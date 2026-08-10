@@ -790,6 +790,16 @@ export interface CalendarLink {
   color?: string | null;
 }
 
+/// One earlier recording of the same recurring meeting. The times are the *occurrence's* (from the link
+/// snapshot), not the upload's, so the list reads as a calendar history.
+export interface SeriesRecording {
+  id: string;
+  title: string;
+  name: string | null;
+  startsAt: string; // ISO
+  endsAt: string; // ISO
+}
+
 /// An external iCalendar (.ics) feed the user subscribes to. `lastError` is the last fetch failure (null when
 /// healthy) so the manager can flag a broken feed.
 export interface IcsFeed {

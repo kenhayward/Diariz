@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import type { CalendarEvent, CalendarLink } from "../../lib/types";
 import CalendarEventDetails from "../CalendarEventDetails";
+import SeriesRecordings from "../SeriesRecordings";
 import { CalendarIcon } from "./SectionIcons";
 
 /// The hub's calendar card: the meeting this recording came from.
@@ -77,18 +78,21 @@ export default function MeetingCard({
 
       <div className="mt-3">
         {linked ? (
-          <CalendarEventDetails
-            showTitle
-            event={
-              linkedEvent ?? {
-                id: calendarLink.eventId,
-                summary: calendarLink.summary,
-                start: calendarLink.start,
-                end: calendarLink.end,
-                htmlLink: calendarLink.htmlLink,
+          <>
+            <CalendarEventDetails
+              showTitle
+              event={
+                linkedEvent ?? {
+                  id: calendarLink.eventId,
+                  summary: calendarLink.summary,
+                  start: calendarLink.start,
+                  end: calendarLink.end,
+                  htmlLink: calendarLink.htmlLink,
+                }
               }
-            }
-          />
+            />
+            <SeriesRecordings eventId={calendarLink.eventId} />
+          </>
         ) : suggestion ? (
           <p className="text-xs text-gray-700 dark:text-gray-300">
             <span className="text-gray-500 dark:text-gray-400">{t("calSuggestedMeeting")}: </span>

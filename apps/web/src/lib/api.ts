@@ -58,6 +58,7 @@ import type {
   Screenshot,
   SectionDto,
   SectionDetail,
+  SeriesRecording,
   SectionNoteItem,
   SectionAttachmentItem,
   TagCloudEntry,
@@ -482,6 +483,14 @@ export const api = {
   /// organiser). Throws 404 when the event is gone or Calendar isn't connected.
   async getCalendarEvent(eventId: string): Promise<CalendarEvent> {
     const { data } = await http.get<CalendarEvent>(`/api/calendar/events/${encodeURIComponent(eventId)}`);
+    return data;
+  },
+
+  /// Your other recordings of the same recurring meeting, newest occurrence first (max 10). Empty for a
+  /// one-off or a series you have not recorded before; 404 when the event is gone.
+  async getSeriesRecordings(eventId: string): Promise<SeriesRecording[]> {
+    const { data } = await http.get<SeriesRecording[]>(
+      `/api/calendar/events/${encodeURIComponent(eventId)}/recordings`);
     return data;
   },
 

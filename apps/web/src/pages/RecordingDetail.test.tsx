@@ -37,7 +37,13 @@ const roomState: {
   rooms: unknown[];
   currentRoom: { id: string; name: string; isPersonal: boolean } | undefined;
 } = { rooms: [], currentRoom: undefined };
-vi.mock("../lib/rooms", () => ({ useRoom: () => roomState }));
+// SeriesRecordings (mounted inside the linked meeting card) also reads useRoomBasePath - keep the room link
+// prefix consistent with roomState the same way the real hook derives it.
+vi.mock("../lib/rooms", () => ({
+  useRoom: () => roomState,
+  useRoomBasePath: () =>
+    roomState.currentRoom && !roomState.currentRoom.isPersonal ? `/rooms/${roomState.currentRoom.id}` : "",
+}));
 
 vi.mock("../lib/api", () => ({
   api: {
@@ -54,6 +60,7 @@ vi.mock("../lib/api", () => ({
     emailMeetingMinutes: vi.fn(),
     getCalendarMatch: vi.fn().mockResolvedValue(null),
     getCalendarEvent: vi.fn(),
+    getSeriesRecordings: vi.fn().mockResolvedValue([]),
     putCalendarLink: vi.fn(),
     deleteCalendarLink: vi.fn(),
     audioUrl: vi.fn(),

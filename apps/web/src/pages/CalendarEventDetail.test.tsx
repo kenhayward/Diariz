@@ -5,7 +5,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { CalendarEvent } from "../lib/types";
 
 vi.mock("../lib/api", () => ({
-  api: { getCalendarEvent: vi.fn(), listRecordings: vi.fn(), putCalendarLink: vi.fn() },
+  api: {
+    getCalendarEvent: vi.fn(),
+    listRecordings: vi.fn(),
+    putCalendarLink: vi.fn(),
+    getSeriesRecordings: vi.fn().mockResolvedValue([]),
+  },
   apiErrorMessage: (e: unknown) => String(e),
 }));
 
