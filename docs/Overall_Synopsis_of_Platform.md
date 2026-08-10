@@ -1514,9 +1514,11 @@ into it with no URL or per-user setup at all.
   both directions (recording → event, and event → recording) and regardless of time overlap (a manual link handles
   meetings that ran late/over). **Web behaviour:** opening an unlinked recording that has a good time-overlap match
   **auto-saves** the link once (client-driven `PUT` with `manual:false`, so GETs stay pure and the icon/details
-  appear with no clicks); the recording Overview renders the meeting's full details (`CalendarEventDetails`, fetched
-  live, falling back to the snapshot) with **Change meeting** (a browse-events modal - date-range + title filter,
-  `CalendarLinkModal`) and **Unlink** actions. A manually-linked event is never overwritten by the auto-match.
+  appear with no clicks); the recording hub shows a summary card (`MeetingCard`) - title, time, location and
+  attendee count - and clicking it opens a **Calendar Event** section (drilled into like Notes or Actions) that
+  renders the meeting's full details (`CalendarEventDetails`, fetched live, falling back to the snapshot) with
+  **Change meeting** (a browse-events modal - date-range + title filter, `CalendarLinkModal`) and **Unlink**
+  actions. A manually-linked event is never overwritten by the auto-match.
 - **Recording started from a calendar event (Join and record).** The Join button on `CalendarEventDetail` opens the
   meeting URL and asks the recorder to start, over the one-line `lib/recordRequest.ts` channel (the recorder is
   mounted once in the capture bar; a plain subscription keeps the page ignorant of where it is). The request now carries
@@ -1645,8 +1647,9 @@ into it with no URL or per-user setup at all.
   (owner-scoped by `Recording.UserId`) rather than re-derived from the calendar, for the rolling-window reason
   above. Returns `[]` for a non-recurring event or a series never recorded before (not an error); 404 when the
   event itself is gone. Returns `SeriesRecordingDto(Id, Title, Name, StartsAt, EndsAt)`. Powers the **"Earlier
-  recordings of this meeting"** list on both the calendar event page and the recording Overview's linked-meeting
-  card (`components/detail/MeetingCard.tsx`).
+  recordings of this meeting"** list on both the calendar event page and the recording's **Calendar Event**
+  section (`components/SeriesRecordings.tsx`, rendered by `pages/RecordingDetail.tsx` alongside
+  `CalendarEventDetails`).
 - **Desktop Outlook mirror (Phase 4 feature - storage layer):** a third calendar source, and the only one that
   **inverts the fetch model**. Google and `.ics` live on the internet, so the API pulls them live at read time
   and stores nothing (an invariant `RecordingCalendarLink`'s doc comment calls out explicitly). A classic

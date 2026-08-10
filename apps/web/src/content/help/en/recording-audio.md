@@ -71,11 +71,12 @@ above on - nothing is lost by moving straight from one meeting to the next.
 ### Repeating meetings
 
 If a meeting repeats - a weekly stand-up, say - Diariz marks it with a **Repeats** badge wherever it
-shows up: the Calendar tab, the meeting's own page, and a recording linked to it. Open the meeting or a
-linked recording and you will also see **Earlier recordings of this meeting** - your last few
-recordings of that same series, newest first, so you can jump straight back to what was said last time
-instead of hunting through your folders. This works for a repeating event from any calendar source you
-have connected - Google, a subscribed .ics feed, or your synced Outlook calendar.
+shows up: the Calendar tab, the meeting's own page, and a recording linked to it. Open the meeting's own
+page, or click through to a linked recording's **Calendar Event** section, and you will also see
+**Earlier recordings of this meeting** - your last few recordings of that same series, newest first, so
+you can jump straight back to what was said last time instead of hunting through your folders. This
+works for a repeating event from any calendar source you have connected - Google, a subscribed .ics
+feed, or your synced Outlook calendar.
 
 ## Taking notes as you go
 
