@@ -23,4 +23,17 @@ describe("TOUR_STEPS", () => {
       expect(s.target).toBeTruthy();
     }
   });
+
+  // Every step spotlights a `data-tour="…"` region. The capture cluster moved into the capture bar and the
+  // account pill into the left panel's room row; both anchors have to survive the header's removal, or the
+  // tour dims the app with nothing lit.
+  it("targets the regions the shell still renders", () => {
+    expect(TOUR_STEPS.map((s) => s.target)).toEqual([
+      "capture",
+      "recordings",
+      "detail",
+      "chat",
+      "account",
+    ]);
+  });
 });

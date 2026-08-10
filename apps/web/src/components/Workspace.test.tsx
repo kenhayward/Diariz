@@ -21,6 +21,7 @@ vi.mock("../auth", () => ({
 }));
 
 import Workspace from "./Workspace";
+import { TOUR_STEPS } from "../lib/onboarding";
 
 function renderWorkspace(initial = "/") {
   return render(
@@ -98,6 +99,16 @@ describe("Workspace", () => {
     const column = screen.getByText("CAPTURE").parentElement!;
     const rail = screen.getByRole("button", { name: /expand chat panel/i });
     expect(column.contains(rail)).toBe(false);
+  });
+
+  // The tour spotlights each step's region by attribute, and every step's region lives in the workspace.
+  // The capture cluster moved into the capture bar and the account pill into the room row; if either
+  // anchor were dropped in the move, the tour would dim the app with nothing lit.
+  it("renders a region for every tour step", () => {
+    renderWorkspace("/recordings/rec-1");
+    for (const step of TOUR_STEPS) {
+      expect(document.querySelector(`[data-tour="${step.target}"]`)).toBeTruthy();
+    }
   });
 
   it("drag-resizes the right panel and persists the width", () => {

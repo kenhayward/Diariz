@@ -22,7 +22,8 @@ Diariz turns spoken conversations into something you can read, search, and reaso
 - The **left panel** lists your meetings. It also has tabs for Actions and Tags, and a calendar view.
 - Opening a meeting lands you on its **hub**: a summary card plus tiles for Transcript, Actions,
   Speakers, Notes, Files, and Formulas.
-- The **account menu** (top right) holds Preferences, Settings, the guided tour, and this help.
+- The **account menu** is the small avatar at the top left, above the meetings list. It holds Preferences,
+  Settings, the guided tour, and this help.
 
 ## What you need
 
