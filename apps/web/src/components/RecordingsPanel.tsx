@@ -269,8 +269,8 @@ export default function RecordingsPanel() {
           onError={setOpError}
         />
       )}
+      <TabStrip tab={tab} onSelect={selectTab} />
       <div className="flex min-h-0 flex-1">
-        <TabStrip tab={tab} onSelect={selectTab} />
         {tab === "list" ? (
           // min-w-0 lets this flex child shrink to the panel width so long recording names truncate
           // instead of forcing the column wider than the panel.
