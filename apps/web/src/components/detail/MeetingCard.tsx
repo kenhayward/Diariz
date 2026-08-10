@@ -91,7 +91,7 @@ export default function MeetingCard({
                 }
               }
             />
-            <SeriesRecordings eventId={calendarLink.eventId} />
+            {linkedEvent?.recurring && <SeriesRecordings eventId={calendarLink.eventId} />}
           </>
         ) : suggestion ? (
           <p className="text-xs text-gray-700 dark:text-gray-300">

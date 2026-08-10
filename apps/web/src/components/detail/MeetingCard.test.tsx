@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { ReactElement } from "react";
 import MeetingCard from "./MeetingCard";
 import type { CalendarEvent, CalendarLink } from "../../lib/types";
+import { api } from "../../lib/api";
 
 // MeetingCard's linked branch mounts SeriesRecordings, which fetches over ../../lib/api and needs a
 // QueryClientProvider in the tree.
@@ -45,6 +46,7 @@ const handlers = () => ({
 let h: ReturnType<typeof handlers>;
 beforeEach(() => {
   h = handlers();
+  vi.mocked(api.getSeriesRecordings).mockClear();
 });
 
 describe("MeetingCard", () => {
@@ -89,5 +91,22 @@ describe("MeetingCard", () => {
   it("still shows a linked meeting even if the calendar has since been disconnected", () => {
     renderWithClient(<MeetingCard calendarLink={link} linkedEvent={event} suggestion={null} calendarConnected={false} {...h} />);
     expect(screen.getByText("QnR Competences merging to one")).toBeTruthy();
+  });
+
+  it("does not fetch other recordings of the series when the linked event isn't recurring", () => {
+    renderWithClient(<MeetingCard calendarLink={link} linkedEvent={event} suggestion={null} calendarConnected {...h} />);
+    expect(api.getSeriesRecordings).not.toHaveBeenCalled();
+  });
+
+  it("fetches other recordings of the series when the linked event is recurring, using the stored eventId", () => {
+    renderWithClient(
+      <MeetingCard calendarLink={link} linkedEvent={{ ...event, recurring: true }} suggestion={null} calendarConnected {...h} />,
+    );
+    expect(api.getSeriesRecordings).toHaveBeenCalledWith(link.eventId);
+  });
+
+  it("does not fetch other recordings while the live event hasn't loaded yet", () => {
+    renderWithClient(<MeetingCard calendarLink={link} linkedEvent={null} suggestion={null} calendarConnected {...h} />);
+    expect(api.getSeriesRecordings).not.toHaveBeenCalled();
   });
 });
