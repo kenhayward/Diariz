@@ -238,7 +238,7 @@
   "placementSelectedMeta": "Archiva en la carpeta que esté abierta en la lista cuando inicias la grabación.",
   "placementSpecific": "Una carpeta fija",
   "placementSpecificMeta": "Siempre la misma carpeta, estés donde estés.",
-  "placementFolder": "Carpeta",
+  "placementChange": "Cambiar...",
   "calendarAutoStopHeading": "Dejar que una reunión del calendario termine su propia grabación",
   "calendarAutoStopBody": "Solo cuando te unes a la reunión desde tu calendario, de modo que se conoce su hora de fin. Una grabación que inicias con el botón Grabar no se corta por esta opción.",
   "calendarStopPrefix": "Detener",

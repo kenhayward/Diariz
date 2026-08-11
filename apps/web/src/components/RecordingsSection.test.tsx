@@ -1,5 +1,4 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -45,12 +44,18 @@ describe("RecordingsSection", () => {
   });
 
   it("offers the three placement modes, defaulting to the selected folder", async () => {
+    // Adapted for the folder picker becoming its own dialog (Task 5): the picker (and its "Filter
+    // folders" box) is no longer inline, so what "one fixed folder" mode reveals is now the path chip +
+    // Change control, and the filter box only appears once Change opens the dialog.
     renderSection();
     const selected = (await screen.findByRole("radio", { name: /the folder I'm looking at/i })) as HTMLInputElement;
     expect(selected.checked).toBe(true);
     // The folder picker only appears in "one fixed folder" mode.
-    expect(screen.queryByLabelText("Filter folders")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^change/i })).toBeNull();
     fireEvent.click(screen.getByRole("radio", { name: /one fixed folder/i }));
+    expect(screen.getByRole("button", { name: /^change/i })).toBeTruthy();
+    expect(screen.queryByLabelText("Filter folders")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^change/i }));
     expect(screen.getByLabelText("Filter folders")).toBeTruthy();
   });
 
@@ -77,12 +82,54 @@ describe("RecordingsSection", () => {
     expect(new Set(names)).toEqual(new Set(["placement-mode"]));
   });
 
-  it("labels the folder picker for assistive tech, associated with the visible 'Folder' heading", async () => {
+  it("shows the chosen folder as a path chip with a Change control, only in fixed-folder mode", async () => {
+    (api.getUserSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...settings, placementMode: "SpecificFolder", placementSectionId: "acme",
+    });
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "customers", name: "Customers", parentId: null, position: 0 },
+      { id: "acme", name: "Acme Corp", parentId: "customers", position: 0 },
+    ]);
+    renderSection();
+
+    expect(await screen.findByText("Customers › Acme Corp")).toBeTruthy();
+    // The picker is a dialog now - nothing of it is on the panel until asked for.
+    expect(screen.queryByLabelText("Filter folders")).toBeNull();
+
+    fireEvent.click(screen.getByRole("radio", { name: /always ungrouped/i }));
+    expect(screen.queryByRole("button", { name: /^change/i })).toBeNull();
+  });
+
+  it("opens the picker from Change, and applies the choice when it closes", async () => {
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "sec-1", name: "Projects", parentId: null, position: 0 },
+    ]);
     renderSection();
     fireEvent.click(await screen.findByRole("radio", { name: /one fixed folder/i }));
-    // A grouping name, not just the picker's own internal control labels (Filter folders / Folders list) -
-    // this is what replaces the old <select>'s aria-label="Folder".
-    expect(screen.getByRole("group", { name: "Folder" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^change/i }));
+
+    expect(screen.getByRole("dialog", { name: "Choose a folder" })).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("Select Projects"));
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+
+    expect(screen.queryByRole("dialog", { name: "Choose a folder" })).toBeNull();
+    expect(screen.getByText("Projects")).toBeTruthy();
+    fireEvent.click(saveButton());
+    await waitFor(() =>
+      expect(api.updateUserSettings).toHaveBeenCalledWith({
+        placementMode: "SpecificFolder", placementSectionId: "sec-1",
+        calendarAutoStopEnabled: false, calendarAutoStopAfterMinutes: 3, calendarSilenceStopSeconds: 30,
+      }),
+    );
+  });
+
+  it("returns focus to Change when the picker closes", async () => {
+    renderSection();
+    fireEvent.click(await screen.findByRole("radio", { name: /one fixed folder/i }));
+    const change = screen.getByRole("button", { name: /^change/i });
+    fireEvent.click(change);
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(document.activeElement).toBe(change);
   });
 
   it("saves a specific-folder placement with the folder chosen from the picker, and nothing else", async () => {
@@ -91,7 +138,9 @@ describe("RecordingsSection", () => {
     ]);
     renderSection();
     fireEvent.click(await screen.findByRole("radio", { name: /one fixed folder/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^change/i }));
     fireEvent.click(await screen.findByLabelText("Select Projects"));
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
     fireEvent.click(saveButton());
 
     await waitFor(() => expect(api.updateUserSettings).toHaveBeenCalled());
@@ -110,10 +159,12 @@ describe("RecordingsSection", () => {
     ]);
     renderSection();
     fireEvent.click(await screen.findByRole("radio", { name: /one fixed folder/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^change/i }));
     // Move the value off its initial `null` first, so a root row whose `onChoose` never fired at all could
     // not accidentally pass this test by leaving the untouched initial value in place.
     fireEvent.click(await screen.findByLabelText("Select Projects"));
     fireEvent.click(screen.getByLabelText("Select Ungrouped"));
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
     fireEvent.click(saveButton());
 
     await waitFor(() =>
@@ -126,7 +177,10 @@ describe("RecordingsSection", () => {
       ...settings, placementMode: "SpecificFolder", placementSectionId: "sec-1",
     });
     renderSection();
-    fireEvent.click(await screen.findByRole("radio", { name: /ungrouped/i }));
+    // Narrower than a plain /ungrouped/i: the SpecificFolder card's own reveal row now sits inside its
+    // <label> too (Task 5), so its chosen-path chip can read "Ungrouped" and fold that word into the
+    // SpecificFolder radio's accessible name - a bare /ungrouped/i would then match two radios.
+    fireEvent.click(await screen.findByRole("radio", { name: /always ungrouped/i }));
     fireEvent.click(saveButton());
 
     await waitFor(() =>
@@ -142,53 +196,9 @@ describe("RecordingsSection", () => {
       { id: "sec-1", name: "Projects", parentId: null, position: 0 },
     ]);
     renderSection();
+    fireEvent.click(await screen.findByRole("button", { name: /^change/i }));
     expect((await screen.findByLabelText("Select Projects")).getAttribute("aria-current")).toBe("true");
     expect(screen.getByLabelText("Select Ungrouped").getAttribute("aria-current")).toBeNull();
-  });
-
-  it("shows the previously saved folder's full path when it is nested too deep to appear at the picker's root (regression: a <select> always shows its value)", async () => {
-    (api.getUserSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ...settings, placementMode: "SpecificFolder", placementSectionId: "phase2",
-    });
-    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { id: "customers", name: "Customers", parentId: null, position: 0 },
-      { id: "acme", name: "Acme Corp", parentId: "customers", position: 0 },
-      { id: "falcon", name: "Project Falcon", parentId: "acme", position: 0 },
-      { id: "phase2", name: "Phase 2", parentId: "falcon", position: 0 },
-    ]);
-    renderSection();
-    fireEvent.click(await screen.findByRole("radio", { name: /one fixed folder/i }));
-
-    // Opening Settings lands on the root drill position, four levels above the saved folder - its row is
-    // not rendered there at all, so the old bug showed nothing marked as current.
-    expect(screen.getByText("Selected: Customers › Acme Corp › Project Falcon › Phase 2")).toBeTruthy();
-  });
-
-  it("is keyboard operable: Tab alone reaches a folder row, and Enter chooses it", async () => {
-    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { id: "sec-1", name: "Projects", parentId: null, position: 0 },
-    ]);
-    const user = userEvent.setup();
-    renderSection();
-    await user.click(await screen.findByRole("radio", { name: /one fixed folder/i }));
-
-    // Real Tab presses only, no `.focus()` shortcut - proves the whole chain (radio group -> picker filter
-    // box -> picker rows) is reachable by keyboard alone, not just that the target element is focusable.
-    await user.tab(); // filter input
-    expect(document.activeElement).toBe(screen.getByLabelText("Filter folders"));
-    await user.tab(); // the root "Ungrouped" row (no back/breadcrumb control at the top drill level)
-    expect(document.activeElement).toBe(screen.getByLabelText("Select Ungrouped"));
-    await user.tab(); // "Projects" row body (drills, does not choose)
-    expect(document.activeElement).toBe(screen.getByLabelText("Open Projects"));
-    await user.tab(); // "Projects" row's separate select control
-    expect(document.activeElement).toBe(screen.getByLabelText("Select Projects"));
-
-    await user.keyboard("{Enter}");
-    await user.click(saveButton());
-
-    await waitFor(() =>
-      expect(api.updateUserSettings).toHaveBeenCalledWith({ placementMode: "SpecificFolder", placementSectionId: "sec-1", calendarAutoStopEnabled: false, calendarAutoStopAfterMinutes: 3, calendarSilenceStopSeconds: 30 }),
-    );
   });
 
   // ---- Recording from a calendar event ----

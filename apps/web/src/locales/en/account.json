@@ -238,7 +238,7 @@
   "placementSelectedMeta": "Files into whichever folder is open in the list when you start recording.",
   "placementSpecific": "One fixed folder",
   "placementSpecificMeta": "Always the same folder, wherever you happen to be.",
-  "placementFolder": "Folder",
+  "placementChange": "Change...",
   "calendarAutoStopHeading": "Let a calendar meeting end its own recording",
   "calendarAutoStopBody": "Only when you join the meeting from your calendar, so its end time is known. A recording you start with the Record button is not cut short by this option.",
   "calendarStopPrefix": "Stop",

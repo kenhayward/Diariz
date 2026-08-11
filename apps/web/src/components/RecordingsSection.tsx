@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 import type { RecordingPlacementMode } from "../lib/types";
-import FolderPicker from "./FolderPicker";
+import { orderedSections } from "../lib/sectionTree";
+import FolderPickerModal from "./FolderPickerModal";
 import { usePreferencesFooter } from "./PreferencesFooter";
-import { CalendarIcon } from "./icons";
+import { CalendarIcon, FolderIcon } from "./icons";
 
 /// Mirrors the server-side defaults (`UserSettings.DefaultCalendar*`). Duplicated rather than derived
 /// because the field can be blank while typing, and a blank must fall back to something on save.
@@ -47,6 +48,7 @@ interface Baseline {
 /// itself lives in the modal's shared footer (see `usePreferencesFooter`), not in this component's body.
 export default function RecordingsSection() {
   const { t } = useTranslation("account");
+  const { t: tWorkspace } = useTranslation("workspace");
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ["user-settings"], queryFn: api.getUserSettings });
   // Personal-room folders for the "Use a specific folder" chooser (flattened "Parent › Child").
@@ -54,6 +56,8 @@ export default function RecordingsSection() {
 
   const [placementMode, setPlacementMode] = useState<RecordingPlacementMode>("SelectedFolder");
   const [placementSectionId, setPlacementSectionId] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const changeRef = useRef<HTMLButtonElement>(null);
   // Calendar-event auto-stop. The two durations are held as strings so the field can be emptied while
   // typing; `positiveOr` turns a blank or nonsensical value back into the default at save time.
   const [calendarAutoStop, setCalendarAutoStop] = useState(false);
@@ -114,6 +118,14 @@ export default function RecordingsSection() {
       current.afterMinutes !== baseline.afterMinutes ||
       current.silenceSeconds !== baseline.silenceSeconds);
 
+  // The panel shows the chosen folder's full path unconditionally - the old inline picker could only show
+  // a folder that happened to be at its current drill level, so a deeply nested choice looked unset.
+  const chosenPath =
+    placementSectionId === null
+      ? tWorkspace("ungrouped")
+      : (orderedSections(sections).find((o) => o.section.id === placementSectionId)?.label ??
+        tWorkspace("ungrouped"));
+
   // `null` until `baseline` is populated (the settings have loaded and the seeding block above has run for
   // them), so no Save button is reachable over a still-loading panel - clicking one before then would PUT
   // this component's hardcoded initial state (defaults), silently overwriting the user's real settings.
@@ -158,150 +170,170 @@ export default function RecordingsSection() {
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-baseline gap-2">
-        <h3 className="text-[15px] font-semibold dark:text-gray-100">{t("placementHeading")}</h3>
-        <span className="text-xs text-gray-500 dark:text-gray-400">{t("placementHeadingMeta")}</span>
-      </div>
-
-      <fieldset className="flex flex-col gap-2.5">
-        {(
-          [
-            { mode: "SelectedFolder", title: "placementSelected", meta: "placementSelectedMeta", isDefault: true },
-            { mode: "Ungrouped", title: "placementUngrouped", meta: "placementUngroupedMeta", isDefault: false },
-            { mode: "SpecificFolder", title: "placementSpecific", meta: "placementSpecificMeta", isDefault: false },
-          ] as const
-        ).map((card) => (
-          <label
-            key={card.mode}
-            // The selected state is the card's OWN border and background, never an outset ring. The
-            // content pane scrolls, and a ring painted 1px outside the box makes the pane wider than its
-            // client width, which paints a full-width horizontal scrollbar across the whole panel.
-            className={`cursor-pointer rounded-lg border px-3.5 py-3 ${
-              placementMode === card.mode
-                ? "border-blue-500/60 bg-blue-500/[.07] dark:border-blue-500/60 dark:bg-blue-500/[.14]"
-                : "border-gray-200 dark:border-gray-700"
-            }`}
-          >
-            <div className="flex items-start gap-3">
-              <input
-                type="radio"
-                name="placement-mode"
-                className="mt-0.5 accent-blue-600"
-                checked={placementMode === card.mode}
-                onChange={() => setPlacementMode(card.mode)}
-              />
-              <div className="flex min-w-0 flex-col gap-[3px]">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{t(card.title)}</span>
-                  {card.isDefault && (
-                    <span className="rounded border border-blue-500/40 bg-blue-500/10 px-1.5 py-px text-[10px] uppercase tracking-[.06em] text-blue-700 dark:text-blue-200">
-                      {t("placementDefaultChip")}
-                    </span>
-                  )}
-                </div>
-                <span className="text-[13px] text-gray-500 dark:text-gray-400">{t(card.meta)}</span>
-              </div>
-            </div>
-          </label>
-        ))}
-      </fieldset>
-      {placementMode === "SpecificFolder" && (
-        <div className="block text-sm">
-          <span id="placement-folder-label" className="mb-1 block text-gray-600 dark:text-gray-300">
-            {t("placementFolder")}
-          </span>
-          {/* `FolderPicker` is a multi-control widget (filter box, drill list, per-row select targets), not
-              a single form field, so it can't carry the visible label the way the native <select> it
-              replaces did via a plain `aria-label`. `role="group"` + `aria-labelledby` keeps the same
-              visible "Folder" text as the programmatic name (assistive tech announces it entering the
-              group), while the picker's own inner controls keep their own more specific labels
-              ("Filter folders", "Select {name}") - see FolderPicker.tsx for why those exist. */}
-          <div role="group" aria-labelledby="placement-folder-label">
-            <FolderPicker sections={sections} selectedId={placementSectionId} onSelect={setPlacementSectionId} />
-          </div>
+    <>
+      <div className="space-y-3">
+        <div className="flex items-baseline gap-2">
+          <h3 className="text-[15px] font-semibold dark:text-gray-100">{t("placementHeading")}</h3>
+          <span className="text-xs text-gray-500 dark:text-gray-400">{t("placementHeadingMeta")}</span>
         </div>
-      )}
 
-      {/* Recording started from a calendar event: the only case where the meeting's end time is known, so
-          the only case where the recorder can end a take by itself. */}
-      <div className="overflow-hidden rounded-lg border dark:border-gray-700">
-        <div className="flex items-start justify-between gap-5 px-4 py-3.5">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="shrink-0 text-gray-500 dark:text-gray-400">
-                <CalendarIcon size={14} />
-              </span>
-              <h3 className="text-[15px] font-semibold dark:text-gray-100">{t("calendarAutoStopHeading")}</h3>
-            </div>
-            <p className="mt-1 text-[13px] text-pretty text-gray-500 dark:text-gray-400">{t("calendarAutoStopBody")}</p>
-          </div>
-          {/* A native checkbox cannot be styled as a track and knob without hiding it, which loses the
-              focus ring; `role="switch"` on a button is the same semantics with a real focusable target.
-              The heading is its accessible name - the control has no visible label of its own. */}
-          <button
-            type="button"
-            role="switch"
-            aria-checked={calendarAutoStop}
-            aria-label={t("calendarAutoStopHeading")}
-            onClick={() => setCalendarAutoStop((on) => !on)}
-            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-              calendarAutoStop ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-700"
-            }`}
-          >
-            <span
-              aria-hidden
-              className={`absolute top-[3px] h-[18px] w-[18px] rounded-full bg-white transition-[left] ${
-                calendarAutoStop ? "left-[23px]" : "left-[3px]"
+        <fieldset className="flex flex-col gap-2.5">
+          {(
+            [
+              { mode: "SelectedFolder", title: "placementSelected", meta: "placementSelectedMeta", isDefault: true },
+              { mode: "Ungrouped", title: "placementUngrouped", meta: "placementUngroupedMeta", isDefault: false },
+              { mode: "SpecificFolder", title: "placementSpecific", meta: "placementSpecificMeta", isDefault: false },
+            ] as const
+          ).map((card) => (
+            <label
+              key={card.mode}
+              // The selected state is the card's OWN border and background, never an outset ring. The
+              // content pane scrolls, and a ring painted 1px outside the box makes the pane wider than its
+              // client width, which paints a full-width horizontal scrollbar across the whole panel.
+              className={`cursor-pointer rounded-lg border px-3.5 py-3 ${
+                placementMode === card.mode
+                  ? "border-blue-500/60 bg-blue-500/[.07] dark:border-blue-500/60 dark:bg-blue-500/[.14]"
+                  : "border-gray-200 dark:border-gray-700"
               }`}
-            />
-          </button>
-        </div>
-
-        {/* Absent rather than disabled: the two durations say HOW a recording ends, and there is nothing
-            for them to qualify while the switch is off. */}
-        {calendarAutoStop && (
-          <div className="flex flex-col gap-3 border-t bg-gray-50 px-4 py-3.5 dark:border-gray-700 dark:bg-white/[.02]">
-            <div className="flex flex-wrap items-center gap-2 text-sm dark:text-gray-200">
-              <span>{t("calendarStopPrefix")}</span>
-              <input
-                type="number"
-                min={1}
-                step={1}
-                value={afterMinutes}
-                onChange={(e) => setAfterMinutes(e.target.value)}
-                aria-label={t("calendarAfterMinutes")}
-                className="w-[60px] rounded border px-2 py-1.5 text-center text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-              />
-              <span>{t("calendarStopMinutesSuffix")}</span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-sm dark:text-gray-200">
-              <span>{t("calendarSilencePrefix")}</span>
-              <input
-                type="number"
-                min={1}
-                step={1}
-                value={silenceSeconds}
-                onChange={(e) => setSilenceSeconds(e.target.value)}
-                aria-label={t("calendarSilenceSeconds")}
-                className="w-[60px] rounded border px-2 py-1.5 text-center text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-              />
-              <span>{t("calendarSilenceSuffix")}</span>
-            </div>
-            {/* The two per-field hints this replaces said what each number was for in the abstract; one
-                worked example says it once, in the reader's own numbers. */}
-            <p
-              aria-live="polite"
-              className="border-l-2 border-blue-500/50 pl-3 text-[13px] text-gray-500 dark:text-gray-400"
             >
-              {t("calendarAutoStopExample", {
-                until: clockAfter(11, positiveOr(afterMinutes, DEFAULT_AFTER_MINUTES)),
-                seconds: positiveOr(silenceSeconds, DEFAULT_SILENCE_SECONDS),
-              })}
-            </p>
+              <div className="flex items-start gap-3">
+                <input
+                  type="radio"
+                  name="placement-mode"
+                  className="mt-0.5 accent-blue-600"
+                  checked={placementMode === card.mode}
+                  onChange={() => setPlacementMode(card.mode)}
+                />
+                <div className="flex min-w-0 flex-col gap-[3px]">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{t(card.title)}</span>
+                    {card.isDefault && (
+                      <span className="rounded border border-blue-500/40 bg-blue-500/10 px-1.5 py-px text-[10px] uppercase tracking-[.06em] text-blue-700 dark:text-blue-200">
+                        {t("placementDefaultChip")}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[13px] text-gray-500 dark:text-gray-400">{t(card.meta)}</span>
+                </div>
+              </div>
+              {card.mode === "SpecificFolder" && placementMode === "SpecificFolder" && (
+                // Indented to line up under the card title rather than the radio.
+                <div className="mt-2.5 flex flex-wrap items-center gap-2 pl-8">
+                  <span className="inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-[13px] dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">
+                    <FolderIcon size={14} />
+                    <span className="truncate">{chosenPath}</span>
+                  </span>
+                  <button
+                    type="button"
+                    ref={changeRef}
+                    // Inside a <label>: without this the click also toggles the radio, and in Firefox it
+                    // would re-focus the input instead of opening the dialog.
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setPickerOpen(true);
+                    }}
+                    className="rounded-md border px-2.5 py-1.5 text-[13px] hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                  >
+                    {t("placementChange")}
+                  </button>
+                </div>
+              )}
+            </label>
+          ))}
+        </fieldset>
+
+        {/* Recording started from a calendar event: the only case where the meeting's end time is known, so
+            the only case where the recorder can end a take by itself. */}
+        <div className="overflow-hidden rounded-lg border dark:border-gray-700">
+          <div className="flex items-start justify-between gap-5 px-4 py-3.5">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="shrink-0 text-gray-500 dark:text-gray-400">
+                  <CalendarIcon size={14} />
+                </span>
+                <h3 className="text-[15px] font-semibold dark:text-gray-100">{t("calendarAutoStopHeading")}</h3>
+              </div>
+              <p className="mt-1 text-[13px] text-pretty text-gray-500 dark:text-gray-400">{t("calendarAutoStopBody")}</p>
+            </div>
+            {/* A native checkbox cannot be styled as a track and knob without hiding it, which loses the
+                focus ring; `role="switch"` on a button is the same semantics with a real focusable target.
+                The heading is its accessible name - the control has no visible label of its own. */}
+            <button
+              type="button"
+              role="switch"
+              aria-checked={calendarAutoStop}
+              aria-label={t("calendarAutoStopHeading")}
+              onClick={() => setCalendarAutoStop((on) => !on)}
+              className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                calendarAutoStop ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-700"
+              }`}
+            >
+              <span
+                aria-hidden
+                className={`absolute top-[3px] h-[18px] w-[18px] rounded-full bg-white transition-[left] ${
+                  calendarAutoStop ? "left-[23px]" : "left-[3px]"
+                }`}
+              />
+            </button>
           </div>
-        )}
+
+          {/* Absent rather than disabled: the two durations say HOW a recording ends, and there is nothing
+              for them to qualify while the switch is off. */}
+          {calendarAutoStop && (
+            <div className="flex flex-col gap-3 border-t bg-gray-50 px-4 py-3.5 dark:border-gray-700 dark:bg-white/[.02]">
+              <div className="flex flex-wrap items-center gap-2 text-sm dark:text-gray-200">
+                <span>{t("calendarStopPrefix")}</span>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={afterMinutes}
+                  onChange={(e) => setAfterMinutes(e.target.value)}
+                  aria-label={t("calendarAfterMinutes")}
+                  className="w-[60px] rounded border px-2 py-1.5 text-center text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                />
+                <span>{t("calendarStopMinutesSuffix")}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-sm dark:text-gray-200">
+                <span>{t("calendarSilencePrefix")}</span>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={silenceSeconds}
+                  onChange={(e) => setSilenceSeconds(e.target.value)}
+                  aria-label={t("calendarSilenceSeconds")}
+                  className="w-[60px] rounded border px-2 py-1.5 text-center text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                />
+                <span>{t("calendarSilenceSuffix")}</span>
+              </div>
+              {/* The two per-field hints this replaces said what each number was for in the abstract; one
+                  worked example says it once, in the reader's own numbers. */}
+              <p
+                aria-live="polite"
+                className="border-l-2 border-blue-500/50 pl-3 text-[13px] text-gray-500 dark:text-gray-400"
+              >
+                {t("calendarAutoStopExample", {
+                  until: clockAfter(11, positiveOr(afterMinutes, DEFAULT_AFTER_MINUTES)),
+                  seconds: positiveOr(silenceSeconds, DEFAULT_SILENCE_SECONDS),
+                })}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+
+      {pickerOpen && (
+        <FolderPickerModal
+          sections={sections}
+          selectedId={placementSectionId}
+          onSelect={setPlacementSectionId}
+          onClose={() => {
+            setPickerOpen(false);
+            changeRef.current?.focus();
+          }}
+        />
+      )}
+    </>
   );
 }

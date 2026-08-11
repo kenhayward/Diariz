@@ -238,7 +238,7 @@
   "placementSelectedMeta": "Classe dans le dossier ouvert dans la liste au moment où vous lancez l'enregistrement.",
   "placementSpecific": "Un dossier fixe",
   "placementSpecificMeta": "Toujours le même dossier, où que vous soyez.",
-  "placementFolder": "Dossier",
+  "placementChange": "Modifier...",
   "calendarAutoStopHeading": "Laisser une réunion du calendrier terminer son propre enregistrement",
   "calendarAutoStopBody": "Uniquement lorsque vous rejoignez la réunion depuis votre calendrier, afin que son heure de fin soit connue. Un enregistrement lancé avec le bouton Enregistrer n'est pas écourté par cette option.",
   "calendarStopPrefix": "Arrêter",

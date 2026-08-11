@@ -238,7 +238,7 @@
   "placementSelectedMeta": "Legt die Aufnahme in dem Ordner ab, der beim Start der Aufnahme in der Liste geöffnet ist.",
   "placementSpecific": "Ein fester Ordner",
   "placementSpecificMeta": "Immer derselbe Ordner, wo auch immer Sie sich befinden.",
-  "placementFolder": "Ordner",
+  "placementChange": "Ändern...",
   "calendarAutoStopHeading": "Eine Kalenderbesprechung ihre eigene Aufnahme beenden lassen",
   "calendarAutoStopBody": "Nur wenn Sie der Besprechung über Ihren Kalender beitreten, sodass deren Endzeit bekannt ist. Eine Aufnahme, die Sie mit der Aufnahmeschaltfläche starten, wird dadurch nicht verkürzt.",
   "calendarStopPrefix": "Beenden",
