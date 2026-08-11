@@ -47,6 +47,10 @@ accepted is not showing yet. Both buttons cover every calendar you have connecte
 .ics feeds - and only touch the ones you actually use. While either is running the bar at the bottom of the
 window counts the seconds, so you can see it is still working.
 
+Both buttons grey out while a sync is running - including the one that starts when you open the app, and one
+you start from the tray. Those show in the bar at the bottom too, so if the buttons will not press you can see
+why. Pressing a button while a sync is already under way simply waits for it and then refreshes.
+
 A meeting you cancel or delete in Outlook disappears from Diariz on the next sync.
 
 A meeting that repeats is marked with a **Repeats** badge, and opening it (or a recording linked to it)

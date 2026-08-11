@@ -62,6 +62,26 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.205.1",
+    date: "2026-08-11",
+    pr: 505,
+    headline: "Calendar sync no longer fails while another sync is running",
+    summary:
+      "Pressing either calendar sync button shortly after opening the desktop app reported \"Could not sync " +
+      "the calendar\" and did nothing. The app runs a full Outlook sync on launch, which takes tens of " +
+      "seconds, and a second sync cannot start while it is going - but that refusal was shown as a failure " +
+      "rather than what it was. Both buttons now wait for the sync already running and refresh when it " +
+      "lands, and they grey out while any sync is in progress, including one started on launch or from the " +
+      "tray - which the status bar now reports too, so you can see why. When a sync genuinely cannot run, " +
+      "the message says what is wrong instead of just that something was.",
+    fixed: [
+      "Syncing the calendar during the launch sync no longer reports a failure - it waits for that sync and refreshes when it finishes.",
+      "Both sync buttons now grey out while any calendar sync is running, not only one you started.",
+      "A sync started on launch or from the tray is now shown in the status bar.",
+      "Sync failures name the reason (Outlook not reachable, access blocked, timed out) instead of a bare \"Could not sync the calendar\".",
+    ],
+  },
+  {
     version: "0.205.0",
     date: "2026-08-11",
     pr: 503,

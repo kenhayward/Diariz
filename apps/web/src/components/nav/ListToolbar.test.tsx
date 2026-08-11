@@ -151,6 +151,54 @@ describe("ListToolbar calendar sync", () => {
     await waitFor(() => expect(screen.queryByText(/syncing calendar/i)).toBeNull());
   });
 
+  // The regression this pair exists for. The old Sync Outlook link greyed itself out while the shell was
+  // busy, so a sync started on launch or from the tray simply could not be clicked over. Moving the buttons
+  // to the toolbar dropped that guard, and the shell answered "busy" - which was reported to the user as a
+  // failure, on every launch, for the whole of the launch sync.
+  it("disables both buttons while a sync it did not start is running", async () => {
+    (api.getUserSettings as Mock).mockResolvedValue({ outlookSyncEnabled: true });
+    const { emit } = fakeShell();
+    renderToolbar({ calendarMode: true, listMode: false });
+
+    const today = await screen.findByRole("button", { name: /sync today/i });
+    const all = screen.getByRole("button", { name: /sync calendar/i });
+    await waitFor(() => expect(api.getUserSettings).toHaveBeenCalled());
+
+    emit("reading");
+    await waitFor(() => expect(today).toHaveProperty("disabled", true));
+    expect(all).toHaveProperty("disabled", true);
+
+    emit("idle");
+    await waitFor(() => expect(today).toHaveProperty("disabled", false));
+    expect(all).toHaveProperty("disabled", false);
+  });
+
+  // ...and say so, rather than leaving two dead buttons and no explanation for why they will not press.
+  it("reports a sync it did not start in the status bar", async () => {
+    (api.getUserSettings as Mock).mockResolvedValue({ outlookSyncEnabled: true });
+    const { emit } = fakeShell();
+    renderToolbar({ calendarMode: true, listMode: false });
+    await screen.findByRole("button", { name: /sync calendar/i });
+
+    emit("reading");
+    expect(await screen.findByText(/syncing calendar 0s/i)).toBeTruthy();
+
+    emit("idle");
+    await waitFor(() => expect(screen.queryByText(/syncing calendar/i)).toBeNull());
+  });
+
+  // "Could not sync the calendar" told the user nothing at all. Whatever the shell reports, the bar has to
+  // carry something they can act on.
+  it("names the reason when a sync cannot run", async () => {
+    (api.getUserSettings as Mock).mockResolvedValue({ outlookSyncEnabled: true });
+    fakeShell({ started: false, reason: "new-outlook" });
+    renderToolbar({ calendarMode: true, listMode: false });
+
+    fireEvent.click(await screen.findByRole("button", { name: /sync calendar/i }));
+
+    expect(await screen.findByText(/cannot reach Outlook/i)).toBeTruthy();
+  });
+
   it("names the quick sync in the status bar, so the two are told apart", async () => {
     (api.getUserSettings as Mock).mockResolvedValue({ outlookSyncEnabled: true });
     const { emit } = fakeShell();
