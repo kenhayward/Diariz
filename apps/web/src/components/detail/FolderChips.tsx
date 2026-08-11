@@ -25,6 +25,7 @@ export default function FolderChips({
   crumbs,
   onSelect,
   maxVisible = 3,
+  showIcon = true,
 }: {
   roomName: string;
   /// The folder chain within `roomName`, outermost first. Empty = filed at the room's top level.
@@ -33,6 +34,10 @@ export default function FolderChips({
   onSelect: (sectionId: string | null) => void;
   /// How many folder chips may show before the middle collapses. Excludes the room chip.
   maxVisible?: number;
+  /// Whether to render the leading folder glyph. The recording detail page passes `false` and renders it
+  /// itself, as the Change folder button - changing the path is an action *on* the path, so it stays outside
+  /// this navigation landmark, and two adjacent folder glyphs would blur which control is which.
+  showIcon?: boolean;
 }) {
   const { t } = useTranslation("workspace");
   const segments = collapsePath(crumbs, maxVisible);
@@ -47,13 +52,16 @@ export default function FolderChips({
   return (
     <nav aria-label={t("folderChipsLabel")} className="flex flex-wrap items-center gap-1">
       {/* Says "these are folders" at a glance - without it the row reads as a set of generic tags. */}
-      <span
-        style={color ? ({ "--sc-light": color.light, "--sc-dark": color.dark } as React.CSSProperties) : undefined}
-        className={`shrink-0 ${color ? "text-[var(--sc-light)] dark:text-[var(--sc-dark)]" : "text-gray-400 dark:text-gray-500"}`}
-        aria-hidden
-      >
-        <FolderIcon size={14} />
-      </span>
+      {showIcon && (
+        <span
+          data-testid="folder-chips-icon"
+          style={color ? ({ "--sc-light": color.light, "--sc-dark": color.dark } as React.CSSProperties) : undefined}
+          className={`shrink-0 ${color ? "text-[var(--sc-light)] dark:text-[var(--sc-dark)]" : "text-gray-400 dark:text-gray-500"}`}
+          aria-hidden
+        >
+          <FolderIcon size={14} />
+        </span>
+      )}
       <Chip label={roomName} onClick={() => onSelect(null)} />
       {segments.map((seg, i) => (
         <span key={seg === "ellipsis" ? `gap-${i}` : seg.id} className="flex min-w-0 items-center gap-1">

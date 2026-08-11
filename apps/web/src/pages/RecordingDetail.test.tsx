@@ -1508,4 +1508,24 @@ describe("RecordingDetail folder chips", () => {
     await screen.findByText(/Mic 6\/26\/2026/);
     expect(screen.queryByRole("button", { name: /change folder/i })).toBeNull();
   });
+
+  /// The affordance moved onto the glyph that opens the path: one control, where the path begins, instead
+  /// of a second button competing with it.
+  it("uses the folder icon as the Change folder button", async () => {
+    renderInRoom(inRoom("acme"));
+
+    const button = await screen.findByRole("button", { name: /change folder/i });
+    expect(button.querySelector("svg")).toBeTruthy();
+    expect(button.textContent?.trim()).toBe("");
+  });
+
+  /// One folder glyph on the row, not two: the chips no longer open with their own. Asserted on the nav's
+  /// first child rather than "contains no icon" - the chips still hold chevron separators, so the broader
+  /// claim would be false for a reason that has nothing to do with this change.
+  it("leaves the chips without a leading folder glyph of their own", async () => {
+    renderInRoom(inRoom("acme"));
+
+    const chips = await screen.findByRole("navigation", { name: /folder/i });
+    expect(chips.firstElementChild?.tagName).toBe("BUTTON"); // the room chip, not a glyph span
+  });
 });

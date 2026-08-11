@@ -31,6 +31,27 @@ describe("FolderChips", () => {
     expect(icon.compareDocumentPosition(firstChip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  /// The detail page renders the icon itself, as the Change folder button. Two adjacent folder glyphs would
+  /// blur which control is which.
+  it("can omit its leading folder icon", () => {
+    // Both halves, in one test: on its own, "the icon is absent when showIcon is false" would also pass if
+    // the test id never existed at all - it would be asserting nothing.
+    const { unmount } = render(<FolderChips roomName="Personal" crumbs={CRUMBS} onSelect={vi.fn()} />);
+    expect(screen.getByTestId("folder-chips-icon")).toBeTruthy();
+    unmount();
+
+    render(<FolderChips roomName="Personal" crumbs={CRUMBS} onSelect={vi.fn()} showIcon={false} />);
+
+    expect(screen.queryByTestId("folder-chips-icon")).toBeNull();
+    // The chips themselves are untouched - only the glyph goes.
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "Personal",
+      "Customers",
+      "Acme Corp",
+      "Project Falcon",
+    ]);
+  });
+
   it("reports the folder id when a folder chip is clicked", async () => {
     const onSelect = vi.fn();
     render(<FolderChips roomName="Personal" crumbs={CRUMBS} onSelect={onSelect} />);

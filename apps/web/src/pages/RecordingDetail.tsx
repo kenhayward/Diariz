@@ -24,6 +24,8 @@ import {
   SpeakersGlyph,
   TranscriptGlyph,
 } from "../components/detail/SectionIcons";
+import { FolderIcon } from "../components/icons";
+import { sectionColor } from "../lib/sectionColors";
 import { DETAIL_SECTION_KEY, initialSection, type SectionKey } from "../lib/detailSection";
 import MoveToSectionModal from "../components/MoveToSectionModal";
 import ShareToRoomModal from "../components/ShareToRoomModal";
@@ -1068,6 +1070,10 @@ export default function RecordingDetail() {
     id: s.id,
     name: s.name,
   }));
+  // The glyph takes the colour of the folder the recording is actually in - the same colour the panel gives
+  // that folder's row - so the button still says *which* folder without any text. Neutral at the room's top
+  // level, where there is no folder to take a colour from.
+  const folderIconColor = folderCrumbs.length > 0 ? sectionColor(folderCrumbs[folderCrumbs.length - 1].id) : null;
   /// Show a folder in the left list. The drill position is a URL param, so this leaves the recording open
   /// and just moves the list underneath it - but the list has to be the thing on screen for that to mean
   /// anything, hence the tab pull: a chip clicked while the panel is on Calendar/Actions/Tags would
@@ -1660,21 +1666,35 @@ export default function RecordingDetail() {
         // title block. It lives here rather than on FolderChips' nav because the nav is no longer the
         // outermost element of the row.
         <div className="-mt-1 flex flex-wrap items-center gap-2">
-          {/* An action on the path, not a step in it - so it stays outside FolderChips' navigation
-              landmark. Square corners against the chips' pills are what tell the two apart; it carries no
-              folder icon, because FolderChips already opens with one and two adjacent folder glyphs blur
-              which belongs to which control. */}
+          {/* The glyph the path opens with IS the way to change that path - one control where the reader is
+              already looking, instead of a second button competing with it. Button chrome (border,
+              background, hover tint) is what says it is clickable at all; the glyph keeps the deepest
+              folder's colour, so the row still names its folder at a glance. It sits outside FolderChips'
+              navigation landmark because changing the path is an action on the path, not a step in it -
+              which is also why the chips no longer draw a glyph of their own (showIcon={false}). */}
           <button
             type="button"
+            aria-label={t("workspace:changeFolder")}
+            title={t("workspace:changeFolder")}
             onClick={() => setMoving(true)}
-            className="shrink-0 rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-500 dark:hover:bg-blue-900/30 dark:hover:text-blue-300"
+            style={
+              folderIconColor
+                ? ({ "--sc-light": folderIconColor.light, "--sc-dark": folderIconColor.dark } as React.CSSProperties)
+                : undefined
+            }
+            className={`shrink-0 rounded-md border border-gray-200 bg-white p-1 hover:border-blue-300 hover:bg-blue-50 dark:border-gray-600 dark:bg-gray-800 dark:hover:border-blue-500 dark:hover:bg-blue-900/30 ${
+              folderIconColor
+                ? "text-[var(--sc-light)] dark:text-[var(--sc-dark)]"
+                : "text-gray-400 dark:text-gray-500"
+            }`}
           >
-            {t("workspace:changeFolder")}
+            <FolderIcon size={14} />
           </button>
           <FolderChips
             roomName={currentRoom?.name ?? ""}
             crumbs={folderCrumbs}
             onSelect={openFolderInList}
+            showIcon={false}
           />
         </div>
       )}
