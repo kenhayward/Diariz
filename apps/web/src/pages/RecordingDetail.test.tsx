@@ -1433,4 +1433,44 @@ describe("RecordingDetail folder chips", () => {
     await screen.findByText(/Mic 6\/26\/2026/);
     expect(screen.queryByRole("navigation", { name: /folder/i })).toBeNull();
   });
+
+  /// Opening the picker from a page that already knows where the recording is filed should show that folder
+  /// as the current one. The modal has a distinct "caller does not know" state, and this call site used to
+  /// land in it, so the picker marked nothing.
+  describe("opens the folder picker on the recording's current folder", () => {
+    /// Open the picker through the kebab. The Change folder button does not exist yet, so this keeps the
+    /// prop fix independently testable - and it doubles as a guard that the menu item survives.
+    async function openPicker() {
+      await screen.findByRole("navigation", { name: /folder/i });
+      fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: /move to section/i }));
+    }
+
+    it("marks a top-level folder as current", async () => {
+      renderInRoom(inRoom("cust"));
+      await openPicker();
+
+      // FolderPicker marks the current folder with aria-current on that row's select control.
+      const current = await screen.findByLabelText("Select Customers");
+      await waitFor(() => expect(current.getAttribute("aria-current")).toBe("true"));
+    });
+
+    /// A nested folder's own row is not on screen when the picker mounts at the top level. FolderPicker
+    /// deliberately does NOT drill to reveal it - it shows a "Selected: {path}" line above the list
+    /// instead. So the visible proof for a nested current folder is that line, not an aria-current row.
+    it("names a nested folder in the selected-path line", async () => {
+      renderInRoom(inRoom("acme"));
+      await openPicker();
+
+      expect(await screen.findByText(/Selected:.*Acme Corp/)).toBeTruthy();
+    });
+
+    it("marks the room's top level as current for an unfiled recording", async () => {
+      renderInRoom(inRoom(null));
+      await openPicker();
+
+      const root = await screen.findByLabelText("Select Ungrouped");
+      await waitFor(() => expect(root.getAttribute("aria-current")).toBe("true"));
+    });
+  });
 });

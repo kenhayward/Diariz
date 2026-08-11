@@ -1746,6 +1746,9 @@ export default function RecordingDetail() {
       {moving && (
         <MoveToSectionModal
           recordingId={id}
+          // The page already knows where this is filed, so the picker opens on it. `?? null` is deliberate:
+          // the modal reads `undefined` as "caller does not know" and `null` as "the room's top level".
+          currentSectionId={folderPlacement?.sectionId ?? null}
           roomId={currentRoom && !currentRoom.isPersonal ? currentRoom.id : undefined}
           onClose={() => setMoving(false)}
         />
