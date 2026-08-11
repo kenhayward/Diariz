@@ -1656,11 +1656,27 @@ export default function RecordingDetail() {
           room: without a placement there is no path, and a bare room chip would claim it sits at that
           room's top level when it isn't filed there at all. */}
       {folderPlacement && (
-        <FolderChips
-          roomName={currentRoom?.name ?? ""}
-          crumbs={folderCrumbs}
-          onSelect={openFolderInList}
-        />
+        // -mt-1 counteracts the hero's space-y-2.5 so the row sits tight under the name as part of the
+        // title block. It lives here rather than on FolderChips' nav because the nav is no longer the
+        // outermost element of the row.
+        <div className="-mt-1 flex flex-wrap items-center gap-2">
+          {/* An action on the path, not a step in it - so it stays outside FolderChips' navigation
+              landmark. Square corners against the chips' pills are what tell the two apart; it carries no
+              folder icon, because FolderChips already opens with one and two adjacent folder glyphs blur
+              which belongs to which control. */}
+          <button
+            type="button"
+            onClick={() => setMoving(true)}
+            className="shrink-0 rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-500 dark:hover:bg-blue-900/30 dark:hover:text-blue-300"
+          >
+            {t("workspace:changeFolder")}
+          </button>
+          <FolderChips
+            roomName={currentRoom?.name ?? ""}
+            crumbs={folderCrumbs}
+            onSelect={openFolderInList}
+          />
+        </div>
       )}
 
       <p className="-mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -1746,6 +1762,9 @@ export default function RecordingDetail() {
       {moving && (
         <MoveToSectionModal
           recordingId={id}
+          // The page already knows where this is filed, so the picker opens on it. `?? null` is deliberate:
+          // the modal reads `undefined` as "caller does not know" and `null` as "the room's top level".
+          currentSectionId={folderPlacement?.sectionId ?? null}
           roomId={currentRoom && !currentRoom.isPersonal ? currentRoom.id : undefined}
           onClose={() => setMoving(false)}
         />

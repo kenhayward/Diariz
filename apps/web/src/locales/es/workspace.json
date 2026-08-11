@@ -460,6 +460,7 @@
   "folderPathLabelCurrent": "Ruta de esta carpeta",
   "folderPathMenuCurrent": "Mostrar ruta completa de esta carpeta",
   "folderChipsLabel": "Carpeta de esta grabación",
+  "changeFolder": "Cambiar carpeta",
   "folderPathCollapsed": "Carpetas ocultas",
   "selectAllIn": "Seleccionar todo en {{section}}",
   "confirmDeleteSection": "¿Eliminar la sección \"{{name}}\"? Sus grabaciones pasarán a Sin agrupar.",

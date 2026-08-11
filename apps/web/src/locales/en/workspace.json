@@ -460,6 +460,7 @@
   "folderPathLabelCurrent": "This folder's path",
   "folderPathMenuCurrent": "Show full path for this folder",
   "folderChipsLabel": "Folder this recording is in",
+  "changeFolder": "Change folder",
   "folderPathCollapsed": "Hidden folders",
   "selectAllIn": "Select all in {{section}}",
   "confirmDeleteSection": "Delete section \"{{name}}\"? Its recordings move to Ungrouped.",

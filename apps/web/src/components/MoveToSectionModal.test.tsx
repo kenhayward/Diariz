@@ -20,6 +20,23 @@ function renderModal(currentSectionId?: string | null, onClose: () => void = () 
   );
 }
 
+/// Like `renderModal`, but hands back the QueryClient so a test can watch what the modal invalidates.
+/// The breadcrumbs on the recording detail page are derived from the `["recording", id]` query, which is a
+/// different key from the `["recordings"]` list - so "the list refreshed" does not mean "the breadcrumbs
+/// refreshed", and only a direct assertion on the key distinguishes them.
+function renderModalWithClient(currentSectionId?: string | null) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const invalidate = vi.spyOn(qc, "invalidateQueries");
+  const view = render(
+    <QueryClientProvider client={qc}>
+      <MoveToSectionModal recordingId="rec-1" currentSectionId={currentSectionId} onClose={() => {}} />
+    </QueryClientProvider>,
+  );
+  /// Every key this modal invalidated, flattened for readable assertions.
+  const invalidatedKeys = () => invalidate.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey));
+  return { ...view, invalidatedKeys };
+}
+
 describe("MoveToSectionModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -177,5 +194,35 @@ describe("MoveToSectionModal", () => {
     fireEvent.click(await screen.findByLabelText("Select Work"));
     await waitFor(() => expect(api.moveRecording).toHaveBeenCalledWith("rec-1", "sec-1", "eng-room"));
     expect(api.listSections).toHaveBeenCalledWith("eng-room");
+  });
+
+  /// The recording's detail page derives its folder breadcrumbs from the `["recording", id]` query. Moving
+  /// the recording used to invalidate only the `["recordings"]` list, so the page you moved it *from* kept
+  /// showing the old folder until a reload.
+  describe("refreshes the recording it moved", () => {
+    it("invalidates the recording's detail query after moving to a folder", async () => {
+      const { invalidatedKeys } = renderModalWithClient(null);
+      fireEvent.click(await screen.findByLabelText("Select Work"));
+
+      await waitFor(() => expect(api.moveRecording).toHaveBeenCalled());
+      await waitFor(() => expect(invalidatedKeys()).toContain(JSON.stringify(["recording", "rec-1"])));
+    });
+
+    it("still invalidates the recordings list after moving to a folder", async () => {
+      const { invalidatedKeys } = renderModalWithClient(null);
+      fireEvent.click(await screen.findByLabelText("Select Work"));
+
+      await waitFor(() => expect(invalidatedKeys()).toContain(JSON.stringify(["recordings"])));
+    });
+
+    it("invalidates the recording's detail query after create-and-move", async () => {
+      const { invalidatedKeys } = renderModalWithClient(null);
+      await screen.findByLabelText("Filter folders");
+      fireEvent.change(screen.getByLabelText(/new section name/i), { target: { value: "Ideas" } });
+      fireEvent.click(screen.getByRole("button", { name: /create.*move/i }));
+
+      await waitFor(() => expect(api.createSection).toHaveBeenCalled());
+      await waitFor(() => expect(invalidatedKeys()).toContain(JSON.stringify(["recording", "rec-1"])));
+    });
   });
 });

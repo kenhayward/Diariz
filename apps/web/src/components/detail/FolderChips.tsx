@@ -42,10 +42,10 @@ export default function FolderChips({
   const deepest = crumbs[crumbs.length - 1];
   const color = deepest ? sectionColor(deepest.id) : null;
 
-  // -mt-1 counteracts the hero's space-y-2.5 so the path sits tight under the name as part of the title
-  // block, rather than floating between the name and the subtitle. The subtitle carries the same pull.
+  // No top margin of its own: this renders inside the detail page's folder row, which owns the pull that
+  // keeps the row tight under the recording name (the subtitle below carries the same pull).
   return (
-    <nav aria-label={t("folderChipsLabel")} className="-mt-1 flex flex-wrap items-center gap-1">
+    <nav aria-label={t("folderChipsLabel")} className="flex flex-wrap items-center gap-1">
       {/* Says "these are folders" at a glance - without it the row reads as a set of generic tags. */}
       <span
         style={color ? ({ "--sc-light": color.light, "--sc-dark": color.dark } as React.CSSProperties) : undefined}

@@ -460,6 +460,7 @@
   "folderPathLabelCurrent": "Pfad dieses Ordners",
   "folderPathMenuCurrent": "Vollständigen Pfad dieses Ordners anzeigen",
   "folderChipsLabel": "Ordner dieser Aufnahme",
+  "changeFolder": "Ordner ändern",
   "folderPathCollapsed": "Ausgeblendete Ordner",
   "selectAllIn": "Alle in {{section}} auswählen",
   "confirmDeleteSection": "Abschnitt „{{name}}“ löschen? Seine Aufnahmen werden nach „Ohne Abschnitt“ verschoben.",

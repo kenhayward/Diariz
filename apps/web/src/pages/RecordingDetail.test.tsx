@@ -105,6 +105,9 @@ vi.mock("../lib/api", () => ({
     emailFormulaResult: vi.fn(),
     downloadFormulaResult: vi.fn(),
     listSections: vi.fn().mockResolvedValue([]),
+    // Not asserted on here, but the folder picker this page opens can call it. An absent method fails as an
+    // opaque crash rather than a clear assertion, so it is stubbed rather than left out.
+    moveRecording: vi.fn(),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }));
@@ -1432,5 +1435,77 @@ describe("RecordingDetail folder chips", () => {
 
     await screen.findByText(/Mic 6\/26\/2026/);
     expect(screen.queryByRole("navigation", { name: /folder/i })).toBeNull();
+  });
+
+  /// Opening the picker from a page that already knows where the recording is filed should show that folder
+  /// as the current one. The modal has a distinct "caller does not know" state, and this call site used to
+  /// land in it, so the picker marked nothing.
+  describe("opens the folder picker on the recording's current folder", () => {
+    /// Open the picker through the kebab. The Change folder button does not exist yet, so this keeps the
+    /// prop fix independently testable - and it doubles as a guard that the menu item survives.
+    async function openPicker() {
+      await screen.findByRole("navigation", { name: /folder/i });
+      fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: /move to section/i }));
+    }
+
+    it("marks a top-level folder as current", async () => {
+      renderInRoom(inRoom("cust"));
+      await openPicker();
+
+      // FolderPicker marks the current folder with aria-current on that row's select control.
+      const current = await screen.findByLabelText("Select Customers");
+      await waitFor(() => expect(current.getAttribute("aria-current")).toBe("true"));
+    });
+
+    /// A nested folder's own row is not on screen when the picker mounts at the top level. FolderPicker
+    /// deliberately does NOT drill to reveal it - it shows a "Selected: {path}" line above the list
+    /// instead. So the visible proof for a nested current folder is that line, not an aria-current row.
+    it("names a nested folder in the selected-path line", async () => {
+      renderInRoom(inRoom("acme"));
+      await openPicker();
+
+      expect(await screen.findByText(/Selected:.*Acme Corp/)).toBeTruthy();
+    });
+
+    it("marks the room's top level as current for an unfiled recording", async () => {
+      renderInRoom(inRoom(null));
+      await openPicker();
+
+      const root = await screen.findByLabelText("Select Ungrouped");
+      await waitFor(() => expect(root.getAttribute("aria-current")).toBe("true"));
+    });
+  });
+
+  /// The chips say where the recording is filed; this button is how you change it. It sits with them, left
+  /// of the breadcrumbs, rather than being buried in the kebab menu.
+  it("shows a Change folder button beside the breadcrumbs", async () => {
+    renderInRoom(inRoom("acme"));
+
+    expect(await screen.findByRole("button", { name: /change folder/i })).toBeTruthy();
+  });
+
+  it("opens the folder picker when Change folder is clicked", async () => {
+    renderInRoom(inRoom("acme"));
+
+    fireEvent.click(await screen.findByRole("button", { name: /change folder/i }));
+
+    expect(await screen.findByRole("dialog", { name: /move to section/i })).toBeTruthy();
+  });
+
+  /// It is an action on the chips, not one of them. The chip row is a navigation landmark whose every
+  /// control is a destination, and several tests above assert exactly which buttons live inside it.
+  it("keeps the button outside the breadcrumb navigation landmark", async () => {
+    renderInRoom(inRoom("acme"));
+
+    const chips = await screen.findByRole("navigation", { name: /folder/i });
+    expect(within(chips).queryByRole("button", { name: /change folder/i })).toBeNull();
+  });
+
+  it("renders no Change folder button when the recording is not placed in the room being viewed", async () => {
+    renderInRoom(inRoom("acme", "some-other-room"));
+
+    await screen.findByText(/Mic 6\/26\/2026/);
+    expect(screen.queryByRole("button", { name: /change folder/i })).toBeNull();
   });
 });

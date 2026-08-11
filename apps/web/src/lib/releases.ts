@@ -62,6 +62,26 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.206.0",
+    date: "2026-08-11",
+    pr: 508,
+    headline: "Change a recording's folder straight from its page",
+    summary:
+      "The folder path under a recording's name told you where it was filed but gave you no way to " +
+      "change it - moving a recording meant finding it in the More actions menu. There is now a Change " +
+      "folder button sitting right next to that path, opening the same folder picker. Two things that " +
+      "were quietly wrong are fixed with it: the picker now opens with the recording's current folder " +
+      "already marked instead of nothing selected, and the folder path updates the moment the move " +
+      "lands rather than showing the old folder until you reloaded the page.",
+    added: [
+      "A Change folder button beside the folder path on a recording's page, opening the folder picker.",
+    ],
+    fixed: [
+      "The folder path under a recording's name now updates as soon as you move it, instead of showing the old folder until a reload.",
+      "The folder picker now opens with the recording's current folder marked.",
+    ],
+  },
+  {
     version: "0.205.3",
     date: "2026-08-11",
     pr: 507,
