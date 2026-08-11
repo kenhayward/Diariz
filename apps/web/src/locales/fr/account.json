@@ -20,6 +20,8 @@
   "themeDark": "Sombre",
   "signOut": "Se déconnecter",
   "preferencesTitle": "Préférences",
+  "unsavedChanges": "Modifications non enregistrées",
+  "saveChanges": "Enregistrer les modifications",
   "tabProfile": "Profil",
   "tabCalendars": "Agendas",
   "tabIntegrations": "Intégrations",

@@ -8,13 +8,19 @@ vi.mock("../auth", () => ({
 vi.mock("../lib/api", () => ({ api: { getProfile: vi.fn() } }));
 // Isolate the shell: each tab's content is a simple marker.
 vi.mock("./ProfileSection", () => ({ default: () => <div>PROFILE_SECTION</div> }));
-vi.mock("./RecordingsSection", () => ({ default: () => <div>RECORDINGS_SECTION</div> }));
+vi.mock("./RecordingsSection", () => ({
+  default: () => {
+    usePreferencesFooter({ dirty: true, busy: false, status: "unsaved", error: null, onSave: () => {} });
+    return <div>RECORDINGS_SECTION</div>;
+  },
+}));
 vi.mock("./FormulasSection", () => ({ default: () => <div>FORMULAS_SECTION</div> }));
 vi.mock("./calendars/CalendarsSection", () => ({ default: () => <div>CALENDARS_SECTION</div> }));
 vi.mock("./integrations/IntegrationsSection", () => ({ default: () => <div>INTEGRATIONS_SECTION</div> }));
 vi.mock("./assistant/AssistantSection", () => ({ default: () => <div>ASSISTANT_SECTION</div> }));
 
 import { api } from "../lib/api";
+import { usePreferencesFooter } from "./PreferencesFooter";
 import PreferencesModal, { type PreferencesTab } from "./PreferencesModal";
 
 function renderModal(props: { onClose?: () => void; initialTab?: PreferencesTab } = {}) {
@@ -147,5 +153,26 @@ describe("PreferencesModal", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /close/i }));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("shows Save changes only on a tab that opts into the footer", () => {
+    renderModal();
+    // Profile does not register.
+    expect(screen.queryByRole("button", { name: /save changes/i })).toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: /^recordings$/i }));
+    expect(screen.getByRole("button", { name: /save changes/i })).toBeTruthy();
+    expect(screen.getByText("Unsaved changes")).toBeTruthy();
+
+    // Switching away must not leave a stale Save button behind pointing at an unmounted tab.
+    fireEvent.click(screen.getByRole("tab", { name: /^profile$/i }));
+    expect(screen.queryByRole("button", { name: /save changes/i })).toBeNull();
+  });
+
+  it("names the active tab in a breadcrumb beside the dialog title", () => {
+    renderModal();
+    expect(screen.getByText("/ Profile")).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: /^calendars$/i }));
+    expect(screen.getByText("/ Calendars")).toBeTruthy();
   });
 });

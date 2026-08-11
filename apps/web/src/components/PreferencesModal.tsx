@@ -8,6 +8,7 @@ import CalendarsSection from "./calendars/CalendarsSection";
 import IntegrationsSection from "./integrations/IntegrationsSection";
 import AssistantSection from "./assistant/AssistantSection";
 import FormulasSection from "./FormulasSection";
+import { PreferencesFooterBar, PreferencesFooterProvider } from "./PreferencesFooter";
 import { CalendarIcon, FileTextIcon, GlobeIcon, MessageSquareIcon, MicIcon, UserIcon } from "./icons";
 
 export type PreferencesTab =
@@ -115,28 +116,27 @@ export default function PreferencesModal({
         </div>
 
         {/* Right content panel. */}
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="border-b px-5 pt-4 pb-3 dark:border-gray-700">
-            <h2 className="text-base font-semibold dark:text-gray-100">{t("preferencesTitle")}</h2>
+        <PreferencesFooterProvider>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex items-baseline gap-2 border-b px-5 pt-4 pb-3 dark:border-gray-700">
+              <h2 className="text-base font-semibold dark:text-gray-100">{t("preferencesTitle")}</h2>
+              {/* Quiet breadcrumb - says which of six panels you are on without a second heading
+                  competing with the dialog's own title. Derived from `tabs`, so it cannot drift. */}
+              <span className="text-[13px] text-gray-500 dark:text-gray-400">
+                / {tabs.find((x) => x.id === tab)?.label}
+              </span>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-5">
+              {tab === "profile" && <ProfileSection />}
+              {tab === "recordings" && <RecordingsSection />}
+              {tab === "formulas" && <FormulasSection />}
+              {tab === "calendars" && <CalendarsSection />}
+              {tab === "integrations" && <IntegrationsSection />}
+              {tab === "assistant" && <AssistantSection />}
+            </div>
+            <PreferencesFooterBar onClose={onClose} />
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-5">
-            {tab === "profile" && <ProfileSection />}
-            {tab === "recordings" && <RecordingsSection />}
-            {tab === "formulas" && <FormulasSection />}
-            {tab === "calendars" && <CalendarsSection />}
-            {tab === "integrations" && <IntegrationsSection />}
-            {tab === "assistant" && <AssistantSection />}
-          </div>
-          <div className="flex items-center justify-end border-t px-5 py-3 dark:border-gray-700">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-            >
-              {t("common:close")}
-            </button>
-          </div>
-        </div>
+        </PreferencesFooterProvider>
       </div>
     </div>
   );
