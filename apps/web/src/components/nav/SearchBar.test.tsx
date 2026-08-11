@@ -418,4 +418,15 @@ describe("SearchBar - keyboard", () => {
     expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe("budget");
     expect(onQueryChange).not.toHaveBeenLastCalledWith("");
   });
+
+  /// The sort control shares the search line. SearchBar keeps ownership of the row so the field and the
+  /// control cannot drift apart in two files.
+  it("renders a trailing control on the search line", () => {
+    renderBar({ trailing: <button type="button">sort-here</button> });
+
+    const control = screen.getByRole("button", { name: "sort-here" });
+    const field = screen.getByRole("searchbox");
+    // Same row: the field's rounded box and the control are siblings under one flex line.
+    expect(control.parentElement).toBe(field.closest("div")!.parentElement);
+  });
 });
