@@ -61,6 +61,32 @@ first, since that is where the folder you asked for is shown.
 A recording shared into more than one room is filed independently in each, so the chips always describe the
 room you are currently viewing.
 
+## Sorting the list
+
+The **Sort by** control sits at the right-hand end of the search line, above the list. It offers:
+
+- **Manual** - the order you arranged by hand, by dragging rows. This is the default.
+- **Date/Time**, **Name** and **Duration**, each of which can run **ascending or descending** using the
+  arrow button beside the dropdown.
+
+Your choice is remembered between visits, and applies wherever you are - every folder, every room.
+
+Sorting changes only what you see. The manual order is left untouched underneath, so switching back to
+**Manual** returns the list exactly as you arranged it, however long you spent looking at it another way.
+
+Two consequences worth knowing:
+
+- **Dragging rows to reorder them pauses while a sort is active.** The list is not showing the manual order
+  at that point, so a row you dropped somewhere new would appear not to move. Switch back to Manual and
+  reordering works as before. Dragging a recording *into a folder*, or onto the path at the top, still works
+  under any sort - those move a recording rather than reorder one.
+- **Folders always stay in their manual order.** A folder has no duration or date of its own, so sorting
+  applies to the recordings below them.
+
+Each recording's row shows **when it was made** on the right: "Today 14:30" for something recorded today,
+"11 Aug 14:30" earlier in the same year, and the year as well for anything older. Hover a row to see its
+duration, along with the source and the full date.
+
 ## Cutting and pasting between folders
 
 To move several recordings, or a whole folder, in one step:

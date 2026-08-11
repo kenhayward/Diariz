@@ -50,10 +50,11 @@ describe("TagCloudModal", () => {
     renderModal();
     expect(screen.getByRole("dialog")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Budget Planning" })).toBeTruthy();
-    // No selection: both tagged recordings are listed with their durations.
+    // No selection: both tagged recordings are listed, each with when it was made. Asserted on the month
+    // rather than a full literal so the expectation does not depend on the machine's timezone.
     expect(screen.getByText("Budget call")).toBeTruthy();
     expect(screen.getByText("Vendor call")).toBeTruthy();
-    expect(screen.getByText("1:01")).toBeTruthy(); // 61000 ms
+    expect(screen.getAllByText(/Jul \d\d:\d\d/).length).toBe(2); // created 1 and 2 July 2026
   });
 
   it("clicking a tag forwards the shared selection to the parent", () => {
