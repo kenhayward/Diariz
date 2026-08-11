@@ -78,7 +78,7 @@ export function PreferencesFooterBar({ onClose }: { onClose: () => void }) {
   const api = useContext(FooterApiCtx);
 
   const statusText =
-    state === null || state.error ? null : state.status === "unsaved" ? t("unsavedChanges") : state.status === "saved" ? t("profileSaved") : null;
+    state === null || state.error ? null : state.status === "unsaved" ? t("unsavedChanges") : state.status === "saved" ? t("saved") : null;
 
   return (
     <div className="flex items-center justify-between gap-4 border-t px-5 py-3 dark:border-gray-700">

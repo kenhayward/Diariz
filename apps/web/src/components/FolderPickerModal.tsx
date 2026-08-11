@@ -40,10 +40,11 @@ export default function FolderPickerModal({
     [sections, selectedId, t],
   );
 
-  // `PreferencesModal` listens for Escape on `document`. React delegates from the root container, which is
-  // a descendant of `document`, so stopping propagation on the native event here does prevent that
-  // listener - one Escape closes this dialog and leaves Preferences open. When the filter box is
-  // non-empty `FolderPicker` stops the event first to clear the filter, so that press reaches neither.
+  // `PreferencesModal` listens for Escape on `document`. React's synthetic `stopPropagation()` also calls
+  // the native event's `stopPropagation()`, so stopping it here keeps a bare Escape from ever reaching
+  // that listener - it closes this dialog and leaves Preferences open. The same mechanism means an Escape
+  // handled inside `FolderPicker` - clearing a non-empty filter - is stopped there too, so it never reaches
+  // `PreferencesModal`'s listener either.
   //
   // `aria-modal="true"` below claims a modality that only holds if Tab actually stays inside - so this
   // also traps Tab/Shift-Tab at the dialog's own first/last focusable control, wrapping instead of

@@ -224,8 +224,8 @@ describe("RecordingsSection", () => {
 
   describe("recording from a calendar event", () => {
     const autoStop = () => screen.getByRole("switch", { name: /let a calendar meeting end its own recording/i });
-    const afterMinutes = () => screen.getByLabelText(/minutes after the meeting ends/i) as HTMLInputElement;
-    const silenceSeconds = () => screen.getByLabelText(/seconds of silence/i) as HTMLInputElement;
+    const afterMinutes = () => screen.getByLabelText(/minutes after the meeting was due to finish/i) as HTMLInputElement;
+    const silenceSeconds = () => screen.getByLabelText(/seconds of silence before stopping/i) as HTMLInputElement;
 
     it("shows the card with the switch off and no duration fields at all", async () => {
       renderSection();
@@ -233,8 +233,8 @@ describe("RecordingsSection", () => {
 
       expect(autoStop().getAttribute("aria-checked")).toBe("false");
       // Absent, not disabled: a field you cannot use should not be on screen looking editable.
-      expect(screen.queryByLabelText(/minutes after the meeting ends/i)).toBeNull();
-      expect(screen.queryByLabelText(/seconds of silence/i)).toBeNull();
+      expect(screen.queryByLabelText(/minutes after the meeting was due to finish/i)).toBeNull();
+      expect(screen.queryByLabelText(/seconds of silence before stopping/i)).toBeNull();
     });
 
     it("says the option applies only to a recording started from the calendar", async () => {

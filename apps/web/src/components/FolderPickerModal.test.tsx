@@ -73,13 +73,20 @@ describe("FolderPickerModal", () => {
     }
   });
 
-  it("lets a non-empty filter take Escape for itself, closing nothing", () => {
-    const { onClose } = renderPicker();
-    const filter = screen.getByLabelText("Filter folders");
-    fireEvent.change(filter, { target: { value: "acme" } });
-    fireEvent.keyDown(filter, { key: "Escape" });
-    expect((filter as HTMLInputElement).value).toBe("");
-    expect(onClose).not.toHaveBeenCalled();
+  it("lets a non-empty filter take Escape for itself, closing nothing - and never reaches the enclosing modal either", () => {
+    const outer = vi.fn();
+    document.addEventListener("keydown", outer);
+    try {
+      const { onClose } = renderPicker();
+      const filter = screen.getByLabelText("Filter folders");
+      fireEvent.change(filter, { target: { value: "acme" } });
+      fireEvent.keyDown(filter, { key: "Escape" });
+      expect((filter as HTMLInputElement).value).toBe("");
+      expect(onClose).not.toHaveBeenCalled();
+      expect(outer).not.toHaveBeenCalled();
+    } finally {
+      document.removeEventListener("keydown", outer);
+    }
   });
 
   it("passes a choice straight through - it is applied to the panel, not held here", () => {

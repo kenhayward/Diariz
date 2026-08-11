@@ -30,8 +30,8 @@ Diariz infers the link by finding the calendar entry that best overlaps the reco
 open it, but starting from the event means there is nothing to infer - the invite's details are on the recording
 the moment it appears, any **prep notes** you wrote on the event come across with it, and because you picked the
 meeting yourself the automatic matcher will not later swap it for an adjacent one.
-Under **Preferences → Recordings**, the switch **Let a calendar meeting end its own recording**
-you can also let such a recording **end by itself** (off by default): it stops a chosen number of **minutes after
+Under **Preferences → Recordings**, the switch **Let a calendar meeting end its own recording** lets
+such a recording **end by itself** (off by default): it stops a chosen number of **minutes after
 the meeting was scheduled to finish** - catching the wrap-up rather than cutting off on the hour - and/or after a
 chosen run of **silence**, for when the meeting breaks up early. Silence only counts once something has been
 heard, so joining before anyone speaks never cuts the recording short, and pausing does not count against it.
