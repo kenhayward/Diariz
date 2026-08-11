@@ -64,6 +64,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.204.0",
     date: "2026-08-11",
+    pr: 504,
     headline: "Preferences -> Recordings, rebuilt",
     summary:
       "The Recordings tab in Preferences now says what each choice actually does. The three placement options are cards carrying a one-line consequence, so you can tell them apart without trying them. The calendar auto-stop settings are one switch: turn it on and the two durations appear as a sentence you can read, with a worked example in your own numbers showing exactly when a 10:00-11:00 meeting would stop recording; turn it off and they are gone rather than sitting there greyed out. Save has moved to the modal footer next to Close, with the panel telling you whether you have unsaved changes. Choosing a fixed folder now opens a proper dialog, and the folder you picked is shown as its full path whether or not it is nested deeply.",
