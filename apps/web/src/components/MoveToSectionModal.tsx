@@ -59,6 +59,9 @@ export default function MoveToSectionModal({
     try {
       await api.moveRecording(recordingId, sectionId, roomId);
       qc.invalidateQueries({ queryKey: ["recordings"] });
+      // The detail page's folder breadcrumbs come from the recording's own query, which is a different key
+      // from the list - without this the page you moved it from keeps showing the old folder.
+      qc.invalidateQueries({ queryKey: ["recording", recordingId] });
       onClose();
     } catch (e) {
       setError(apiErrorMessage(e));
@@ -76,6 +79,7 @@ export default function MoveToSectionModal({
       await api.moveRecording(recordingId, section.id, roomId);
       qc.invalidateQueries({ queryKey: ["recordings"] });
       qc.invalidateQueries({ queryKey: ["sections"] });
+      qc.invalidateQueries({ queryKey: ["recording", recordingId] });
       onClose();
     } catch (e) {
       setError(apiErrorMessage(e));
