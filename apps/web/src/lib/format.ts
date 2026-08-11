@@ -49,6 +49,30 @@ export function formatTimeHm(iso: string): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
+/// A recording's timestamp as the list rows show it: "Today 14:30", "11 Aug 14:30", or "11 Aug 2025 14:30"
+/// once the year stops being obvious. The time is always fixed 24-hour.
+///
+/// The day is placed **before** the localised month by hand rather than through `Intl`'s own ordering, which
+/// renders "Aug 11" for en-US - `formatLongDate` above composes English the same way and for the same reason.
+/// `todayLabel` arrives already translated so this module stays free of i18n, and `now` is injectable so the
+/// tests are deterministic (as `formatRelativeTime` does).
+export function formatListDateTime(
+  iso: string,
+  locale: string | undefined,
+  todayLabel: string,
+  now: Date = new Date(),
+): string {
+  const d = new Date(iso);
+  const time = formatTimeHm(iso);
+  const sameYear = d.getFullYear() === now.getFullYear();
+  if (sameYear && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()) {
+    return `${todayLabel} ${time}`;
+  }
+  const month = d.toLocaleDateString(locale || undefined, { month: "short" });
+  const year = sameYear ? "" : ` ${d.getFullYear()}`;
+  return `${d.getDate()} ${month}${year} ${time}`;
+}
+
 /// Duration (ms) as fixed "hh:mm" (hours:minutes, both zero-padded), e.g. 65000 → "00:01", 3900000 → "01:05".
 export function formatDurationHm(ms: number): string {
   const total = Math.max(0, Math.round(ms / 1000));
