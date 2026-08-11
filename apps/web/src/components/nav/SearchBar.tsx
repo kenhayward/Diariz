@@ -27,12 +27,17 @@ export default function SearchBar({
   scopeName,
   onQueryChange,
   onDrill,
+  trailing,
 }: {
   roomId: string | undefined;
   /// The folder being browsed - the default search scope. Null at the room's top level.
   sectionId: string | null;
   /// What to call the current scope on the chip.
   scopeName: string;
+  /// Rendered on the search line, right of the field - the panel's Sort by control. The field gives up the
+  /// width for it. Kept as a slot rather than a hard dependency: this component knows about searching, not
+  /// about how the list below it is ordered.
+  trailing?: React.ReactNode;
   /// Fired whenever the live query changes, so the panel can swap its list body for these results.
   onQueryChange: (query: string) => void;
   onDrill?: (sectionId: string) => void;
@@ -93,8 +98,10 @@ export default function SearchBar({
     // Only claims the panel's spare height once results are showing; idle, it is just the pinned field and
     // the drill-in list below keeps the room.
     <div className={`flex min-h-0 flex-col ${active ? "flex-1" : "shrink-0"}`}>
-      <div className="shrink-0 border-b px-2 py-1.5 dark:border-gray-800">
-        <div className="flex items-center gap-1.5 rounded-lg border bg-gray-50 px-2 py-1 focus-within:ring-2 focus-within:ring-blue-500 dark:border-gray-700 dark:bg-gray-800">
+      <div className="flex shrink-0 items-center gap-1.5 border-b px-2 py-1.5 dark:border-gray-800">
+        {/* min-w-0 flex-1: the field yields the width the trailing control needs, rather than pushing it
+            out of the panel. */}
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg border bg-gray-50 px-2 py-1 focus-within:ring-2 focus-within:ring-blue-500 dark:border-gray-700 dark:bg-gray-800">
           <span className="shrink-0 text-gray-400">
             <SearchIcon size={14} />
           </span>
@@ -142,6 +149,7 @@ export default function SearchBar({
             </button>
           )}
         </div>
+        {trailing}
       </div>
 
       {active && (

@@ -4,7 +4,7 @@ import { showStatusBadge, statusBadgeClass, statusLabel } from "../../lib/record
 import { sourceLabel } from "../../lib/recordingSource";
 import { useRoomBasePath } from "../../lib/rooms";
 import { useDrillSearch } from "../../lib/drillRoute";
-import { formatDuration } from "../../lib/format";
+import { formatDuration, formatListDateTime } from "../../lib/format";
 import { CalendarIcon, MicIcon } from "../icons";
 import KebabMenu from "../KebabMenu";
 import RenameForm from "./RenameForm";
@@ -60,7 +60,11 @@ export function RecordingRow({
   selectMode: boolean;
   selected: boolean;
   onToggleSelect: () => void;
-  onDropBefore: (draggedId: string) => void;
+  /// Insert the dragged recording before this one. **Optional**: the List tab omits it while a non-manual
+  /// sort is active, because a reorder would write a `Position` the sorted view cannot show - the row would
+  /// spring back and read as a broken drag. With no handler the row attaches no drop listener at all, so the
+  /// drop bubbles to the level behind it (which appends) instead of being swallowed.
+  onDropBefore?: (draggedId: string) => void;
   /// Show a second line with the source + date/time (the dense list keeps these in the hover title; the
   /// Tags views have room to show them). Off by default so the list/calendar rows are unchanged.
   showDate?: boolean;
@@ -94,13 +98,20 @@ export function RecordingRow({
         e.dataTransfer.setData("text/plain", r.id);
         e.dataTransfer.effectAllowed = "move";
       }}
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => {
-        if (e.dataTransfer.files?.length) return; // a file upload — let it bubble to the panel drop zone
-        e.preventDefault();
-        e.stopPropagation(); // don't also trigger the group's append-drop
-        onDropBefore(e.dataTransfer.getData("text/plain"));
-      }}
+      // Listeners at all only when the row can reorder. Attaching them unconditionally and no-oping inside
+      // would swallow the drop: the level behind the row would never see it, so a drag while sorted would
+      // do nothing at all rather than append.
+      {...(onDropBefore
+        ? {
+            onDragOver: (e: React.DragEvent) => e.preventDefault(),
+            onDrop: (e: React.DragEvent) => {
+              if (e.dataTransfer.files?.length) return; // a file upload — let it bubble to the panel drop zone
+              e.preventDefault();
+              e.stopPropagation(); // don't also trigger the group's append-drop
+              onDropBefore(e.dataTransfer.getData("text/plain"));
+            },
+          }
+        : {})}
     >
       {/* Colour/opacity alone would leave a screen-reader user unable to tell which rows are cut - the
           bar's count says something is cut, never which. */}
@@ -131,9 +142,9 @@ export function RecordingRow({
             to={{ pathname: `${basePath}/recordings/${r.id}`, search: drillSearch }}
             draggable={false}
             onClick={() => onNavigate?.()}
-            // Single-line row: name + right-aligned duration. Source + date (and the full, untruncated name)
-            // move to the hover tooltip to keep the list dense (unless showDate puts the date on a 2nd line).
-            title={`${r.name ?? r.title} — ${sourceLabel(r.source, t)} · ${new Date(r.createdAt).toLocaleDateString(i18n.language)}`}
+            // Single-line row: name + right-aligned date/time. Source, the full date and the duration (which
+            // the row no longer shows) move to the hover tooltip to keep the list dense.
+            title={`${r.name ?? r.title} - ${sourceLabel(r.source, t)} · ${new Date(r.createdAt).toLocaleDateString(i18n.language)} · ${formatDuration(r.durationMs)}`}
             className={({ isActive }) =>
               `flex min-w-0 flex-1 gap-2 rounded px-1 py-0.5 leading-tight ${showDate ? "items-start" : "items-baseline"} ${
                 isActive ? "bg-blue-50 dark:bg-blue-900/30" : "hover:bg-gray-50 dark:hover:bg-gray-800"
@@ -148,9 +159,10 @@ export function RecordingRow({
                 </span>
               )}
             </span>
-            {/* Duration right-aligned (tabular-nums) so durations line up down the list. */}
+            {/* When, right-aligned (tabular-nums) so the column lines up down the list. The duration moved
+                into the hover title above: "when was this?" is what a list is scanned for. */}
             <span className="shrink-0 tabular-nums text-xs text-gray-500 dark:text-gray-400">
-              {formatDuration(r.durationMs)}
+              {formatListDateTime(r.createdAt, i18n.language, t("workspace:today"))}
             </span>
           </NavLink>
         )}

@@ -958,10 +958,16 @@ describe("RecordingsPanel", () => {
     expect(screen.getByRole("menuitem", { name: /email me the transcript/i })).toBeTruthy();
   });
 
-  it("shows the duration as m:ss", async () => {
+  /// The row's right-hand column says WHEN, not how long - that is what a list is scanned for. The duration
+  /// is still one hover away. Asserted on the month rather than a full literal so the expectation does not
+  /// depend on the machine's timezone.
+  it("shows the date and time, keeping the duration in the hover title", async () => {
     renderList();
     await screen.findByText("Weekly Standup");
-    expect(screen.getByText("0:09")).toBeTruthy(); // 9000 ms
+
+    expect(screen.getByText(/Jun \d\d:\d\d/)).toBeTruthy(); // created 26 June 2026
+    expect(screen.queryByText("0:09")).toBeNull(); // 9000 ms, no longer in the row
+    expect(screen.getByRole("link", { name: /weekly standup/i }).getAttribute("title")).toContain("0:09");
   });
 
   it("Extract actions confirms before replacing when the recording already has actions", async () => {
@@ -1352,5 +1358,149 @@ describe("RecordingsPanel", () => {
     fireEvent.drop(target, { dataTransfer: { getData: () => "b" } });
     await new Promise((r) => setTimeout(r, 0));
     expect(api.reorderRecordings).not.toHaveBeenCalled();
+  });
+});
+
+/// Sorting is a **view**. The order the user arranged by hand is what every reorder write is measured
+/// against, so it has to survive being looked at in a different order.
+describe("RecordingsPanel sorting", () => {
+  // The names are chosen so that alphabetical order is the REVERSE of the manual order. That is what makes
+  // the drop assertion below able to fail: with the ids appended, a manual [a, b, c] yields ["a","b","c"]
+  // while a leaked sorted [b, c, a] yields ["b","a","c"]. Fixtures where the two coincide would let a real
+  // bug through.
+  const three = [
+    { ...rec, id: "a", name: "Gamma", durationMs: 3000, createdAt: new Date("2026-01-02T09:00:00Z").toISOString() },
+    { ...rec, id: "b", name: "Alpha", durationMs: 1000, createdAt: new Date("2026-03-04T09:00:00Z").toISOString() },
+    { ...rec, id: "c", name: "Beta", durationMs: 2000, createdAt: new Date("2026-02-03T09:00:00Z").toISOString() },
+  ];
+
+  // Read the rendered order off the row links' hrefs rather than their text: the row now shows a name AND a
+  // date, and splitting that string back apart is exactly the kind of assertion that quietly stops testing
+  // anything when the format changes.
+  const orderedIds = () =>
+    screen
+      .getAllByRole("link")
+      .map((el) => el.getAttribute("href") ?? "")
+      .filter((href) => href.includes("/recordings/"))
+      .map((href) => href.split("/recordings/")[1].split("?")[0]);
+
+  const sortBy = (value: string) =>
+    fireEvent.change(screen.getByRole("combobox", { name: /sort by/i }), { target: { value } });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    roomStub.currentRoom = { id: "p1", isPersonal: true };
+    roomStub.canManageContents = true;
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue(three);
+    (api.reorderRecordings as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+  });
+
+  it("starts on manual, in the order the server returned", async () => {
+    renderList();
+    await screen.findByText("Gamma");
+
+    expect((screen.getByRole("combobox", { name: /sort by/i }) as HTMLSelectElement).value).toBe("manual");
+    expect(orderedIds()).toEqual(["a", "b", "c"]);
+  });
+
+  it("reorders the rows when a sort is chosen", async () => {
+    renderList();
+    await screen.findByText("Gamma");
+
+    sortBy("duration"); // b=1000, c=2000, a=3000
+
+    expect(orderedIds()).toEqual(["b", "c", "a"]);
+  });
+
+  it("reverses on the direction toggle", async () => {
+    renderList();
+    await screen.findByText("Gamma");
+
+    sortBy("duration");
+    fireEvent.click(screen.getByRole("button", { name: /ascending/i }));
+
+    expect(orderedIds()).toEqual(["a", "c", "b"]);
+  });
+
+  it("sorts by date", async () => {
+    renderList();
+    await screen.findByText("Gamma");
+
+    sortBy("date"); // a=2 Jan, c=3 Feb, b=4 Mar
+
+    expect(orderedIds()).toEqual(["a", "c", "b"]);
+  });
+
+  it("persists the choice", async () => {
+    renderList();
+    await screen.findByText("Gamma");
+
+    sortBy("name");
+
+    expect(JSON.parse(localStorage.getItem("diariz.recordings.sort")!)).toEqual({ key: "name", dir: "asc" });
+  });
+
+  it("restores a persisted sort on mount", async () => {
+    localStorage.setItem("diariz.recordings.sort", JSON.stringify({ key: "name", dir: "desc" }));
+    renderList();
+    await screen.findByText("Gamma");
+
+    expect(orderedIds()).toEqual(["a", "c", "b"]); // Gamma, Beta, Alpha
+  });
+
+  /// Folders have no duration and no date of their own, so a folder block that reacted to Name alone would
+  /// be inconsistent across the three keys. They keep their manual order under every setting.
+  it("leaves the folder rows in their manual order", async () => {
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "s1", name: "Zulu", parentId: null, position: 0 },
+      { id: "s2", name: "Alpha Folder", parentId: null, position: 1 },
+    ]);
+    renderList();
+    await screen.findByText("Zulu");
+
+    sortBy("name");
+
+    const labels = screen.getAllByRole("button").map((b) => b.getAttribute("aria-label") ?? "");
+    expect(labels).toContain("Open Zulu");
+    expect(labels).toContain("Open Alpha Folder");
+    // Document order, not the alphabetical order a sorted folder block would have produced.
+    expect(labels.indexOf("Open Zulu")).toBeLessThan(labels.indexOf("Open Alpha Folder"));
+  });
+
+  /// A drop would write a Position the sorted view cannot show, so the row springs back and the drag reads
+  /// as broken. Off while sorted; back the moment Manual returns.
+  it("does not reorder within the level while sorted", async () => {
+    renderList();
+    await screen.findByText("Gamma");
+    sortBy("name"); // display becomes b (Alpha), c (Beta), a (Gamma)
+
+    // Drop "c" onto the "Alpha" row (b). Sorted, this must NOT insert c before b.
+    // getData must answer per type: the level-background handler asks for the section MIME first, and a
+    // dataTransfer that returns "c" for every type would be read as a folder drag instead of a recording.
+    fireEvent.drop(screen.getByText("Alpha").closest("li")!, {
+      dataTransfer: { getData: (type: string) => (type === "text/plain" ? "c" : "") },
+    });
+
+    await waitFor(() => expect(api.reorderRecordings).toHaveBeenCalled());
+    // It bubbled past the row to the level behind it, which appends - and the list it appended into is the
+    // MANUAL order [a, b, c], giving ["a","b","c"]. Had the sorted order leaked into the write it would read
+    // ["b","a","c"], and one drag would have silently rewritten every Position in this folder.
+    expect(api.reorderRecordings).toHaveBeenCalledWith(null, ["a", "b", "c"], undefined);
+  });
+
+  it("reorders again once manual is restored", async () => {
+    renderList();
+    await screen.findByText("Gamma");
+    sortBy("name");
+    sortBy("manual");
+
+    // Manual display is a (Gamma), b (Alpha), c (Beta); dropping c onto b inserts it before b.
+    fireEvent.drop(screen.getByText("Alpha").closest("li")!, {
+      dataTransfer: { getData: (type: string) => (type === "text/plain" ? "c" : "") },
+    });
+
+    await waitFor(() => expect(api.reorderRecordings).toHaveBeenCalledWith(null, ["a", "c", "b"], undefined));
   });
 });

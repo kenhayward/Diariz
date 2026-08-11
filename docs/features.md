@@ -364,7 +364,16 @@ name - the room, then each folder down to the one it sits in - and clicking any 
 to that folder without closing the recording (from the Calendar, Actions or Tags tab it switches back to the
 list first). A deep path collapses in the middle the same way, and a recording shared into several rooms
 shows its folder in the room you are currently viewing, since it is filed independently in each. Recordings
-with no folder simply sit at the top level, and show just the room chip. Browse them as a **list or a calendar**
+with no folder simply sit at the top level, and show just the room chip. A **Sort by** control on the search
+line orders the level you are looking at: **Manual** (the order you arranged by hand, the default),
+**Date/Time**, **Name** or **Duration**, each **ascending or descending**, and your choice is remembered
+between visits and applies in every folder and room. Sorting only changes what you see - the manual order is
+left untouched underneath, so switching back to Manual returns the list exactly as you left it. Folder rows
+always keep their manual order (a folder has no duration or date of its own), and while a sort other than
+Manual is active **dragging rows to reorder them pauses**, since the list is no longer showing the order a
+drag would rewrite; dragging into a folder still works throughout. Each row's right-hand column shows **when
+the recording was made** - "Today 14:30" for today, "11 Aug 14:30" this year, with the year added beyond it -
+and the duration moves to the row's hover tooltip. Browse them as a **list or a calendar**
 (days with recordings are highlighted; click one to see that day on an hour-by-hour timeline). You can also **cut and
 paste** to move several things at once: select recordings and click **Cut** in the toolbar, or **Cut** a
 single folder from its own menu, then drill into wherever you want them and click **Paste**. A bar under

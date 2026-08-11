@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   formatBytes, storagePercent, bytesToGb, gbToBytes, formatDuration,
   formatLongDate, formatTimeHm, formatDurationHm, formatDurationApprox, formatRelativeTime,
+  formatListDateTime,
 } from "./format";
 
 describe("formatDurationApprox", () => {
@@ -136,5 +137,41 @@ describe("formatRelativeTime", () => {
 
   it("defaults to the browser locale when none is passed", () => {
     expect(formatRelativeTime(new Date(2026, 2, 23, 9, 0, 0).toISOString(), undefined, now)).toContain("3");
+  });
+});
+
+describe("formatListDateTime", () => {
+  // Built from local components, not an ISO literal: the output's time comes from the local clock, so a
+  // UTC literal would make these assertions depend on the machine's timezone.
+  const at = (y: number, m: number, d: number, h: number, min: number) =>
+    new Date(y, m, d, h, min).toISOString();
+  const now = new Date(2026, 7, 11, 9, 0); // 11 Aug 2026, 09:00 local
+
+  it("labels today with the time only", () => {
+    expect(formatListDateTime(at(2026, 7, 11, 14, 30), "en", "Today", now)).toBe("Today 14:30");
+  });
+
+  it("shows day and month for an earlier day this year", () => {
+    expect(formatListDateTime(at(2026, 7, 3, 14, 30), "en", "Today", now)).toBe("3 Aug 14:30");
+  });
+
+  it("adds the year outside the current year", () => {
+    expect(formatListDateTime(at(2025, 7, 11, 14, 30), "en", "Today", now)).toBe("11 Aug 2025 14:30");
+  });
+
+  // Same month and day, different year: without a year comparison this would read as "Today".
+  it("does not call the same date in another year today", () => {
+    expect(formatListDateTime(at(2025, 7, 11, 8, 5), "en", "Today", now)).toBe("11 Aug 2025 08:05");
+  });
+
+  it("treats yesterday across a year boundary as another year", () => {
+    const newYear = new Date(2026, 0, 1, 9, 0);
+    expect(formatListDateTime(at(2025, 11, 31, 23, 15), "en", "Today", newYear)).toBe("31 Dec 2025 23:15");
+  });
+
+  // Day-first is fixed by hand rather than left to Intl, which renders "Aug 11" for en-US. Only the month
+  // name is localised.
+  it("localises the month name but keeps the day first", () => {
+    expect(formatListDateTime(at(2026, 7, 3, 14, 30), "fr", "Aujourd'hui", now)).toMatch(/^3 ao/);
   });
 });

@@ -34,7 +34,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Translate** | Translate a whole transcript or a single segment, stored as revisions you can flip back. |
 | **Attachments** | Attach files or URLs (PDF, Office, email, calendar, images) to a recording or directly to a folder, edit Markdown attachments in place, save a chat conversation as an attachment with /attach, and optionally feed them to chat. |
 | **Rooms** | A private Personal Room per account plus shareable Rooms: invite users and groups with per-member permissions. Each Shared Room has its **own folder structure** (sections/sub-sections, drag-and-drop, per-room order) and its own List/Calendar/Actions/Tags scoped to it; record or upload files straight into a room (your Personal Room keeps the original), and search + chat over every room you belong to. A member who can read a shared recording sees its notes and screenshots too - only the owner can add, edit, or delete them. Your Google Calendar and its linking stay personal. The switcher shows each room's folder and meeting counts (shared ones labelled), ticks the one you are in, and remembers where you were. Manage rooms from the switcher. |
-| **Organise & merge** | Folders nested up to 8 levels deep with drag-and-drop (dragging one of several ticked rows moves the whole selection); the meetings list drills in one folder at a time (coloured folder rows with counts, a breadcrumb showing the full path with every part clickable, browser back pops a level) so it stays readable however many recordings you have, with **Open section page** in the breadcrumb's menu as a separate target from browsing deeper; an open recording shows its folder path as clickable chips under its name, each taking the list straight to that folder; choose where a new recording is filed (Ungrouped, the open folder, or a specific folder); cut one or more recordings, or a folder, and paste them into another folder in one move (landing at the bottom, in the order you cut them), with the Paste control showing why it's disabled when a move isn't allowed yet; browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
+| **Organise & merge** | Folders nested up to 8 levels deep with drag-and-drop (dragging one of several ticked rows moves the whole selection); the meetings list drills in one folder at a time (coloured folder rows with counts, a breadcrumb showing the full path with every part clickable, browser back pops a level) so it stays readable however many recordings you have, with **Open section page** in the breadcrumb's menu as a separate target from browsing deeper; an open recording shows its folder path as clickable chips under its name, each taking the list straight to that folder; choose where a new recording is filed (Ungrouped, the open folder, or a specific folder); sort the list by date/time, name or duration (ascending or descending) or keep your manual order, remembered between visits, with each row showing when it was made; cut one or more recordings, or a folder, and paste them into another folder in one move (landing at the bottom, in the order you cut them), with the Paste control showing why it's disabled when a move isn't allowed yet; browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
 | **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds and - synced by the Windows desktop app on launch, from the tray or on demand - a mirror of your classic Outlook calendar (opt-in, per machine, erasable). All three are set up in one **Calendars** tab in Preferences, a card per source showing its account, its calendars and whether it is live. Every calendar you connect is treated the same: meetings from any of them show on the Calendar tab, match to a recording, and open with their full invite details. A month grid highlights the days that have something on them; picking one lays that day out on an hour axis, with meetings and recordings placed and sized by when they ran, clashes side by side, all-day entries in their own strip, and a line marking the current time. Two toolbar buttons refresh it: **Sync calendar** covers every source you have connected in one go, and **Sync today** does the same for the current day only - seconds rather than the half a minute a full Outlook read takes - with the status bar counting up while either runs. |
 | **API access** | Generate a personal API token (when enabled), read-only or read-write, with an optional expiry date, to call the REST API as yourself; the list shows which tokens are read-only and when each expires. A built-in API reference documents every endpoint - what it does, who may call it, and what it changes. |
@@ -61,6 +61,31 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.207.0",
+    date: "2026-08-11",
+    pr: 509,
+    headline: "Sort your meetings, and see when each one was made",
+    summary:
+      "The meetings list gains a Sort by control on the search line. Keep the manual arrangement you " +
+      "dragged into place, or order the list by date and time, name, or duration, ascending or " +
+      "descending - and whichever you pick is remembered for next time. Each row now tells you when a " +
+      "recording was made rather than how long it runs: today's read as \"Today 14:30\", older ones as " +
+      "\"11 Aug 14:30\", with the year added once it is no longer obvious. The duration has not gone " +
+      "anywhere, it is on the row's hover tooltip beside the source. Sorting only changes what you see, " +
+      "never the order you arranged by hand, so clearing it back to Manual returns the list exactly as " +
+      "you left it - while a sort is active, dragging rows to reorder them pauses, since the list is no " +
+      "longer showing that order. On a recording's page, the folder icon at the start of the " +
+      "breadcrumbs is now the Change folder button, replacing the separate one beside it.",
+    added: [
+      "A Sort by control on the meetings list - Manual, Date/Time, Name or Duration, each ascending or descending, remembered between visits.",
+    ],
+    changed: [
+      "Recording rows show the date and time instead of the duration; the duration moved to the hover tooltip.",
+      "The folder icon that starts a recording's breadcrumbs is now the Change folder button.",
+      "Dragging to reorder pauses while a sort other than Manual is active, and returns with Manual.",
+    ],
+  },
   {
     version: "0.206.0",
     date: "2026-08-11",

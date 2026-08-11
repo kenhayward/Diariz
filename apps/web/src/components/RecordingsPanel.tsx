@@ -8,6 +8,7 @@ import { useSelection } from "../lib/selection";
 import { useMoveClipboard } from "../lib/moveClipboard";
 import { useRecordingDrop } from "../lib/recordingDrop";
 import { useRoom, useRoomBasePath } from "../lib/rooms";
+import { useListSort, sortRecordings } from "../lib/listSort";
 import { useDragAutoScroll } from "../lib/dragAutoScroll";
 import { buildRecordingTree } from "../lib/recordingTree";
 import { childrenOf, breadcrumbOf, recordingCountOf, depthOf, MAX_FOLDER_DEPTH } from "../lib/drillView";
@@ -17,6 +18,7 @@ import DrillBreadcrumb from "./nav/DrillBreadcrumb";
 import ClipboardBar from "./nav/ClipboardBar";
 import SectionRow from "./nav/SectionRow";
 import SearchBar from "./nav/SearchBar";
+import SortMenu from "./nav/SortMenu";
 import { RecordingRow } from "./nav/RecordingRow";
 import TabStrip, { TABPANEL_ID, tabId } from "./nav/TabStrip";
 import ListToolbar from "./nav/ListToolbar";
@@ -102,6 +104,10 @@ export default function RecordingsPanel() {
   // clearing the query drops straight back to where the user was browsing, with nothing to restore.
   const [searchQuery, setSearchQuery] = useState("");
   const searching = searchQuery.length > 0;
+  // How the level below is ordered. Persisted globally, and **display only** - see lib/listSort and the
+  // note on `rowList`.
+  const [sort, setSort] = useListSort();
+  const sorted = sort.key !== "manual";
   // List vs Calendar tab (persisted). The calendar shows the month, focused on today, and lists the
   // selected day's recordings below it. Held in a shared store rather than local state because the tab
   // strip is no longer the only thing that moves it: a folder chip on a recording's detail page pulls the
@@ -208,11 +214,14 @@ export default function RecordingsPanel() {
   const cutRecordingIds = cut?.kind === "recordings" ? cut.ids : [];
   const cutFolderIds = cut?.kind === "folders" ? cut.ids : [];
 
+  /// `items` arrives in manual order. It is sorted for **display only**: `ids` - which becomes the
+  /// recordings' new server Positions via `computeReorder` - stays exactly as the server returned it. Sorting
+  /// a view must never rewrite an order the user arranged by hand.
   const rowList = (sectionId: string | null, items: RecordingSummary[]) => {
     const ids = items.map((i) => i.id);
     return (
       <ul className="divide-y dark:divide-gray-800">
-        {items.map((r) => (
+        {sortRecordings(items, sort).map((r) => (
           <RecordingRow
             key={r.id}
             r={r}
@@ -220,7 +229,10 @@ export default function RecordingsPanel() {
             selectMode={selection.selectMode}
             selected={selection.selectedIds.includes(r.id)}
             onToggleSelect={() => selection.toggle(r.id)}
-            onDropBefore={(draggedId) => drop(sectionId, ids, draggedId, r.id)}
+            // Omitted while sorted: a reorder would write a Position this view cannot show, so the row would
+            // spring back and read as a broken drag. The row then passes the drop through to the level
+            // behind it, which appends.
+            onDropBefore={sorted ? undefined : (draggedId) => drop(sectionId, ids, draggedId, r.id)}
             cut={cutRecordingIds.includes(r.id)}
           />
         ))}
@@ -232,6 +244,8 @@ export default function RecordingsPanel() {
   // filed directly in it. At the root that is the top-level folders plus the ungrouped recordings — which
   // is why "Ungrouped" is no longer a special case, it is just the root's own items.
   const level = childrenOf(tree, drill.sectionId);
+  // Manual order, deliberately: this feeds the level-background drop, which turns it into the recordings'
+  // new server Positions. The sorted array exists only inside `rowList`. See lib/listSort.
   const levelIds = level.items.map((i) => i.id);
   // A folder row on this level may take sub-folders as long as one more level still fits. The rows are one
   // level below the drill position, so their own depth is the drill's depth + 1.
@@ -289,6 +303,7 @@ export default function RecordingsPanel() {
               scopeName={currentLevelName}
               onQueryChange={setSearchQuery}
               onDrill={(id) => drill.drillTo(id)}
+              trailing={<SortMenu sort={sort} onChange={setSort} />}
             />
             {/* The breadcrumb stays put during a search: the drill is not disturbed by typing, and the user
                 can see where they will land the moment they clear the query. */}
