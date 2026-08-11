@@ -62,6 +62,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.204.0",
+    date: "2026-08-11",
+    headline: "Preferences -> Recordings, rebuilt",
+    summary:
+      "The Recordings tab in Preferences now says what each choice actually does. The three placement options are cards carrying a one-line consequence, so you can tell them apart without trying them. The calendar auto-stop settings are one switch: turn it on and the two durations appear as a sentence you can read, with a worked example in your own numbers showing exactly when a 10:00-11:00 meeting would stop recording; turn it off and they are gone rather than sitting there greyed out. Save has moved to the modal footer next to Close, with the panel telling you whether you have unsaved changes. Choosing a fixed folder now opens a proper dialog, and the folder you picked is shown as its full path whether or not it is nested deeply.",
+    added: [
+      "A worked example under the calendar auto-stop settings, recomputed as you type.",
+      "An unsaved-changes indicator in the Preferences footer.",
+      "A Choose a folder dialog for the fixed-folder setting, with the chosen folder shown as a full path.",
+    ],
+    changed: [
+      "The three recording-placement options are cards that say what each one does.",
+      "Calendar auto-stop is a single switch; its two durations appear only when it is on, instead of sitting disabled.",
+      "Save for the Recordings tab moved from the panel body to the modal footer.",
+      "The Preferences header names the panel you are on.",
+    ],
+  },
+  {
     version: "0.203.0",
     date: "2026-08-10",
     pr: 502,

@@ -93,5 +93,7 @@ and when it finishes uploading.
 ## Where the recording lands
 
 By default a new recording is filed into the folder you currently have open. You can change this in
-**Settings -> Recordings** to always use a specific folder, or to leave new recordings ungrouped. If a
-shared room is open when you record, the meeting is filed into that room as well.
+**Preferences -> Recordings**, where each choice is a card saying what it does: keep the open folder,
+send everything to Ungrouped, or pick one fixed folder. Changes there are saved with the **Save changes**
+button in the footer of the Preferences window. If a shared room is open when you record, the meeting is
+filed into that room as well.

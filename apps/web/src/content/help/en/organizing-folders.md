@@ -15,8 +15,9 @@ project underneath it. A recording can be filed into a folder at any of those le
 to jump straight to it from anywhere in the tree, with its full path shown so you can tell two
 same-named folders apart, or leave the filter empty to browse one level at a time the same way the
 folder list does. **Ungrouped** is offered as a choice at every level, so you never have to back out to
-the top to pick it. The same picker is used for choosing where a new recording is filed, in
-**Settings -> Recordings**. If you choose **Use the currently selected folder** there, a new recording
+the top to pick it. The same picker is used for choosing where a new recording is filed: in
+**Preferences -> Recordings**, pick **One fixed folder** and press **Change...** to open it. If you
+choose **The folder I'm looking at** instead, a new recording
 goes into whichever folder the list is showing at the moment you start it, so opening a folder and
 recording files the take there; at the top level it goes to Ungrouped. Files picked with the **Upload**
 button follow the same setting, taken when the upload starts, so a whole batch lands together even if you
