@@ -209,7 +209,11 @@ surface/border/shadow from the existing `--hub-popover-*` tokens.
   box is non-empty `FolderPicker` already swallows Escape to clear the filter, so that case clears the
   filter and closes nothing.
 
-`CheckIcon` and `XIcon` (Feather `check` / `x`) are added to `icons.tsx` rather than inlined.
+**No new icons.** The handoff asks for Feather `check` and `x` to be added to `icons.tsx`. Neither is
+needed: the tick stays inside `FolderPicker`, which is unchanged, and every other dialog in this codebase
+renders its close control as a literal `✕` character with an `aria-label` (`ManageUsersModal.tsx:65`,
+`ManageMeetingTypesModal.tsx:208`, `ChatPanel.tsx`, and others). Introducing an icon component for this
+one dialog would read as inconsistent with everything around it.
 
 ### E. Known deviations from the handoff
 
@@ -217,6 +221,9 @@ surface/border/shadow from the existing `--hub-popover-*` tokens.
 2. **The picker's list body keeps today's semantics and styling.** The screenshots show a restyled filter
    box (search glyph, borderless input) and inverted row rule; both live inside `FolderPicker`, which
    `MoveToSectionModal` also renders. This PR supplies the new chrome only. Follow-up if wanted.
+3. **No new icon components** - the close control follows the codebase's existing `✕` convention, as
+   above.
+4. **The path chip's separator** is `orderedSections`' guillemet, not the handoff's ` > `.
 
 ## Testing
 
