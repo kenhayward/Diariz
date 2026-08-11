@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { orderedSections } from "./sectionTree";
+import { orderedSections, sectionPathLabel } from "./sectionTree";
 import type { SectionDto } from "./types";
 
 const section = (id: string, name: string, parentId: string | null = null, position = 0): SectionDto =>
@@ -69,5 +69,27 @@ describe("orderedSections", () => {
     const out = orderedSections(sections);
     expect(out[0].section).toEqual(sections[0]);
     expect(out[0].label).toBe("Acme");
+  });
+});
+
+describe("sectionPathLabel", () => {
+  // `FolderPickerModal` and `RecordingsSection` both need "the chosen folder's full-path label, or a
+  // fallback" while the dialog is open at the same time - one helper so the two on-screen strings agree by
+  // construction instead of by two separately-maintained `.find` calls happening to match.
+  const sections = [
+    { id: "customers", name: "Customers", parentId: null, position: 0 },
+    { id: "acme", name: "Acme Corp", parentId: "customers", position: 0 },
+  ];
+
+  it("returns the fallback for the root (null id)", () => {
+    expect(sectionPathLabel(sections, null, "Ungrouped")).toBe("Ungrouped");
+  });
+
+  it("returns the full path label for a nested id", () => {
+    expect(sectionPathLabel(sections, "acme", "Ungrouped")).toBe("Customers › Acme Corp");
+  });
+
+  it("returns the fallback for an id no longer in the list (deleted, or a still-loading list)", () => {
+    expect(sectionPathLabel(sections, "missing", "Ungrouped")).toBe("Ungrouped");
   });
 });

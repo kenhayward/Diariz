@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { orderedSections } from "../lib/sectionTree";
+import { sectionPathLabel } from "../lib/sectionTree";
 import type { SectionDto } from "../lib/types";
 import FolderPicker from "./FolderPicker";
+
+/// Elements a real browser would put in the Tab order. Good enough for this dialog's own controls (plain
+/// buttons and one text input - see `FolderPicker.tsx`'s doc comment for why its rows are built this way);
+/// not a general-purpose selector.
+const FOCUSABLE_SELECTOR = 'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /// Dialog chrome around `FolderPicker`, which is rendered unchanged - the row semantics stay the ones the
 /// left nav teaches (a row body drills, a separate control chooses), and `MoveToSectionModal`, the other
@@ -30,25 +35,45 @@ export default function FolderPickerModal({
     boxRef.current?.querySelector<HTMLInputElement>('input[type="text"]')?.focus();
   }, []);
 
-  const chosen = useMemo(() => {
-    if (selectedId === null) return t("ungrouped");
-    return orderedSections(sections).find((o) => o.section.id === selectedId)?.label ?? t("ungrouped");
-  }, [sections, selectedId, t]);
+  const chosen = useMemo(
+    () => sectionPathLabel(sections, selectedId, t("ungrouped")),
+    [sections, selectedId, t],
+  );
 
   // `PreferencesModal` listens for Escape on `document`. React delegates from the root container, which is
   // a descendant of `document`, so stopping propagation on the native event here does prevent that
   // listener - one Escape closes this dialog and leaves Preferences open. When the filter box is
   // non-empty `FolderPicker` stops the event first to clear the filter, so that press reaches neither.
+  //
+  // `aria-modal="true"` below claims a modality that only holds if Tab actually stays inside - so this
+  // also traps Tab/Shift-Tab at the dialog's own first/last focusable control, wrapping instead of
+  // escaping into whatever Preferences renders behind the overlay.
   function onKeyDown(e: React.KeyboardEvent) {
-    if (e.key !== "Escape") return;
-    e.stopPropagation();
-    e.nativeEvent.stopImmediatePropagation();
-    onClose();
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      e.nativeEvent.stopImmediatePropagation();
+      onClose();
+      return;
+    }
+    if (e.key !== "Tab") return;
+    const items = Array.from(boxRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? []);
+    if (items.length === 0) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
   }
 
   return (
-    // The backdrop does NOT close on click, matching every other dialog in this app.
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/55 p-4" onKeyDown={onKeyDown}>
+    // The backdrop does NOT close on click, matching every other dialog in this app. No handler of its own
+    // - it is never itself a keydown target (it holds no focusable content directly), so a copy here would
+    // be dead code; the dialog div below is where every key actually lands.
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/55 p-4">
       <div
         role="dialog"
         aria-modal="true"

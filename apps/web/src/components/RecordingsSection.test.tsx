@@ -132,6 +132,28 @@ describe("RecordingsSection", () => {
     expect(document.activeElement).toBe(change);
   });
 
+  // Regression: the reveal row (chip + Change) used to sit inside the SpecificFolder card's own <label>,
+  // so the radio's accessible name picked up whatever folder was currently chosen (it changed on every
+  // selection, and could read "... Ungrouped Change..." or "... Projects Change..."). The reveal row must
+  // be a sibling of the label, not inside it, so the radio's name is just its title and description.
+  it("keeps the fixed-folder radio's accessible name independent of the chosen folder", async () => {
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "sec-1", name: "Projects", parentId: null, position: 0 },
+    ]);
+    renderSection();
+    fireEvent.click(await screen.findByRole("radio", { name: /one fixed folder/i }));
+    const radioName = "One fixed folder Always the same folder, wherever you happen to be.";
+    expect(screen.getByRole("radio", { name: radioName })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /^change/i }));
+    fireEvent.click(await screen.findByLabelText("Select Projects"));
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+
+    // Still exactly the title + description - not "... Projects Change..." - so the exact-name lookup
+    // still resolves after the chosen folder changed.
+    expect(screen.getByRole("radio", { name: radioName })).toBeTruthy();
+  });
+
   it("saves a specific-folder placement with the folder chosen from the picker, and nothing else", async () => {
     (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
       { id: "sec-1", name: "Projects", parentId: null, position: 0 },
@@ -177,10 +199,7 @@ describe("RecordingsSection", () => {
       ...settings, placementMode: "SpecificFolder", placementSectionId: "sec-1",
     });
     renderSection();
-    // Narrower than a plain /ungrouped/i: the SpecificFolder card's own reveal row now sits inside its
-    // <label> too (Task 5), so its chosen-path chip can read "Ungrouped" and fold that word into the
-    // SpecificFolder radio's accessible name - a bare /ungrouped/i would then match two radios.
-    fireEvent.click(await screen.findByRole("radio", { name: /always ungrouped/i }));
+    fireEvent.click(await screen.findByRole("radio", { name: /ungrouped/i }));
     fireEvent.click(saveButton());
 
     await waitFor(() =>

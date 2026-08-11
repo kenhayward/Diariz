@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 import type { RecordingPlacementMode } from "../lib/types";
-import { orderedSections } from "../lib/sectionTree";
+import { sectionPathLabel } from "../lib/sectionTree";
 import FolderPickerModal from "./FolderPickerModal";
 import { usePreferencesFooter } from "./PreferencesFooter";
 import { CalendarIcon, FolderIcon } from "./icons";
@@ -120,11 +120,7 @@ export default function RecordingsSection() {
 
   // The panel shows the chosen folder's full path unconditionally - the old inline picker could only show
   // a folder that happened to be at its current drill level, so a deeply nested choice looked unset.
-  const chosenPath =
-    placementSectionId === null
-      ? tWorkspace("ungrouped")
-      : (orderedSections(sections).find((o) => o.section.id === placementSectionId)?.label ??
-        tWorkspace("ungrouped"));
+  const chosenPath = sectionPathLabel(sections, placementSectionId, tWorkspace("ungrouped"));
 
   // `null` until `baseline` is populated (the settings have loaded and the seeding block above has run for
   // them), so no Save button is reachable over a still-loading panel - clicking one before then would PUT
@@ -185,18 +181,23 @@ export default function RecordingsSection() {
               { mode: "SpecificFolder", title: "placementSpecific", meta: "placementSpecificMeta", isDefault: false },
             ] as const
           ).map((card) => (
-            <label
+            <div
               key={card.mode}
               // The selected state is the card's OWN border and background, never an outset ring. The
               // content pane scrolls, and a ring painted 1px outside the box makes the pane wider than its
               // client width, which paints a full-width horizontal scrollbar across the whole panel.
-              className={`cursor-pointer rounded-lg border px-3.5 py-3 ${
+              //
+              // A plain <div>, not a <label>: the reveal row below (chosen-path chip + Change button) is a
+              // sibling of the <label>, not inside it. A <label> computes its control's accessible name
+              // from its entire subtree text, and this row's chip text changes with the chosen folder - if
+              // it lived inside the label, the SpecificFolder radio's name would too, on every selection.
+              className={`rounded-lg border px-3.5 py-3 ${
                 placementMode === card.mode
                   ? "border-blue-500/60 bg-blue-500/[.07] dark:border-blue-500/60 dark:bg-blue-500/[.14]"
                   : "border-gray-200 dark:border-gray-700"
               }`}
             >
-              <div className="flex items-start gap-3">
+              <label className="flex cursor-pointer items-start gap-3">
                 <input
                   type="radio"
                   name="placement-mode"
@@ -215,9 +216,10 @@ export default function RecordingsSection() {
                   </div>
                   <span className="text-[13px] text-gray-500 dark:text-gray-400">{t(card.meta)}</span>
                 </div>
-              </div>
+              </label>
               {card.mode === "SpecificFolder" && placementMode === "SpecificFolder" && (
-                // Indented to line up under the card title rather than the radio.
+                // Indented to line up under the card title rather than the radio. A sibling of the <label>
+                // above, not nested in it - see the comment on the enclosing <div>.
                 <div className="mt-2.5 flex flex-wrap items-center gap-2 pl-8">
                   <span className="inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-[13px] dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">
                     <FolderIcon size={14} />
@@ -226,19 +228,14 @@ export default function RecordingsSection() {
                   <button
                     type="button"
                     ref={changeRef}
-                    // Inside a <label>: without this the click also toggles the radio, and in Firefox it
-                    // would re-focus the input instead of opening the dialog.
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setPickerOpen(true);
-                    }}
+                    onClick={() => setPickerOpen(true)}
                     className="rounded-md border px-2.5 py-1.5 text-[13px] hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
                   >
                     {t("placementChange")}
                   </button>
                 </div>
               )}
-            </label>
+            </div>
           ))}
         </fieldset>
 

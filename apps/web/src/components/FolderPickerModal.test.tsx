@@ -107,4 +107,22 @@ describe("FolderPickerModal", () => {
     await user.keyboard("{Enter}");
     expect(onSelect).toHaveBeenCalledWith("customers");
   });
+
+  // `aria-modal="true"` claims a modality assistive tech relies on; without an actual trap, Tab escapes
+  // into whatever is behind the dialog (Preferences' own content) and Shift-Tab from the first control
+  // goes nowhere useful either. Both directions wrap within the dialog instead.
+  it("traps Tab focus within the dialog, wrapping at both ends", async () => {
+    const user = userEvent.setup();
+    renderPicker();
+    const closeBtn = screen.getByRole("button", { name: "Close folder picker" });
+    const doneBtn = screen.getByRole("button", { name: "Done" });
+
+    doneBtn.focus();
+    await user.tab();
+    expect(document.activeElement).toBe(closeBtn);
+
+    closeBtn.focus();
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(doneBtn);
+  });
 });
