@@ -768,6 +768,18 @@ pure reconciliation (which displays need an overlay built, dropped, or re-fitted
 mid-meeting can't leave a screen unpickable or an overlay over stale geometry. Because an overlay now
 outlives a single pick, main sends it **`picker:reset`** when putting it away - without that, its one-shot
 choose/cancel guard would make every pick after the first inert.
+**Every capture affordance hangs off `canCapture(recorder)`, and that needs the renderer to be *ready* -
+which only ends with the document.** `recorder.ready` means "a document is loaded whose `Recorder` has
+mounted and reported in"; it gates tray-driven recording and, through `canCapture`, the hotkey, the tray
+items, the overlay pool and both capture buttons. Main clears it only on the events listed in
+`apps/desktop/src/rendererReadiness.js` - **`did-navigate`** (a new document committed) and
+**`render-process-gone`**. It used to clear it on `did-start-loading`, which Chromium raises for
+**same-document** navigation too (react-router's `pushState`), as well as for subframe loads and for
+off-origin navigations main itself aborts in `will-navigate`. So one in-app navigation mid-recording marked
+the still-mounted recorder as gone, and since the web app reports readiness only when it mounts, nothing
+ever set it back: for the rest of that take the hotkey was unregistered, the overlay pool torn down, the
+tray items absent and "Change capture area" a silent no-op that still highlighted on hover.
+
 **Whether an area is set is mirrored to the renderer** (`screenshot:has-area` for the starting value,
 `screenshot:area-changed` for every later change - every write goes through main's `setCaptureTarget`), and
 the web app **disables its capture buttons until there is one**: capturing with no area opens the picker,
