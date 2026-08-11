@@ -105,6 +105,9 @@ vi.mock("../lib/api", () => ({
     emailFormulaResult: vi.fn(),
     downloadFormulaResult: vi.fn(),
     listSections: vi.fn().mockResolvedValue([]),
+    // Not asserted on here, but the folder picker this page opens can call it. An absent method fails as an
+    // opaque crash rather than a clear assertion, so it is stubbed rather than left out.
+    moveRecording: vi.fn(),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }));
@@ -1472,5 +1475,37 @@ describe("RecordingDetail folder chips", () => {
       const root = await screen.findByLabelText("Select Ungrouped");
       await waitFor(() => expect(root.getAttribute("aria-current")).toBe("true"));
     });
+  });
+
+  /// The chips say where the recording is filed; this button is how you change it. It sits with them, left
+  /// of the breadcrumbs, rather than being buried in the kebab menu.
+  it("shows a Change folder button beside the breadcrumbs", async () => {
+    renderInRoom(inRoom("acme"));
+
+    expect(await screen.findByRole("button", { name: /change folder/i })).toBeTruthy();
+  });
+
+  it("opens the folder picker when Change folder is clicked", async () => {
+    renderInRoom(inRoom("acme"));
+
+    fireEvent.click(await screen.findByRole("button", { name: /change folder/i }));
+
+    expect(await screen.findByRole("dialog", { name: /move to section/i })).toBeTruthy();
+  });
+
+  /// It is an action on the chips, not one of them. The chip row is a navigation landmark whose every
+  /// control is a destination, and several tests above assert exactly which buttons live inside it.
+  it("keeps the button outside the breadcrumb navigation landmark", async () => {
+    renderInRoom(inRoom("acme"));
+
+    const chips = await screen.findByRole("navigation", { name: /folder/i });
+    expect(within(chips).queryByRole("button", { name: /change folder/i })).toBeNull();
+  });
+
+  it("renders no Change folder button when the recording is not placed in the room being viewed", async () => {
+    renderInRoom(inRoom("acme", "some-other-room"));
+
+    await screen.findByText(/Mic 6\/26\/2026/);
+    expect(screen.queryByRole("button", { name: /change folder/i })).toBeNull();
   });
 });
