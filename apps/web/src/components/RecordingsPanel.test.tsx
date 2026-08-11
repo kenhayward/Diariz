@@ -958,10 +958,16 @@ describe("RecordingsPanel", () => {
     expect(screen.getByRole("menuitem", { name: /email me the transcript/i })).toBeTruthy();
   });
 
-  it("shows the duration as m:ss", async () => {
+  /// The row's right-hand column says WHEN, not how long - that is what a list is scanned for. The duration
+  /// is still one hover away. Asserted on the month rather than a full literal so the expectation does not
+  /// depend on the machine's timezone.
+  it("shows the date and time, keeping the duration in the hover title", async () => {
     renderList();
     await screen.findByText("Weekly Standup");
-    expect(screen.getByText("0:09")).toBeTruthy(); // 9000 ms
+
+    expect(screen.getByText(/Jun \d\d:\d\d/)).toBeTruthy(); // created 26 June 2026
+    expect(screen.queryByText("0:09")).toBeNull(); // 9000 ms, no longer in the row
+    expect(screen.getByRole("link", { name: /weekly standup/i }).getAttribute("title")).toContain("0:09");
   });
 
   it("Extract actions confirms before replacing when the recording already has actions", async () => {
