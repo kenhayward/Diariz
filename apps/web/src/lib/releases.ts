@@ -62,6 +62,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.205.3",
+    date: "2026-08-11",
+    pr: 507,
+    headline: "Screenshot capture no longer dies the moment you move around the app",
+    summary:
+      "In the desktop app, opening a recording or the calendar while recording quietly switched screen " +
+      "capture off for the rest of that meeting. \"Change capture area\" still lit up under the mouse but " +
+      "did nothing when clicked, the capture button stayed greyed out, the screenshot hotkey stopped " +
+      "working and the tray lost its screenshot items - with nothing on screen to say why. The desktop " +
+      "app tracks whether the web app is loaded and listening, and it was treating an ordinary move " +
+      "between pages as the page having gone away. It now only lets go when the page is genuinely " +
+      "replaced (a reload or a sign-in redirect), so capture keeps working wherever you are in the app.",
+    fixed: [
+      "Screen capture no longer stops working after you navigate anywhere in the app during a recording - the capture-area button, the capture button, the hotkey and the tray items all keep working.",
+    ],
+  },
+  {
     version: "0.205.2",
     date: "2026-08-11",
     pr: 506,

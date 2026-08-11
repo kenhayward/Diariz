@@ -24,6 +24,7 @@ const { updateRestartItem, notificationForUpdate, isNewerVersion } = require("./
 const { buildStartUrl, codeFromArgv, notificationForAuthError } = require("./desktopAuth");
 const { cropRectFor, resizeDims, clampRect } = require("./captureTarget");
 const { reconcilePool } = require("./pickerPool");
+const { RENDERER_INVALIDATING_EVENTS } = require("./rendererReadiness");
 const {
   SYNC_DEFAULTS,
   windowForScope,
@@ -136,8 +137,11 @@ function createMainWindow(url) {
   });
 
   // The recorder lives in the web app; until it (re)mounts and reports in, the tray
-  // can't drive it. Any fresh navigation/reload drops readiness until it reports again.
-  mainWindow.webContents.on("did-start-loading", () => setRecorderReady(false));
+  // can't drive it. Only a replaced document (or a dead renderer) unmounts it - see
+  // rendererReadiness.js for why the loading state is emphatically not that signal.
+  for (const event of RENDERER_INVALIDATING_EVENTS) {
+    mainWindow.webContents.on(event, () => setRecorderReady(false));
+  }
 
   mainWindow.loadURL(url);
   if (DEV_URL) mainWindow.webContents.openDevTools({ mode: "detach" });
