@@ -64,7 +64,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.206.0",
     date: "2026-08-11",
-    pr: 0,
+    pr: 508,
     headline: "Change a recording's folder straight from its page",
     summary:
       "The folder path under a recording's name told you where it was filed but gave you no way to " +
