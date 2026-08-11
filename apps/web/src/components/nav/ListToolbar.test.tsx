@@ -211,3 +211,44 @@ describe("ListToolbar calendar sync", () => {
     emit("idle");
   });
 });
+
+/// The Calendar tab has two purpose-built refresh controls of its own; a third generic one beside them read as
+/// a duplicate of the pair. It stays on the tabs where it is the only refresh there is.
+describe("ListToolbar refresh button", () => {
+  // Same reset as the sync block above: this is a sibling describe, so it does not inherit that one's
+  // beforeEach, and a shell left installed by an earlier test would send these syncs down the desktop path
+  // and hang them waiting for a phase nobody emits.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (api.getUserSettings as Mock).mockResolvedValue({ outlookSyncEnabled: false });
+    delete (window as { diariz?: unknown }).diariz;
+  });
+
+  it("offers Refresh on the list", async () => {
+    renderToolbar({ listMode: true, calendarMode: false });
+
+    expect(await screen.findByRole("button", { name: /^refresh$/i })).toBeTruthy();
+  });
+
+  it("hides Refresh on the Calendar tab, where the two syncs cover it", async () => {
+    renderToolbar({ calendarMode: true, listMode: false });
+
+    // The syncs are there; the generic refresh is not.
+    expect(await screen.findByRole("button", { name: /sync calendar/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^refresh$/i })).toBeNull();
+  });
+
+  /// Refresh was also how you re-read the recordings drawn on the day grid. With it gone from this tab, a
+  /// sync has to pick them up, or the calendar would lose a refresh it used to have.
+  it("refreshes the recordings as well as the events, so the day grid keeps up", async () => {
+    const { qc } = renderToolbar({ calendarMode: true, listMode: false });
+    const invalidate = vi.spyOn(qc, "invalidateQueries");
+
+    fireEvent.click(await screen.findByRole("button", { name: /sync calendar/i }));
+
+    await waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["calendar-events"] })),
+    );
+    expect(invalidate).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["recordings"] }));
+  });
+});

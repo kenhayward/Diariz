@@ -277,6 +277,7 @@ export function useCalendarSync(): {
         // the recordings are a background top-up, and blocking the "syncing" message on them would make the
         // calendar's own refresh look slower than it is.
         refetchEvents: () => {
+          void qc.invalidateQueries({ queryKey: ["recordings"] });
           return qc.invalidateQueries({ queryKey: ["calendar-events"], refetchType: "all" });
         },
       })
