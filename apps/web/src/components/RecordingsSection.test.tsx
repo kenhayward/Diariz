@@ -278,4 +278,28 @@ describe("RecordingsSection", () => {
     fireEvent.click(saveButton());
     await waitFor(() => expect(screen.getByText(/boom/)).toBeTruthy());
   });
+
+  it("registers no Save with the footer while settings are still loading, so it cannot overwrite real settings with defaults", async () => {
+    // Never resolves - pins the panel in its pre-data state, where a click on a live Save button would
+    // PUT the component's hardcoded initial state (not the user's real settings) before they even arrive.
+    (api.getUserSettings as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}));
+    renderSection();
+
+    // Give any in-flight microtasks a turn, then confirm nothing that looks like Save is reachable.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByRole("button", { name: /save changes/i })).toBeNull();
+    expect(api.updateUserSettings).not.toHaveBeenCalled();
+  });
+
+  it("ignores a stale saved folder id when the loaded mode isn't Specific folder, so opening the panel isn't already 'Unsaved'", async () => {
+    // A row a server could plausibly have (a leftover section id from before the mode was switched away
+    // from SpecificFolder). If the baseline seed didn't mode-gate this the same way the save payload does,
+    // the panel would open reading "Unsaved changes" before the user touched anything.
+    (api.getUserSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...settings, placementMode: "Ungrouped", placementSectionId: "stale-sec",
+    });
+    renderSection();
+    await screen.findByRole("radio", { name: /currently selected folder/i });
+    expect(screen.queryByText("Unsaved changes")).toBeNull();
+  });
 });

@@ -39,18 +39,31 @@ export function PreferencesFooterProvider({ children }: { children: ReactNode })
 /// Opt this tab into the shared footer: the modal paints its Save button and status line. A tab that never
 /// calls this keeps its own in-body Save and sees the plain Close-only footer, which is the case for five
 /// of the six tabs. Outside a provider this is a no-op, so a tab still renders standalone in a test.
-export function usePreferencesFooter({ dirty, busy, status, error, onSave }: FooterSaveState & { onSave: () => void }) {
+///
+/// The argument is nullable, and it must still be called on every render (never behind an `if`) - a tab
+/// with an async load (e.g. a settings query still in flight) passes `null` for the renders before its
+/// data has arrived, which registers nothing and leaves the plain Close-only footer up. That keeps a
+/// live-looking Save button from ever appearing over a blank/default-seeded panel, where clicking it
+/// would PUT the component's hardcoded initial state instead of the user's real settings. Passing `null`
+/// this way (rather than always registering and relying on an internal `active` flag) means "not ready
+/// yet" is visible at the call site, not buried inside the values being passed.
+export function usePreferencesFooter(reg: (FooterSaveState & { onSave: () => void }) | null) {
   const api = useContext(FooterApiCtx);
+  const dirty = reg?.dirty ?? false;
+  const busy = reg?.busy ?? false;
+  const status = reg?.status ?? "idle";
+  const error = reg?.error ?? null;
+  const active = reg !== null;
 
   // Refreshed on every render, and deliberately not in the effect below - the footer must call the
   // handler as it is now, not the one that existed when the tab first registered.
   useEffect(() => {
-    if (api) api.saveRef.current = onSave;
+    if (api && reg) api.saveRef.current = reg.onSave;
   });
 
   useEffect(() => {
-    api?.register({ dirty, busy, status, error });
-  }, [api, dirty, busy, status, error]);
+    api?.register(active ? { dirty, busy, status, error } : null);
+  }, [api, active, dirty, busy, status, error]);
 
   // Unmount only, so switching tabs restores the plain footer. Kept separate from the effect above,
   // whose cleanup would otherwise blank the footer on every value change.

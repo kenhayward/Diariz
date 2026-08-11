@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
@@ -52,24 +52,39 @@ export default function RecordingsSection() {
   const [savedOnce, setSavedOnce] = useState(false);
   const [busy, setBusy] = useState(false);
   const [baseline, setBaseline] = useState<Baseline | null>(null);
+  // Tracks which `data` object local state was last seeded from, so the block below fires exactly once
+  // per freshly loaded/refetched settings row.
+  const [seededFrom, setSeededFrom] = useState<typeof data>(undefined);
 
-  useEffect(() => {
-    if (data) {
-      const next: Baseline = {
-        placementMode: data.placementMode ?? "SelectedFolder",
-        placementSectionId: data.placementSectionId ?? null,
-        calendarAutoStop: data.calendarAutoStopEnabled ?? false,
-        afterMinutes: data.calendarAutoStopAfterMinutes ?? DEFAULT_AFTER_MINUTES,
-        silenceSeconds: data.calendarSilenceStopSeconds ?? DEFAULT_SILENCE_SECONDS,
-      };
-      setPlacementMode(next.placementMode);
-      setPlacementSectionId(next.placementSectionId);
-      setCalendarAutoStop(next.calendarAutoStop);
-      setAfterMinutes(String(next.afterMinutes));
-      setSilenceSeconds(String(next.silenceSeconds));
-      setBaseline(next);
-    }
-  }, [data]);
+  // Seeds local editable state and `baseline` from the loaded settings, in the *same* render as `data`
+  // first arrives - not in a `useEffect`, which would run one render after the `if (!data) return null`
+  // guard below opens up. That gap would let `data` be on screen (radios rendered) for a frame while
+  // `baseline` still read null, which is exactly the state the baseline-gated `usePreferencesFooter` call
+  // below exists to keep off screen. Calling `setState` directly in the render body (guarded so it only
+  // fires when `data` actually changed) is React's documented way to adjust state in response to an
+  // incoming value: React discards this render and re-renders immediately with the new state before
+  // anything commits or paints, so there is no intermediate frame where `data` is loaded but `baseline`
+  // is not.
+  if (data && data !== seededFrom) {
+    const mode = data.placementMode ?? "SelectedFolder";
+    const next: Baseline = {
+      placementMode: mode,
+      // Mode-gated the same way `current` is below - the two derivations of this value must agree, or a
+      // server row with a stale non-null section id under a non-SpecificFolder mode would open the panel
+      // already reading "Unsaved changes" with no user action.
+      placementSectionId: mode === "SpecificFolder" ? (data.placementSectionId ?? null) : null,
+      calendarAutoStop: data.calendarAutoStopEnabled ?? false,
+      afterMinutes: data.calendarAutoStopAfterMinutes ?? DEFAULT_AFTER_MINUTES,
+      silenceSeconds: data.calendarSilenceStopSeconds ?? DEFAULT_SILENCE_SECONDS,
+    };
+    setSeededFrom(data);
+    setPlacementMode(next.placementMode);
+    setPlacementSectionId(next.placementSectionId);
+    setCalendarAutoStop(next.calendarAutoStop);
+    setAfterMinutes(String(next.afterMinutes));
+    setSilenceSeconds(String(next.silenceSeconds));
+    setBaseline(next);
+  }
 
   // The exact five fields Save sends, so `dirty` compares what would be stored rather than what is typed:
   // blanking a duration field is not a change, because `positiveOr` would store the same number anyway.
@@ -88,16 +103,23 @@ export default function RecordingsSection() {
       current.afterMinutes !== baseline.afterMinutes ||
       current.silenceSeconds !== baseline.silenceSeconds);
 
-  usePreferencesFooter({
-    dirty,
-    busy,
-    status: dirty ? "unsaved" : savedOnce ? "saved" : "idle",
-    error,
-    onSave,
-  });
+  // `null` until `baseline` is populated (the settings have loaded and the seeding block above has run for
+  // them), so no Save button is reachable over a still-loading panel - clicking one before then would PUT
+  // this component's hardcoded initial state (defaults), silently overwriting the user's real settings.
+  usePreferencesFooter(
+    baseline === null
+      ? null
+      : {
+          dirty,
+          busy,
+          status: dirty ? "unsaved" : savedOnce ? "saved" : "idle",
+          error,
+          onSave,
+        },
+  );
 
   // Render only once the settings have loaded, so an early interaction can't be overwritten by the arriving
-  // initial values (the effect above seeds state from `data`).
+  // initial values (the block above seeds state from `data`, in the same render).
   if (!data) return null;
 
   async function onSave() {

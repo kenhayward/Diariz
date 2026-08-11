@@ -8,6 +8,9 @@ vi.mock("../auth", () => ({
 vi.mock("../lib/api", () => ({ api: { getProfile: vi.fn() } }));
 // Isolate the shell: each tab's content is a simple marker.
 vi.mock("./ProfileSection", () => ({ default: () => <div>PROFILE_SECTION</div> }));
+// Always passes a registration object (never null) - it stands in for the tab once its data has loaded,
+// which is the state PreferencesModal's own tests care about (switching tabs, footer wiring). The
+// null-while-loading case is RecordingsSection's own concern and is covered in RecordingsSection.test.tsx.
 vi.mock("./RecordingsSection", () => ({
   default: () => {
     usePreferencesFooter({ dirty: true, busy: false, status: "unsaved", error: null, onSave: () => {} });
