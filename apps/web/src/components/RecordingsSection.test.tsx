@@ -194,35 +194,69 @@ describe("RecordingsSection", () => {
   // ---- Recording from a calendar event ----
 
   describe("recording from a calendar event", () => {
-    const autoStop = () => screen.getByRole("checkbox", { name: /end recording automatically/i });
+    const autoStop = () => screen.getByRole("switch", { name: /let a calendar meeting end its own recording/i });
     const afterMinutes = () => screen.getByLabelText(/minutes after the meeting ends/i) as HTMLInputElement;
     const silenceSeconds = () => screen.getByLabelText(/seconds of silence/i) as HTMLInputElement;
 
-    it("shows the section with auto-stop off and both conditions at their defaults", async () => {
+    it("shows the card with the switch off and no duration fields at all", async () => {
       renderSection();
-      await screen.findByText("Recording from a Calendar Event");
+      await screen.findByText("Let a calendar meeting end its own recording");
 
-      expect((autoStop() as HTMLInputElement).checked).toBe(false);
+      expect(autoStop().getAttribute("aria-checked")).toBe("false");
+      // Absent, not disabled: a field you cannot use should not be on screen looking editable.
+      expect(screen.queryByLabelText(/minutes after the meeting ends/i)).toBeNull();
+      expect(screen.queryByLabelText(/seconds of silence/i)).toBeNull();
+    });
+
+    it("says the option applies only to a recording started from the calendar", async () => {
+      renderSection();
+      expect(
+        await screen.findByText(
+          /Only when you join the meeting from your calendar.*not cut short by this option\./,
+        ),
+      ).toBeTruthy();
+    });
+
+    it("reveals both durations at their defaults when the switch is turned on", async () => {
+      renderSection();
+      await screen.findByText("Let a calendar meeting end its own recording");
+
+      fireEvent.click(autoStop());
+      expect(autoStop().getAttribute("aria-checked")).toBe("true");
       expect(afterMinutes().value).toBe("3");
       expect(silenceSeconds().value).toBe("30");
     });
 
-    it("disables both conditions until auto-stop is turned on", async () => {
+    it("works the example through from the two values, and recomputes it live", async () => {
       renderSection();
-      await screen.findByText("Recording from a Calendar Event");
-
-      // The conditions are meaningless on their own - they say HOW it stops, not WHETHER.
-      expect(afterMinutes().disabled).toBe(true);
-      expect(silenceSeconds().disabled).toBe(true);
-
+      await screen.findByText("Let a calendar meeting end its own recording");
       fireEvent.click(autoStop());
-      expect(afterMinutes().disabled).toBe(false);
-      expect(silenceSeconds().disabled).toBe(false);
+
+      expect(
+        screen.getByText(
+          "A 10:00-11:00 meeting keeps recording until 11:03 - or stops sooner, once 30 seconds pass with nobody speaking.",
+        ),
+      ).toBeTruthy();
+
+      fireEvent.change(afterMinutes(), { target: { value: "90" } });
+      fireEvent.change(silenceSeconds(), { target: { value: "45" } });
+      expect(
+        screen.getByText(
+          "A 10:00-11:00 meeting keeps recording until 12:30 - or stops sooner, once 45 seconds pass with nobody speaking.",
+        ),
+      ).toBeTruthy();
+    });
+
+    it("announces the example when a value changes", async () => {
+      renderSection();
+      await screen.findByText("Let a calendar meeting end its own recording");
+      fireEvent.click(autoStop());
+      expect(screen.getByText(/keeps recording until/).getAttribute("aria-live")).toBe("polite");
     });
 
     it("saves the three settings alongside the placement", async () => {
       renderSection();
-      await screen.findByText("Recording from a Calendar Event");
+      await screen.findByText("Let a calendar meeting end its own recording");
 
       fireEvent.click(autoStop());
       fireEvent.change(afterMinutes(), { target: { value: "10" } });
@@ -242,18 +276,17 @@ describe("RecordingsSection", () => {
         calendarSilenceStopSeconds: 45,
       });
       renderSection();
-      await screen.findByText("Recording from a Calendar Event");
+      await screen.findByText("Let a calendar meeting end its own recording");
 
-      expect((autoStop() as HTMLInputElement).checked).toBe(true);
+      expect(autoStop().getAttribute("aria-checked")).toBe("true");
       expect(afterMinutes().value).toBe("7");
       expect(silenceSeconds().value).toBe("45");
-      expect(afterMinutes().disabled).toBe(false);
     });
 
     it("sends the defaults rather than a blanked or zero duration", async () => {
       // Clearing a number input yields "" - saving that as 0 would stop a recording the instant it began.
       renderSection();
-      await screen.findByText("Recording from a Calendar Event");
+      await screen.findByText("Let a calendar meeting end its own recording");
 
       fireEvent.click(autoStop());
       fireEvent.change(afterMinutes(), { target: { value: "" } });

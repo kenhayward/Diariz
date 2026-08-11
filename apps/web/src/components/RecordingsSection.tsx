@@ -5,6 +5,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import type { RecordingPlacementMode } from "../lib/types";
 import FolderPicker from "./FolderPicker";
 import { usePreferencesFooter } from "./PreferencesFooter";
+import { CalendarIcon } from "./icons";
 
 /// Mirrors the server-side defaults (`UserSettings.DefaultCalendar*`). Duplicated rather than derived
 /// because the field can be blank while typing, and a blank must fall back to something on save.
@@ -16,6 +17,16 @@ const DEFAULT_SILENCE_SECONDS = 30;
 function positiveOr(value: string, fallback: number): number {
   const n = Number.parseInt(value, 10);
   return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+/// 24h `HH:MM`, `addMinutes` after the given whole hour. Only used by the worked example, whose meeting is
+/// a fixed 10:00-11:00, so it takes an hour rather than a date; wraps past midnight so a silly value like
+/// 3000 minutes still renders a clock time rather than "35:00".
+function clockAfter(hour: number, addMinutes: number): string {
+  const total = (hour * 60 + addMinutes) % (24 * 60);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
 /// The five values as last loaded or last saved. `dirty` is a comparison against this rather than a flag
@@ -214,51 +225,82 @@ export default function RecordingsSection() {
 
       {/* Recording started from a calendar event: the only case where the meeting's end time is known, so
           the only case where the recorder can end a take by itself. */}
-      <div className="space-y-2 border-t pt-3 dark:border-gray-700">
-        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-200">{t("calendarRecordingHeading")}</h3>
-        <p className="text-xs text-gray-500 dark:text-gray-400">{t("calendarRecordingIntro")}</p>
+      <div className="overflow-hidden rounded-lg border dark:border-gray-700">
+        <div className="flex items-start justify-between gap-5 px-4 py-3.5">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 text-gray-500 dark:text-gray-400">
+                <CalendarIcon size={14} />
+              </span>
+              <h3 className="text-[15px] font-semibold dark:text-gray-100">{t("calendarAutoStopHeading")}</h3>
+            </div>
+            <p className="mt-1 text-[13px] text-pretty text-gray-500 dark:text-gray-400">{t("calendarAutoStopBody")}</p>
+          </div>
+          {/* A native checkbox cannot be styled as a track and knob without hiding it, which loses the
+              focus ring; `role="switch"` on a button is the same semantics with a real focusable target.
+              The heading is its accessible name - the control has no visible label of its own. */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={calendarAutoStop}
+            aria-label={t("calendarAutoStopHeading")}
+            onClick={() => setCalendarAutoStop((on) => !on)}
+            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+              calendarAutoStop ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-700"
+            }`}
+          >
+            <span
+              aria-hidden
+              className={`absolute top-[3px] h-[18px] w-[18px] rounded-full bg-white transition-[left] ${
+                calendarAutoStop ? "left-[23px]" : "left-[3px]"
+              }`}
+            />
+          </button>
+        </div>
 
-        <label className="flex items-start gap-2 text-sm">
-          <input
-            type="checkbox"
-            className="mt-0.5"
-            checked={calendarAutoStop}
-            onChange={(e) => setCalendarAutoStop(e.target.checked)}
-          />
-          <span className="text-gray-700 dark:text-gray-200">{t("calendarAutoStop")}</span>
-        </label>
-
-        {/* Both conditions say HOW the recording ends, not WHETHER - so they are inert, and disabled, until
-            the checkbox above is on. */}
-        <label className="block text-sm">
-          <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("calendarAfterMinutes")}</span>
-          <input
-            type="number"
-            min={1}
-            step={1}
-            value={afterMinutes}
-            disabled={!calendarAutoStop}
-            onChange={(e) => setAfterMinutes(e.target.value)}
-            aria-label={t("calendarAfterMinutes")}
-            className="w-24 rounded border px-2 py-1 text-sm disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          />
-          <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">{t("calendarAfterMinutesHint")}</span>
-        </label>
-
-        <label className="block text-sm">
-          <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("calendarSilenceSeconds")}</span>
-          <input
-            type="number"
-            min={1}
-            step={1}
-            value={silenceSeconds}
-            disabled={!calendarAutoStop}
-            onChange={(e) => setSilenceSeconds(e.target.value)}
-            aria-label={t("calendarSilenceSeconds")}
-            className="w-24 rounded border px-2 py-1 text-sm disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          />
-          <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">{t("calendarSilenceSecondsHint")}</span>
-        </label>
+        {/* Absent rather than disabled: the two durations say HOW a recording ends, and there is nothing
+            for them to qualify while the switch is off. */}
+        {calendarAutoStop && (
+          <div className="flex flex-col gap-3 border-t bg-gray-50 px-4 py-3.5 dark:border-gray-700 dark:bg-white/[.02]">
+            <div className="flex flex-wrap items-center gap-2 text-sm dark:text-gray-200">
+              <span>{t("calendarStopPrefix")}</span>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={afterMinutes}
+                onChange={(e) => setAfterMinutes(e.target.value)}
+                aria-label={t("calendarAfterMinutes")}
+                className="w-[60px] rounded border px-2 py-1.5 text-center text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              />
+              <span>{t("calendarStopMinutesSuffix")}</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-sm dark:text-gray-200">
+              <span>{t("calendarSilencePrefix")}</span>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={silenceSeconds}
+                onChange={(e) => setSilenceSeconds(e.target.value)}
+                aria-label={t("calendarSilenceSeconds")}
+                className="w-[60px] rounded border px-2 py-1.5 text-center text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              />
+              <span>{t("calendarSilenceSuffix")}</span>
+            </div>
+            {/* The two per-field hints this replaces said what each number was for in the abstract; one
+                worked example says it once, in the reader's own numbers. */}
+            <p
+              aria-live="polite"
+              className="border-l-2 border-blue-500/50 pl-3 text-[13px] text-gray-500 dark:text-gray-400"
+            >
+              {t("calendarAutoStopExample", {
+                until: clockAfter(11, positiveOr(afterMinutes, DEFAULT_AFTER_MINUTES)),
+                seconds: positiveOr(silenceSeconds, DEFAULT_SILENCE_SECONDS),
+              })}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
