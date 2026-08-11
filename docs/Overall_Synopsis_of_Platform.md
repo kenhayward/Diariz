@@ -1574,8 +1574,19 @@ into it with no URL or per-user setup at all.
     `calendarConnected && isPersonalRoom`, which gave anyone whose calendar was entirely `.ics` feeds (or, once
     it shipped, a desktop Outlook mirror) a permanently empty Calendar tab. The endpoint already degrades to
     `[]`, so the gate bought nothing and cost those users the feature outright.
-  - A **Sync Outlook** link sits beside Refresh, shown only when the shell can reach Outlook and the user has
-    opted in; a started sync invalidates the month so the new meetings appear without a second click.
+  - **The sync controls live in the panel toolbar** (`ListToolbar`, shown when the Calendar tab is up in a
+    personal room), not in the tab: **Sync calendar** and **Sync today**, two icons. They used to be *Sync
+    Outlook* + *Refresh events* links under the month grid, which read as the calendar's own chrome and
+    scrolled with it. `lib/calendarSync.ts` owns one run for every source - and there is deliberately **no
+    per-provider fan-out**, because Google and `.ics` are read **live** by `/api/calendar/events` (which skips
+    whichever is not connected), so invalidating `["calendar-events"]` *is* their refresh. Desktop Outlook is
+    the exception: it must be harvested and pushed first, so the run asks the shell (only when opted in and
+    reachable), **waits for it to return to `idle`** - the first moment the server holds the new meetings - and
+    only then refetches. `scope: "today"` narrows the shell's read to the local day: seconds against the tens a
+    full mailbox read costs, which is what makes "the meeting I just accepted is missing" a two-second fix.
+    Progress goes to the **app status bar** (`useStatus`), counting up each second and naming the scope, and
+    clears when the run ends. The Calendar tab keeps its own `onOutlookState` listener for syncs it did not
+    start (the tray's, and the one on launch).
   Pure client helpers (`eventDayKeys`/`dayItems` in `lib/calendar.ts`) colour the grid (event-only days a
   darker green, an events dot on recording days) and build a **merged, time-ordered day list** of meetings +
   recordings - **deduped**, so a linked recording and its meeting show as one row (both icons). Each event is
@@ -1680,8 +1691,12 @@ into it with no URL or per-user setup at all.
     mirror written into someone's real calendar there is nothing else it could hit. A partial read
     (`complete: false`) never sweeps, a run that never reaches `final` degrades to upsert-only, and the sweep is
     bounded by the window the run covered so a narrower run never deletes history outside it. Limits: 500
-    events/page (413), uid ≤400 chars, window ≤730 days, body capped at 8000 chars, and a **60s per-device run
-    cooldown** (409) that exempts later pages of a run already in flight.
+    events/page (413), uid ≤400 chars, window ≤730 days, body capped at 8000 chars, and a per-device run
+    cooldown (409) that exempts later pages of a run already in flight. The cooldown is **scoped by window
+    width**: **60s** for a full run, **10s** for a narrow one (≤ 2 days - the desktop's "Sync today"), each
+    against its own stamp (`LastSyncedAt` / `LastNarrowSyncedAt`). One shared stamp would have refused the quick
+    sync in the one moment it exists for - seconds after a full sync finished without the meeting the user is
+    looking for. Preferences shows the later of the two as "last synced".
   - **Timezone and all-day.** The desktop sends all-day dates as **local `yyyy-MM-dd` strings**, stored verbatim
     and never re-derived from the UTC instant (re-deriving is the classic off-by-one - an all-day 2026-03-15 in
     Europe/London is `2026-03-14T23:00:00Z`). Windows zone ids convert server-side via
@@ -1712,8 +1727,9 @@ into it with no URL or per-user setup at all.
     shell cannot use app-ready for that, since the user may not be signed in yet.
   - **The reader (desktop shell).** A **self-contained .NET console exe**,
     `apps/desktop/native/Diariz.OutlookReader`, published to `native/publish` and shipped via electron-builder
-    `extraResources` to `resources/outlook/`. It takes `--start/--end/--max/--no-body/--include-private` and
-    writes **one JSON document to stdout**; `outlookHost.js` spawns it with a 120 s timeout and parses that.
+    `extraResources` to `resources/outlook/`. It takes `--start/--end/--max/--no-body/--include-private`, plus
+    `--probe`, and writes **one JSON document to stdout**; `outlookHost.js` spawns it with a 120 s timeout
+    (15 s for a probe) and parses that.
     - **Why a separate process, not a native Node module.** An in-process COM binding (`winax`) is broken from
       Electron 41 up - it compiles against raw V8 headers with no N-API, so it breaks every Electron major - and
       would have made this the shell's first native dependency. Beyond that, COM is synchronous: a
@@ -1721,6 +1737,20 @@ into it with no URL or per-user setup at all.
       screenshot hotkey, possibly mid-meeting. A process boundary also means a hung or crashing COM call kills
       the helper, not Diariz. The shell keeps **zero native dependencies** (guarded by
       `outlookPackaging.test.js`).
+    - **Presence is answered from the registry, never by activating Outlook** (`OutlookPresence.Detect()`,
+      and `--probe` exposes it on its own). `Outlook.Application` is registered by **Office as a whole**, so it
+      is present on a PC with Word and Excel but no Outlook, and on one migrated to the new Outlook - and
+      activating it there does not fail, it hands the request to Windows Installer, which pops up an *install
+      Outlook* dialog. Diariz syncs on launch, so those users met that dialog **every launch**. The probe
+      resolves `Outlook.Application` → CLSID → `LocalServer32` (and the `App Paths\OUTLOOK.EXE` entry) in
+      **both registry views** - a 32-bit Office on 64-bit Windows registers under `Wow6432Node`, and the reader
+      is x64 - and requires the executable to **exist on disk**; `Read` consults it before it ever creates the
+      COM object (guarded by `outlookPackaging.test.js`). `main.js` **remembers** a definitive "no"
+      (`outlookUnavailableReason` in `electron-store`, for the sticky reasons `not-installed` / `new-outlook` /
+      `unavailable` only - never a transient `busy`/`timeout`/`denied`), so even the probe stops running; the
+      **Check again** button on the Outlook card in Preferences (`outlook:recheck`) is the only thing that
+      clears it. Availability resolves through one shared promise, because the probe is a subprocess and the
+      renderer's `outlook:ready` - which licenses the launch sync - routinely arrives while it is still running.
     - **How it reads.** Late binding only (`Type.GetTypeFromProgID` + `InvokeMember`), so no interop assembly
       and no Outlook version coupling. `IncludeRecurrences = true` then `Sort("[Start]")` then `Restrict(...)`
       - the order matters, as Outlook only expands a series once the collection is sorted by start - so the

@@ -165,6 +165,41 @@ describe("OutlookCard", () => {
     expect(screen.queryByRole("button", { name: /sync now/i })).toBeNull();
   });
 
+  /// The shell REMEMBERS that Outlook is not here - that is what stopped Windows offering to install Office
+  /// on every launch - so someone who has since installed it needs a way to say "look again". This is the only
+  /// thing that clears the remembered answer, which is why it has to be here and not left to a restart.
+  it("offers a re-check on a machine where Outlook was not found", async () => {
+    (api.getUserSettings as Mock).mockResolvedValue({ outlookSyncEnabled: true });
+    const recheckOutlook = vi.fn().mockResolvedValue(true);
+    (window as { diariz?: unknown }).diariz = {
+      canSyncOutlook: true,
+      outlookAvailable: vi.fn().mockResolvedValue(false),
+      recheckOutlook,
+      onOutlookState: vi.fn().mockReturnValue(() => {}),
+    };
+    renderCard();
+
+    fireEvent.click(await screen.findByRole("button", { name: /check again/i }));
+
+    await waitFor(() => expect(recheckOutlook).toHaveBeenCalled());
+    // It found Outlook this time, so the card stops explaining its absence and offers the sync.
+    expect(await screen.findByRole("button", { name: /sync now/i })).toBeTruthy();
+    expect(screen.queryByText(/needs classic Outlook for Windows/i)).toBeNull();
+  });
+
+  it("offers no re-check on a machine that can reach Outlook", async () => {
+    (api.getUserSettings as Mock).mockResolvedValue({ outlookSyncEnabled: true });
+    (window as { diariz?: unknown }).diariz = {
+      canSyncOutlook: true,
+      outlookAvailable: vi.fn().mockResolvedValue(true),
+      onOutlookState: vi.fn().mockReturnValue(() => {}),
+    };
+    renderCard();
+
+    await screen.findByRole("button", { name: /sync now/i });
+    expect(screen.queryByRole("button", { name: /check again/i })).toBeNull();
+  });
+
   /// The count used to sit on the end of the description, where this card's unusually busy header - a
   /// chip, a checkbox and a button - truncated it away. It is in the chip now, as on every other card.
   /// The chip used to read "Mirroring", which the "Mirror enabled" tick beside it already said.

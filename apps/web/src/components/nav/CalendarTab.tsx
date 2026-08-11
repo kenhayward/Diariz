@@ -4,13 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { useDragAutoScroll } from "../../lib/dragAutoScroll";
 import { recordingDayKeys, dayKey, eventDayKeys, visibleGridRange, dayItems, dayEventCount, type DayItem } from "../../lib/calendar";
-import {
-  canSyncOutlook as shellCanSyncOutlook,
-  onOutlookState,
-  outlookAvailable as checkOutlookAvailable,
-  syncOutlookNow,
-  type OutlookShellState,
-} from "../../lib/outlookSync";
+import { onOutlookState, type OutlookShellState } from "../../lib/outlookSync";
 import MonthCalendar from "../MonthCalendar";
 import DayGrid from "./DayGrid";
 import type { RecordingSummary } from "../../lib/types";
@@ -19,8 +13,8 @@ import type { RecordingSummary } from "../../lib/types";
 /// (in a personal room) unlinked calendar events from every source the user has (Google, subscribed .ics
 /// feeds, and a mirrored desktop Outlook calendar), positioned and sized by when they actually ran.
 ///
-/// Owns its own state and its two queries. Because the panel mounts this only while the tab is showing,
-/// those queries do not run while you are reading the meetings list - and the month resets to today when
+/// Owns its own state and its events query. Because the panel mounts this only while the tab is showing,
+/// that query does not run while you are reading the meetings list - and the month resets to today when
 /// you leave and come back. That reset is the deliberate trade: the alternative is keeping the month alive
 /// in the panel, which is cold state in the hottest file in the app. Pinned by CalendarTab.test.tsx.
 export default function CalendarTab({
@@ -47,8 +41,7 @@ export default function CalendarTab({
 
   // Calendar overlay: fetch the visible month's events. Keyed by month, so navigating months auto-refetches;
   // a short staleTime avoids refetch churn on focus.
-  const { data: settings } = useQuery({ queryKey: ["user-settings"], queryFn: api.getUserSettings });
-  const { data: calendarEvents = [], isFetching: eventsFetching } = useQuery({
+  const { data: calendarEvents = [] } = useQuery({
     queryKey: ["calendar-events", month.year, month.month],
     queryFn: () => {
       const { timeMin, timeMax } = visibleGridRange(month.year, month.month);
@@ -67,36 +60,19 @@ export default function CalendarTab({
   // already returns [] when nothing is connected, so the gate bought nothing and cost those users the feature.
   const showCalendarOverlay = isPersonalRoom;
 
-  // A "Sync Outlook" affordance right where the meetings are, so a user who notices a missing one does not
-  // have to go to Preferences to refresh. Availability is asked once; the phase keeps the button honest while
-  // a sync runs. All three are inert in a browser, so this costs nothing off the desktop.
-  const [outlookAvailable, setOutlookAvailable] = useState(false);
-  const [outlookSyncing, setOutlookSyncing] = useState(false);
-  const outlookPhase = useRef<OutlookShellState["phase"]>("idle");
-  const outlookOptedIn = outlookAvailable && settings?.outlookSyncEnabled === true;
-
-  useEffect(() => {
-    let live = true;
-    void checkOutlookAvailable().then((ok) => {
-      if (live) setOutlookAvailable(ok);
-    });
-    return () => {
-      live = false;
-    };
-  }, []);
-
-  // The shell's phase drives the button's label and, on the way back down, the refresh. A sync that has
-  // *finished* is one whose meetings the server actually has: the shell only returns to idle once the renderer
-  // has POSTed the harvested window. Refreshing when one starts - which is what this used to do - refetched the
-  // meetings already on screen and left the new ones invisible until the user pressed Refresh events.
-  // Any completed sync counts, not only one from this button: the tray and the launch sync fill the day in too.
+  // Fill the day in when a sync the user did not start finishes - the tray's, and the one that runs on launch.
+  // (The toolbar's own two buttons refresh themselves when their run completes; this is for everything else.)
+  //
+  // On the way *down* only. A sync that has finished is one whose meetings the server actually has: the shell
+  // returns to idle only once the renderer has POSTed the harvested window. Refreshing when one starts - which
+  // is what this used to do - refetched the meetings already on screen and left the new ones invisible.
   // The phase lives in a ref so changing month mid-sync (which resubscribes) cannot lose the transition.
+  const outlookPhase = useRef<OutlookShellState["phase"]>("idle");
   useEffect(
     () =>
       onOutlookState((s) => {
         const finished = outlookPhase.current !== "idle" && s.phase === "idle";
         outlookPhase.current = s.phase;
-        setOutlookSyncing(s.phase !== "idle");
         if (finished) void qc.invalidateQueries({ queryKey: ["calendar-events", month.year, month.month] });
       }),
     [qc, month.year, month.month],
@@ -140,31 +116,6 @@ export default function CalendarTab({
           onPrev={() => stepMonth(-1)}
           onNext={() => stepMonth(1)}
         />
-        {showCalendarOverlay && (
-          <div className="flex items-center justify-end gap-3 px-2 pb-1">
-            {/* Only on the Windows desktop, with Outlook reachable and the user opted in - elsewhere there is
-                nothing that could answer, so no button rather than one that explains itself away. */}
-            {shellCanSyncOutlook() && outlookOptedIn && (
-              <button
-                type="button"
-                // A refusal (cooldown, busy) needs no message here - Preferences is where that detail lives.
-                onClick={() => void syncOutlookNow()}
-                disabled={outlookSyncing}
-                className="text-[10px] text-gray-400 hover:text-gray-600 disabled:opacity-50 dark:text-gray-500 dark:hover:text-gray-300"
-              >
-                {outlookSyncing ? t("calSyncingOutlook") : t("calSyncOutlook")}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => qc.invalidateQueries({ queryKey: ["calendar-events", month.year, month.month] })}
-              disabled={eventsFetching}
-              className="text-[10px] text-gray-400 hover:text-gray-600 disabled:opacity-50 dark:text-gray-500 dark:hover:text-gray-300"
-            >
-              {eventsFetching ? t("calRefreshing") : t("calRefreshEvents")}
-            </button>
-          </div>
-        )}
       </div>
       {selectedDay && (
         <>

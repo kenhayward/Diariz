@@ -13,6 +13,11 @@ public sealed class ReaderOptions
     /// <summary>Bodies are cut here before leaving the machine, not on arrival.</summary>
     public int MaxBodyChars { get; init; } = 4000;
 
+    /// <summary>Answer "is classic Outlook installed?" from the registry and exit, without creating the COM
+    /// object. The shell asks this before it ever offers the connector - see
+    /// <see cref="OutlookPresence"/> for why touching COM is the thing to avoid.</summary>
+    public bool Probe { get; init; }
+
     public static ReaderOptions Parse(string[] args)
     {
         var map = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
@@ -37,6 +42,7 @@ public sealed class ReaderOptions
             IncludeBody = !map.ContainsKey("no-body"),
             Max = Int(map, "max") ?? 5000,
             MaxBodyChars = Int(map, "max-body") ?? 4000,
+            Probe = map.ContainsKey("probe"),
         };
     }
 

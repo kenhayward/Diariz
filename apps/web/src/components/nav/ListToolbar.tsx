@@ -6,14 +6,23 @@ import { useSelection } from "../../lib/selection";
 import { useMoveClipboard } from "../../lib/moveClipboard";
 import { inDisplayOrder } from "../../lib/reorder";
 import { sectionCreateTarget } from "../../lib/drillView";
+import { useCalendarSync } from "../../lib/calendarSync";
 import ToolbarButton, { iconProps } from "../ToolbarButton";
 import type { RecordingSummary, SectionDto } from "../../lib/types";
 
 /// Top-of-list toolbar: create a section (group), toggle multi-select, bulk-delete audio for the
-/// selection, and refresh the list (picks up changes made on another machine/browser).
+/// selection, refresh the list (picks up changes made on another machine/browser), and - on the Calendar tab -
+/// sync the calendar.
+///
+/// The two calendar syncs are here rather than in the Calendar tab because that is where every other action in
+/// this panel lives: below the month grid they read as part of the calendar's own chrome, and they scrolled
+/// with it. Keeping them in the toolbar also means a sync started from the Calendar keeps running (and keeps
+/// reporting) if the user switches to the list while they wait.
 function ListToolbar({
   recordings,
   listMode,
+  calendarMode,
+  isPersonalRoom,
   allowFolders,
   sections,
   drillSectionId,
@@ -22,6 +31,11 @@ function ListToolbar({
 }: {
   recordings: RecordingSummary[];
   listMode: boolean;
+  /// The Calendar tab is showing, so the two sync buttons apply.
+  calendarMode: boolean;
+  /// The event overlay is personal-only: a shared room shows its own recordings and nothing else, so there is
+  /// no calendar there to sync.
+  isPersonalRoom: boolean;
   // Shown when the caller can manage the current room's contents (folders are per-room).
   allowFolders: boolean;
   // The room's folders and where the list is drilled to - together they decide where the folder button
@@ -36,6 +50,7 @@ function ListToolbar({
   const qc = useQueryClient();
   const { selectMode, setSelectMode, selectedIds, clear } = useSelection();
   const { cutRecordings } = useMoveClipboard();
+  const { syncing, sync } = useCalendarSync();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -195,6 +210,25 @@ function ListToolbar({
               />
             </span>
           )}
+          {/* Calendar-only, and personal-room-only, because that is exactly where the event overlay exists.
+              One control per scope rather than a menu: "the meeting I just accepted is missing" is a common
+              enough moment to deserve a button, and the quick sync is seconds where the full one is tens. */}
+          {calendarMode && isPersonalRoom && (
+            <>
+              <ToolbarButton
+                label={t("calSyncToday")}
+                onClick={() => sync("today")}
+                disabled={syncing != null}
+                icon={<SyncTodayIcon />}
+              />
+              <ToolbarButton
+                label={t("calSyncCalendar")}
+                onClick={() => sync("all")}
+                disabled={syncing != null}
+                icon={<SyncCalendarIcon />}
+              />
+            </>
+          )}
           <ToolbarButton
             label={t("refresh")}
             onClick={() => {
@@ -230,6 +264,28 @@ const RefreshIcon = () => (
     <path d="M23 4v6h-6" />
     <path d="M1 20v-6h6" />
     <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+  </svg>
+);
+// The two syncs are a matched pair, so they share a calendar body and differ only in what sits inside it: a
+// single day for the quick one, the refresh arrows for the full one.
+const SyncTodayIcon = () => (
+  <svg {...iconProps}>
+    <rect x="3" y="4" width="18" height="18" rx="2" />
+    <line x1="3" y1="10" x2="21" y2="10" />
+    <line x1="8" y1="2" x2="8" y2="6" />
+    <line x1="16" y1="2" x2="16" y2="6" />
+    <rect x="10" y="13" width="4" height="4" rx="1" fill="currentColor" />
+  </svg>
+);
+const SyncCalendarIcon = () => (
+  <svg {...iconProps}>
+    <path d="M21 11V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6" />
+    <line x1="3" y1="10" x2="21" y2="10" />
+    <line x1="8" y1="2" x2="8" y2="6" />
+    <line x1="16" y1="2" x2="16" y2="6" />
+    <path d="M21 17a3.5 3.5 0 0 1-6 2.3M14 17a3.5 3.5 0 0 1 6-2.3" />
+    <polyline points="14 14 14 17 17 17" />
+    <polyline points="21 20 21 17 18 17" />
   </svg>
 );
 const TrashIcon = () => (

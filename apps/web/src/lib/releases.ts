@@ -36,7 +36,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Rooms** | A private Personal Room per account plus shareable Rooms: invite users and groups with per-member permissions. Each Shared Room has its **own folder structure** (sections/sub-sections, drag-and-drop, per-room order) and its own List/Calendar/Actions/Tags scoped to it; record or upload files straight into a room (your Personal Room keeps the original), and search + chat over every room you belong to. A member who can read a shared recording sees its notes and screenshots too - only the owner can add, edit, or delete them. Your Google Calendar and its linking stay personal. The switcher shows each room's folder and meeting counts (shared ones labelled), ticks the one you are in, and remembers where you were. Manage rooms from the switcher. |
 | **Organise & merge** | Folders nested up to 8 levels deep with drag-and-drop (dragging one of several ticked rows moves the whole selection); the meetings list drills in one folder at a time (coloured folder rows with counts, a breadcrumb showing the full path with every part clickable, browser back pops a level) so it stays readable however many recordings you have, with **Open section page** in the breadcrumb's menu as a separate target from browsing deeper; an open recording shows its folder path as clickable chips under its name, each taking the list straight to that folder; choose where a new recording is filed (Ungrouped, the open folder, or a specific folder); cut one or more recordings, or a folder, and paste them into another folder in one move (landing at the bottom, in the order you cut them), with the Paste control showing why it's disabled when a move isn't allowed yet; browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
-| **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds and - synced by the Windows desktop app on launch, from the tray or on demand - a mirror of your classic Outlook calendar (opt-in, per machine, erasable). All three are set up in one **Calendars** tab in Preferences, a card per source showing its account, its calendars and whether it is live. Every calendar you connect is treated the same: meetings from any of them show on the Calendar tab, match to a recording, and open with their full invite details. A month grid highlights the days that have something on them; picking one lays that day out on an hour axis, with meetings and recordings placed and sized by when they ran, clashes side by side, all-day entries in their own strip, and a line marking the current time. |
+| **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds and - synced by the Windows desktop app on launch, from the tray or on demand - a mirror of your classic Outlook calendar (opt-in, per machine, erasable). All three are set up in one **Calendars** tab in Preferences, a card per source showing its account, its calendars and whether it is live. Every calendar you connect is treated the same: meetings from any of them show on the Calendar tab, match to a recording, and open with their full invite details. A month grid highlights the days that have something on them; picking one lays that day out on an hour axis, with meetings and recordings placed and sized by when they ran, clashes side by side, all-day entries in their own strip, and a line marking the current time. Two toolbar buttons refresh it: **Sync calendar** covers every source you have connected in one go, and **Sync today** does the same for the current day only - seconds rather than the half a minute a full Outlook read takes - with the status bar counting up while either runs. |
 | **API access** | Generate a personal API token (when enabled), read-only or read-write, with an optional expiry date, to call the REST API as yourself; the list shows which tokens are read-only and when each expires. A built-in API reference documents every endpoint - what it does, who may call it, and what it changes. |
 | **Automations (webhooks)** | When enabled, register outbound webhooks from Preferences - a list of what you have, with a composer for making or editing one - that fire when a recording is created, finishes or fails transcription, a summary / meeting minutes / action items / tags become ready (each carrying its output), or a formula finishes or fails. Every recording event also carries an **attendees** list - who spoke, the person they are, their title, company, and internal or external - with email addresses and phone numbers included only when that automation opts in. Signed deliveries with automatic retries (rate-limited per automation and 429-aware), a test-event button, auto-pause after repeated failures, and a Pause / Resume button that stops deliveries reversibly (deleting an automation discards its signing secret; pausing keeps it). Admins can also define named Workflow Signals and wire a platform automation to one, so a formula author just picks "When this finishes, trigger: ..." in the formula editor - no URL or per-user setup - and the formula's output is delivered inline to everyone routed through that signal. |
 | **n8n** | A published community node (\`n8n-nodes-diariz\`): a trigger that registers its own automation and verifies every signed delivery, with a Platform scope for administrators that adds events across every user including Feedback Received, plus an action node covering the whole REST API - with dropdowns listing your real recordings and formulas, files in and out, and a Run Formula step that waits for the document to finish. |
@@ -61,6 +61,37 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.205.0",
+    date: "2026-08-11",
+    pr: 503,
+    headline: "One calendar sync, a quick sync for today, and no more Outlook install prompts",
+    summary:
+      "The Calendar's sync controls have moved out of the day view and into the panel toolbar as two icons. " +
+      "Sync calendar refreshes everything you have connected in one go - Google, your .ics feeds and a " +
+      "desktop Outlook mirror - touching only the ones you actually use. Sync today does the same for the " +
+      "current day only, which takes a couple of seconds instead of the half a minute a full Outlook read " +
+      "costs, so a meeting that has just appeared in your calendar can be picked up straight away. While " +
+      "either is running the status bar counts the seconds, so a long sync no longer looks like a button " +
+      "that did nothing. On Windows PCs without classic Outlook, Diariz now works out that it is not there " +
+      "by looking, rather than by trying to start it - which is what made Windows offer to install Outlook " +
+      "every time the app opened. It remembers the answer; Preferences has a Check again button for after " +
+      "you install it.",
+    added: [
+      "Sync today - a quick calendar sync covering only the current day.",
+      "A status-bar line that counts up while a calendar sync runs, naming which of the two is going.",
+      "A Check again button on the Outlook card, for a PC where classic Outlook was not found.",
+    ],
+    changed: [
+      "The calendar sync controls are now two icons in the panel toolbar, not text buttons under the month grid.",
+      "One sync covers Google, .ics feeds and desktop Outlook together, refreshing only what is connected.",
+      "Refresh events is gone - Sync calendar does that and more.",
+    ],
+    fixed: [
+      "Windows no longer offers to install Outlook on every launch on a PC that has Office but not classic Outlook.",
+      "A quick sync is no longer refused for a minute because a full sync has just run.",
+    ],
+  },
   {
     version: "0.204.0",
     date: "2026-08-11",

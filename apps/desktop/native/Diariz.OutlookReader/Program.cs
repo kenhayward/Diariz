@@ -25,7 +25,7 @@ public static class Program
         try
         {
             var options = ReaderOptions.Parse(args);
-            var result = Read(options);
+            var result = options.Probe ? Probe() : Read(options);
             Write(result);
             return result.Ok ? 0 : 1;
         }
@@ -38,8 +38,25 @@ public static class Program
         }
     }
 
+    /// <summary>Registry-only "is classic Outlook here?", with no COM activation at all. Reported as an
+    /// ordinary result document so the shell parses one shape whatever it asked for.</summary>
+    private static ReadResult Probe()
+    {
+        var presence = OutlookPresence.Detect();
+        return presence.Installed
+            ? new ReadResult { Ok = true, Complete = true, DeviceTimeZone = TimeZoneInfo.Local.Id }
+            : ReadResult.Failed(presence.Reason ?? "not-installed", "Classic Outlook is not installed on this PC.");
+    }
+
     private static ReadResult Read(ReaderOptions options)
     {
+        // Ask the registry before touching COM. Activating Outlook.Application on a PC that has Office but not
+        // Outlook does not fail cleanly - Windows Installer offers to install it, in a dialog over whatever the
+        // user was doing, every single time a sync ran. See OutlookPresence.
+        var presence = OutlookPresence.Detect();
+        if (!presence.Installed)
+            return ReadResult.Failed(presence.Reason ?? "not-installed", "Classic Outlook is not installed on this PC.");
+
         var progId = Type.GetTypeFromProgID("Outlook.Application");
         if (progId is null)
             return ReadResult.Failed("not-installed", "Outlook is not installed on this PC.");

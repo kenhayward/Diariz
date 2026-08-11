@@ -2,9 +2,10 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
-  SYNC_DEFAULTS, MAX_EVENTS, SYNC_COOLDOWN_MS,
-  windowFor, localDateKey, readDateParts, truncateBody, normalizeAppointment,
-  dedupeUids, capEvents, shouldStartSync, trayOutlookItems, describeComError, notificationForSyncResult,
+  SYNC_DEFAULTS, MAX_EVENTS, SYNC_COOLDOWN_MS, QUICK_SYNC_COOLDOWN_MS,
+  windowFor, todayWindow, windowForScope, localDateKey, readDateParts, truncateBody, normalizeAppointment,
+  dedupeUids, capEvents, shouldStartSync, isStickyUnavailable, trayOutlookItems, describeComError,
+  notificationForSyncResult,
 } = require("./outlookSync");
 
 // ---- windowFor ----
@@ -21,6 +22,32 @@ test("windowFor falls back to the server's own defaults", () => {
   const a = windowFor(now);
   const b = windowFor(now, SYNC_DEFAULTS);
   assert.deepEqual(a, b);
+});
+
+// ---- todayWindow / windowForScope ----
+
+// The quick sync exists because a full read takes ~30s: it must ask for one day, and it must ask for the
+// LOCAL day. Built from local parts rather than an ISO string so the assertion holds in any runner timezone.
+test("todayWindow spans local midnight to the next local midnight", () => {
+  const now = new Date(2026, 7, 11, 14, 30);
+  const { start, end } = todayWindow(now);
+  assert.equal(new Date(start).getTime(), new Date(2026, 7, 11).getTime());
+  assert.equal(new Date(end).getTime(), new Date(2026, 7, 12).getTime());
+});
+
+// Across a DST change the next local midnight is 23 or 25 hours away, not 24. Adding a fixed day of
+// milliseconds would land an hour either side of it and clip - or double-count - the edge of the day.
+test("todayWindow lands on the next local midnight, not 24 hours later", () => {
+  const { start, end } = todayWindow(new Date(2026, 2, 29, 9, 0));
+  assert.equal(new Date(end).getTime(), new Date(2026, 2, 30).getTime());
+  assert.ok(new Date(end) > new Date(start));
+});
+
+test("windowForScope narrows to the day for a quick sync and keeps the rolling window otherwise", () => {
+  const now = new Date(2026, 7, 11, 14, 30);
+  assert.deepEqual(windowForScope(now, SYNC_DEFAULTS, "today"), todayWindow(now));
+  assert.deepEqual(windowForScope(now, SYNC_DEFAULTS, "all"), windowFor(now, SYNC_DEFAULTS));
+  assert.deepEqual(windowForScope(now, SYNC_DEFAULTS), windowFor(now, SYNC_DEFAULTS));
 });
 
 // ---- the all-day off-by-one ----
@@ -172,6 +199,41 @@ test("shouldStartSync refuses while one is running or inside the cooldown", () =
   assert.equal(shouldStartSync({ inFlight: false, lastSyncAt: now - SYNC_COOLDOWN_MS }, now), true);
   assert.equal(shouldStartSync({ inFlight: false, lastSyncAt: 0 }, now), true);
   assert.equal(shouldStartSync(null, now), false);
+});
+
+// A quick sync is the thing you reach for right after a launch sync has just finished and the meeting you
+// wanted still is not there. Sharing the full run's 60s cooldown would refuse exactly then, which is the one
+// moment it has to work - so it has its own, much shorter one, kept on its own stamp.
+test("shouldStartSync gives a quick sync its own shorter cooldown", () => {
+  const now = 1_000_000;
+  assert.ok(QUICK_SYNC_COOLDOWN_MS < SYNC_COOLDOWN_MS);
+
+  const justSyncedFully = { inFlight: false, lastSyncAt: now - 1000, lastQuickSyncAt: 0 };
+  assert.equal(shouldStartSync(justSyncedFully, now, "all"), false);
+  assert.equal(shouldStartSync(justSyncedFully, now, "today"), true);
+
+  const justSyncedToday = { inFlight: false, lastSyncAt: 0, lastQuickSyncAt: now - 1000 };
+  assert.equal(shouldStartSync(justSyncedToday, now, "today"), false);
+  assert.equal(
+    shouldStartSync({ ...justSyncedToday, lastQuickSyncAt: now - QUICK_SYNC_COOLDOWN_MS }, now, "today"),
+    true,
+  );
+  assert.equal(shouldStartSync({ inFlight: true }, now, "today"), false);
+});
+
+// ---- remembering that there is no Outlook here ----
+
+// On a PC without classic Outlook, creating the COM object made Windows offer to install Office - on every
+// launch. The reasons that mean "there is nothing here to talk to" are remembered so it is never attempted
+// again; a passing condition (a modal dialog, a slow mailbox) must NOT be, or one bad moment would switch the
+// connector off until the user found the recheck button.
+test("isStickyUnavailable remembers only a permanent absence", () => {
+  for (const reason of ["not-installed", "new-outlook", "unavailable"]) {
+    assert.equal(isStickyUnavailable(reason), true, reason);
+  }
+  for (const reason of ["busy", "timeout", "denied", "error", "not-windows", undefined, null]) {
+    assert.equal(isStickyUnavailable(reason), false, String(reason));
+  }
 });
 
 // ---- tray ----

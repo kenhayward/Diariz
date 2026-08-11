@@ -63,6 +63,25 @@ test("the reader keeps trimming off", () => {
   assert.match(csproj, /<SelfContained>true<\/SelfContained>/, "a user must not need a .NET runtime installed");
 });
 
+/// The reader has no C# test project (it is deliberately outside Diariz.slnx, which CI builds on Linux), so
+/// the one rule that has to hold at the source level is guarded here - in the same spirit as the csproj checks
+/// above.
+test("the reader checks the registry before it ever activates Outlook", () => {
+  const program = fs.readFileSync(
+    path.join(root, "native", "Diariz.OutlookReader", "Program.cs"),
+    "utf8",
+  );
+  const read = program.slice(program.indexOf("private static ReadResult Read("));
+  const probe = read.indexOf("OutlookPresence.Detect()");
+  const activate = read.indexOf("CreateApplication()");
+
+  assert.ok(probe >= 0, "Read must ask OutlookPresence whether classic Outlook is installed");
+  assert.ok(activate >= 0, "Read still creates the COM object once it knows Outlook is there");
+  // On a PC with Office but no Outlook, activating the class makes Windows offer to install it - a dialog the
+  // user got on every launch, because a sync runs at startup. The registry answers the question for free.
+  assert.ok(probe < activate, "the registry probe must come first, or the install prompt comes back");
+});
+
 test("the shell still has no native dependencies", () => {
   // The whole reason the reader is a separate process. A native module here would reintroduce per-Electron
   // rebuilds, arch-specific packaging, and the ABI breakage that ruled out an in-process COM binding.
