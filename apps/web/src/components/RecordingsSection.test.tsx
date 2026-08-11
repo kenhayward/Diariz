@@ -46,17 +46,40 @@ describe("RecordingsSection", () => {
 
   it("offers the three placement modes, defaulting to the selected folder", async () => {
     renderSection();
-    const selected = (await screen.findByRole("radio", { name: /currently selected folder/i })) as HTMLInputElement;
+    const selected = (await screen.findByRole("radio", { name: /the folder I'm looking at/i })) as HTMLInputElement;
     expect(selected.checked).toBe(true);
-    // The folder picker only appears in "specific folder" mode.
+    // The folder picker only appears in "one fixed folder" mode.
     expect(screen.queryByLabelText("Filter folders")).toBeNull();
-    fireEvent.click(screen.getByRole("radio", { name: /specific folder/i }));
+    fireEvent.click(screen.getByRole("radio", { name: /one fixed folder/i }));
     expect(screen.getByLabelText("Filter folders")).toBeTruthy();
+  });
+
+  it("heads the placement group and says what each choice does", async () => {
+    renderSection();
+    await screen.findByText("Where a new recording is filed");
+    expect(screen.getByText("in your personal space")).toBeTruthy();
+
+    expect(screen.getByText("Files into whichever folder is open in the list when you start recording.")).toBeTruthy();
+    expect(screen.getByText("Everything lands in one place; file it into a folder afterwards.")).toBeTruthy();
+    expect(screen.getByText("Always the same folder, wherever you happen to be.")).toBeTruthy();
+  });
+
+  it("marks the open-folder choice as the default", async () => {
+    renderSection();
+    const card = (await screen.findByRole("radio", { name: /the folder I'm looking at/i })).closest("label");
+    expect(card?.textContent).toContain("Default");
+  });
+
+  it("keeps the three choices in one radio group so arrow keys still work", async () => {
+    renderSection();
+    await screen.findByText("Where a new recording is filed");
+    const names = screen.getAllByRole("radio").map((r) => (r as HTMLInputElement).name);
+    expect(new Set(names)).toEqual(new Set(["placement-mode"]));
   });
 
   it("labels the folder picker for assistive tech, associated with the visible 'Folder' heading", async () => {
     renderSection();
-    fireEvent.click(await screen.findByRole("radio", { name: /specific folder/i }));
+    fireEvent.click(await screen.findByRole("radio", { name: /one fixed folder/i }));
     // A grouping name, not just the picker's own internal control labels (Filter folders / Folders list) -
     // this is what replaces the old <select>'s aria-label="Folder".
     expect(screen.getByRole("group", { name: "Folder" })).toBeTruthy();
@@ -67,7 +90,7 @@ describe("RecordingsSection", () => {
       { id: "sec-1", name: "Projects", parentId: null, position: 0 },
     ]);
     renderSection();
-    fireEvent.click(await screen.findByRole("radio", { name: /specific folder/i }));
+    fireEvent.click(await screen.findByRole("radio", { name: /one fixed folder/i }));
     fireEvent.click(await screen.findByLabelText("Select Projects"));
     fireEvent.click(saveButton());
 
@@ -86,7 +109,7 @@ describe("RecordingsSection", () => {
       { id: "sec-1", name: "Projects", parentId: null, position: 0 },
     ]);
     renderSection();
-    fireEvent.click(await screen.findByRole("radio", { name: /specific folder/i }));
+    fireEvent.click(await screen.findByRole("radio", { name: /one fixed folder/i }));
     // Move the value off its initial `null` first, so a root row whose `onChoose` never fired at all could
     // not accidentally pass this test by leaving the untouched initial value in place.
     fireEvent.click(await screen.findByLabelText("Select Projects"));
@@ -134,7 +157,7 @@ describe("RecordingsSection", () => {
       { id: "phase2", name: "Phase 2", parentId: "falcon", position: 0 },
     ]);
     renderSection();
-    fireEvent.click(await screen.findByRole("radio", { name: /specific folder/i }));
+    fireEvent.click(await screen.findByRole("radio", { name: /one fixed folder/i }));
 
     // Opening Settings lands on the root drill position, four levels above the saved folder - its row is
     // not rendered there at all, so the old bug showed nothing marked as current.
@@ -147,7 +170,7 @@ describe("RecordingsSection", () => {
     ]);
     const user = userEvent.setup();
     renderSection();
-    await user.click(await screen.findByRole("radio", { name: /specific folder/i }));
+    await user.click(await screen.findByRole("radio", { name: /one fixed folder/i }));
 
     // Real Tab presses only, no `.focus()` shortcut - proves the whole chain (radio group -> picker filter
     // box -> picker rows) is reachable by keyboard alone, not just that the target element is focusable.
@@ -246,7 +269,7 @@ describe("RecordingsSection", () => {
 
   it("has no Save of its own - it registers one with the modal footer", async () => {
     renderSection();
-    await screen.findByRole("radio", { name: /currently selected folder/i });
+    await screen.findByRole("radio", { name: /the folder I'm looking at/i });
     expect(screen.queryByRole("button", { name: /^save$/i })).toBeNull();
     expect(saveButton()).toBeTruthy();
   });
@@ -267,7 +290,7 @@ describe("RecordingsSection", () => {
     expect(screen.getByText("Unsaved changes")).toBeTruthy();
 
     // Back to the value that was loaded - there is nothing to save, so the footer must say so.
-    fireEvent.click(screen.getByRole("radio", { name: /currently selected folder/i }));
+    fireEvent.click(screen.getByRole("radio", { name: /the folder I'm looking at/i }));
     expect(screen.queryByText("Unsaved changes")).toBeNull();
   });
 
@@ -299,7 +322,7 @@ describe("RecordingsSection", () => {
       ...settings, placementMode: "Ungrouped", placementSectionId: "stale-sec",
     });
     renderSection();
-    await screen.findByRole("radio", { name: /currently selected folder/i });
+    await screen.findByRole("radio", { name: /the folder I'm looking at/i });
     expect(screen.queryByText("Unsaved changes")).toBeNull();
   });
 });

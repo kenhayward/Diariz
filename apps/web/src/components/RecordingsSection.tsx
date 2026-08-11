@@ -148,38 +148,52 @@ export default function RecordingsSection() {
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-gray-500 dark:text-gray-400">{t("recordingsIntro")}</p>
-      <fieldset className="space-y-2">
-        <label className="flex items-start gap-2 text-sm">
-          <input
-            type="radio"
-            name="placement-mode"
-            className="mt-0.5"
-            checked={placementMode === "Ungrouped"}
-            onChange={() => setPlacementMode("Ungrouped")}
-          />
-          <span className="text-gray-700 dark:text-gray-200">{t("placementUngrouped")}</span>
-        </label>
-        <label className="flex items-start gap-2 text-sm">
-          <input
-            type="radio"
-            name="placement-mode"
-            className="mt-0.5"
-            checked={placementMode === "SelectedFolder"}
-            onChange={() => setPlacementMode("SelectedFolder")}
-          />
-          <span className="text-gray-700 dark:text-gray-200">{t("placementSelected")}</span>
-        </label>
-        <label className="flex items-start gap-2 text-sm">
-          <input
-            type="radio"
-            name="placement-mode"
-            className="mt-0.5"
-            checked={placementMode === "SpecificFolder"}
-            onChange={() => setPlacementMode("SpecificFolder")}
-          />
-          <span className="text-gray-700 dark:text-gray-200">{t("placementSpecific")}</span>
-        </label>
+      <div className="flex items-baseline gap-2">
+        <h3 className="text-[15px] font-semibold dark:text-gray-100">{t("placementHeading")}</h3>
+        <span className="text-xs text-gray-500 dark:text-gray-400">{t("placementHeadingMeta")}</span>
+      </div>
+
+      <fieldset className="flex flex-col gap-2.5">
+        {(
+          [
+            { mode: "SelectedFolder", title: "placementSelected", meta: "placementSelectedMeta", isDefault: true },
+            { mode: "Ungrouped", title: "placementUngrouped", meta: "placementUngroupedMeta", isDefault: false },
+            { mode: "SpecificFolder", title: "placementSpecific", meta: "placementSpecificMeta", isDefault: false },
+          ] as const
+        ).map((card) => (
+          <label
+            key={card.mode}
+            // The selected state is the card's OWN border and background, never an outset ring. The
+            // content pane scrolls, and a ring painted 1px outside the box makes the pane wider than its
+            // client width, which paints a full-width horizontal scrollbar across the whole panel.
+            className={`cursor-pointer rounded-lg border px-3.5 py-3 ${
+              placementMode === card.mode
+                ? "border-blue-500/60 bg-blue-500/[.07] dark:border-blue-500/60 dark:bg-blue-500/[.14]"
+                : "border-gray-200 dark:border-gray-700"
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <input
+                type="radio"
+                name="placement-mode"
+                className="mt-0.5 accent-blue-600"
+                checked={placementMode === card.mode}
+                onChange={() => setPlacementMode(card.mode)}
+              />
+              <div className="flex min-w-0 flex-col gap-[3px]">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{t(card.title)}</span>
+                  {card.isDefault && (
+                    <span className="rounded border border-blue-500/40 bg-blue-500/10 px-1.5 py-px text-[10px] uppercase tracking-[.06em] text-blue-700 dark:text-blue-200">
+                      {t("placementDefaultChip")}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[13px] text-gray-500 dark:text-gray-400">{t(card.meta)}</span>
+              </div>
+            </div>
+          </label>
+        ))}
       </fieldset>
       {placementMode === "SpecificFolder" && (
         <div className="block text-sm">
