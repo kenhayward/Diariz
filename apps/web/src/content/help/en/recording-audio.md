@@ -41,12 +41,11 @@ The recording is also linked to that meeting from the outset, so the invite's de
 as it appears, and any prep notes you wrote on the event move across to it. Recordings you start any
 other way are matched to a meeting by time afterwards, which is a good guess but still a guess.
 
-You can also let such a recording end by itself. In **Settings -> Recordings**, under **Recording from
-a Calendar Event**, turn on **End recording automatically** and choose either or both conditions:
-
-- **Minutes after the meeting ends.** Three by default, so the conversation that carries on past the
-  hour is still captured.
-- **Seconds of silence.** Thirty by default, for when the meeting breaks up early.
+You can also let such a recording end by itself. In **Preferences -> Recordings**, turn on **Let a
+calendar meeting end its own recording** and one sentence appears: "Stop 3 minutes after the meeting
+was due to finish, or after 30 seconds of silence - whichever comes first." Change either number and a
+worked example underneath updates as you type, spelling out exactly when a 10:00-11:00 meeting would
+stop.
 
 Whichever happens first ends the recording, which then transcribes as normal. Silence is only counted
 once something has been heard, so joining a call before anyone speaks will not cut your recording
@@ -93,5 +92,7 @@ and when it finishes uploading.
 ## Where the recording lands
 
 By default a new recording is filed into the folder you currently have open. You can change this in
-**Settings -> Recordings** to always use a specific folder, or to leave new recordings ungrouped. If a
-shared room is open when you record, the meeting is filed into that room as well.
+**Preferences -> Recordings**, where each choice is a card saying what it does: keep the open folder,
+send everything to Ungrouped, or pick one fixed folder. Changes there are saved with the **Save changes**
+button in the footer of the Preferences window. If a shared room is open when you record, the meeting is
+filed into that room as well.

@@ -36,3 +36,14 @@ export function orderedSections(sections: SectionDto[]): OrderedSection[] {
   walk(null, "", 1, new Set());
   return out;
 }
+
+/// The chosen folder's full-path label for `id`, or `fallback` for the root (`id === null`) and for an id
+/// no longer present in `sections` (deleted, or a still-loading list). `FolderPickerModal` and
+/// `RecordingsSection` are both on screen at once while the dialog is open and both need this exact string -
+/// one shared derivation so the two agree by construction rather than by two independent `.find` calls
+/// happening to match. Callers own the translated fallback text, so this stays a pure, translation-free
+/// function.
+export function sectionPathLabel(sections: SectionDto[], id: string | null, fallback: string): string {
+  if (id === null) return fallback;
+  return orderedSections(sections).find((o) => o.section.id === id)?.label ?? fallback;
+}
