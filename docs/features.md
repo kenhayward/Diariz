@@ -494,8 +494,11 @@ actually have, and **Sync today** does the same for the current day alone. The q
 Outlook read is tens of seconds on a busy mailbox where a single day is a couple: it is what you press when a
 meeting you have just accepted is not on the calendar yet. While either runs, the **status bar counts the
 seconds** and names which sync is going, so a long one cannot be mistaken for a button that did nothing. Both
-work in a plain browser, where a sync is simply a re-read of Google and your feeds. (They replace the *Sync
-Outlook* and *Refresh events* links that used to sit under the month grid.)
+work in a plain browser, where a sync is simply a re-read of Google and your feeds. Either also re-reads the
+**recordings** drawn alongside the meetings, so one button refreshes everything the day view shows - which is
+why the generic **Refresh** button is not offered on this tab, only on the tabs where it is the only refresh
+there is. (The two syncs replace the *Sync Outlook* and *Refresh events* links that used to sit under the
+month grid.)
 - **Subscribe to external calendar feeds**: add any public iCalendar (`.ics`) URL — a team or shared
 calendar — in **Preferences → Calendars**, give it a name and colour, and its meetings appear on the
 Calendar tab in that colour (fetched behind an SSRF guard, no Google connection required). Feed meetings are

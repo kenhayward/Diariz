@@ -62,6 +62,25 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.207.1",
+    date: "2026-08-11",
+    pr: 510,
+    headline: "The calendar's sync message no longer gets stuck",
+    summary:
+      "Starting a calendar sync and then moving away from the Calendar tab - or collapsing the left panel - " +
+      "could leave \"Syncing calendar 0s\" sitting in the status bar for the rest of the session, frozen, with " +
+      "nothing able to clear it. The message now goes with the toolbar that put it there. The Calendar tab " +
+      "also loses its third refresh button: it had Sync today, Sync calendar and a general Refresh side by " +
+      "side, and the first two now re-read the recordings shown on the day view as well as the meetings, so " +
+      "the third had nothing left to do. Refresh is unchanged on the other tabs.",
+    changed: [
+      "The Calendar tab no longer shows the general Refresh button - Sync today and Sync calendar cover it, and now refresh the recordings on the day view too.",
+    ],
+    fixed: [
+      "A calendar sync no longer leaves a frozen \"Syncing calendar\" message in the status bar when you switch tabs or collapse the panel while it runs.",
+    ],
+  },
+  {
     version: "0.207.0",
     date: "2026-08-11",
     pr: 509,
