@@ -101,6 +101,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddOutlookCalendarSync` | `OutlookCalendarSources` (one per user+device, unique `(UserId, DeviceId)`, cascade on user delete) and `OutlookCalendarEvents` (flattened occurrences; deterministic uuid PK, unique `(SourceId, Uid)`, indexes `(UserId, StartsAt)` and `(SourceId, StartsAt)`, `AttendeesJson` as **jsonb**, cascade from both the source and the user), plus `UserSettings.OutlookSyncEnabled` (boolean NOT NULL DEFAULT false - the privacy opt-in). Two new tables and one defaulted column: additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddCalendarRecordingPreferences` | `UserSettings.CalendarAutoStopEnabled` (boolean NOT NULL DEFAULT false) + `CalendarAutoStopAfterMinutes` (int NOT NULL **DEFAULT 3**) + `CalendarSilenceStopSeconds` (int NOT NULL **DEFAULT 30**) - how a recording started by joining a meeting from the calendar should end. The two int defaults are set in the **column**, not just the C# initialiser: these columns land on a table that already has rows, and EF's usual `defaultValue: 0` would have meant "stop the moment recording starts" / "end on zero seconds of silence" for every existing user. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddCalendarSeriesId` | `RecordingCalendarLinks.SeriesId` (varchar(1024) null) - which recurring series a linked event belongs to, so a recording's earlier occurrences of the same meeting can be listed. **Backfills** existing Google/`.ics` links by stripping the `_{yyyyMMddTHHmmssZ}` occurrence suffix off `EventId`, and existing Outlook links (`EventId` = `outlook:{id}`) by joining `OutlookCalendarEvents` on that id and taking the `#`-prefix of its `Uid`; links the backfill cannot resolve are left null. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `OutlookNarrowSyncStamp` | `OutlookCalendarSources.LastNarrowSyncedAt` (timestamptz null) - when this device last completed a narrow (<= 2 day) push, so the desktop's "Sync today" has its own 10s cooldown instead of sharing the full run's 60s one and being refused in the moment it exists for. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 
 ### Entity-relationship overview
 
@@ -531,7 +532,8 @@ reachable from the user's own PC, so its events are **pushed** by the desktop ap
 | `SkipPrivate` | bool | default **true**; private/confidential appointments are dropped **on the machine**, so they never leave it |
 | `IncludeBody` | bool | default true; a private appointment's body is stripped regardless |
 | `CreatedAt` | timestamptz | |
-| `LastSyncedAt` | timestamptz null | last completed push; also gates the 60s per-device run cooldown |
+| `LastSyncedAt` | timestamptz null | last completed **full** push; also gates the 60s per-device run cooldown |
+| `LastNarrowSyncedAt` | timestamptz null | last completed **narrow** push (a window of <= 2 days - the desktop's "Sync today"); gates that run's own 10s cooldown. Kept apart from `LastSyncedAt` so the two cannot block each other: a quick sync is what a user reaches for seconds after a full one ran, and one shared stamp would refuse it exactly then. Preferences shows the later of the two |
 | `LastError` | varchar(512) null | last sync failure (Outlook not installed, the new Outlook, blocked COM), surfaced in Preferences from any device |
 | `LastEventCount` | int | events held after the last completed run |
 

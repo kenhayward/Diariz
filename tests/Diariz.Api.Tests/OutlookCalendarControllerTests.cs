@@ -325,6 +325,43 @@ public class OutlookCalendarControllerTests
         Assert.Equal(409, ((ObjectResult)result.Result!).StatusCode);
     }
 
+    /// <summary>The quick "Sync today" is exactly what a user reaches for seconds after a full sync failed to
+    /// bring in the meeting they can see in Outlook. Holding it to the full run's minute would refuse it in the
+    /// one moment it exists for, so a run covering a day or less gets its own, much shorter cooldown.</summary>
+    [Fact]
+    public async Task Sync_AllowsANarrowRunStraightAfterAFullOne()
+    {
+        using var db = TestDb.Create();
+        var userId = SeedOptedInUser(db);
+        var controller = Build(db, userId);
+        await controller.Sync(
+            Push(Guid.NewGuid(), [Event("u1", "A", "2026-07-02T09:00:00Z", "2026-07-02T10:00:00Z")]), default);
+
+        var result = await controller.Sync(
+            Push(Guid.NewGuid(), [Event("u2", "B", "2026-07-02T14:00:00Z", "2026-07-02T15:00:00Z")],
+                windowStart: "2026-07-02T00:00:00Z", windowEnd: "2026-07-03T00:00:00Z"),
+            default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    /// <summary>It is a shorter cooldown, not none: a client looping on the quick sync is still rate-limited.</summary>
+    [Fact]
+    public async Task Sync_RejectsTwoNarrowRunsBackToBack()
+    {
+        using var db = TestDb.Create();
+        var userId = SeedOptedInUser(db);
+        var controller = Build(db, userId);
+        var today = new Func<Guid, OutlookSyncRequest>(id => Push(
+            id, [Event("u1", "A", "2026-07-02T09:00:00Z", "2026-07-02T10:00:00Z")],
+            windowStart: "2026-07-02T00:00:00Z", windowEnd: "2026-07-03T00:00:00Z"));
+        await controller.Sync(today(Guid.NewGuid()), default);
+
+        var result = await controller.Sync(today(Guid.NewGuid()), default);
+
+        Assert.Equal(409, ((ObjectResult)result.Result!).StatusCode);
+    }
+
     /// <summary>The cooldown gates whole runs, not pages: a multi-page run already in flight must be able to
     /// finish, or the window would be left half-written with no final page to sweep or stamp it.</summary>
     [Fact]

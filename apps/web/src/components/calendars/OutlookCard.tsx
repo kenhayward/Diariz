@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../../lib/api";
-import { canSyncOutlook, onOutlookState, outlookAvailable, syncOutlookNow } from "../../lib/outlookSync";
+import { canSyncOutlook, onOutlookState, outlookAvailable, recheckOutlook, syncOutlookNow } from "../../lib/outlookSync";
 import { CalendarIcon } from "../icons";
 import SourceCard, { cardBtn } from "../SourceCard";
 import type { OutlookSource } from "../../lib/types";
@@ -23,12 +23,14 @@ export default function OutlookCard() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [available, setAvailable] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [phase, setPhase] = useState<"idle" | "reading" | "pushing">("idle");
 
   const enabled = settings?.outlookSyncEnabled === true;
   const onDesktop = canSyncOutlook();
 
   // Ask the shell once whether it can actually reach Outlook (installed, classic rather than new Outlook).
+  // Cheap: it is answered from the registry, and a "no" is remembered rather than re-derived.
   useEffect(() => {
     let live = true;
     void outlookAvailable().then((ok) => {
@@ -83,6 +85,22 @@ export default function OutlookCard() {
     }
   }
 
+  /// Look for Outlook again on a machine where the shell has written off finding it.
+  ///
+  /// That "no" is deliberately sticky - re-deriving it is what made Windows offer to install Office on every
+  /// launch - so someone who has just installed classic Outlook has no other way to be noticed.
+  async function recheck() {
+    setError(null);
+    setChecking(true);
+    try {
+      const ok = await recheckOutlook();
+      setAvailable(ok);
+      if (!ok) setError(t("outlookErrStillNotFound"));
+    } finally {
+      setChecking(false);
+    }
+  }
+
   async function syncNow() {
     setError(null);
     const { started, reason } = await syncOutlookNow();
@@ -121,6 +139,11 @@ export default function OutlookCard() {
               {phase === "idle" ? t("outlookSyncNow") : t("outlookSyncing")}
             </button>
           )}
+          {onDesktop && !available && (
+            <button type="button" onClick={recheck} disabled={checking} className={cardBtn}>
+              {checking ? t("outlookChecking") : t("outlookRecheck")}
+            </button>
+          )}
         </>
       }
     >
@@ -129,6 +152,9 @@ export default function OutlookCard() {
       {/* A browser (or a Mac) can manage everything here except starting a sync, so say where that happens
           rather than showing a button that could not work. */}
       {!onDesktop && <p className="mt-1.5 text-[11px] text-gray-400 dark:text-gray-500">{t("outlookRequiresDesktop")}</p>}
+      {/* Said once, next to the re-check button in the header: this machine was looked at, and no classic
+          Outlook was found. The answer is remembered rather than re-derived on every launch, which is what
+          stopped Windows offering to install Office each time - so the button is how you change it. */}
       {onDesktop && !available && (
         <p className="mt-1.5 text-[11px] text-gray-400 dark:text-gray-500">{t("outlookErrNotAvailable")}</p>
       )}

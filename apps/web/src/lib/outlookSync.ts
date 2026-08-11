@@ -50,11 +50,17 @@ export interface OutlookReadyConfig {
   includeBody: boolean;
 }
 
+/// How much of the calendar a run should read. `today` is the quick sync - one local day rather than the
+/// configured rolling window, which is the difference between a couple of seconds and half a minute on a busy
+/// mailbox.
+export type OutlookSyncScope = "all" | "today";
+
 interface OutlookShell {
   canSyncOutlook?: boolean;
   outlookAvailable?: () => Promise<boolean>;
+  recheckOutlook?: () => Promise<boolean>;
   reportOutlookReady?: (cfg: OutlookReadyConfig) => void;
-  syncOutlookNow?: () => Promise<{ started: boolean; reason?: string }>;
+  syncOutlookNow?: (options?: { scope?: OutlookSyncScope }) => Promise<{ started: boolean; reason?: string }>;
   onOutlookPush?: (cb: (payload: OutlookPushPayload) => void) => () => void;
   reportOutlookResult?: (result: OutlookPushResult) => void;
   onOutlookState?: (cb: (state: OutlookShellState) => void) => () => void;
@@ -82,16 +88,35 @@ export async function outlookAvailable(): Promise<boolean> {
   }
 }
 
+/// Ask the shell to look for Outlook again on a machine where it previously found none.
+///
+/// Needed because that answer is *remembered*: the shell stops probing once it knows there is no classic
+/// Outlook here, which is what stopped Windows offering to install Office on every launch. Someone who has
+/// since installed it needs a way to say so, and this is it. False in a browser, and on a shell that predates
+/// the bridge - so the caller should keep whatever it already knew.
+export async function recheckOutlook(): Promise<boolean> {
+  const api = shell();
+  if (!api?.recheckOutlook) return false;
+  try {
+    return await api.recheckOutlook();
+  } catch {
+    return false;
+  }
+}
+
 export function reportOutlookReady(cfg: OutlookReadyConfig): void {
   shell()?.reportOutlookReady?.(cfg);
 }
 
-/// Ask the shell to sync now. `started: false` carries a reason the caller can explain (`unavailable`,
-/// `disabled`, `busy`, `cooldown`, ...).
-export async function syncOutlookNow(): Promise<{ started: boolean; reason?: string }> {
+/// Ask the shell to sync now, over the whole configured window or (with `scope: "today"`) just the current
+/// local day. `started: false` carries a reason the caller can explain (`unavailable`, `disabled`, `busy`,
+/// `cooldown`, ...).
+export async function syncOutlookNow(
+  options: { scope?: OutlookSyncScope } = {},
+): Promise<{ started: boolean; reason?: string }> {
   const api = shell();
   if (!api?.syncOutlookNow) return { started: false, reason: "unavailable" };
-  return api.syncOutlookNow();
+  return api.syncOutlookNow(options);
 }
 
 /// Subscribe to harvested windows. Returns an unsubscribe function (a no-op in a browser).

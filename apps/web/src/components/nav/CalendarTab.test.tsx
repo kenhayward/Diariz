@@ -114,13 +114,13 @@ describe("CalendarTab", () => {
   // [] when nothing is connected, so the gate bought nothing and cost those users the feature.
   it("fetches events without a Google connection, so a feeds-only user still gets an overlay", async () => {
     (api.getCalendarEvents as Mock).mockResolvedValue([
-      { id: "ics:1:a", summary: "Team sync", start: today.toISOString(), end: today.toISOString() },
+      { id: "ics:1:a", summary: "Team sync", start: at(14).toISOString(), end: at(15).toISOString() },
     ]);
     renderTab();
 
     await screen.findByText("Today call");
     await waitFor(() => expect(api.getCalendarEvents).toHaveBeenCalled());
-    expect(await screen.findByRole("button", { name: /refresh events/i })).toBeTruthy();
+    expect(await screen.findByText("Team sync")).toBeTruthy();
   });
 
   /// Render at an explicit room scope, for the pair of overlay tests below.
@@ -139,7 +139,7 @@ describe("CalendarTab", () => {
 
   const withEvents = () => {
     (api.getCalendarEvents as Mock).mockResolvedValue([
-      { id: "e1", summary: "Standup", start: today.toISOString(), end: today.toISOString() },
+      { id: "e1", summary: "Standup", start: at(14).toISOString(), end: at(15).toISOString() },
     ]);
   };
 
@@ -152,85 +152,62 @@ describe("CalendarTab", () => {
     withEvents();
     renderAtScope(true);
     await waitFor(() => expect(api.getCalendarEvents).toHaveBeenCalled());
-    expect(await screen.findByRole("button", { name: /refresh events/i })).toBeTruthy();
+    expect(await screen.findByText("Standup")).toBeTruthy();
   });
 
   it("shows no event overlay in a shared room", async () => {
     withEvents();
+    // Establish the fetch - and how long it takes to land - in this same test before asserting it does not
+    // happen. Asserting "not called" on its own is a test that cannot fail: it passes whatever the gate says,
+    // which is exactly the hole the panel-suite version of this had (dropping `&& isPersonalRoom` from the
+    // query left it green).
+    const personal = renderAtScope(true);
+    await screen.findByText("Standup");
+    personal.unmount();
+    (api.getCalendarEvents as Mock).mockClear();
+
     renderAtScope(false);
 
     expect(await screen.findByText("Today call")).toBeTruthy(); // the room's own recording still shows
-    // Wait past the point the personal-room case proves the fetch fires. The settings query is the anchor
-    // now that the profile one is gone - without something that has demonstrably resolved, "not called" would
-    // be a claim about timing rather than about the gate.
-    await waitFor(() => expect(api.getUserSettings).toHaveBeenCalled());
-    await waitFor(() => expect(screen.queryByRole("button", { name: /refresh events/i })).toBeNull());
     await new Promise((r) => setTimeout(r, 20));
-
     expect(api.getCalendarEvents).not.toHaveBeenCalled();
-    expect(screen.queryByRole("button", { name: /refresh events/i })).toBeNull();
+    expect(screen.queryByText("Standup")).toBeNull();
   });
 
-  // ---- the Sync Outlook affordance ----
-
-  it("offers no Outlook sync in a plain browser", async () => {
-    (api.getUserSettings as Mock).mockResolvedValue({ outlookSyncEnabled: true });
-    renderTab();
-
-    await screen.findByText("Today call");
-    await waitFor(() => expect(api.getCalendarEvents).toHaveBeenCalled());
-    expect(screen.queryByRole("button", { name: /sync outlook/i })).toBeNull();
-  });
-
-  /// Opting in is not enough on its own: the shell still has to be able to reach Outlook. Offering the button
-  /// to someone on the new Outlook would be a button that can only ever fail.
-  it("offers no Outlook sync when the shell cannot reach Outlook", async () => {
-    (api.getUserSettings as Mock).mockResolvedValue({ outlookSyncEnabled: true });
-    (window as { diariz?: unknown }).diariz = {
-      canSyncOutlook: true,
-      outlookAvailable: vi.fn().mockResolvedValue(false),
-      onOutlookState: vi.fn().mockReturnValue(() => {}),
-    };
-    renderTab();
-
-    await screen.findByText("Today call");
-    await waitFor(() => expect(api.getCalendarEvents).toHaveBeenCalled());
-    expect(screen.queryByRole("button", { name: /sync outlook/i })).toBeNull();
-  });
+  // ---- filling the day in after a sync ----
+  //
+  // The sync buttons themselves live in the panel toolbar now (ListToolbar.test.tsx covers them), and they
+  // refresh the calendar when their own run completes. What is left here is every sync this tab did not
+  // start - the tray's and the one that runs on launch - which must still fill the day in on their own.
 
   /// A desktop shell whose sync phase the test drives. The real shell pushes state changes and replays
   /// nothing on subscribe, so `emit` is the only way the tab learns a sync started or finished.
   function fakeShell() {
     const listeners: ((s: { phase: string }) => void)[] = [];
-    const syncOutlookNow = vi.fn().mockResolvedValue({ started: true });
     (window as { diariz?: unknown }).diariz = {
       canSyncOutlook: true,
       outlookAvailable: vi.fn().mockResolvedValue(true),
-      syncOutlookNow,
+      syncOutlookNow: vi.fn().mockResolvedValue({ started: true }),
       onOutlookState: (cb: (s: { phase: string }) => void) => {
         listeners.push(cb);
         return () => listeners.splice(listeners.indexOf(cb), 1);
       },
     };
     const emit = (phase: string) => act(() => listeners.forEach((cb) => cb({ phase })));
-    return { syncOutlookNow, emit };
+    return { emit };
   }
 
-  /// Long enough for a refetch triggered by the click itself to have landed, so the "not yet" assertion
-  /// below is about the trigger and not about how quickly the test looked.
+  /// Long enough for a refetch triggered by the phase change itself to have landed, so the "not yet"
+  /// assertion below is about the trigger and not about how quickly the test looked.
   const settle = () => act(() => new Promise((r) => setTimeout(r, 20)));
 
-  it("refreshes the day's events when an Outlook sync finishes, not when it starts", async () => {
+  it("refreshes the day's events when a sync finishes, not when it starts", async () => {
     (api.getUserSettings as Mock).mockResolvedValue({ outlookSyncEnabled: true });
-    const { syncOutlookNow, emit } = fakeShell();
+    const { emit } = fakeShell();
     renderTab();
 
-    const button = await screen.findByRole("button", { name: /sync outlook/i });
     await waitFor(() => expect(api.getCalendarEvents).toHaveBeenCalled());
     (api.getCalendarEvents as Mock).mockClear();
-
-    fireEvent.click(button);
-    await waitFor(() => expect(syncOutlookNow).toHaveBeenCalled());
 
     // Mid-sync the server does not have the new meetings yet, so refetching here would only redraw the
     // ones already on screen - and leave the day stale once the upload actually lands.
@@ -241,21 +218,6 @@ describe("CalendarTab", () => {
 
     // The shell drops back to idle only once the renderer has POSTed the harvested window, so this is the
     // first moment the new meetings exist to be fetched.
-    emit("idle");
-    await waitFor(() => expect(api.getCalendarEvents).toHaveBeenCalled());
-  });
-
-  // The tray and the launch sync run without anyone touching this tab. They finish the same way, so the day
-  // should fill in on its own rather than waiting for a Refresh click.
-  it("refreshes after a sync it did not start", async () => {
-    (api.getUserSettings as Mock).mockResolvedValue({ outlookSyncEnabled: true });
-    const { emit } = fakeShell();
-    renderTab();
-
-    await waitFor(() => expect(api.getCalendarEvents).toHaveBeenCalled());
-    (api.getCalendarEvents as Mock).mockClear();
-
-    emit("reading");
     emit("idle");
     await waitFor(() => expect(api.getCalendarEvents).toHaveBeenCalled());
   });

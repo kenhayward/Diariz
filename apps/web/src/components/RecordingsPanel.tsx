@@ -262,6 +262,8 @@ export default function RecordingsPanel() {
         <ListToolbar
           recordings={recordings}
           listMode={tab === "list"}
+          calendarMode={tab === "calendar"}
+          isPersonalRoom={isPersonalRoom}
           allowFolders={canManageContents}
           sections={sections}
           drillSectionId={drill.sectionId}

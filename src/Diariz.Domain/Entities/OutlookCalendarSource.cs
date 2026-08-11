@@ -58,6 +58,12 @@ public class OutlookCalendarSource
     /// <summary>When this device last completed a push. Null until the first one.</summary>
     public DateTimeOffset? LastSyncedAt { get; set; }
 
+    /// <summary>When this device last completed a <b>narrow</b> push - a day or less, the desktop's "Sync
+    /// today". Stamped apart from <see cref="LastSyncedAt"/> so the two cooldowns do not block each other: a
+    /// quick sync is what the user reaches for seconds after a full one has run, and sharing a stamp would
+    /// refuse it exactly then. Null until the first quick sync.</summary>
+    public DateTimeOffset? LastNarrowSyncedAt { get; set; }
+
     /// <summary>The last sync failure, surfaced in Preferences so a user can see a broken connector from any
     /// device (Outlook not installed, the new Outlook, a blocked COM call). Null when the last sync succeeded.
     /// Mirrors <see cref="IcsCalendarSource.LastError"/>.</summary>

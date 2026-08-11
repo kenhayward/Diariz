@@ -479,6 +479,14 @@ past its usual 06:00-23:00 window whenever something falls outside it, so a meet
 A block does what its row did — a recording opens its transcript and keeps its full actions menu, a meeting
 opens its invite — and a block too short for two lines puts its title and time on one. The calendar a meeting
 came from is shown in the block's tooltip.
+- **Two calendar syncs, in the panel toolbar**: **Sync calendar** refreshes every source you have connected in
+one go — Google, subscribed `.ics` feeds and a mirrored desktop Outlook calendar — touching only the ones you
+actually have, and **Sync today** does the same for the current day alone. The quick one exists because a full
+Outlook read is tens of seconds on a busy mailbox where a single day is a couple: it is what you press when a
+meeting you have just accepted is not on the calendar yet. While either runs, the **status bar counts the
+seconds** and names which sync is going, so a long one cannot be mistaken for a button that did nothing. Both
+work in a plain browser, where a sync is simply a re-read of Google and your feeds. (They replace the *Sync
+Outlook* and *Refresh events* links that used to sit under the month grid.)
 - **Subscribe to external calendar feeds**: add any public iCalendar (`.ics`) URL — a team or shared
 calendar — in **Preferences → Calendars**, give it a name and colour, and its meetings appear on the
 Calendar tab in that colour (fetched behind an SSRF guard, no Google connection required). Feed meetings are
@@ -495,12 +503,16 @@ rename it, hide it without disconnecting, set how many days back and ahead it re
 (on by default), and exclude invite text. **Disconnecting a machine deletes the meetings copied from it, and
 turning the opt-in off clears every machine** — both confirm first. Managing it works from any browser; the
 syncing itself runs from the Windows desktop app, which reads the calendar **on launch**, from its **tray
-menu**, or from **Sync now** in Preferences. Reading happens in a small bundled helper program rather than
-inside the app, so a slow or failing calendar read cannot freeze recording, the tray or the screenshot hotkey;
-Diariz never closes an Outlook you had open, though COM will start Outlook if it is not running. Each failure
-is named specifically — Outlook not installed, Outlook busy, access blocked, or **the new Outlook, which does
-not expose a calendar to other apps at all** — and recorded against that machine so it is visible from
-elsewhere. Requires **classic Outlook for Windows**.
+menu**, from the Calendar's **Sync calendar / Sync today** buttons, or from **Sync now** in Preferences.
+Reading happens in a small bundled helper program rather than inside the app, so a slow or failing calendar
+read cannot freeze recording, the tray or the screenshot hotkey; Diariz never closes an Outlook you had open,
+though COM will start Outlook if it is not running. Each failure is named specifically — Outlook not installed,
+Outlook busy, access blocked, or **the new Outlook, which does not expose a calendar to other apps at all** —
+and recorded against that machine so it is visible from elsewhere. Requires **classic Outlook for Windows**.
+On a PC that has Office but **not** classic Outlook, Diariz works out that it is missing by **reading the
+registry**, never by trying to start it — starting it is what made Windows pop up an *install Outlook* dialog,
+on every launch, because a sync runs at startup. That answer is **remembered**, so nothing tries again; if you
+install Outlook later, **Check again** on the Outlook card in Preferences is what tells Diariz to look.
 - **Recurring meetings are marked.** A calendar event that repeats - from Google, an `.ics` feed, or the
 mirrored Outlook calendar - carries a **Repeats** badge, and both the event and a recording linked to it list
 your **earlier recordings of the same meeting** (up to 10, newest first), so you can jump straight back to the

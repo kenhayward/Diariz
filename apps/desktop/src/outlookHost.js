@@ -29,6 +29,42 @@ function isAvailable() {
   return process.platform === "win32" && fs.existsSync(readerPath());
 }
 
+/// A probe of the reader is registry-only, so it is quick - but it is still a process launch, and it runs on
+/// the path that decides whether to show the connector at all.
+const PROBE_TIMEOUT_MS = 15_000;
+
+/// Ask the reader whether classic Outlook is installed, WITHOUT activating it.
+///
+/// This exists because activation is the harmful part: on a PC with Office but no classic Outlook, creating
+/// `Outlook.Application` makes Windows offer to install it, and Diariz syncs on launch - so those users met
+/// that dialog every time they opened the app. The reader answers from the registry instead.
+///
+/// Always resolves with `{ ok, reason? }`.
+function probe() {
+  return new Promise((resolve) => {
+    if (process.platform !== "win32") {
+      resolve({ ok: false, reason: "not-windows" });
+      return;
+    }
+    const exe = readerPath();
+    if (!fs.existsSync(exe)) {
+      resolve({ ok: false, reason: "unavailable" });
+      return;
+    }
+
+    execFile(exe, ["--probe"], { timeout: PROBE_TIMEOUT_MS, windowsHide: true }, (error, stdout) => {
+      try {
+        const parsed = JSON.parse(stdout);
+        resolve({ ok: parsed.ok === true, reason: parsed.reason });
+      } catch {
+        // A reader that cannot even answer this is not one to hand a calendar read to. Reported as a
+        // transient error rather than "not installed", so it is not remembered across launches.
+        resolve({ ok: false, reason: error && error.killed ? "timeout" : "error" });
+      }
+    });
+  });
+}
+
 /// Read a window of the calendar.
 ///
 /// Always resolves - never rejects - with `{ ok, reason?, error?, complete, events, mailboxName,
@@ -80,4 +116,4 @@ function read({ start, end, skipPrivate = true, includeBody = true, max = 5000 }
   });
 }
 
-module.exports = { read, isAvailable, readerPath, READ_TIMEOUT_MS };
+module.exports = { read, probe, isAvailable, readerPath, READ_TIMEOUT_MS };

@@ -16,12 +16,35 @@ const MAX_BODY_CHARS = 4000;
 /// just avoids making the request at all.
 const SYNC_COOLDOWN_MS = 60_000;
 
+/// Minimum gap between *quick* (today-only) runs. Far shorter than the full one on purpose: a quick sync is
+/// what the user reaches for the moment a meeting they can see in Outlook is missing here, which is usually
+/// seconds after a full sync has just run. Reading one day is cheap enough that rate-limiting it hard buys
+/// nothing. The server applies the same distinction to a narrow window.
+const QUICK_SYNC_COOLDOWN_MS = 10_000;
+
 /// The rolling window to read, as ISO instants. Takes `now` rather than calling Date.now() so it is testable.
 function windowFor(now, options = {}) {
   const { pastDays, futureDays } = { ...SYNC_DEFAULTS, ...options };
   const start = new Date(now.getTime() - pastDays * 86_400_000);
   const end = new Date(now.getTime() + futureDays * 86_400_000);
   return { start: start.toISOString(), end: end.toISOString() };
+}
+
+/// Today, as ISO instants: local midnight to the next local midnight.
+///
+/// Built by stepping the local date rather than adding 86.4 million milliseconds, because the next local
+/// midnight is 23 or 25 hours away across a DST change - and a window that stops an hour short of it would
+/// leave the last meetings of the day outside the run (and, worse, outside the server's sweep).
+function todayWindow(now) {
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+/// The window a run of the given scope should read: `today` for the quick sync, the configured rolling window
+/// for everything else.
+function windowForScope(now, options = {}, scope = "all") {
+  return scope === "today" ? todayWindow(now) : windowFor(now, options);
 }
 
 /// The local calendar date of a `{ year, month, day }` parts object, as `yyyy-MM-dd`.
@@ -127,10 +150,29 @@ function capEvents(events, max = MAX_EVENTS) {
   return events.length <= max ? events : events.slice(0, max);
 }
 
-/// Whether to start a sync now, given `{ inFlight, lastSyncAt }`. Mirrors screenshotState's shouldStartCapture.
-function shouldStartSync(state, now) {
+/// Whether to start a sync now, given `{ inFlight, lastSyncAt, lastQuickSyncAt }`. Mirrors screenshotState's
+/// shouldStartCapture.
+///
+/// The two scopes keep separate stamps deliberately. Sharing one would mean a launch sync locks the quick sync
+/// out for a minute - which is exactly the minute the user is staring at a day that is missing a meeting.
+function shouldStartSync(state, now, scope = "all") {
   if (!state || state.inFlight) return false;
-  return now - (state.lastSyncAt || 0) >= SYNC_COOLDOWN_MS;
+  return scope === "today"
+    ? now - (state.lastQuickSyncAt || 0) >= QUICK_SYNC_COOLDOWN_MS
+    : now - (state.lastSyncAt || 0) >= SYNC_COOLDOWN_MS;
+}
+
+/// Reader reasons that mean there is no classic Outlook on this PC to talk to - as opposed to one that could
+/// not answer just now.
+///
+/// This distinction is the whole fix for the install prompt: creating the COM object on a PC without classic
+/// Outlook makes Windows offer to install Office, and it did so on every launch. A sticky reason is remembered
+/// so nothing tries again until the user asks it to from Preferences; a transient one must never be, or a
+/// single modal dialog in Outlook would switch the connector off until they went looking for the button.
+const STICKY_UNAVAILABLE = ["not-installed", "new-outlook", "unavailable"];
+
+function isStickyUnavailable(reason) {
+  return STICKY_UNAVAILABLE.includes(reason);
 }
 
 /// The tray items for the connector. Empty unless this machine could actually sync AND the user has opted in -
@@ -197,7 +239,12 @@ module.exports = {
   MAX_EVENTS,
   MAX_BODY_CHARS,
   SYNC_COOLDOWN_MS,
+  QUICK_SYNC_COOLDOWN_MS,
+  STICKY_UNAVAILABLE,
   windowFor,
+  todayWindow,
+  windowForScope,
+  isStickyUnavailable,
   localDateKey,
   readDateParts,
   truncateBody,

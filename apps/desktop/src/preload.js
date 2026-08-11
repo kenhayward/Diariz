@@ -84,15 +84,22 @@ contextBridge.exposeInMainWorld("diariz", {
   /// reachable (installed, classic rather than the new Outlook) is outlookAvailable().
   canSyncOutlook: process.platform === "win32",
 
-  /// Whether the shell can reach Outlook right now.
+  /// Whether the shell can reach Outlook right now. Answered from the registry, never by activating Outlook -
+  /// and a definitive "no" is remembered, so this stays cheap and stops prompting to install Office.
   outlookAvailable: () => ipcRenderer.invoke("outlook:available"),
+
+  /// Look again on a machine where Outlook was previously not found. The only thing that clears the
+  /// remembered "no"; Preferences offers it, because nothing else should decide to retry on the user's behalf.
+  recheckOutlook: () => ipcRenderer.invoke("outlook:recheck"),
 
   /// Report the connector's settings. Arriving at all also tells the shell a signed-in renderer is ready to
   /// POST, which is what lets it run its launch sync.
   reportOutlookReady: (cfg) => ipcRenderer.send("outlook:ready", cfg),
 
-  /// Ask for a sync now. Resolves { started, reason? } so the caller can explain a refusal.
-  syncOutlookNow: () => ipcRenderer.invoke("outlook:sync-now"),
+  /// Ask for a sync now. `{ scope: "today" }` reads only the current local day - the quick sync, seconds
+  /// rather than the tens a full mailbox read costs. Resolves { started, reason? } so the caller can explain
+  /// a refusal.
+  syncOutlookNow: (options) => ipcRenderer.invoke("outlook:sync-now", options),
 
   /// Subscribe to a harvested window awaiting upload. Returns an unsubscribe function.
   onOutlookPush: (cb) => {

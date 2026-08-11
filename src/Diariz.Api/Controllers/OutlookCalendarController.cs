@@ -34,6 +34,16 @@ public class OutlookCalendarController : ControllerBase
     /// flight share its sync id and are exempt.</summary>
     private static readonly TimeSpan RunCooldown = TimeSpan.FromSeconds(60);
 
+    /// <summary>The same, for a run covering a day or less - the desktop's "Sync today". Far shorter, because
+    /// that sync exists precisely for the moment just after a full one has finished without the meeting the
+    /// user is looking for, and a minute-long refusal would land squarely on it. Rereading one day is cheap;
+    /// what the cooldown is really protecting against is a client rewriting the whole window in a loop.</summary>
+    private static readonly TimeSpan NarrowRunCooldown = TimeSpan.FromSeconds(10);
+
+    /// <summary>Widest window still treated as a quick run. Two days rather than one so a client whose "today"
+    /// straddles a timezone or a DST boundary is not pushed onto the full cooldown by an hour of slack.</summary>
+    private static readonly TimeSpan NarrowRunWindow = TimeSpan.FromDays(2);
+
     private readonly DiarizDbContext _db;
 
     public OutlookCalendarController(DiarizDbContext db) => _db = db;
@@ -111,13 +121,17 @@ public class OutlookCalendarController : ControllerBase
                 .OrderByDescending(e => e.SyncedAt)
                 .Select(e => (Guid?)e.SyncId)
                 .FirstOrDefaultAsync(ct);
-            if (isNewRun && lastRunId != req.SyncId &&
-                source.LastSyncedAt is { } last && now - last < RunCooldown)
+            // A narrow run is stamped separately, so a full sync's minute never blocks a "Sync today" and a
+            // quick one never blocks the next full read.
+            var narrow = req.WindowEnd - req.WindowStart <= NarrowRunWindow;
+            var cooldown = narrow ? NarrowRunCooldown : RunCooldown;
+            var since = narrow ? source.LastNarrowSyncedAt : source.LastSyncedAt;
+            if (isNewRun && lastRunId != req.SyncId && since is { } last && now - last < cooldown)
             {
                 return StatusCode(StatusCodes.Status409Conflict, new
                 {
                     code = "outlook-sync-cooldown",
-                    retryAfterSeconds = (int)Math.Ceiling((RunCooldown - (now - last)).TotalSeconds),
+                    retryAfterSeconds = (int)Math.Ceiling((cooldown - (now - last)).TotalSeconds),
                 });
             }
         }
@@ -180,7 +194,11 @@ public class OutlookCalendarController : ControllerBase
 
         if (req.Final)
         {
-            source.LastSyncedAt = now;
+            // A quick run stamps only its own clock: it read one day, so it is no evidence that the full
+            // window is up to date, and treating it as such would let a burst of them hold the next full sync
+            // off indefinitely.
+            if (req.WindowEnd - req.WindowStart <= NarrowRunWindow) source.LastNarrowSyncedAt = now;
+            else source.LastSyncedAt = now;
             source.LastError = null;
             source.LastEventCount = await _db.OutlookCalendarEvents.CountAsync(e => e.SourceId == source.Id, ct);
         }
@@ -258,9 +276,16 @@ public class OutlookCalendarController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>The device as Preferences shows it. "Last synced" is the later of the two stamps: they are
+    /// kept apart so the cooldowns cannot block each other, but a user who quick-synced ten seconds ago is
+    /// owed that answer, not the full run from this morning.</summary>
     private static OutlookSourceDto ToDto(OutlookCalendarSource s, int eventCount) => new(
         s.Id, s.DeviceId, s.DeviceName, s.MailboxName, s.DisplayName, s.Color, s.Enabled,
-        s.PastDays, s.FutureDays, s.SkipPrivate, s.IncludeBody, s.LastSyncedAt, s.LastError, eventCount);
+        s.PastDays, s.FutureDays, s.SkipPrivate, s.IncludeBody,
+        Later(s.LastSyncedAt, s.LastNarrowSyncedAt), s.LastError, eventCount);
+
+    private static DateTimeOffset? Later(DateTimeOffset? a, DateTimeOffset? b) =>
+        a is null ? b : b is null ? a : a > b ? a : b;
 
     /// <summary>Copy one reported occurrence onto its row.</summary>
     private static void Apply(

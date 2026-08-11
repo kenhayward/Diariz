@@ -26,11 +26,12 @@ const { cropRectFor, resizeDims, clampRect } = require("./captureTarget");
 const { reconcilePool } = require("./pickerPool");
 const {
   SYNC_DEFAULTS,
-  windowFor,
+  windowForScope,
   normalizeAppointment,
   dedupeUids,
   capEvents,
   shouldStartSync,
+  isStickyUnavailable,
   trayOutlookItems,
   notificationForSyncResult,
 } = require("./outlookSync");
@@ -334,14 +335,54 @@ async function handleAuthDeepLink(argv) {
 // feature uses. Nothing runs until the renderer reports the user has opted in.
 const outlook = {
   phase: "idle",           // idle | reading | pushing
-  available: false,        // Windows, and the reader is actually present
+  available: false,        // Windows, the reader is present, AND classic Outlook is installed
   enabled: false,          // the user's opt-in, as reported by the renderer
   inFlight: false,
-  lastSyncAt: 0,
+  lastSyncAt: 0,           // last full run
+  lastQuickSyncAt: 0,      // last today-only run - its own stamp, see shouldStartSync
   lastError: null,
   cfg: { ...SYNC_DEFAULTS },
   launchSyncDone: false,
 };
+
+/// Store key holding "there is no classic Outlook on this PC" (the reader's reason), so nothing probes or
+/// activates again until the user asks from Preferences. See isStickyUnavailable for which reasons qualify.
+const OUTLOOK_UNAVAILABLE_KEY = "outlookUnavailableReason";
+
+/// Decide whether this machine can reach Outlook, and remember a permanent "no".
+///
+/// The remembering is the point. A PC with Office but no classic Outlook used to get a Windows *install
+/// Outlook* prompt on every launch, because the launch sync activated the COM class to find out. The reader
+/// now answers from the registry, and a definitive "not installed" is written down so even that probe stops
+/// running - `recheckOutlook()` (Preferences) is the only thing that clears it.
+async function resolveOutlookAvailability({ force = false } = {}) {
+  if (!outlookHost.isAvailable()) {
+    outlook.available = false;
+    return outlook.available;
+  }
+
+  if (force) store.delete(OUTLOOK_UNAVAILABLE_KEY);
+  else if (isStickyUnavailable(store.get(OUTLOOK_UNAVAILABLE_KEY))) {
+    outlook.available = false;
+    return outlook.available;
+  }
+
+  const { ok, reason } = await outlookHost.probe();
+  if (!ok && isStickyUnavailable(reason)) store.set(OUTLOOK_UNAVAILABLE_KEY, reason);
+  outlook.available = ok;
+  outlook.lastError = ok ? null : reason || "unavailable";
+  refreshTray();
+  return outlook.available;
+}
+
+/// The answer, resolved once and shared. Everything that needs to know whether Outlook is reachable goes
+/// through this rather than reading `outlook.available` directly: the probe is a subprocess, so the renderer's
+/// `outlook:ready` (which licenses the launch sync) routinely arrives while it is still running, and reading
+/// the flag then would report "unavailable" on every launch.
+function outlookAvailability({ force = false } = {}) {
+  if (force || !outlook.availability) outlook.availability = resolveOutlookAvailability({ force });
+  return outlook.availability;
+}
 
 function setOutlookPhase(phase) {
   if (outlook.phase === phase) return;
@@ -358,19 +399,24 @@ function setOutlookPhase(phase) {
 
 /// Read the calendar and hand the window to the renderer to upload.
 ///
+/// `scope` is `all` (the configured rolling window - the full read, which takes tens of seconds on a busy
+/// mailbox) or `today` (local midnight to midnight, the quick sync the Calendar toolbar offers for picking up
+/// a meeting that has just appeared). Only the window differs; everything downstream, including the server's
+/// window-scoped sweep, is identical.
+///
 /// Resolves to a reason when it did not start, so a caller (the tray, or the button in the web app) can say
 /// why rather than appearing to do nothing.
-async function syncOutlook() {
+async function syncOutlook({ scope = "all" } = {}) {
   if (process.platform !== "win32") return { started: false, reason: "not-windows" };
-  if (!outlook.available) return { started: false, reason: "unavailable" };
+  if (!(await outlookAvailability())) return { started: false, reason: "unavailable" };
   if (!outlook.enabled) return { started: false, reason: "disabled" };
   if (outlook.inFlight) return { started: false, reason: "busy" };
-  if (!shouldStartSync(outlook, Date.now())) return { started: false, reason: "cooldown" };
+  if (!shouldStartSync(outlook, Date.now(), scope)) return { started: false, reason: "cooldown" };
 
   outlook.inFlight = true;
   setOutlookPhase("reading");
   try {
-    const { start, end } = windowFor(new Date(), outlook.cfg);
+    const { start, end } = windowForScope(new Date(), outlook.cfg, scope);
     const result = await outlookHost.read({
       start,
       end,
@@ -380,6 +426,14 @@ async function syncOutlook() {
 
     if (!result.ok) {
       outlook.lastError = result.reason || "error";
+      // A failure that means "there is no classic Outlook here" is written down and the connector switched
+      // off, so the next launch does not try again - that repetition is what made the install prompt a
+      // recurring annoyance rather than a one-off.
+      if (isStickyUnavailable(result.reason)) {
+        store.set(OUTLOOK_UNAVAILABLE_KEY, result.reason);
+        outlook.available = false;
+        refreshTray();
+      }
       const note = notificationForSyncResult({ ok: false, reason: result.reason });
       if (note && Notification.isSupported()) new Notification(note).show();
       return { started: false, reason: result.reason || "error" };
@@ -419,8 +473,13 @@ async function syncOutlook() {
     return { started: false, reason: "error" };
   } finally {
     outlook.inFlight = false;
-    outlook.lastSyncAt = Date.now();
-    store.set("outlookLastSyncAt", outlook.lastSyncAt);
+    // Stamped per scope: a quick run must not start the full run's minute-long cooldown, and vice versa.
+    if (scope === "today") {
+      outlook.lastQuickSyncAt = Date.now();
+    } else {
+      outlook.lastSyncAt = Date.now();
+      store.set("outlookLastSyncAt", outlook.lastSyncAt);
+    }
     if (outlook.phase !== "pushing") setOutlookPhase("idle");
   }
 }
@@ -428,7 +487,7 @@ async function syncOutlook() {
 // The renderer telling us the connector's settings - and, by arriving at all, that a signed-in renderer is
 // ready to POST. That is what licenses the launch sync: app-ready cannot be the trigger, because the user may
 // not be signed in yet and the push needs their token.
-ipcMain.on("outlook:ready", (_e, cfg) => {
+ipcMain.on("outlook:ready", async (_e, cfg) => {
   outlook.enabled = cfg?.enabled === true;
   outlook.cfg = {
     pastDays: cfg?.pastDays ?? SYNC_DEFAULTS.pastDays,
@@ -438,14 +497,16 @@ ipcMain.on("outlook:ready", (_e, cfg) => {
   };
   refreshTray();
 
-  if (outlook.enabled && outlook.available && !outlook.launchSyncDone) {
+  if (outlook.enabled && !outlook.launchSyncDone && (await outlookAvailability())) {
     outlook.launchSyncDone = true;
     void syncOutlook();
   }
 });
 
-ipcMain.handle("outlook:available", () => outlook.available);
-ipcMain.handle("outlook:sync-now", () => syncOutlook());
+ipcMain.handle("outlook:available", () => outlookAvailability());
+ipcMain.handle("outlook:sync-now", (_e, options) => syncOutlook(options || {}));
+// Preferences asking us to look again: the only thing that clears a remembered "no classic Outlook here".
+ipcMain.handle("outlook:recheck", () => outlookAvailability({ force: true }));
 
 ipcMain.on("outlook:result", (_e, result) => {
   outlook.lastError = result?.ok ? null : result?.error || "error";
@@ -1204,9 +1265,11 @@ if (!app.requestSingleInstanceLock()) {
     } else {
       Menu.setApplicationMenu(null);
     }
-    // Whether this build can reach Outlook at all (Windows + the bundled reader is present). Resolved once
-    // here so the tray and the web app agree; the user's opt-in arrives separately from the renderer.
-    outlook.available = outlookHost.isAvailable();
+    // Whether this build can reach Outlook at all (Windows, the bundled reader is present, and classic
+    // Outlook is actually installed). Resolved once here so the tray and the web app agree; the user's opt-in
+    // arrives separately from the renderer. Not awaited - the tray must not wait on a subprocess, and the
+    // launch sync is licensed by the renderer's `outlook:ready`, which arrives well after this settles.
+    void outlookAvailability();
     outlook.lastSyncAt = store.get("outlookLastSyncAt") || 0;
 
     buildTray();
