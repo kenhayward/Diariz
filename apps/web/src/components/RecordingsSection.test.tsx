@@ -10,6 +10,7 @@ vi.mock("../lib/api", () => ({
 
 import { api } from "../lib/api";
 import RecordingsSection from "./RecordingsSection";
+import { PreferencesFooterProvider, PreferencesFooterBar } from "./PreferencesFooter";
 
 const settings = {
   apiBase: null, model: null, hasApiKey: false, defaultApiBase: null, defaultModel: null,
@@ -24,10 +25,16 @@ function renderSection() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <RecordingsSection />
+      <PreferencesFooterProvider>
+        <RecordingsSection />
+        <PreferencesFooterBar onClose={() => {}} />
+      </PreferencesFooterProvider>
     </QueryClientProvider>,
   );
 }
+
+/// The panel has no Save of its own any more - it registers one with the modal footer.
+const saveButton = () => screen.getByRole("button", { name: /save changes/i });
 
 describe("RecordingsSection", () => {
   beforeEach(() => {
@@ -62,7 +69,7 @@ describe("RecordingsSection", () => {
     renderSection();
     fireEvent.click(await screen.findByRole("radio", { name: /specific folder/i }));
     fireEvent.click(await screen.findByLabelText("Select Projects"));
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    fireEvent.click(saveButton());
 
     await waitFor(() => expect(api.updateUserSettings).toHaveBeenCalled());
     const arg = (api.updateUserSettings as ReturnType<typeof vi.fn>).mock.calls[0][0];
@@ -84,7 +91,7 @@ describe("RecordingsSection", () => {
     // not accidentally pass this test by leaving the untouched initial value in place.
     fireEvent.click(await screen.findByLabelText("Select Projects"));
     fireEvent.click(screen.getByLabelText("Select Ungrouped"));
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    fireEvent.click(saveButton());
 
     await waitFor(() =>
       expect(api.updateUserSettings).toHaveBeenCalledWith({ placementMode: "SpecificFolder", placementSectionId: null, calendarAutoStopEnabled: false, calendarAutoStopAfterMinutes: 3, calendarSilenceStopSeconds: 30 }),
@@ -97,7 +104,7 @@ describe("RecordingsSection", () => {
     });
     renderSection();
     fireEvent.click(await screen.findByRole("radio", { name: /ungrouped/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    fireEvent.click(saveButton());
 
     await waitFor(() =>
       expect(api.updateUserSettings).toHaveBeenCalledWith({ placementMode: "Ungrouped", placementSectionId: null, calendarAutoStopEnabled: false, calendarAutoStopAfterMinutes: 3, calendarSilenceStopSeconds: 30 }),
@@ -154,7 +161,7 @@ describe("RecordingsSection", () => {
     expect(document.activeElement).toBe(screen.getByLabelText("Select Projects"));
 
     await user.keyboard("{Enter}");
-    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    await user.click(saveButton());
 
     await waitFor(() =>
       expect(api.updateUserSettings).toHaveBeenCalledWith({ placementMode: "SpecificFolder", placementSectionId: "sec-1", calendarAutoStopEnabled: false, calendarAutoStopAfterMinutes: 3, calendarSilenceStopSeconds: 30 }),
@@ -197,7 +204,7 @@ describe("RecordingsSection", () => {
       fireEvent.click(autoStop());
       fireEvent.change(afterMinutes(), { target: { value: "10" } });
       fireEvent.change(silenceSeconds(), { target: { value: "90" } });
-      fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+      fireEvent.click(saveButton());
 
       await waitFor(() => expect(api.updateUserSettings).toHaveBeenCalled());
       expect((api.updateUserSettings as ReturnType<typeof vi.fn>).mock.calls[0][0]).toEqual({
@@ -228,12 +235,47 @@ describe("RecordingsSection", () => {
       fireEvent.click(autoStop());
       fireEvent.change(afterMinutes(), { target: { value: "" } });
       fireEvent.change(silenceSeconds(), { target: { value: "0" } });
-      fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+      fireEvent.click(saveButton());
 
       await waitFor(() => expect(api.updateUserSettings).toHaveBeenCalled());
       const arg = (api.updateUserSettings as ReturnType<typeof vi.fn>).mock.calls[0][0];
       expect(arg.calendarAutoStopAfterMinutes).toBe(3);
       expect(arg.calendarSilenceStopSeconds).toBe(30);
     });
+  });
+
+  it("has no Save of its own - it registers one with the modal footer", async () => {
+    renderSection();
+    await screen.findByRole("radio", { name: /currently selected folder/i });
+    expect(screen.queryByRole("button", { name: /^save$/i })).toBeNull();
+    expect(saveButton()).toBeTruthy();
+  });
+
+  it("reports unsaved changes to the footer, and clears them on a successful save", async () => {
+    renderSection();
+    fireEvent.click(await screen.findByRole("radio", { name: /ungrouped/i }));
+    expect(screen.getByText("Unsaved changes")).toBeTruthy();
+
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(screen.getByText("Saved")).toBeTruthy());
+    expect(screen.queryByText("Unsaved changes")).toBeNull();
+  });
+
+  it("clears the unsaved indicator when an edit is undone by hand", async () => {
+    renderSection();
+    fireEvent.click(await screen.findByRole("radio", { name: /ungrouped/i }));
+    expect(screen.getByText("Unsaved changes")).toBeTruthy();
+
+    // Back to the value that was loaded - there is nothing to save, so the footer must say so.
+    fireEvent.click(screen.getByRole("radio", { name: /currently selected folder/i }));
+    expect(screen.queryByText("Unsaved changes")).toBeNull();
+  });
+
+  it("surfaces a save failure in the footer", async () => {
+    (api.updateUserSettings as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("boom"));
+    renderSection();
+    fireEvent.click(await screen.findByRole("radio", { name: /ungrouped/i }));
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(screen.getByText(/boom/)).toBeTruthy());
   });
 });

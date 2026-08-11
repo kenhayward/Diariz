@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 import type { RecordingPlacementMode } from "../lib/types";
 import FolderPicker from "./FolderPicker";
+import { usePreferencesFooter } from "./PreferencesFooter";
 
 /// Mirrors the server-side defaults (`UserSettings.DefaultCalendar*`). Duplicated rather than derived
 /// because the field can be blank while typing, and a blank must fall back to something on save.
@@ -17,9 +18,22 @@ function positiveOr(value: string, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
+/// The five values as last loaded or last saved. `dirty` is a comparison against this rather than a flag
+/// set by each change handler, so undoing an edit by hand clears the indicator instead of latching it.
+/// Reset from the payload on a successful save rather than waiting for the refetch, which would otherwise
+/// leave the footer briefly reading "Unsaved changes" over values that are already stored.
+interface Baseline {
+  placementMode: RecordingPlacementMode;
+  placementSectionId: string | null;
+  calendarAutoStop: boolean;
+  afterMinutes: number;
+  silenceSeconds: number;
+}
+
 /// Recordings tab: where a new recording lands in the user's Personal room (Ungrouped / the selected folder /
 /// a fixed folder), plus how a recording started from a calendar event should end. Self-contained; its Save
-/// PUTs only the fields this tab owns (tri-state), leaving the other personal preferences untouched.
+/// PUTs only the fields this tab owns (tri-state), leaving the other personal preferences untouched. Save
+/// itself lives in the modal's shared footer (see `usePreferencesFooter`), not in this component's body.
 export default function RecordingsSection() {
   const { t } = useTranslation("account");
   const qc = useQueryClient();
@@ -35,18 +49,52 @@ export default function RecordingsSection() {
   const [afterMinutes, setAfterMinutes] = useState(String(DEFAULT_AFTER_MINUTES));
   const [silenceSeconds, setSilenceSeconds] = useState(String(DEFAULT_SILENCE_SECONDS));
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [savedOnce, setSavedOnce] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [baseline, setBaseline] = useState<Baseline | null>(null);
 
   useEffect(() => {
     if (data) {
-      setPlacementMode(data.placementMode ?? "SelectedFolder");
-      setPlacementSectionId(data.placementSectionId ?? null);
-      setCalendarAutoStop(data.calendarAutoStopEnabled ?? false);
-      setAfterMinutes(String(data.calendarAutoStopAfterMinutes ?? DEFAULT_AFTER_MINUTES));
-      setSilenceSeconds(String(data.calendarSilenceStopSeconds ?? DEFAULT_SILENCE_SECONDS));
+      const next: Baseline = {
+        placementMode: data.placementMode ?? "SelectedFolder",
+        placementSectionId: data.placementSectionId ?? null,
+        calendarAutoStop: data.calendarAutoStopEnabled ?? false,
+        afterMinutes: data.calendarAutoStopAfterMinutes ?? DEFAULT_AFTER_MINUTES,
+        silenceSeconds: data.calendarSilenceStopSeconds ?? DEFAULT_SILENCE_SECONDS,
+      };
+      setPlacementMode(next.placementMode);
+      setPlacementSectionId(next.placementSectionId);
+      setCalendarAutoStop(next.calendarAutoStop);
+      setAfterMinutes(String(next.afterMinutes));
+      setSilenceSeconds(String(next.silenceSeconds));
+      setBaseline(next);
     }
   }, [data]);
+
+  // The exact five fields Save sends, so `dirty` compares what would be stored rather than what is typed:
+  // blanking a duration field is not a change, because `positiveOr` would store the same number anyway.
+  const current: Baseline = {
+    placementMode,
+    placementSectionId: placementMode === "SpecificFolder" ? placementSectionId : null,
+    calendarAutoStop,
+    afterMinutes: positiveOr(afterMinutes, DEFAULT_AFTER_MINUTES),
+    silenceSeconds: positiveOr(silenceSeconds, DEFAULT_SILENCE_SECONDS),
+  };
+  const dirty =
+    baseline !== null &&
+    (current.placementMode !== baseline.placementMode ||
+      current.placementSectionId !== baseline.placementSectionId ||
+      current.calendarAutoStop !== baseline.calendarAutoStop ||
+      current.afterMinutes !== baseline.afterMinutes ||
+      current.silenceSeconds !== baseline.silenceSeconds);
+
+  usePreferencesFooter({
+    dirty,
+    busy,
+    status: dirty ? "unsaved" : savedOnce ? "saved" : "idle",
+    error,
+    onSave,
+  });
 
   // Render only once the settings have loaded, so an early interaction can't be overwritten by the arriving
   // initial values (the effect above seeds state from `data`).
@@ -54,18 +102,21 @@ export default function RecordingsSection() {
 
   async function onSave() {
     setError(null);
-    setSaved(false);
     setBusy(true);
     try {
       await api.updateUserSettings({
-        placementMode,
-        placementSectionId: placementMode === "SpecificFolder" ? placementSectionId : null,
-        calendarAutoStopEnabled: calendarAutoStop,
-        calendarAutoStopAfterMinutes: positiveOr(afterMinutes, DEFAULT_AFTER_MINUTES),
-        calendarSilenceStopSeconds: positiveOr(silenceSeconds, DEFAULT_SILENCE_SECONDS),
+        placementMode: current.placementMode,
+        placementSectionId: current.placementSectionId,
+        calendarAutoStopEnabled: current.calendarAutoStop,
+        calendarAutoStopAfterMinutes: current.afterMinutes,
+        calendarSilenceStopSeconds: current.silenceSeconds,
       });
       qc.invalidateQueries({ queryKey: ["user-settings"] });
-      setSaved(true);
+      // Show the coerced values, so a field left blank reads as the default that was actually stored.
+      setAfterMinutes(String(current.afterMinutes));
+      setSilenceSeconds(String(current.silenceSeconds));
+      setBaseline(current);
+      setSavedOnce(true);
     } catch (e) {
       setError(apiErrorMessage(e));
     } finally {
@@ -172,19 +223,6 @@ export default function RecordingsSection() {
           />
           <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">{t("calendarSilenceSecondsHint")}</span>
         </label>
-      </div>
-
-      <div className="flex items-center gap-3 border-t pt-3 dark:border-gray-700">
-        <button
-          type="button"
-          onClick={onSave}
-          disabled={busy}
-          className="rounded bg-gray-900 px-3 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
-        >
-          {busy ? t("common:saving") : t("common:save")}
-        </button>
-        {error && <span className="text-sm text-red-600 dark:text-red-400">{error}</span>}
-        {saved && !error && <span className="text-sm text-green-600 dark:text-green-400">{t("profileSaved")}</span>}
       </div>
     </div>
   );
