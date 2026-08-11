@@ -77,6 +77,8 @@ vi.mock("../lib/api", () => ({
     updateAction: vi.fn(),
     deleteAction: vi.fn(),
     searchPeople: vi.fn(),
+    listPeople: vi.fn(),
+    findPersonDuplicates: vi.fn(),
     getProfile: vi.fn().mockResolvedValue(null),
     listAttachments: vi.fn().mockResolvedValue([]),
     addFileAttachment: vi.fn(),
@@ -560,13 +562,19 @@ describe("RecordingDetail", () => {
   /// moment listing the directory required the Manage people permission, a user without it opened a
   /// recording to an empty picker and could not label anyone. Naming a speaker is not a privileged act, so
   /// the page must only ever use the ungated search endpoint.
+  ///
+  /// This asserted the mock had no `listPeople` at all, so any call threw. It cannot any more: the People
+  /// directory modal opens from the Speakers toolbar and legitimately lists the directory, so the method has
+  /// to exist on the mock. What is guarded is unchanged - reaching the picker must not touch the gated
+  /// endpoint - and the *source*-level rule that only PeopleModal and PersonEditor may name it is enforced
+  /// separately, and more strictly, by `lib/gatedApi.test.ts`.
   it("never calls the permission-gated directory listing", async () => {
     renderPage(base);
     await loaded();
     openTab("Transcript");
     await screen.findByRole("button", { name: "Assign SPEAKER_00 to a person" });
 
-    expect((api as unknown as Record<string, unknown>).listPeople).toBeUndefined();
+    expect(api.listPeople).not.toHaveBeenCalled();
     expect(api.searchPeople).not.toHaveBeenCalled(); // not until the user actually types
   });
 
@@ -1254,6 +1262,51 @@ describe("RecordingDetail", () => {
 
     await waitFor(() => expect(api.updatePerson).toHaveBeenCalled());
     await waitFor(() => expect(api.getRecording).toHaveBeenCalledTimes(2));
+  });
+
+  /// The People directory opens over the Speakers panel from its toolbar, and can change everything the
+  /// speaker rows show about a person - job title, company, internal or external. Those details are a
+  /// snapshot inside this recording's payload, so without a refresh when the modal closes the row keeps the
+  /// details it was first rendered with, and a correct edit reads as one that did not save.
+  ///
+  /// This asserts the row's visible text, not just that a refetch happened: counting getRecording calls
+  /// would pass against a page that refetched and rendered nothing new.
+  it("refreshes the speaker rows when the People directory closes, so an edit made there is visible", async () => {
+    const speaker = {
+      label: "SPEAKER_00", displayName: "Lizzie Mcneil", personId: "p1", title: null,
+      companyName: null, email: null, phone: null, isInternal: false,
+      identifiedAuto: true, isMultiSpeaker: false,
+    };
+    const before = { ...base, speakers: [speaker] };
+    const after = { ...base, speakers: [{ ...speaker, title: "Presenter" }] };
+
+    (api.listPeople as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        id: "p1", name: "Lizzie Mcneil", title: null, companyName: null, email: null, phone: null,
+        isInternal: false, voiceprintOptOut: false, hasVoiceprint: true, sampleCount: 2,
+        linkedUserId: null, isSelf: false, canManageBiometrics: true,
+        createdAt: "2026-07-30T00:00:00Z", updatedAt: "2026-07-30T00:00:00Z",
+      },
+    ]);
+    (api.findPersonDuplicates as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (api.updatePerson as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+    renderPage(before);
+    await loaded();
+    openTab("Speakers");
+
+    fireEvent.click(screen.getByRole("button", { name: "Manage people" }));
+    const dialog = await screen.findByRole("dialog", { name: "People" });
+    fireEvent.click(await within(dialog).findByRole("button", { name: /Lizzie Mcneil/ }));
+    fireEvent.change(within(dialog).getByLabelText("Job title"), { target: { value: "Presenter" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(api.updatePerson).toHaveBeenCalled());
+
+    // The person now carries a job title on the server. The payload the page is still holding does not.
+    (api.getRecording as ReturnType<typeof vi.fn>).mockResolvedValue(after);
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(await screen.findByText("Presenter")).toBeTruthy();
   });
 });
 

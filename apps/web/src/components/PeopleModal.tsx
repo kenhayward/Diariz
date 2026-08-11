@@ -41,6 +41,23 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  /// The directory can change anything a recording shows about a speaker: their name, job title, company,
+  /// internal-or-external marker, or the person record itself through a delete or a merge. The Speakers panel
+  /// renders those from a snapshot inside the recording payload, so an open recording behind this modal keeps
+  /// the old details and a correct edit reads as one that did not save.
+  ///
+  /// On unmount, not in `onClose`: every exit - the cross, the footer button, Escape - funnels through
+  /// unmount, and so will any exit added later. One hook here rather than an `onSaved` per mutation, because
+  /// merge lives in this component and delete and erase-voiceprint live in the editor, and a fifth mutation
+  /// added later would silently join whichever ones forgot.
+  ///
+  /// The `["recording"]` prefix, not one id: this modal does not know which recording is behind it, and it
+  /// opens from the account menu as well as a recording's Speakers toolbar. React Query only refetches
+  /// *active* queries, so with no recording open this costs nothing.
+  useEffect(() => {
+    return () => void qc.invalidateQueries({ queryKey: ["recording"] });
+  }, [qc]);
+
   const params = {
     q: q.trim() || undefined,
     isInternal: filter === "internal" ? true : filter === "external" ? false : undefined,

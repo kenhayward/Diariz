@@ -62,6 +62,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.205.2",
+    date: "2026-08-11",
+    pr: 506,
+    headline: "An edit made in the People directory now shows on the recording behind it",
+    summary:
+      "Opening **Manage people** from a recording's Speakers tab, changing someone - their job title, or " +
+      "whether they are internal or external - and closing the directory left the speaker rows showing the " +
+      "details they had before. The edit had saved; the recording was still showing the copy it was opened " +
+      "with, which is indistinguishable from a save that failed. Closing the directory now refreshes the " +
+      "recording underneath it, whichever way you opened it and whatever you changed - including deleting " +
+      "someone, erasing a voiceprint, or merging two records.",
+    fixed: [
+      "A person edited through the People directory kept their old job title, company and internal or external marker on the recording's Speakers tab until the page was reloaded.",
+    ],
+  },
+  {
     version: "0.205.1",
     date: "2026-08-11",
     pr: 505,
