@@ -32,8 +32,8 @@ the moment it appears, any **prep notes** you wrote on the event come across wit
 meeting yourself the automatic matcher will not later swap it for an adjacent one.
 Under **Preferences → Recordings**, the switch **Let a calendar meeting end its own recording** lets
 such a recording **end by itself** (off by default): it stops a chosen number of **minutes after
-the meeting was scheduled to finish** - catching the wrap-up rather than cutting off on the hour - and after a
-chosen run of **silence**, for when the meeting breaks up early. Silence only counts once something has been
+the meeting was scheduled to finish** - catching the wrap-up rather than cutting off on the hour - or after a
+chosen run of **silence** for when the meeting breaks up early, whichever comes first. Silence only counts once something has been
 heard, so joining before anyone speaks never cuts the recording short, and pausing does not count against it.
 Both settings apply **only** to a recording started from a calendar event; one started with the Record button
 runs until you stop it, exactly as before. And whatever those settings say, **joining a second meeting while
