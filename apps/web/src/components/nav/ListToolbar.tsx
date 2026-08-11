@@ -50,7 +50,10 @@ function ListToolbar({
   const qc = useQueryClient();
   const { selectMode, setSelectMode, selectedIds, clear } = useSelection();
   const { cutRecordings } = useMoveClipboard();
-  const { syncing, sync } = useCalendarSync();
+  // `busy` covers a sync this app did not start - the shell's launch sync, or one from the tray. The buttons
+  // have to follow it: the shell refuses a second run while one is in flight, so a live button during those
+  // tens of seconds is a button that can only fail.
+  const { busy: calendarBusy, sync } = useCalendarSync();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -218,13 +221,13 @@ function ListToolbar({
               <ToolbarButton
                 label={t("calSyncToday")}
                 onClick={() => sync("today")}
-                disabled={syncing != null}
+                disabled={calendarBusy}
                 icon={<SyncTodayIcon />}
               />
               <ToolbarButton
                 label={t("calSyncCalendar")}
                 onClick={() => sync("all")}
-                disabled={syncing != null}
+                disabled={calendarBusy}
                 icon={<SyncCalendarIcon />}
               />
             </>

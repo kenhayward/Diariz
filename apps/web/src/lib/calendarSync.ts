@@ -56,6 +56,38 @@ export function syncStatusKey(scope: CalendarSyncScope): string {
   return scope === "today" ? "statusSyncingCalendarToday" : "statusSyncingCalendar";
 }
 
+/// The message for a run that did not happen (workspace namespace), or null when there is nothing worth
+/// saying.
+///
+/// A refusal is not automatically a failure. `cooldown` means a sync ran moments ago, so the calendar is
+/// already as fresh as it can be - shouting at the user for pressing a button twice is worse than silence.
+/// `busy` never reaches here at all: a run already in flight is one to join, not to report.
+///
+/// Everything else names what went wrong. The first version of this said only "Could not sync the calendar",
+/// which threw the reason away at exactly the moment it was needed - the first real failure took an hour to
+/// diagnose because the screen held no evidence at all.
+export function syncErrorKey(reason: string | undefined): string | null {
+  if (!reason || reason === "cooldown") return null;
+  switch (reason) {
+    // Every "there is no Outlook here to talk to" answer reads the same to a user, whichever layer said it.
+    case "unavailable":
+    case "not-installed":
+    case "new-outlook":
+    case "not-windows":
+      return "calSyncFailedUnavailable";
+    // Should not be reachable - the buttons only ask the shell when the opt-in is on - but if the two ever
+    // disagree, "turn it on in Preferences" is the one thing that would actually help.
+    case "disabled":
+      return "calSyncFailedDisabled";
+    case "timeout":
+      return "calSyncFailedTimeout";
+    case "denied":
+      return "calSyncFailedDenied";
+    default:
+      return "calSyncFailed";
+  }
+}
+
 /// Run one sync. Resolves once every source has been refreshed - which is the moment the caller can stop
 /// showing "syncing".
 export async function runCalendarSync(
@@ -85,7 +117,9 @@ export async function runCalendarSync(
 function syncOutlookAndWait(scope: CalendarSyncScope, deps: CalendarSyncDeps): Promise<string | undefined> {
   return new Promise((resolve) => {
     let settled = false;
-    let sawWork = false;
+    // Whether a run is known to be under way, and therefore whether an `idle` means "finished" rather than
+    // "nothing has started yet". Set by seeing a working phase, and by the shell telling us it is busy.
+    let running = false;
 
     const finish = (reason?: string) => {
       if (settled) return;
@@ -98,15 +132,31 @@ function syncOutlookAndWait(scope: CalendarSyncScope, deps: CalendarSyncDeps): P
     // Subscribed before the sync is asked for: the shell replays nothing, and a fast read could otherwise be
     // over before this listener existed.
     const unsubscribe = deps.onOutlookState((state) => {
-      if (state.phase !== "idle") sawWork = true;
-      else if (sawWork) finish();
+      if (state.phase !== "idle") running = true;
+      else if (running) finish();
     });
     const timer = setTimeout(() => finish("timeout"), deps.timeoutMs ?? SHELL_TIMEOUT_MS);
 
     void deps
       .syncOutlookNow({ scope })
       .then(({ started, reason }) => {
-        if (!started) finish(reason ?? "error");
+        if (started) return;
+        // `busy` means a sync is ALREADY RUNNING - the one that fires on launch, or the tray's. It refreshes
+        // the same calendar we were about to ask for, so join it instead of treating it as a failure. This is
+        // what used to put a red error on screen for the whole of every launch sync.
+        //
+        // Marking it running is not incidental: we are attaching to a run already under way, so the `idle`
+        // that ends it may be the only event we ever see. Waiting for a working phase first would mean waiting
+        // out the timeout on exactly the runs we most want to follow.
+        //
+        // A reader failure also reports `busy` (Outlook itself refused, mid-dialog), but that arrives after
+        // the shell has already been through reading -> idle, so `finish` has run and this is a no-op. The
+        // shell raises its own notification for those.
+        if (reason === "busy") {
+          running = true;
+          return;
+        }
+        finish(reason ?? "error");
       })
       .catch(() => finish("error"));
   });
@@ -120,6 +170,9 @@ function syncOutlookAndWait(scope: CalendarSyncScope, deps: CalendarSyncDeps): P
 export function useCalendarSync(): {
   /// The scope of the run in progress, or null when idle.
   syncing: CalendarSyncScope | null;
+  /// Whether **any** sync is under way, including one this app did not start - the shell's launch sync, or one
+  /// from the tray. The buttons disable on this, not on `syncing`.
+  busy: boolean;
   /// Start a run. Ignored while one is already going; the same two buttons work in a browser, where a sync is
   /// simply Google and the feeds with no shell to ask.
   sync: (scope: CalendarSyncScope) => void;
@@ -143,23 +196,52 @@ export function useCalendarSync(): {
   }, []);
   const outlook = canSyncOutlook() && shellReady && settings?.outlookSyncEnabled === true;
 
+  // Follow the shell's own phase, so a sync nobody here started is still visible.
+  //
+  // This is what the old Sync Outlook link did, and dropping it when the buttons moved up here is what broke
+  // them: the shell refuses a second run while one is in flight, and the launch sync holds it for tens of
+  // seconds every time the app opens. Buttons that stay live through that are buttons that fail.
+  const [shellPhase, setShellPhase] = useState<"idle" | "reading" | "pushing">("idle");
+  useEffect(() => onOutlookState((s) => setShellPhase(s.phase)), []);
+
+  const busy = syncing != null || shellPhase !== "idle";
+
   // The count-up. A ticking message is the whole point of it: a 30-second sync with a static label is
-  // indistinguishable from one that has hung. Started at 0s immediately so the bar reacts to the click, not to
-  // the first tick a second later.
+  // indistinguishable from one that has hung. Shown immediately rather than on the first tick a second later,
+  // so the bar reacts to the click.
+  //
+  // `pushed` mirrors the recorder's guard: only ever clear a message we put there ourselves. The completion
+  // handler below clears it when it leaves an error in place, so the error is not wiped a moment later.
+  const pushed = useRef(false);
   useEffect(() => {
-    if (!syncing) return;
-    const show = () =>
-      setStatus(t(syncStatusKey(syncing), { seconds: elapsedSeconds(startedAt.current, Date.now()) }), "progress", {
-        sticky: true,
-      });
+    if (!busy) {
+      startedAt.current = 0;
+      if (pushed.current) setStatus(null);
+      pushed.current = false;
+      return;
+    }
+    // A sync we started is timed from the click; one we merely noticed is timed from the moment we noticed
+    // it, which is the most honest number available - the shell does not say when it began.
+    if (startedAt.current === 0) startedAt.current = Date.now();
+
+    const show = () => {
+      setStatus(
+        t(syncStatusKey(syncing ?? "all"), { seconds: elapsedSeconds(startedAt.current, Date.now()) }),
+        "progress",
+        { sticky: true },
+      );
+      pushed.current = true;
+    };
     show();
     const tick = setInterval(show, 1000);
     return () => clearInterval(tick);
-  }, [syncing, setStatus, t]);
+  }, [busy, syncing, setStatus, t]);
 
   const sync = useCallback(
     (scope: CalendarSyncScope) => {
-      if (syncing) return; // one at a time: the shell can only read one window anyway
+      // One at a time - the shell can only read one window anyway. `busy` rather than `syncing`, so a click
+      // landing during the launch sync is ignored here instead of being sent to a shell that will refuse it.
+      if (busy) return;
       startedAt.current = Date.now();
       setSyncing(scope);
 
@@ -173,14 +255,17 @@ export function useCalendarSync(): {
         refetchEvents: () => qc.invalidateQueries({ queryKey: ["calendar-events"], refetchType: "all" }),
       })
         .then(({ outlookReason }) => {
-          // A cooldown is not worth a red line - it means a sync just ran, so the calendar is fresh anyway.
-          if (outlookReason && outlookReason !== "cooldown") setStatus(t("calSyncFailed"), "error");
-          else setStatus(null);
+          const failure = syncErrorKey(outlookReason);
+          setStatus(failure ? t(failure) : null, failure ? "error" : "info");
+          // Either way we no longer own a progress line: an error is left standing for the user to read
+          // (clearing it a moment later, when `busy` drops, is how the first version lost its own message),
+          // and a success has just been cleared.
+          pushed.current = false;
         })
         .finally(() => setSyncing(null));
     },
-    [syncing, outlook, qc, setStatus, t],
+    [busy, outlook, qc, setStatus, t],
   );
 
-  return { syncing, sync };
+  return { syncing, busy, sync };
 }

@@ -1,5 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
-import { elapsedSeconds, syncStatusKey, runCalendarSync, type CalendarSyncDeps } from "./calendarSync";
+import {
+  elapsedSeconds,
+  syncStatusKey,
+  syncErrorKey,
+  runCalendarSync,
+  type CalendarSyncDeps,
+} from "./calendarSync";
 
 /// A fake desktop shell whose sync phase the test drives, matching the real one: it pushes state changes and
 /// replays nothing on subscribe, so only `emit` can tell the run that the shell has finished.
@@ -111,6 +117,78 @@ describe("runCalendarSync", () => {
 
     expect(d.refetchEvents).toHaveBeenCalledTimes(1);
     expect(result.outlookReason).toBe("cooldown");
+  });
+
+  // `busy` means a sync is ALREADY RUNNING - the one that fires on launch, or the tray's. That is not a
+  // failure, and reporting it as one is what put a red "Could not sync the calendar" on screen for the whole
+  // of every launch sync. The run in progress refreshes the same calendar, so join it: wait for the shell to
+  // land and then refetch, exactly as if we had started it.
+  it("joins a sync already in progress rather than calling it a failure", async () => {
+    const shell = fakeShell({ started: false, reason: "busy" });
+    const d = deps({ outlook: true, syncOutlookNow: shell.syncOutlookNow, onOutlookState: shell.onOutlookState });
+
+    const run = runCalendarSync("all", d);
+    await vi.waitFor(() => expect(shell.syncOutlookNow).toHaveBeenCalled());
+    expect(d.refetchEvents).not.toHaveBeenCalled(); // still waiting on the run in flight
+
+    shell.emit("idle");
+    const result = await run;
+
+    expect(result.outlookReason).toBeUndefined();
+    expect(d.refetchEvents).toHaveBeenCalledTimes(1);
+  });
+
+  // The subtle half of the same bug. Joining means attaching to a run that is already under way, so the
+  // waiter cannot require a non-idle phase before it will accept `idle` as "finished" - by then the only
+  // event left to see IS the idle one. Without this it would wait out the full timeout instead.
+  it("does not hang when the run it joined is already on its last phase", async () => {
+    vi.useFakeTimers();
+    try {
+      const shell = fakeShell({ started: false, reason: "busy" });
+      const d = deps({
+        outlook: true,
+        syncOutlookNow: shell.syncOutlookNow,
+        onOutlookState: shell.onOutlookState,
+        timeoutMs: 150_000,
+      });
+
+      const run = runCalendarSync("all", d);
+      await vi.waitFor(() => expect(shell.syncOutlookNow).toHaveBeenCalled());
+      shell.emit("idle"); // the only event it will ever see
+      await vi.advanceTimersByTimeAsync(10);
+      const result = await run;
+
+      expect(result.outlookReason).toBeUndefined();
+      expect(d.refetchEvents).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("syncErrorKey", () => {
+  // A refusal is not automatically a failure worth shouting about. A cooldown means a sync ran moments ago,
+  // so the calendar is already fresh; `busy` is handled by joining the run and never reaches here.
+  it("stays quiet when there is nothing wrong", () => {
+    expect(syncErrorKey(undefined)).toBeNull();
+    expect(syncErrorKey("cooldown")).toBeNull();
+  });
+
+  // The original message said only "Could not sync the calendar", which told the user nothing and made the
+  // first real failure genuinely hard to diagnose - the reason was thrown away at exactly the point it
+  // mattered. Every reason the shell can give now maps to something actionable.
+  it("names what actually went wrong", () => {
+    for (const reason of ["unavailable", "not-installed", "new-outlook", "not-windows"]) {
+      expect(syncErrorKey(reason), reason).toBe("calSyncFailedUnavailable");
+    }
+    expect(syncErrorKey("timeout")).toBe("calSyncFailedTimeout");
+    expect(syncErrorKey("denied")).toBe("calSyncFailedDenied");
+    expect(syncErrorKey("disabled")).toBe("calSyncFailedDisabled");
+  });
+
+  it("falls back to the generic message for a reason it does not know", () => {
+    expect(syncErrorKey("something-new")).toBe("calSyncFailed");
+    expect(syncErrorKey("error")).toBe("calSyncFailed");
   });
 
   // Without this, a shell that dies mid-read (or an older one that never reports idle) would leave the status

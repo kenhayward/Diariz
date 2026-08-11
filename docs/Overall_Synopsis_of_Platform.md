@@ -1585,7 +1585,18 @@ into it with no URL or per-user setup at all.
     only then refetches. `scope: "today"` narrows the shell's read to the local day: seconds against the tens a
     full mailbox read costs, which is what makes "the meeting I just accepted is missing" a two-second fix.
     Progress goes to the **app status bar** (`useStatus`), counting up each second and naming the scope, and
-    clears when the run ends. The Calendar tab keeps its own `onOutlookState` listener for syncs it did not
+    clears when the run ends.
+  - **`busy` is joined, not reported.** The shell refuses a second run while one is in flight, and the launch
+    sync holds that for tens of seconds every time the app opens - so a `busy` refusal means "the calendar you
+    asked for is already being fetched", not a failure. The run marks itself as under way and keeps waiting for
+    `idle`, then refetches as if it had started the sync itself. Marking it is load-bearing: attaching to a run
+    already in progress means the `idle` that ends it may be the **only** event that arrives, so a waiter that
+    demanded a working phase first would sit out the whole 150s timeout. The buttons also disable on the
+    **shell's** phase, not just their own run (the affordance the old *Sync Outlook* link had, whose loss is what
+    made `busy` reachable at all), and that phase drives the status bar too, so a launch or tray sync is
+    visible. A reader-level `busy` (Outlook itself mid-dialog) is distinguishable by ordering - it arrives after
+    the shell has already been through `reading -> idle`, so the waiter has settled - and the shell raises its
+    own notification for those. The Calendar tab keeps its own `onOutlookState` listener for syncs it did not
     start (the tray's, and the one on launch).
   Pure client helpers (`eventDayKeys`/`dayItems` in `lib/calendar.ts`) colour the grid (event-only days a
   darker green, an events dot on recording days) and build a **merged, time-ordered day list** of meetings +
