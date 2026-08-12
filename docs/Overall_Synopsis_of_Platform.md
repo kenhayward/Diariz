@@ -249,6 +249,20 @@ three-second window the case for that work is weak.
    writes a **`Recording`** row, creates a **`Transcription`** row (version 1) and **enqueues a job** on the
    Redis stream **`transcription-jobs`** (consumer group **`workers`**). Uploads are gated by magic-byte
    format sniffing (`AudioFormats`) + size cap (`Uploads:MaxBytes`) + the owner's storage quota.
+   - **Video is converted client-side, before any of this.** Dropping an `.mp4`/`.m4v`/`.mov`/`.mkv`/`.webm`
+     on the web or desktop UI runs a **mediabunny** (MPL-2.0, WebCodecs) conversion in a **Web Worker**
+     (`apps/web/src/lib/videoAudio.worker.ts`): the video track is discarded and the audio is re-encoded to
+     **Opus, 1 channel, 48 kHz, 32 kbps in WebM**, which is byte-for-byte the same *kind* of artifact the
+     browser recorder produces - so nothing server-side changes. A container holding no video (an audio-only
+     WebM, or an MP4 whose only video track is cover art) is passed through **untouched**, never re-encoded.
+     Measured: a 60 s 1080p MP4 went from 7.2 MB to 273 kB, stereo AAC to mono Opus, video track gone.
+     This is why the 500 MB cap is judged on the *extracted* file rather than the dropped one
+     (`apps/web/src/lib/mediaKinds.ts` splits the two guards; the source ceiling is 8 GB).
+   - **This is a UI guarantee, not a server invariant.** A direct API, n8n, or MCP caller posting an MP4 to
+     `POST /api/recordings` still has the whole video stored, because `AudioFormats.Detect` sniffs any
+     ISO-BMFF `ftyp` box as `m4a` and cannot see whether a video track is present without parsing the box
+     tree. Closing that would need an ISO-BMFF box-tree parse plus an EBML walk for Matroska; deliberately
+     deferred (0.209.0 / see `docs/superpowers/specs/2026-08-12-video-audio-extraction-design.md`).
    - **Four size limits sit in front of this endpoint and must agree**, largest first: nginx
      `client_max_body_size` (1024m, `apps/web/nginx.conf`), Kestrel's per-request `[RequestSizeLimit]` and
      `FormOptions.MultipartBodyLengthLimit` (both `UploadOptions.MaxRequestBytes`, 1 GiB), then the action's

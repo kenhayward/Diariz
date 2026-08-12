@@ -18,10 +18,13 @@ browsers** (tick "Share audio" in the share dialog) and seamlessly in the Electr
 loopback / **macOS - beta** ScreenCaptureKit); the checkbox is hidden where the browser can't capture it, and
 if system audio isn't shared the take falls back to microphone-only. The desktop app can also **start/stop
 recording from its tray / menu-bar menu** (in the background, with notifications), including a **Record Both**
-item. Or **upload existing audio files** to transcribe (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A) — via the
-Upload button or by **dragging several onto the recordings list**, with per-file status. Dropped files land
-in **the folder the list is showing** - where you dropped them beats the placement preference, which decides
-for the Upload button (and for a new recording) instead.
+item. Or **upload existing audio files** to transcribe (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A) - via the
+Upload button or by **dragging several onto the recordings list**, with per-file status. You can also
+drop a **video** (MP4, MOV, MKV, WebM): its audio is extracted **in your browser**, mixed to mono and
+uploaded on its own, so the video is never sent to the server or stored against your quota. Long
+extractions show progress and can be cancelled. Dropped files land in **the folder the list is
+showing** - where you dropped them beats the placement preference, which decides for the Upload
+button (and for a new recording) instead.
 - **Record a meeting straight from your calendar.** Opening a calendar event gives you **Join meeting**, which
 opens the meeting link and starts recording in one click. The recording is **named after the invite**, so your
 library reads as the meetings you attended rather than a list of timestamps - and the name sticks, rather than
