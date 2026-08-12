@@ -90,6 +90,17 @@ bundle with exactly one lazy route (the API reference), and every `import.meta.g
 loaded tab needs nothing further from that container. The usual stale-chunk hazard of an SPA redeploy does
 not apply here - **but it would the moment a second `lazy()` import is added**, so keep that in mind.
 
+The *opposite* hazard is real, and it hid two releases before anyone noticed: **`index.html` must never be
+cached.** nginx sends no `Cache-Control` of its own - only `ETag`/`Last-Modified` - and a cache is then free
+to apply heuristic freshness (RFC 9111 4.2.2), reusing the shell without revalidating. That shell names the
+previous build's content-hashed bundles, so a redeploy reaches nobody until each client's cache happens to
+expire: the fix is live on the server and the user still sees the old app, with a hard reload the only way
+through. It bites the **desktop shell** hardest, since that loads the SPA from this origin and people leave
+it open for days. `apps/web/nginx.conf` therefore sets `no-cache` on `/index.html` (revalidation costs a 304
+on about a kilobyte) and `immutable, max-age=1y` on `/assets/`, which is safe precisely because those names
+are content-hashed. `/assets/` also stops falling through to the SPA fallback, so a missing bundle is a clean
+404 rather than HTML served as JavaScript.
+
 Three client behaviours cover the API's own restart window: uploads retry past a gateway error
 (`lib/retry.ts`), the sliding-session token refresh retries on failure rather than lapsing
 (`lib/tokenRefresh.ts`), and the SignalR hub reconnects indefinitely instead of giving up after ~42s
