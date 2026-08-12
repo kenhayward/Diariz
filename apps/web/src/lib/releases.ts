@@ -64,6 +64,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.209.0",
     date: "2026-08-12",
+    pr: 515,
     headline: "Drop a video, get a transcript",
     summary:
       "Recorded webinars and town halls usually arrive as video, and until now you had to extract the " +
