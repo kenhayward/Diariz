@@ -62,6 +62,26 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.207.2",
+    date: "2026-08-12",
+    pr: 511,
+    headline: "A calendar sync that stalls now recovers on its own",
+    summary:
+      "Follow-up to the stuck sync message. If the desktop app announced it was syncing your Outlook " +
+      "calendar and then stopped answering - which it can do when a sync finishes uploading but never " +
+      "reports back - the app went on believing it forever: both sync buttons stayed greyed out and " +
+      "\"Syncing calendar\" stayed in the status bar for the rest of the session, with no way back short of " +
+      "restarting. Diariz now stops believing a sync that has said nothing for two and a half minutes, " +
+      "clears the message and gives you the buttons back. A sync that is still reporting progress is left " +
+      "alone however long it takes, so a slow first read of a big mailbox is never cut short. When a sync " +
+      "does give up, the reason now stays on screen instead of being overwritten by the counter a moment " +
+      "later and then vanishing.",
+    fixed: [
+      "A calendar sync that stalls no longer leaves the sync buttons disabled and the status message showing for the rest of the session.",
+      "When a sync gives up waiting, it now says why - the reason used to be painted over by the seconds counter and then cleared.",
+    ],
+  },
+  {
     version: "0.207.1",
     date: "2026-08-11",
     pr: 510,
