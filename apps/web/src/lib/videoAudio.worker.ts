@@ -65,7 +65,16 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
       post({ type: "error", message: "Couldn't decode this video's audio." });
       return;
     }
-    conversion.onProgress = (fraction: number) => post({ type: "progress", fraction });
+    // mediabunny reports progress thousands of times (2,814 ticks for a 60 s file when this was
+    // measured), and each one costs a postMessage plus a React state update to render a value with
+    // only 100 distinct states. Report a tick only when the whole percentage actually changes.
+    let lastPercent = -1;
+    conversion.onProgress = (fraction: number) => {
+      const percent = Math.round(fraction * 100);
+      if (percent === lastPercent) return;
+      lastPercent = percent;
+      post({ type: "progress", fraction });
+    };
 
     await conversion.execute();
     const buffer = output.target.buffer;
