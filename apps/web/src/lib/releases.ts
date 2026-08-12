@@ -64,6 +64,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.209.2",
     date: "2026-08-12",
+    pr: 517,
     headline: "AMD ROCm worker: correct GPU group, honest hardware requirements",
     summary:
       "Only affects self-hosters running the optional AMD ROCm transcription worker; the NVIDIA and " +
