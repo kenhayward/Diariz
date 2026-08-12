@@ -2246,6 +2246,12 @@ pyannote's `ReproducibilityWarning` a red herring on AMD consumer hardware. Tran
 run to run (65/116/105 segments on identical audio) because the ROCm ASR path uses openai-whisper's
 default **temperature fallback**, which resamples any segment failing the logprob/compression thresholds.
 
+For scale, `DEVICE=cpu` on the *same* machine (16-core Zen 5) took 451.9 s / 481.4 s on the same file —
+so the GPU is worth ~**2.8x**, or an hour of audio in ~37 minutes rather than ~104. The CPU path runs at
+**0.56-0.60x realtime**, slower than the meeting itself, which is why it is documented as a fallback for
+getting the stack working rather than a way to run it. The gap is narrower than a discrete GPU would give
+because an APU's CPU and GPU share one package power budget.
+
 ## Observability (optional): GlitchTip
 
 An **optional** self-hosted error-tracking and performance-monitoring service, [GlitchTip](https://glitchtip.com/)
