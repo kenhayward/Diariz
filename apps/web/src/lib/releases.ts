@@ -62,6 +62,26 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.208.0",
+    date: "2026-08-12",
+    pr: 513,
+    headline: "The desktop app can reload itself",
+    summary:
+      "The companion to the last release, on the desktop side. The Windows app had no way at all to fetch " +
+      "the app again: it runs without a menu bar, so the usual Ctrl-R and Ctrl-Shift-R do nothing, and " +
+      "closing its window only hides it to the tray - so an app you believe you restarted has often been " +
+      "running for days. An update could be live on the server and there was no way, short of deleting " +
+      "files by hand, to make the desktop app pick it up. There is now a **Reload** item in the tray menu " +
+      "that fetches everything fresh, and each launch checks for a newer version of the app before using " +
+      "the copy it already has. Needs the new installer.",
+    added: [
+      "A Reload item in the desktop tray menu, which re-fetches the app ignoring anything cached.",
+    ],
+    fixed: [
+      "The desktop app now checks for a newer version on every launch instead of reusing whatever it had cached.",
+    ],
+  },
+  {
     version: "0.207.3",
     date: "2026-08-12",
     pr: 512,
