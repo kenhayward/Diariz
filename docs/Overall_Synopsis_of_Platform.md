@@ -2237,6 +2237,15 @@ diarization and embeddings all on the GPU, at 95-98% GPU utilisation. Indicative
 ~1.3-1.7x realtime for `large-v3`, untuned. Note that Strix Halo is an APU with a *dynamic* unified-memory
 carve-out, so a point-in-time "VRAM %" reading is not a headroom figure — the allocation grows on demand.
 
+**Both obvious tuning levers measured as dead ends**, and the noise floor is the reason to be sceptical of
+any further micro-tuning: repeated runs of the same 269 s file span **123-200 s (±25%)**. Against that,
+`HSA_OVERRIDE_GFX_VERSION=11.0.0` was within noise on warm runs and **2.3x slower cold** (MIOpen rebuilding
+its kernel cache), so the commonly-cited "2-6x faster on gfx1151" did not reproduce; and TF32 is simply
+absent on gfx1151 (`torch.backends.cuda.matmul.allow_tf32` reads back `False` after being set), making
+pyannote's `ReproducibilityWarning` a red herring on AMD consumer hardware. Transcript output also varies
+run to run (65/116/105 segments on identical audio) because the ROCm ASR path uses openai-whisper's
+default **temperature fallback**, which resamples any segment failing the logprob/compression thresholds.
+
 ## Observability (optional): GlitchTip
 
 An **optional** self-hosted error-tracking and performance-monitoring service, [GlitchTip](https://glitchtip.com/)

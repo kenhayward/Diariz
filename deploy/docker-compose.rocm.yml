@@ -186,10 +186,10 @@ services:
       WHISPER_MODEL: ${WHISPER_MODEL:-large-v3}
       MAX_AUDIO_SECONDS: ${MAX_AUDIO_SECONDS:-14400}
       ENABLE_SPEAKER_EMBEDDINGS: ${ENABLE_SPEAKER_EMBEDDINGS:-1}
-      # Borrow a nearby arch's kernels (e.g. 11.0.0 = gfx1100). Two reasons to set it, not one:
-      #   * correctness - the build has no kernels for your GPU ("invalid device function" / no kernel image);
-      #   * speed - on gfx1151 the gfx1100 kernels have been measured 2-6x FASTER than the native ones, so
-      #     this is worth trying even when the build does support your card.
+      # Borrow a nearby arch's kernels (e.g. 11.0.0 = gfx1100), for correctness: the build has no kernels
+      # for your GPU ("invalid device function" / no kernel image). It is often also described as a 2-6x
+      # SPEED win on gfx1151 - that did not reproduce on ROCm 7.2.4 / torch 2.8.0 here (within noise warm,
+      # 2.3x slower cold), so measure before setting it. Numbers in src/Diariz.Worker/README.md -> AMD ROCm.
       # NOTE: this interpolation hands the container the variable SET BUT EMPTY when it is blank in .env,
       # and to the ROCm runtime that is NOT the same as unset - it stops finding the GPU entirely and the
       # worker silently drops to CPU. worker.py strips the empty value before importing torch

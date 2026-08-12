@@ -190,9 +190,35 @@ recent, so:
 > process. The second run being *slower* despite reusing in-memory models points at power/thermal
 > behaviour on an APU rather than anything in the pipeline; it has not been investigated.
 >
-> Untuned. Three levers are known and untried here: `HSA_OVERRIDE_GFX_VERSION=11.0.0` (gfx1100 kernels,
-> reported 2-6x faster on gfx1151), pyannote's automatic **TF32 disable** (`ReproducibilityWarning`), and
-> the MIOpen `IsEnoughWorkspace` fallback warnings during alignment.
+> **Tuning levers, measured on this box - both of the obvious ones were dead ends.** Same 269 s file,
+> 3 consecutive in-process runs per config, run 0 being the model-load run:
+>
+> | Config | Run 0 (cold) | Warm runs | Warm mean |
+> | --- | --- | --- | --- |
+> | baseline | 167.6 s | 149.2 / 184.5 s | 166.8 s |
+> | `HSA_OVERRIDE_GFX_VERSION=11.0.0` | **381.5 s** | 165.2 / 162.2 s | 163.7 s |
+> | TF32 attempt (see below) | 197.6 s | 200.2 / 123.3 s | 161.8 s |
+>
+> - **`HSA_OVERRIDE_GFX_VERSION=11.0.0` bought nothing here.** The warm means are within noise of baseline
+>   (163.7 s vs 166.8 s), and the *cold* run cost **2.3x more** (381.5 s vs 167.6 s) - consistent with
+>   MIOpen rebuilding its kernel cache for the substituted architecture. The widely-repeated "2-6x faster
+>   on gfx1151" did **not** reproduce on ROCm 7.2.4 / torch 2.8.0. It may still help on older ROCm, where
+>   the native gfx1151 kernels were worse; treat it as something to measure, not to set by default.
+> - **TF32 is not available on this GPU at all, so pyannote's `ReproducibilityWarning` is a red herring.**
+>   `torch.backends.cuda.matmul.allow_tf32` reads back `False` immediately after being set to `True`
+>   (gfx1151 is RDNA 3.5 and has no TF32 path). The "TF32" row above is therefore just a third baseline
+>   sample, which is exactly why it is useful: pooled with baseline, the no-override warm runs span
+>   **123.3-200.2 s**, a **±25%** band on identical audio.
+>
+> That noise floor is the real headline: with N=3 nothing smaller than roughly a 1.5x effect is
+> measurable this way, so treat any micro-tuning claim (including these numbers) with suspicion unless it
+> is backed by many more runs. The MIOpen `IsEnoughWorkspace` fallbacks during alignment were not
+> investigated for the same reason.
+>
+> **Output is not deterministic between runs** (65 / 116 / 105 segments across three runs of the same
+> audio). That is inherent to Whisper rather than to ROCm: `_asr` calls openai-whisper's `transcribe()`
+> with its default **temperature fallback**, so any segment failing the logprob / compression-ratio
+> thresholds is retried with sampling at temperature up to 1.0.
 
 ## Local run (outside Docker)
 

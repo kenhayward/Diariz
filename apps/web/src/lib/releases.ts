@@ -89,7 +89,7 @@ export const RELEASES: Release[] = [
     ],
     changed: [
       "ROCm docs: kernel 6.15+ and ROCm 7.x recommended for gfx1151, replacing the optimistic 6.11 / 6.4.1 floor.",
-      "ROCm docs: HSA_OVERRIDE_GFX_VERSION is now described as a speed option as well as an error workaround.",
+      "ROCm docs: the widely-repeated claim that the gfx1100 kernel override is 2-6x faster on this GPU has been replaced with measurements, which did not reproduce it - it was within noise warm and 2.3x slower on the first run.",
       "ROCm docs now record the measured limits on a Radeon 8060S: ROCm 7.0.2 detects the GPU but crashes on any allocation, and PyTorch 2.9 or newer breaks speaker diarization.",
     ],
   },
