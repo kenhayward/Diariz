@@ -198,6 +198,15 @@ recent, so:
 > | baseline | 167.6 s | 149.2 / 184.5 s | 166.8 s |
 > | `HSA_OVERRIDE_GFX_VERSION=11.0.0` | **381.5 s** | 165.2 / 162.2 s | 163.7 s |
 > | TF32 attempt (see below) | 197.6 s | 200.2 / 123.3 s | 161.8 s |
+> | **`DEVICE=cpu`** (same box, 16C/32T Zen 5) | 451.9 s | 481.4 s | **481.4 s** |
+>
+> **The GPU is worth about 2.8x over this machine's own CPU** (466.6 s mean vs 164.3 s), or 3.7x
+> best-against-best. Put in operational terms: an hour of audio costs roughly **37 minutes on the GPU
+> and 104 minutes on the CPU** - i.e. the CPU path runs at **0.56-0.60x realtime**, *slower than the
+> meeting it is transcribing*, so it cannot keep up with a steady recording habit and is a
+> get-it-working fallback rather than a deployment option. Note this is an APU: the CPU here is a
+> strong 16-core Zen 5 sharing one package power budget with the GPU, so the gap is narrower than a
+> discrete GPU would give.
 >
 > - **`HSA_OVERRIDE_GFX_VERSION=11.0.0` bought nothing here.** The warm means are within noise of baseline
 >   (163.7 s vs 166.8 s), and the *cold* run cost **2.3x more** (381.5 s vs 167.6 s) - consistent with
