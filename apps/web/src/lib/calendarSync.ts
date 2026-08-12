@@ -202,7 +202,33 @@ export function useCalendarSync(): {
   // them: the shell refuses a second run while one is in flight, and the launch sync holds it for tens of
   // seconds every time the app opens. Buttons that stay live through that are buttons that fail.
   const [shellPhase, setShellPhase] = useState<"idle" | "reading" | "pushing">("idle");
-  useEffect(() => onOutlookState((s) => setShellPhase(s.phase)), []);
+  // `reported` is cleared on every phase change: a shell that is doing something NEW has earned a progress
+  // line again, whatever verdict the last run ended on. See the ticking effect below.
+  const reported = useRef(false);
+  useEffect(
+    () =>
+      onOutlookState((s) => {
+        reported.current = false;
+        setShellPhase(s.phase);
+      }),
+    [],
+  );
+
+  // Believing the shell's phase forever is what made this half of `busy` unbounded. The shell's own reader is
+  // hard-capped at 120s (`READ_TIMEOUT_MS`), so silence for longer than the ceiling below is not a slow
+  // mailbox - it is a shell that is never coming back. It genuinely happens: the shell parks in `pushing`
+  // until the renderer reports its POST, and nothing resets it if that report never arrives (a reload mid-push
+  // is enough). Left unbounded that disabled both sync buttons and held the status line for the rest of the
+  // session - the calendar could not be synced again without restarting the app.
+  //
+  // The timer restarts on every phase change, so a run that keeps reporting is never cut short however long it
+  // takes; only silence expires. Forcing `idle` here is local disbelief, not a claim about the shell - if it
+  // wakes up and reports again, the subscription above picks it straight back up.
+  useEffect(() => {
+    if (shellPhase === "idle") return;
+    const stale = setTimeout(() => setShellPhase("idle"), SHELL_TIMEOUT_MS);
+    return () => clearTimeout(stale);
+  }, [shellPhase]);
 
   const busy = syncing != null || shellPhase !== "idle";
 
@@ -225,6 +251,12 @@ export function useCalendarSync(): {
     if (startedAt.current === 0) startedAt.current = Date.now();
 
     const show = () => {
+      // Our own run has already delivered its verdict, so stop narrating. The shell-phase half of `busy` can
+      // outlive the run - a shell that announced work and then wedged is still "working" as far as this hook
+      // knows - and without this guard the next tick painted "Syncing calendar 150s" straight over the timeout
+      // error just written, then cleared it a second later when the phase went stale. The user was left with
+      // a message that explained nothing and then vanished.
+      if (reported.current) return;
       setStatus(
         t(syncStatusKey(syncing ?? "all"), { seconds: elapsedSeconds(startedAt.current, Date.now()) }),
         "progress",
@@ -261,6 +293,7 @@ export function useCalendarSync(): {
       // landing during the launch sync is ignored here instead of being sent to a shell that will refuse it.
       if (busy) return;
       startedAt.current = Date.now();
+      reported.current = false; // a new run narrates again
       setSyncing(scope);
 
       void runCalendarSync(scope, {
@@ -288,6 +321,8 @@ export function useCalendarSync(): {
           // (clearing it a moment later, when `busy` drops, is how the first version lost its own message),
           // and a success has just been cleared.
           pushed.current = false;
+          // This run has said its piece. Nothing may narrate over it until the shell reports something new.
+          reported.current = true;
         })
         .finally(() => setSyncing(null));
     },
