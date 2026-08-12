@@ -62,6 +62,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.207.3",
+    date: "2026-08-12",
+    pr: 512,
+    headline: "Updates actually reach you now",
+    summary:
+      "A deployment fix, and it explains why recent changes seemed not to arrive. The page that loads " +
+      "Diariz carried no caching instructions, which left browsers free to decide for themselves how long " +
+      "to keep it - and while they kept it, they kept loading the previous version of the app underneath. " +
+      "An update could be live on the server and simply never reach you, with a hard reload the only way " +
+      "through. It hit the desktop app hardest, since it stays open for days at a time. That page is now " +
+      "always checked for a newer version on load, so an update arrives the next time you open or reload " +
+      "Diariz. The app's own files are unchanged in behaviour and still cached, so this costs nothing " +
+      "noticeable at startup.",
+    fixed: [
+      "New versions now reach you on the next load instead of being held back by your browser's cache - the desktop app in particular could sit several releases behind.",
+    ],
+  },
+  {
     version: "0.207.2",
     date: "2026-08-12",
     pr: 511,
