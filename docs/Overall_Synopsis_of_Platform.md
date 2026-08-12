@@ -101,6 +101,14 @@ on about a kilobyte) and `immutable, max-age=1y` on `/assets/`, which is safe pr
 are content-hashed. `/assets/` also stops falling through to the SPA fallback, so a missing bundle is a clean
 404 rather than HTML served as JavaScript.
 
+The shell was given the matching half, because a header only helps a client that asks: it loads the document
+with `pragma: no-cache` (`apps/desktop/src/documentLoad.js`) so every launch revalidates, and its tray gained
+a **Reload** item that calls `reloadIgnoringCache()`. Both exist because the Windows build had *no* way to
+force a refresh - it runs menu-less (`Menu.setApplicationMenu(null)`), so Electron's Ctrl-R / Ctrl-Shift-R
+accelerators are never registered, and closing the window only hides it to the tray, so the process a user
+believes they restarted has usually been up for days. Diagnosing this from the outside starts with
+`Get-Process Diariz | Select StartTime`.
+
 Three client behaviours cover the API's own restart window: uploads retry past a gateway error
 (`lib/retry.ts`), the sliding-session token refresh retries on failure rather than lapsing
 (`lib/tokenRefresh.ts`), and the SignalR hub reconnects indefinitely instead of giving up after ~42s

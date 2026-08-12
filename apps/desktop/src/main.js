@@ -21,6 +21,7 @@ const Store = require("electron-store");
 const { normalizeServerUrl } = require("./url");
 const { trayRecorderItems, trayTooltip, notificationFor } = require("./recorderState");
 const { updateRestartItem, notificationForUpdate, isNewerVersion } = require("./updateState");
+const { documentLoadOptions, trayReloadItem } = require("./documentLoad");
 const { buildStartUrl, codeFromArgv, notificationForAuthError } = require("./desktopAuth");
 const { cropRectFor, resizeDims, clampRect } = require("./captureTarget");
 const { reconcilePool } = require("./pickerPool");
@@ -143,7 +144,9 @@ function createMainWindow(url) {
     mainWindow.webContents.on(event, () => setRecorderReady(false));
   }
 
-  mainWindow.loadURL(url);
+  // Never from cache without asking - see documentLoad.js. The shell loads someone else's SPA, so a stale
+  // document means running an old build of the whole app with nothing on screen to say so.
+  mainWindow.loadURL(url, documentLoadOptions());
   if (DEV_URL) mainWindow.webContents.openDevTools({ mode: "detach" });
   return mainWindow;
 }
@@ -158,6 +161,22 @@ function showMainWindow() {
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
+}
+
+/// Throw away whatever the window is holding and fetch the app again, ignoring the cache entirely - the
+/// escape hatch for a shell that has ended up on an old build. Stronger than the `pragma: no-cache` used on a
+/// normal load, which only revalidates: this reloads the subresources too, so a client whose cached copy of
+/// the document was itself stored under the wrong headers still comes back current.
+///
+/// Brings the window up first, since the usual reason to reach for this is that what is on screen looks wrong
+/// - and with no window there is nothing to reload, so `showMainWindow` (which opens setup when no server is
+/// configured) is the whole of the correct behaviour.
+function reloadMainWindow() {
+  const existed = Boolean(mainWindow && !mainWindow.isDestroyed());
+  showMainWindow();
+  // Only a window that was already up. One we just created is mid-fetch of a fresh document already, and
+  // reloading it here would cancel that load to start the same one again.
+  if (existed && mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.reloadIgnoringCache();
 }
 
 // ---- First-run / settings: server address ----
@@ -214,7 +233,7 @@ ipcMain.handle("setup:save", async (_e, rawUrl) => {
   if (result.ok) {
     if (setupWindow) setupWindow.close();
     // (Re)load the main window at the new origin.
-    if (mainWindow) mainWindow.loadURL(result.origin);
+    if (mainWindow) mainWindow.loadURL(result.origin, documentLoadOptions());
     showMainWindow();
   }
   return result;
@@ -1170,6 +1189,7 @@ function refreshTray() {
   }));
 
   const restart = updateRestartItem(update);
+  const reload = trayReloadItem(targetUrl());
 
   tray.setToolTip(trayTooltip(recorder));
   tray.setContextMenu(
@@ -1182,6 +1202,11 @@ function refreshTray() {
           if (u) shell.openExternal(u);
         },
       },
+      // The only way to force a fresh document from inside the app: Windows runs menu-less, so Electron's
+      // own Ctrl-R / Ctrl-Shift-R accelerators do not exist here, and closing the window merely hides it to
+      // this tray. Without this, a shell stuck on a stale build could only be fixed by deleting its cache
+      // directory by hand.
+      ...(reload ? [{ label: reload.label, click: reloadMainWindow }] : []),
       ...(restart ? [{ label: restart.label, click: restartToUpdate }] : []),
       { type: "separator" },
       ...recordItems,
