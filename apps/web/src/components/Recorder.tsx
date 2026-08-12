@@ -47,7 +47,7 @@ import AutoStopPopover from "./hub/AutoStopPopover";
 import NotesPopover from "./hub/NotesPopover";
 import HubIconButton from "./hub/HubIconButton";
 import { useHubPopover } from "./hub/hubPopovers";
-import { AUDIO_ACCEPT_ATTR } from "../lib/audioFormats";
+import { MEDIA_ACCEPT_ATTR } from "../lib/mediaKinds";
 import { retryOnGatewayError } from "../lib/retry";
 import { useUpload } from "../lib/uploadContext";
 import {
@@ -1373,7 +1373,7 @@ export default function Recorder({
         <input
           ref={fileRef}
           type="file"
-          accept={AUDIO_ACCEPT_ATTR}
+          accept={MEDIA_ACCEPT_ATTR}
           multiple
           onChange={onPickFiles}
           className="hidden"

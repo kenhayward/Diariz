@@ -1,3 +1,4 @@
+import { uploadableWithoutExtraction } from "./mediaKinds";
 import type { ExtractOptions } from "./uploadQueue";
 import type { WorkerResponse } from "./videoAudio.worker";
 
@@ -12,9 +13,13 @@ import type { WorkerResponse } from "./videoAudio.worker";
 export function extractAudio(file: File, opts: ExtractOptions): Promise<File> {
   return new Promise<File>((resolve, reject) => {
     if (typeof Worker === "undefined" || typeof AudioDecoder === "undefined") {
-      reject(
-        new Error("This browser can't extract audio from video. Try Chrome or Edge, or the desktop app."),
-      );
+      // No WebCodecs. Fall back to what this app accepted before extraction existed rather than
+      // regressing a case that used to work; anything newly accepted is refused, never sent blind.
+      if (uploadableWithoutExtraction(file)) resolve(file);
+      else
+        reject(
+          new Error("This browser can't extract audio from video. Try Chrome or Edge, or the desktop app."),
+        );
       return;
     }
 

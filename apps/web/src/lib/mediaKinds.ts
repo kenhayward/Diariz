@@ -35,6 +35,15 @@ export function classifyFile(file: { name: string }): MediaKind {
   return "rejected";
 }
 
+/// Whether a container may still be uploaded as-is when the browser cannot extract at all (no
+/// WebCodecs). True only for `.webm`, which this app accepted and stored whole long before extraction
+/// existed - refusing it now would make an already-working case worse on an older browser, and would
+/// buy no safety, since those uploads were already being stored. The formats this feature newly
+/// introduced (mp4/m4v/mov/mkv) get no such pass: an unverifiable video is never uploaded.
+export function uploadableWithoutExtraction(file: { name: string }): boolean {
+  return fileExtension(file.name) === "webm";
+}
+
 /// Judged on the dropped file, before extraction. Returns a message, or null to proceed.
 export function sourceProblem(
   file: { name: string; size: number },

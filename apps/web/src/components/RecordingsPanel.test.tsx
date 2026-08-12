@@ -27,7 +27,13 @@ vi.mock("../lib/rooms", () => ({
 // upload). Reset per test by `vi.clearAllMocks()`.
 const uploadFilesMock = vi.fn();
 vi.mock("../lib/uploadContext", () => ({
-  useUpload: () => ({ items: [], busy: false, uploadFiles: uploadFilesMock, clearFinished: vi.fn() }),
+  useUpload: () => ({
+    items: [],
+    busy: false,
+    uploadFiles: uploadFilesMock,
+    cancel: vi.fn(),
+    clearFinished: vi.fn(),
+  }),
 }));
 
 vi.mock("../lib/api", () => ({

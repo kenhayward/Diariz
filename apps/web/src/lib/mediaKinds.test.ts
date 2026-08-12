@@ -3,6 +3,7 @@ import {
   classifyFile,
   sourceProblem,
   resultProblem,
+  uploadableWithoutExtraction,
   MEDIA_ACCEPT_ATTR,
   MAX_SOURCE_BYTES,
 } from "./mediaKinds";
@@ -44,6 +45,12 @@ describe("mediaKinds", () => {
     expect(resultProblem({ size: 52_000_000 })).toBeNull();
     expect(resultProblem({ size: 600_000_000 })).toMatch(/too large/i);
     expect(resultProblem({ size: 50 }, 10)).toMatch(/too large/i);
+  });
+
+  it("lets only .webm upload unextracted, since it was accepted before this feature", () => {
+    expect(uploadableWithoutExtraction({ name: "clip.webm" })).toBe(true);
+    for (const name of ["a.mp4", "a.m4v", "a.mov", "a.mkv"])
+      expect(uploadableWithoutExtraction({ name }), name).toBe(false);
   });
 
   it("offers both audio and video in the file picker", () => {
