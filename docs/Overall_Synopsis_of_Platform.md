@@ -2502,11 +2502,20 @@ uncompressed*, so it is always larger than the sum of all audio and cannot be gi
 recording-upload chain further up sizes each layer above `Uploads:MaxBytes`; there is no equivalent app-level
 number to size against, so both proxies must simply not cap this path.
 - **In this repo:** `apps/web/nginx.conf` has a `location /api/maintenance/` block (longer prefix, so it wins
-  over `/api/`) with `client_max_body_size 0`, `proxy_request_buffering off`, and 3 h read/send timeouts. The
-  server-wide `1024m` still applies to every other endpoint.
-- **On the outer reverse proxy (not in this repo):** the same three settings must be applied to the app's host,
+  over `/api/`) with `client_max_body_size 0`, `proxy_request_buffering off`, `proxy_http_version 1.1`, and 3 h
+  read/send timeouts. The server-wide `1024m` still applies to every other endpoint.
+- **On the outer reverse proxy (not in this repo):** the same settings must be applied to the app's host,
   **per host** - a staging host added later does not inherit the production host's Advanced config. Without
   them a restore dies at the proxy's default body cap with a bare nginx **413** page that never reaches the API.
+- **Why the body is streamed rather than buffered**, when the recording-upload advice above says the same for a
+  different reason: buffering costs scratch space equal to the archive *and* doubles the transfer, because the
+  API writes its own temp copy either way. Two arguments that normally favour buffering invert here - with an
+  unlimited body size it would make nginx absorb an **unauthenticated** flood to disk before the API can answer
+  401 (the action doesn't read `Request.Body` until after authorization), and buffering is what enables an
+  upstream retry, which a destructive non-idempotent restore must never get. Truncation is safe: the API's zip
+  fails to open before `pg_restore` or the bucket wipe. Note `proxy_http_version 1.1` is **load-bearing** -
+  nginx buffers a chunked request body regardless of `proxy_request_buffering` unless HTTP/1.1 proxying is on
+  (the default is 1.0), so an outer proxy streaming into this one would otherwise be spooled to disk silently.
 - **Diagnose by status code**, as with uploads: **413** is a body cap, **504** is a timeout. Both endpoints are
   silent for minutes (backup builds the whole zip before the first byte; restore reloads the database and
   re-uploads every blob before answering), so a 60s default timeout reads as a crash rather than as work in
