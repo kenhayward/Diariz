@@ -2200,6 +2200,14 @@ voiceprints are PyTorch and run on ROCm unchanged (PyTorch-ROCm keeps the `"cuda
 target: Strix Halo (gfx1151). The API/web are vendor-agnostic — only the worker image differs. The
 openai-whisper backend is slower than faster-whisper but accuracy is unchanged (the aligner re-times words).
 
+The ROCm stack is **native-Linux only**: `/dev/kfd` does not exist under WSL2 (which bridges compute via
+`/dev/dxg`), and AMD's ROCm-on-WSL covers only a short list of discrete cards, not gfx1151 — so Docker
+Desktop on Windows fails in the *daemon*, before the container is created, with `error gathering device
+information while adding custom device "/dev/kfd"`. Confirmed on a Strix Halo box, 2026-08-12. The worker
+service adds **both** the `video` and `render` groups, because `/dev/kfd` is conventionally `root:render`
+`0660`. For gfx1151 prefer kernel 6.15+ and a **ROCm 7.x** image; 6.4.1 boots but has only basic rocBLAS and
+no hipBLASLt. End-to-end ROCm inference is still unvalidated on real hardware.
+
 ## Observability (optional): GlitchTip
 
 An **optional** self-hosted error-tracking and performance-monitoring service, [GlitchTip](https://glitchtip.com/)

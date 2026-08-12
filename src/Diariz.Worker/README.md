@@ -112,9 +112,10 @@ cp .env.example .env   # set HF_TOKEN etc.; the ROCm compose hardcodes ASR_BACKE
 docker compose -f docker-compose.rocm.yml up --build
 ```
 
-The compose file grants AMD GPU access with `devices: /dev/kfd, /dev/dri`, `group_add: video`,
+The compose file grants AMD GPU access with `devices: /dev/kfd, /dev/dri`, `group_add: video, render`,
 `security_opt: seccomp:unconfined` (no NVIDIA Container Toolkit). The host needs ROCm installed and the
-user in the `video`/`render` groups.
+user in the `video`/`render` groups. **Both** groups are added deliberately: `/dev/kfd` is conventionally
+`root:render` `0660`, so `video` on its own is not enough to open it.
 
 > ⚠️ **Native Linux only — NOT WSL2 / Docker Desktop on Windows.** This image uses the native-Linux ROCm
 > path (`/dev/kfd` + `/dev/dri`). WSL2 doesn't expose `/dev/kfd` at all — it bridges GPU compute through a
@@ -122,8 +123,10 @@ user in the `video`/`render` groups.
 > under Docker Desktop/WSL2 fails at startup with
 > `error gathering device information while adding custom device "/dev/kfd": no such file or directory`.
 > AMD's "ROCm on WSL" also only supports a short list of discrete Radeon cards — Strix Halo (gfx1151) isn't
-> among them — so WSL2 GPU acceleration for this APU isn't available today. Run the AMD worker on a **native
-> Linux** install (kernel ≥ 6.11, ROCm ≥ 6.4.1). If you must stay on Windows/WSL2, skip this image and run the
+> among them — so WSL2 GPU acceleration for this APU isn't available today. **Confirmed on a Strix Halo box,
+> 2026-08-12.** Note the error comes from the Docker *daemon*, while it resolves the `devices:` list — the
+> container is never created, so no environment variable (`HSA_OVERRIDE_GFX_VERSION`, `DEVICE`, …) can
+> affect it. Run the AMD worker on a **native Linux** install. If you must stay on Windows/WSL2, skip this image and run the
 > **standard** worker **CPU-only** instead: use `docker-compose.yml`, comment out the worker's
 > `deploy.resources` GPU block, and set `WORKER_DEVICE=cpu WORKER_COMPUTE_TYPE=int8` (functional everywhere,
 > just far slower — see [CPU-only](#cpu-only)).
@@ -134,12 +137,23 @@ user in the `video`/`render` groups.
 runtime — don't reinstall them). Strix Halo (Ryzen AI Max APU / Radeon 8060S, **gfx1151**) support is
 recent, so:
 
-- **Pin a `rocm/pytorch` tag** whose ROCm (**≥ 6.4.1**) and bundled torch include gfx1151 kernels. The
-  Dockerfile uses `:latest` for convenience — pin an explicit tag once you've confirmed one works on your
-  card (reproducibility).
-- If model load fails with *"no kernel image" / "invalid device function"*, set
-  **`HSA_OVERRIDE_GFX_VERSION`** (e.g. `11.0.0` to borrow gfx1100 kernels). It's plumbed through the compose
-  env.
+- **Use a recent kernel.** 6.15+ is the reported sweet spot; 6.8 may not bring the GPU up at all. The
+  kernel must have `CONFIG_HSA_AMD` (`=y` or `=m`), or there is no `/dev/kfd` to hand the container.
+- **Prefer a ROCm 7.x `rocm/pytorch` tag.** ROCm **6.4.1** is a *"boots"* floor on gfx1151, not a
+  *"works well"* one: it gives only basic rocBLAS support and no hipBLASLt. The Dockerfile uses `:latest`
+  for convenience — pin an explicit tag once you've confirmed one works on your card (reproducibility).
+- **`HSA_OVERRIDE_GFX_VERSION` is worth trying for speed, not just for errors.** Set it (e.g. `11.0.0` to
+  borrow gfx1100 kernels) if model load fails with *"no kernel image" / "invalid device function"* — but
+  also try it when things already work: on gfx1151 the gfx1100 kernels have been measured **2-6x faster**
+  than the native ones. It's plumbed through the compose env.
+- **No `/dev/kfd` on native Linux?** The usual cause is the `amdgpu` module being blacklisted (some GPU
+  driver installers add one). Deleting the file in `/etc/modprobe.d/` is *not* enough — the blacklist stays
+  cached in the initramfs, so rebuild it:
+  ```bash
+  grep -rn "blacklist.*amdgpu" /etc/modprobe.d/   # find it
+  sudo update-initramfs -u                        # the step people miss
+  sudo modprobe amdgpu && ls -l /dev/kfd
+  ```
 - Strix Halo is an **APU with unified memory** — its "VRAM" is carved from system RAM. Allocate enough
   GTT/VRAM in BIOS for the ~9 GB working set (large-v3 + align + pyannote).
 - **Build pins `setuptools<81`** for the pip install step. openai-whisper's `setup.py` imports

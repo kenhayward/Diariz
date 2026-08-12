@@ -5,11 +5,13 @@
 # unchanged. Run it via deploy/docker-compose.rocm.yml (exposes /dev/kfd + /dev/dri).
 #
 # Initial target: Strix Halo (Ryzen AI Max APU / Radeon 8060S, gfx1151). Strix Halo support is recent, so:
-#   * Pin a `rocm/pytorch` tag whose ROCm (>= 6.4.1) AND bundled torch/torchaudio include gfx1151 kernels.
-#     `latest` is a moving target — for reproducibility pin an explicit tag once you've confirmed one works
-#     on your card (e.g. rocm/pytorch:rocm6.4.x_ubuntu22.04_py3.x_pytorch_release_2.x).
-#   * If the build lacks gfx1151 kernels, set HSA_OVERRIDE_GFX_VERSION (see docker-compose.rocm.yml) to
-#     borrow a nearby arch's kernels (e.g. 11.0.0 = gfx1100).
+#   * Pin a `rocm/pytorch` tag whose ROCm AND bundled torch/torchaudio include gfx1151 kernels. Prefer a
+#     ROCm 7.x tag: 6.4.1 is only a "boots" floor on this GPU (basic rocBLAS, no hipBLASLt), not a
+#     "works well" one. `latest` is a moving target — for reproducibility pin an explicit tag once you've
+#     confirmed one works on your card.
+#   * Setting HSA_OVERRIDE_GFX_VERSION (see docker-compose.rocm.yml) to borrow a nearby arch's kernels
+#     (e.g. 11.0.0 = gfx1100) is worth trying for SPEED as well as for missing-kernel errors: the gfx1100
+#     kernels have been measured 2-6x faster than the native gfx1151 ones.
 # torch + torchaudio come from THIS base image (compiled for the ROCm runtime) — do NOT reinstall them from
 # PyPI, or you'll get CUDA/CPU wheels that won't use the AMD GPU.
 FROM rocm/pytorch:latest

@@ -62,6 +62,27 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.209.2",
+    date: "2026-08-12",
+    headline: "AMD ROCm worker: correct GPU group, honest hardware requirements",
+    summary:
+      "Only affects self-hosters running the optional AMD ROCm transcription worker; the NVIDIA and " +
+      "CPU paths are untouched. The ROCm compose file granted the container only the `video` group, but " +
+      "the GPU compute device `/dev/kfd` is conventionally owned by `render` - so it now adds both, as " +
+      "every standard ROCm container invocation does. The hardware requirements were also too " +
+      "optimistic: for a Strix Halo (gfx1151) APU, prefer kernel 6.15 or newer and a ROCm 7.x image, " +
+      "since ROCm 6.4.1 only just boots on that GPU. Documentation now also spells out that the ROCm " +
+      "stack cannot run under WSL2 at all, and how to recover a missing `/dev/kfd` when the amdgpu " +
+      "driver has been blacklisted.",
+    fixed: [
+      "The ROCm worker now joins both the `video` and `render` groups, so it can open /dev/kfd.",
+    ],
+    changed: [
+      "ROCm docs: kernel 6.15+ and ROCm 7.x recommended for gfx1151, replacing the optimistic 6.11 / 6.4.1 floor.",
+      "ROCm docs: HSA_OVERRIDE_GFX_VERSION is now described as a speed option as well as an error workaround.",
+    ],
+  },
+  {
     version: "0.209.1",
     date: "2026-08-12",
     pr: 514,
