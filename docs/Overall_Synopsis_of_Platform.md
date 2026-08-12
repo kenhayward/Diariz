@@ -2495,6 +2495,25 @@ LLM API keys can't be decrypted (users re-enter them); everything else is faithf
 shell-out is behind `IDatabaseBackup` so the archive/object orchestration is unit-tested; the real round-trip
 is an integration test that skips when the client tools aren't on the host PATH.
 
+**Proxy limits are the restore's real ceiling.** The API applies **no** size limit of its own here - the action
+is `[DisableRequestSizeLimit]` and reads the raw body - so every refusal comes from a proxy in front of it, and
+a restore body is not comparable to a recording upload: it carries the dump *plus every stored blob,
+uncompressed*, so it is always larger than the sum of all audio and cannot be given a sensible fixed cap. The
+recording-upload chain further up sizes each layer above `Uploads:MaxBytes`; there is no equivalent app-level
+number to size against, so both proxies must simply not cap this path.
+- **In this repo:** `apps/web/nginx.conf` has a `location /api/maintenance/` block (longer prefix, so it wins
+  over `/api/`) with `client_max_body_size 0`, `proxy_request_buffering off`, and 3 h read/send timeouts. The
+  server-wide `1024m` still applies to every other endpoint.
+- **On the outer reverse proxy (not in this repo):** the same three settings must be applied to the app's host,
+  **per host** - a staging host added later does not inherit the production host's Advanced config. Without
+  them a restore dies at the proxy's default body cap with a bare nginx **413** page that never reaches the API.
+- **Diagnose by status code**, as with uploads: **413** is a body cap, **504** is a timeout. Both endpoints are
+  silent for minutes (backup builds the whole zip before the first byte; restore reloads the database and
+  re-uploads every blob before answering), so a 60s default timeout reads as a crash rather than as work in
+  progress.
+- The browser is shown a readable message for either: `apiErrorMessage` (`apps/web/src/lib/api.ts`) discards a
+  body that is markup rather than a message, so a proxy's HTML error page no longer lands in the panel verbatim.
+
 **Progress reporting.** Because the archive is fully assembled before the first response byte, a download can
 sit silent for minutes on a large platform - the browser shows no download entry until the headers arrive. The
 backup action therefore reports into `IBackupProgress` (a **singleton**, in-memory, per-instance: the build is

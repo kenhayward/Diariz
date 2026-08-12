@@ -38,6 +38,27 @@ describe("apiErrorMessage", () => {
     expect(apiErrorMessage(axiosError({}, 503))).toBe("Request failed (503).");
   });
 
+  // A proxy in front of the API answers with its own HTML error page, not our string bodies. Dumping that
+  // whole document into the UI is what a 413 from nginx used to look like in the restore panel.
+  it("does not render a proxy's HTML error page", () => {
+    const page =
+      "<html>\r\n<head><title>502 Bad Gateway</title></head>\r\n<body>\r\n<center><h1>502 Bad Gateway</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n";
+    expect(apiErrorMessage(axiosError(page, 502))).toBe("Request failed (502).");
+  });
+
+  it("explains a 413 rather than echoing the proxy's page", () => {
+    const page = "<html><head><title>413 Request Entity Too Large</title></head></html>";
+    expect(apiErrorMessage(axiosError(page, 413))).toBe(
+      "The file is too large for the server to accept."
+    );
+  });
+
+  it("still prefers the server's own message on a 413", () => {
+    expect(apiErrorMessage(axiosError("File too large. The maximum upload size is 500 MB.", 413))).toBe(
+      "File too large. The maximum upload size is 500 MB."
+    );
+  });
+
   it("uses the message of a non-axios Error", () => {
     expect(apiErrorMessage(new Error("boom"))).toBe("boom");
   });
