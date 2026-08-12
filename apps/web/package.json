@@ -26,6 +26,7 @@
     "dompurify": "^3.4.12",
     "i18next": "^26.3.6",
     "marked": "^18.0.7",
+    "mediabunny": "^1.53.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-i18next": "^17.0.11",
