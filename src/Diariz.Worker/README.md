@@ -139,13 +139,31 @@ recent, so:
 
 - **Use a recent kernel.** 6.15+ is the reported sweet spot; 6.8 may not bring the GPU up at all. The
   kernel must have `CONFIG_HSA_AMD` (`=y` or `=m`), or there is no `/dev/kfd` to hand the container.
-- **Prefer a ROCm 7.x `rocm/pytorch` tag.** ROCm **6.4.1** is a *"boots"* floor on gfx1151, not a
-  *"works well"* one: it gives only basic rocBLAS support and no hipBLASLt. The Dockerfile uses `:latest`
-  for convenience — pin an explicit tag once you've confirmed one works on your card (reproducibility).
+- **The base tag is pinned, and the window is narrow.** `Dockerfile.rocm` pins
+  `rocm/pytorch:rocm7.2.4_ubuntu24.04_py3.12_pytorch_release_2.8.0`, confirmed on a Ryzen AI Max+ 395 /
+  Radeon 8060S. Don't move it to `latest` and don't bump it blind — two opposing constraints squeeze it:
+  - **ROCm must be new enough for gfx1151.** On `rocm7.0.2` + torch 2.7.1 the GPU is detected correctly
+    (gfx1151, 137 GB) but *every* device allocation segfaults — `torch.randn(64, 64, device="cuda")` is
+    enough, and `HSA_OVERRIDE_GFX_VERSION=11.0.0`/`11.5.1` do not rescue it. **7.2.4** is the known-good floor.
+  - **torchaudio must be old enough for pyannote.** torchaudio **2.9** dropped the top-level
+    `AudioMetaData` and `info` symbols that pyannote.audio 3.3.2 uses in `core/io.py`, so torch ≥ 2.9 dies at
+    `import whisperx` with `AttributeError: module 'torchaudio' has no attribute 'AudioMetaData'` and the
+    worker crash-loops before taking a job. torch **2.8.0** still has both.
+
+  This is not hypothetical: `:latest` drifted to ROCm 7.14 / torch 2.13 / torchaudio 2.11 and took every
+  ROCm worker down with exactly that `AudioMetaData` error, with no repo change to explain it.
+  `tests/test_dockerfile_pins.py` now fails if either worker Dockerfile goes back to a floating tag.
 - **`HSA_OVERRIDE_GFX_VERSION` is worth trying for speed, not just for errors.** Set it (e.g. `11.0.0` to
   borrow gfx1100 kernels) if model load fails with *"no kernel image" / "invalid device function"* — but
   also try it when things already work: on gfx1151 the gfx1100 kernels have been measured **2-6x faster**
   than the native ones. It's plumbed through the compose env.
+  - ⚠️ **Empty is not the same as unset.** The compose file interpolates `${HSA_OVERRIDE_GFX_VERSION:-}`
+    and `.env.example` ships the key blank, so the container gets the variable *defined but empty* — and
+    the ROCm runtime then fails to enumerate the GPU at all. Measured on a Radeon 8060S with one image:
+    no variable → `torch.cuda.is_available()` `True`; `HSA_OVERRIDE_GFX_VERSION=` → `False`, i.e. a silent
+    fall back to CPU with nothing in the logs to explain it. `worker.py` therefore calls
+    `rocm_env.clean_gfx_override()` **before importing torch**, which deletes an empty value (and logs a
+    warning) and trims a padded one. Keep that call first if you reorder the imports.
 - **No `/dev/kfd` on native Linux?** The usual cause is the `amdgpu` module being blacklisted (some GPU
   driver installers add one). Deleting the file in `/etc/modprobe.d/` is *not* enough — the blacklist stays
   cached in the initramfs, so rebuild it:
@@ -161,9 +179,20 @@ recent, so:
   that otherwise pulls `setuptools >= 81` into the isolated wheel build and fails with *"No module named
   'pkg_resources'"*. `PIP_CONSTRAINT` scopes the pin to the build (it applies to the isolated build overlay).
 
-> **Status: build- and unit-validated, not yet run on AMD hardware.** The ASR-backend switch is unit-tested
-> and the CUDA path is unchanged, but end-to-end ROCm *inference* still needs confirming on a real AMD
-> (Strix Halo) GPU. A PR reporting results + a known-good `rocm/pytorch` tag is very welcome.
+> **Status: validated end-to-end on AMD hardware.** Confirmed on a Ryzen AI Max+ 395 (Radeon 8060S,
+> gfx1151, kernel 7.0.0-29, Docker CE) with the pinned `rocm7.2.4 / torch 2.8.0` base: a 269 s meeting
+> recording transcribed to **106 segments across 2 speakers**, with a 192-d ECAPA voiceprint per speaker -
+> i.e. ASR, word alignment, diarization and speaker embeddings all running on the AMD GPU (`rocm-smi`
+> showed 95-98% GPU use throughout).
+>
+> **Throughput (single sample, so treat as indicative, not a benchmark):** ~1.3-1.7x realtime for
+> `large-v3` at default settings - 269 s of audio in 155 s and 201 s on two consecutive runs in the same
+> process. The second run being *slower* despite reusing in-memory models points at power/thermal
+> behaviour on an APU rather than anything in the pipeline; it has not been investigated.
+>
+> Untuned. Three levers are known and untried here: `HSA_OVERRIDE_GFX_VERSION=11.0.0` (gfx1100 kernels,
+> reported 2-6x faster on gfx1151), pyannote's automatic **TF32 disable** (`ReproducibilityWarning`), and
+> the MIOpen `IsEnoughWorkspace` fallback warnings during alignment.
 
 ## Local run (outside Docker)
 

@@ -12,10 +12,17 @@ import time
 
 import redis
 
-import audio_merge
-import callback
-import heartbeat
-import pipeline
+# MUST come before any import that pulls in torch (pipeline/audio_merge do): an empty
+# HSA_OVERRIDE_GFX_VERSION - which the ROCm compose file and .env.example both produce by default -
+# stops the ROCm runtime finding the GPU at all. See rocm_env for the measured before/after.
+import rocm_env
+
+rocm_env.clean_gfx_override()
+
+import audio_merge  # noqa: E402
+import callback  # noqa: E402
+import heartbeat  # noqa: E402
+import pipeline  # noqa: E402
 import storage
 import telemetry
 import torch_compat

@@ -2203,10 +2203,39 @@ openai-whisper backend is slower than faster-whisper but accuracy is unchanged (
 The ROCm stack is **native-Linux only**: `/dev/kfd` does not exist under WSL2 (which bridges compute via
 `/dev/dxg`), and AMD's ROCm-on-WSL covers only a short list of discrete cards, not gfx1151 — so Docker
 Desktop on Windows fails in the *daemon*, before the container is created, with `error gathering device
-information while adding custom device "/dev/kfd"`. Confirmed on a Strix Halo box, 2026-08-12. The worker
-service adds **both** the `video` and `render` groups, because `/dev/kfd` is conventionally `root:render`
-`0660`. For gfx1151 prefer kernel 6.15+ and a **ROCm 7.x** image; 6.4.1 boots but has only basic rocBLAS and
-no hipBLASLt. End-to-end ROCm inference is still unvalidated on real hardware.
+information while adding custom device "/dev/kfd"`. Confirmed on a Strix Halo box, 2026-08-12.
+
+**GPU access does not come from `group_add`.** `/dev/kfd` is conventionally `root:render 0660`, but the
+worker container runs as **root** (the `rocm/pytorch` base sets no `USER`), so it opens the device through
+`CAP_DAC_OVERRIDE` regardless of its groups — verified by running the worker image with no `group_add` at
+all and getting a clean GPU matmul. The entry must also be **numeric**: `group_add` resolves names inside
+the *container*, and the `rocm/pytorch` images ship no `render` group, so `- render` aborts container
+creation with `unable to find group render: no matching entries in group file`. Even where the name does
+exist it is the wrong lever, since access is decided by the *host's* GID (990 on the reference box, while
+the ROCm 7.0.2 image calls `render` 991).
+
+The base image tag is **pinned** (`rocm7.2.4_ubuntu24.04_py3.12_pytorch_release_2.8.0`) between two
+opposing constraints, both measured on a Ryzen AI Max+ 395: ROCm must be ≥ **7.2.4** or every GPU
+allocation segfaults on gfx1151 (7.0.2 detects the card, then dies on `torch.randn(..., device="cuda")`,
+and `HSA_OVERRIDE_GFX_VERSION` does not help), while torch must stay ≤ **2.8** because torchaudio 2.9
+dropped the `AudioMetaData`/`info` symbols pyannote.audio 3.3.2 imports. The previous floating `:latest`
+drifted to ROCm 7.14 / torch 2.13 and crash-looped every ROCm worker; `tests/test_dockerfile_pins.py`
+guards against a floating tag returning. For gfx1151 also prefer kernel 6.15+.
+
+**An empty `HSA_OVERRIDE_GFX_VERSION` disables the GPU.** The compose file interpolates
+`${HSA_OVERRIDE_GFX_VERSION:-}` and `.env.example` ships the key blank, so the default ROCm deployment
+hands the container the variable *set but empty* — which the ROCm runtime treats differently from unset
+and then finds no GPU at all, silently degrading to CPU. Measured on a Radeon 8060S with one image: no
+variable → `torch.cuda.is_available()` `True`; `HSA_OVERRIDE_GFX_VERSION=` → `False`. `worker.py` calls
+`rocm_env.clean_gfx_override()` **before** any torch-importing module to delete an empty value (logging a
+warning, since it runs before `logging.basicConfig` where only WARNING+ reaches stderr) and to trim a
+padded one. That import ordering is load-bearing.
+
+**ROCm inference is now hardware-validated.** On a Ryzen AI Max+ 395 / Radeon 8060S (gfx1151), a 269 s
+recording produced 106 segments across 2 speakers with a 192-d ECAPA voiceprint each — ASR, alignment,
+diarization and embeddings all on the GPU, at 95-98% GPU utilisation. Indicative throughput is
+~1.3-1.7x realtime for `large-v3`, untuned. Note that Strix Halo is an APU with a *dynamic* unified-memory
+carve-out, so a point-in-time "VRAM %" reading is not a headroom figure — the allocation grows on demand.
 
 ## Observability (optional): GlitchTip
 

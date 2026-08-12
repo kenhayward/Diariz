@@ -190,6 +190,10 @@ services:
       #   * correctness - the build has no kernels for your GPU ("invalid device function" / no kernel image);
       #   * speed - on gfx1151 the gfx1100 kernels have been measured 2-6x FASTER than the native ones, so
       #     this is worth trying even when the build does support your card.
+      # NOTE: this interpolation hands the container the variable SET BUT EMPTY when it is blank in .env,
+      # and to the ROCm runtime that is NOT the same as unset - it stops finding the GPU entirely and the
+      # worker silently drops to CPU. worker.py strips the empty value before importing torch
+      # (rocm_env.clean_gfx_override), which is what makes a blank default safe here.
       HSA_OVERRIDE_GFX_VERSION: ${HSA_OVERRIDE_GFX_VERSION:-}
     volumes:
       - workercache:/root/.cache
@@ -198,11 +202,23 @@ services:
     devices:
       - /dev/kfd
       - /dev/dri
-    # BOTH groups, matching every standard ROCm docker invocation. `render` is the one that matters:
-    # /dev/kfd is conventionally root:render 0660, so `video` alone is not enough to open it.
+    # The container runs as root (the rocm/pytorch base sets no USER), so it opens /dev/kfd via
+    # CAP_DAC_OVERRIDE no matter what groups it holds - verified on a Ryzen AI Max+ 395 by running the
+    # worker image with NO group_add at all and getting a clean GPU matmul. So this list is belt-and-braces
+    # for anyone who adds a non-root USER, not something the GPU currently depends on.
+    #
+    # It must be NUMERIC. `group_add` resolves names inside the CONTAINER, and the rocm/pytorch images
+    # ship `video` but no `render` group at all - so `- render` does not merely fail to help, it aborts
+    # container creation with "unable to find group render: no matching entries in group file". Even on an
+    # image that does define it the name is the wrong lever, because access is decided by the HOST's
+    # numeric GID: /dev/kfd here is root:render(990) while the ROCm 7.0.2 image calls `render` 991.
+    #
+    # 44 is `video` on Debian/Ubuntu hosts. If you add a non-root USER to the worker image, ALSO add your
+    # host's render GID here as a quoted number - find it with:  getent group render | cut -d: -f3
+    # (it is 990 on this Ubuntu box, but it is not stable across distros, which is exactly why the name
+    # cannot be used). Do not add it twice: compose rejects duplicate group_add entries.
     group_add:
-      - video
-      - render
+      - "44"
     security_opt:
       - seccomp:unconfined
     ipc: host
