@@ -154,7 +154,8 @@ export default function RecordingsPanel() {
     () => filterActions(allActions, { person: personFilter, hideComplete }),
     [allActions, personFilter, hideComplete],
   );
-  // Drag audio files anywhere onto the panel to upload them (distinct from the reorder DnD, which uses
+  // Drag audio or video files anywhere onto the panel to upload them (a video has its audio extracted
+  // in the browser first, so the video itself is never sent). Distinct from the reorder DnD, which uses
   // the "text/plain" payload — file drags carry "Files"). A depth counter keeps the highlight stable as
   // the cursor moves over child rows.
   const upload = useUpload();
@@ -352,7 +353,11 @@ export default function RecordingsPanel() {
                 if (dragged) drop(drill.sectionId, levelIds, dragged, null);
               }}
             >
-              <UploadStatusList items={upload.items} onClear={upload.clearFinished} />
+              <UploadStatusList
+                items={upload.items}
+                onClear={upload.clearFinished}
+                onCancel={upload.cancel}
+              />
               {dragging && (
                 <p className="px-3 py-2 text-center text-xs font-medium text-blue-600 dark:text-blue-400">
                   {t("dropToUpload")}

@@ -1,8 +1,9 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "./api";
 import { titleFromFilename } from "./audioFormats";
-import { runUploadBatch, type UploadItem } from "./uploadQueue";
+import { runUploadBatch, type UploadBatchHandle, type UploadItem } from "./uploadQueue";
+import { extractAudio } from "./videoAudio";
 import { useRoom } from "./rooms";
 
 interface UploadContextValue {
@@ -16,7 +17,9 @@ interface UploadContextValue {
   /// a drop is an instruction about this batch, while the preference only answers "where do things go when
   /// I haven't said". The Upload button has no drop target and so omits it.
   uploadFiles: (files: File[], target?: { sectionId: string | null }) => void;
-  /// Drop the done/failed rows from the status list (keeps any still in flight).
+  /// Cancel one in-flight item (an extraction in progress). Settled items ignore it.
+  cancel: (id: string) => void;
+  /// Drop the done/failed/cancelled rows from the status list (keeps any still in flight).
   clearFinished: () => void;
 }
 
@@ -25,6 +28,7 @@ const UploadContext = createContext<UploadContextValue>({
   items: [],
   busy: false,
   uploadFiles: () => {},
+  cancel: () => {},
   clearFinished: () => {},
 });
 
@@ -34,6 +38,8 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   const { currentRoom, recordingSectionId } = useRoom();
   const [items, setItems] = useState<UploadItem[]>([]);
   const [busy, setBusy] = useState(false);
+  // The running batch's cancel handle, replaced each time a batch starts.
+  const handleRef = useRef<UploadBatchHandle | null>(null);
 
   const uploadFiles = useCallback(
     (files: File[], target?: { sectionId: string | null }) => {
@@ -58,18 +64,29 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         },
         onUpdate: setItems,
         onSuccess: () => qc.invalidateQueries({ queryKey: ["recordings"] }),
+        // A dropped video has its audio extracted here, in the browser, so the video itself is never
+        // uploaded or stored.
+        extract: extractAudio,
+        onHandle: (h) => {
+          handleRef.current = h;
+        },
       }).finally(() => setBusy(false));
     },
     [qc, currentRoom, recordingSectionId],
   );
 
   const clearFinished = useCallback(
-    () => setItems((it) => it.filter((i) => i.status === "queued" || i.status === "uploading")),
+    () =>
+      setItems((it) =>
+        it.filter((i) => i.status === "queued" || i.status === "extracting" || i.status === "uploading"),
+      ),
     [],
   );
 
+  const cancel = useCallback((id: string) => handleRef.current?.cancel(id), []);
+
   return (
-    <UploadContext.Provider value={{ items, busy, uploadFiles, clearFinished }}>
+    <UploadContext.Provider value={{ items, busy, uploadFiles, cancel, clearFinished }}>
       {children}
     </UploadContext.Provider>
   );
