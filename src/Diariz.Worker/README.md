@@ -112,9 +112,10 @@ cp .env.example .env   # set HF_TOKEN etc.; the ROCm compose hardcodes ASR_BACKE
 docker compose -f docker-compose.rocm.yml up --build
 ```
 
-The compose file grants AMD GPU access with `devices: /dev/kfd, /dev/dri`, `group_add: video`,
+The compose file grants AMD GPU access with `devices: /dev/kfd, /dev/dri`, `group_add: video, render`,
 `security_opt: seccomp:unconfined` (no NVIDIA Container Toolkit). The host needs ROCm installed and the
-user in the `video`/`render` groups.
+user in the `video`/`render` groups. **Both** groups are added deliberately: `/dev/kfd` is conventionally
+`root:render` `0660`, so `video` on its own is not enough to open it.
 
 > ⚠️ **Native Linux only — NOT WSL2 / Docker Desktop on Windows.** This image uses the native-Linux ROCm
 > path (`/dev/kfd` + `/dev/dri`). WSL2 doesn't expose `/dev/kfd` at all — it bridges GPU compute through a
@@ -122,8 +123,10 @@ user in the `video`/`render` groups.
 > under Docker Desktop/WSL2 fails at startup with
 > `error gathering device information while adding custom device "/dev/kfd": no such file or directory`.
 > AMD's "ROCm on WSL" also only supports a short list of discrete Radeon cards — Strix Halo (gfx1151) isn't
-> among them — so WSL2 GPU acceleration for this APU isn't available today. Run the AMD worker on a **native
-> Linux** install (kernel ≥ 6.11, ROCm ≥ 6.4.1). If you must stay on Windows/WSL2, skip this image and run the
+> among them — so WSL2 GPU acceleration for this APU isn't available today. **Confirmed on a Strix Halo box,
+> 2026-08-12.** Note the error comes from the Docker *daemon*, while it resolves the `devices:` list — the
+> container is never created, so no environment variable (`HSA_OVERRIDE_GFX_VERSION`, `DEVICE`, …) can
+> affect it. Run the AMD worker on a **native Linux** install. If you must stay on Windows/WSL2, skip this image and run the
 > **standard** worker **CPU-only** instead: use `docker-compose.yml`, comment out the worker's
 > `deploy.resources` GPU block, and set `WORKER_DEVICE=cpu WORKER_COMPUTE_TYPE=int8` (functional everywhere,
 > just far slower — see [CPU-only](#cpu-only)).
@@ -134,12 +137,41 @@ user in the `video`/`render` groups.
 runtime — don't reinstall them). Strix Halo (Ryzen AI Max APU / Radeon 8060S, **gfx1151**) support is
 recent, so:
 
-- **Pin a `rocm/pytorch` tag** whose ROCm (**≥ 6.4.1**) and bundled torch include gfx1151 kernels. The
-  Dockerfile uses `:latest` for convenience — pin an explicit tag once you've confirmed one works on your
-  card (reproducibility).
-- If model load fails with *"no kernel image" / "invalid device function"*, set
-  **`HSA_OVERRIDE_GFX_VERSION`** (e.g. `11.0.0` to borrow gfx1100 kernels). It's plumbed through the compose
-  env.
+- **Use a recent kernel.** 6.15+ is the reported sweet spot; 6.8 may not bring the GPU up at all. The
+  kernel must have `CONFIG_HSA_AMD` (`=y` or `=m`), or there is no `/dev/kfd` to hand the container.
+- **The base tag is pinned, and the window is narrow.** `Dockerfile.rocm` pins
+  `rocm/pytorch:rocm7.2.4_ubuntu24.04_py3.12_pytorch_release_2.8.0`, confirmed on a Ryzen AI Max+ 395 /
+  Radeon 8060S. Don't move it to `latest` and don't bump it blind — two opposing constraints squeeze it:
+  - **ROCm must be new enough for gfx1151.** On `rocm7.0.2` + torch 2.7.1 the GPU is detected correctly
+    (gfx1151, 137 GB) but *every* device allocation segfaults — `torch.randn(64, 64, device="cuda")` is
+    enough, and `HSA_OVERRIDE_GFX_VERSION=11.0.0`/`11.5.1` do not rescue it. **7.2.4** is the known-good floor.
+  - **torchaudio must be old enough for pyannote.** torchaudio **2.9** dropped the top-level
+    `AudioMetaData` and `info` symbols that pyannote.audio 3.3.2 uses in `core/io.py`, so torch ≥ 2.9 dies at
+    `import whisperx` with `AttributeError: module 'torchaudio' has no attribute 'AudioMetaData'` and the
+    worker crash-loops before taking a job. torch **2.8.0** still has both.
+
+  This is not hypothetical: `:latest` drifted to ROCm 7.14 / torch 2.13 / torchaudio 2.11 and took every
+  ROCm worker down with exactly that `AudioMetaData` error, with no repo change to explain it.
+  `tests/test_dockerfile_pins.py` now fails if either worker Dockerfile goes back to a floating tag.
+- **`HSA_OVERRIDE_GFX_VERSION` is worth trying for speed, not just for errors.** Set it (e.g. `11.0.0` to
+  borrow gfx1100 kernels) if model load fails with *"no kernel image" / "invalid device function"* — but
+  also try it when things already work: on gfx1151 the gfx1100 kernels have been measured **2-6x faster**
+  than the native ones. It's plumbed through the compose env.
+  - ⚠️ **Empty is not the same as unset.** The compose file interpolates `${HSA_OVERRIDE_GFX_VERSION:-}`
+    and `.env.example` ships the key blank, so the container gets the variable *defined but empty* — and
+    the ROCm runtime then fails to enumerate the GPU at all. Measured on a Radeon 8060S with one image:
+    no variable → `torch.cuda.is_available()` `True`; `HSA_OVERRIDE_GFX_VERSION=` → `False`, i.e. a silent
+    fall back to CPU with nothing in the logs to explain it. `worker.py` therefore calls
+    `rocm_env.clean_gfx_override()` **before importing torch**, which deletes an empty value (and logs a
+    warning) and trims a padded one. Keep that call first if you reorder the imports.
+- **No `/dev/kfd` on native Linux?** The usual cause is the `amdgpu` module being blacklisted (some GPU
+  driver installers add one). Deleting the file in `/etc/modprobe.d/` is *not* enough — the blacklist stays
+  cached in the initramfs, so rebuild it:
+  ```bash
+  grep -rn "blacklist.*amdgpu" /etc/modprobe.d/   # find it
+  sudo update-initramfs -u                        # the step people miss
+  sudo modprobe amdgpu && ls -l /dev/kfd
+  ```
 - Strix Halo is an **APU with unified memory** — its "VRAM" is carved from system RAM. Allocate enough
   GTT/VRAM in BIOS for the ~9 GB working set (large-v3 + align + pyannote).
 - **Build pins `setuptools<81`** for the pip install step. openai-whisper's `setup.py` imports
@@ -147,9 +179,46 @@ recent, so:
   that otherwise pulls `setuptools >= 81` into the isolated wheel build and fails with *"No module named
   'pkg_resources'"*. `PIP_CONSTRAINT` scopes the pin to the build (it applies to the isolated build overlay).
 
-> **Status: build- and unit-validated, not yet run on AMD hardware.** The ASR-backend switch is unit-tested
-> and the CUDA path is unchanged, but end-to-end ROCm *inference* still needs confirming on a real AMD
-> (Strix Halo) GPU. A PR reporting results + a known-good `rocm/pytorch` tag is very welcome.
+> **Status: validated end-to-end on AMD hardware.** Confirmed on a Ryzen AI Max+ 395 (Radeon 8060S,
+> gfx1151, kernel 7.0.0-29, Docker CE) with the pinned `rocm7.2.4 / torch 2.8.0` base: a 269 s meeting
+> recording transcribed to **106 segments across 2 speakers**, with a 192-d ECAPA voiceprint per speaker -
+> i.e. ASR, word alignment, diarization and speaker embeddings all running on the AMD GPU (`rocm-smi`
+> showed 95-98% GPU use throughout).
+>
+> **Throughput (single sample, so treat as indicative, not a benchmark):** ~1.3-1.7x realtime for
+> `large-v3` at default settings - 269 s of audio in 155 s and 201 s on two consecutive runs in the same
+> process. The second run being *slower* despite reusing in-memory models points at power/thermal
+> behaviour on an APU rather than anything in the pipeline; it has not been investigated.
+>
+> **Tuning levers, measured on this box - both of the obvious ones were dead ends.** Same 269 s file,
+> 3 consecutive in-process runs per config, run 0 being the model-load run:
+>
+> | Config | Run 0 (cold) | Warm runs | Warm mean |
+> | --- | --- | --- | --- |
+> | baseline | 167.6 s | 149.2 / 184.5 s | 166.8 s |
+> | `HSA_OVERRIDE_GFX_VERSION=11.0.0` | **381.5 s** | 165.2 / 162.2 s | 163.7 s |
+> | TF32 attempt (see below) | 197.6 s | 200.2 / 123.3 s | 161.8 s |
+>
+> - **`HSA_OVERRIDE_GFX_VERSION=11.0.0` bought nothing here.** The warm means are within noise of baseline
+>   (163.7 s vs 166.8 s), and the *cold* run cost **2.3x more** (381.5 s vs 167.6 s) - consistent with
+>   MIOpen rebuilding its kernel cache for the substituted architecture. The widely-repeated "2-6x faster
+>   on gfx1151" did **not** reproduce on ROCm 7.2.4 / torch 2.8.0. It may still help on older ROCm, where
+>   the native gfx1151 kernels were worse; treat it as something to measure, not to set by default.
+> - **TF32 is not available on this GPU at all, so pyannote's `ReproducibilityWarning` is a red herring.**
+>   `torch.backends.cuda.matmul.allow_tf32` reads back `False` immediately after being set to `True`
+>   (gfx1151 is RDNA 3.5 and has no TF32 path). The "TF32" row above is therefore just a third baseline
+>   sample, which is exactly why it is useful: pooled with baseline, the no-override warm runs span
+>   **123.3-200.2 s**, a **±25%** band on identical audio.
+>
+> That noise floor is the real headline: with N=3 nothing smaller than roughly a 1.5x effect is
+> measurable this way, so treat any micro-tuning claim (including these numbers) with suspicion unless it
+> is backed by many more runs. The MIOpen `IsEnoughWorkspace` fallbacks during alignment were not
+> investigated for the same reason.
+>
+> **Output is not deterministic between runs** (65 / 116 / 105 segments across three runs of the same
+> audio). That is inherent to Whisper rather than to ROCm: `_asr` calls openai-whisper's `transcribe()`
+> with its default **temperature fallback**, so any segment failing the logprob / compression-ratio
+> thresholds is retried with sampling at temperature up to 1.0.
 
 ## Local run (outside Docker)
 

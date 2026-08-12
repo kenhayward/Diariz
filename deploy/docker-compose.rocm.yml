@@ -8,11 +8,18 @@
 # else (API, web, infra, the worker's align/diarize/voiceprints) is unchanged. Pick this OR the NVIDIA
 # compose file — both use the `diariz` project name, so only one runs at a time.
 #
-# REQUIRES NATIVE LINUX (kernel >= 6.11, ROCm >= 6.4.1) — NOT WSL2 / Docker Desktop on Windows. WSL2 has no
-# /dev/kfd (it bridges GPU compute via /dev/dxg + a WSL-specific ROCm this image doesn't use), so it fails at
-# startup with: error gathering device information while adding custom device "/dev/kfd": no such file or
-# directory. On Windows/WSL2, run the standard worker CPU-only instead (docker-compose.yml + WORKER_DEVICE=cpu
-# WORKER_COMPUTE_TYPE=int8). See src/Diariz.Worker/README.md -> AMD ROCm.
+# REQUIRES NATIVE LINUX — NOT WSL2 / Docker Desktop on Windows. WSL2 has no /dev/kfd (it bridges GPU compute
+# via /dev/dxg + a WSL-specific ROCm this image doesn't use), so it fails at startup with: error gathering
+# device information while adding custom device "/dev/kfd": no such file or directory. That error comes from
+# the Docker DAEMON, before the container is created — no env var here can affect it. Confirmed on a Strix
+# Halo box, 2026-08-12. On Windows/WSL2, run the standard worker CPU-only instead (docker-compose.yml +
+# WORKER_DEVICE=cpu WORKER_COMPUTE_TYPE=int8). See src/Diariz.Worker/README.md -> AMD ROCm.
+#
+# For Strix Halo (gfx1151) prefer a RECENT kernel (6.15+; 6.8 may not bring the GPU up at all) and ROCm 7.x.
+# ROCm 6.4.1 gives only basic rocBLAS on gfx1151 and no hipBLASLt, so treat it as a floor for "boots", not
+# for "works well". If /dev/kfd is missing on native Linux, the usual cause is the amdgpu module being
+# blacklisted — and removing the blacklist file is not enough, because it stays cached in the initramfs:
+#   grep -rn "blacklist.*amdgpu" /etc/modprobe.d/ ; sudo update-initramfs -u ; sudo modprobe amdgpu
 
 name: diariz
 
@@ -179,9 +186,14 @@ services:
       WHISPER_MODEL: ${WHISPER_MODEL:-large-v3}
       MAX_AUDIO_SECONDS: ${MAX_AUDIO_SECONDS:-14400}
       ENABLE_SPEAKER_EMBEDDINGS: ${ENABLE_SPEAKER_EMBEDDINGS:-1}
-      # Strix Halo (gfx1151) and some consumer cards aren't in every ROCm build's kernel set. If model load
-      # fails with "invalid device function" / no kernel image, set HSA_OVERRIDE_GFX_VERSION to borrow a
-      # nearby arch's kernels (e.g. 11.0.0 = gfx1100). Leave blank when the build supports your GPU natively.
+      # Borrow a nearby arch's kernels (e.g. 11.0.0 = gfx1100), for correctness: the build has no kernels
+      # for your GPU ("invalid device function" / no kernel image). It is often also described as a 2-6x
+      # SPEED win on gfx1151 - that did not reproduce on ROCm 7.2.4 / torch 2.8.0 here (within noise warm,
+      # 2.3x slower cold), so measure before setting it. Numbers in src/Diariz.Worker/README.md -> AMD ROCm.
+      # NOTE: this interpolation hands the container the variable SET BUT EMPTY when it is blank in .env,
+      # and to the ROCm runtime that is NOT the same as unset - it stops finding the GPU entirely and the
+      # worker silently drops to CPU. worker.py strips the empty value before importing torch
+      # (rocm_env.clean_gfx_override), which is what makes a blank default safe here.
       HSA_OVERRIDE_GFX_VERSION: ${HSA_OVERRIDE_GFX_VERSION:-}
     volumes:
       - workercache:/root/.cache
@@ -190,8 +202,23 @@ services:
     devices:
       - /dev/kfd
       - /dev/dri
+    # The container runs as root (the rocm/pytorch base sets no USER), so it opens /dev/kfd via
+    # CAP_DAC_OVERRIDE no matter what groups it holds - verified on a Ryzen AI Max+ 395 by running the
+    # worker image with NO group_add at all and getting a clean GPU matmul. So this list is belt-and-braces
+    # for anyone who adds a non-root USER, not something the GPU currently depends on.
+    #
+    # It must be NUMERIC. `group_add` resolves names inside the CONTAINER, and the rocm/pytorch images
+    # ship `video` but no `render` group at all - so `- render` does not merely fail to help, it aborts
+    # container creation with "unable to find group render: no matching entries in group file". Even on an
+    # image that does define it the name is the wrong lever, because access is decided by the HOST's
+    # numeric GID: /dev/kfd here is root:render(990) while the ROCm 7.0.2 image calls `render` 991.
+    #
+    # 44 is `video` on Debian/Ubuntu hosts. If you add a non-root USER to the worker image, ALSO add your
+    # host's render GID here as a quoted number - find it with:  getent group render | cut -d: -f3
+    # (it is 990 on this Ubuntu box, but it is not stable across distros, which is exactly why the name
+    # cannot be used). Do not add it twice: compose rejects duplicate group_add entries.
     group_add:
-      - video
+      - "44"
     security_opt:
       - seccomp:unconfined
     ipc: host

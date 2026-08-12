@@ -62,6 +62,38 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.209.2",
+    date: "2026-08-12",
+    pr: 517,
+    headline: "AMD ROCm worker: pinned to a base image that actually works, and validated on real hardware",
+    summary:
+      "Only affects self-hosters running the optional AMD ROCm transcription worker; the NVIDIA and CPU " +
+      "paths are untouched. The ROCm worker image tracked `rocm/pytorch:latest`, and that moving tag " +
+      "rolled forward to a PyTorch whose audio library had dropped two functions the speaker-diarization " +
+      "library still calls. Every ROCm worker then crash-looped at startup and no recording could be " +
+      "transcribed - with nothing changed in Diariz itself to explain it. The base image is now pinned to " +
+      "a specific version, and a test fails the build if it is ever set back to a moving tag. The pin sits " +
+      "in a narrow window, so it is documented in detail: newer AMD runtimes are required for the Radeon " +
+      "8060S to work at all, while newer PyTorch versions break diarization. This release is also the " +
+      "first to be checked end to end on real AMD hardware (Ryzen AI Max+ 395 / Radeon 8060S), rather " +
+      "than only built and unit-tested. Separately, an earlier attempt to fix GPU access by adding the " +
+      "`render` group turned out to be harmful and has been reverted: the container runs as root and " +
+      "already had access, and naming that group prevented the container from starting at all.",
+    fixed: [
+      "The ROCm worker no longer crash-loops on startup with \"module 'torchaudio' has no attribute 'AudioMetaData'\" - its base image is pinned instead of following a moving tag.",
+      "Adding the `render` group to the ROCm worker stopped the container from being created at all (\"unable to find group render\"), because the image does not define that group. Reverted - the worker runs as root and could already open the GPU.",
+      "The ROCm worker no longer falls back to the CPU without saying so. The shipped configuration left the GPU architecture override blank, and a blank value (as opposed to no value) stops the AMD runtime finding the GPU at all; the worker now clears it at startup and warns when it does.",
+    ],
+    added: [
+      "A test that fails the build if either worker Dockerfile goes back to a floating base-image tag such as `latest`.",
+    ],
+    changed: [
+      "ROCm docs: kernel 6.15+ and ROCm 7.x recommended for gfx1151, replacing the optimistic 6.11 / 6.4.1 floor.",
+      "ROCm docs: the widely-repeated claim that the gfx1100 kernel override is 2-6x faster on this GPU has been replaced with measurements, which did not reproduce it - it was within noise warm and 2.3x slower on the first run.",
+      "ROCm docs now record the measured limits on a Radeon 8060S: ROCm 7.0.2 detects the GPU but crashes on any allocation, and PyTorch 2.9 or newer breaks speaker diarization.",
+    ],
+  },
+  {
     version: "0.209.1",
     date: "2026-08-12",
     pr: 514,
