@@ -2507,7 +2507,7 @@ number to size against, so both proxies must simply not cap this path.
 - **On the outer reverse proxy (not in this repo):** the same settings must be applied to the app's host, and
   **per host** - a staging host added later does not inherit the production host's Advanced config, which is
   exactly how a first restore on staging met a bare nginx **413** that never reached the API. In
-  nginx-proxy-manager this goes in the host's **Advanced** tab, which is injected at `server` scope; all five
+  nginx-proxy-manager this goes in the host's **Advanced** tab, which is injected at `server` scope; all four
   are valid there and inherit into NPM's generated `location /`, which sets none of them itself:
 
   ```nginx
@@ -2515,8 +2515,22 @@ number to size against, so both proxies must simply not cap this path.
   proxy_request_buffering off;
   proxy_read_timeout 3h;
   proxy_send_timeout 3h;
-  proxy_http_version 1.1;
   ```
+
+  **Do NOT add `proxy_http_version 1.1` here, even though the inner nginx needs it and the streaming above
+  depends on it.** NPM already emits that directive at `server` scope when the host has **Websockets Support**
+  enabled, and nginx rejects a second one in the same block outright (`"proxy_http_version" directive is
+  duplicate`). NPM's failure mode makes this expensive to diagnose: rather than keeping the last good config, it
+  sets the host's file aside as `.err` and reloads without it, so the host stops existing as far as nginx is
+  concerned, the request falls through to the default server and its dummy certificate, and the browser reports
+  a **TLS name error** - which looks like a DNS or certificate problem and points nowhere near the line that
+  caused it. Confirm with `docker exec <npm-container> nginx -t` and by looking for a `.err` file in
+  `/data/nginx/proxy_host/`.
+
+  The corollary is a **coupling worth knowing about**: on this host, request streaming is supplied by the
+  Websockets Support toggle, whose stated purpose is unrelated. Turning it off would break SignalR (so it must
+  stay on regardless) and *silently* restore request buffering - a multi-GB archive spooled to the proxy's disk
+  again, with no error to explain the slowdown. If NPM ever stops emitting it, the line belongs in Advanced.
 
   This **widens the whole host**, not just `/api/maintenance/` - which is safe only because the web container's
   own nginx still enforces `1024m` on every other path, so the backstop moves one hop in rather than
