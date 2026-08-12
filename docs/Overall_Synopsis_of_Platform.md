@@ -2504,9 +2504,26 @@ number to size against, so both proxies must simply not cap this path.
 - **In this repo:** `apps/web/nginx.conf` has a `location /api/maintenance/` block (longer prefix, so it wins
   over `/api/`) with `client_max_body_size 0`, `proxy_request_buffering off`, `proxy_http_version 1.1`, and 3 h
   read/send timeouts. The server-wide `1024m` still applies to every other endpoint.
-- **On the outer reverse proxy (not in this repo):** the same settings must be applied to the app's host,
-  **per host** - a staging host added later does not inherit the production host's Advanced config. Without
-  them a restore dies at the proxy's default body cap with a bare nginx **413** page that never reaches the API.
+- **On the outer reverse proxy (not in this repo):** the same settings must be applied to the app's host, and
+  **per host** - a staging host added later does not inherit the production host's Advanced config, which is
+  exactly how a first restore on staging met a bare nginx **413** that never reached the API. In
+  nginx-proxy-manager this goes in the host's **Advanced** tab, which is injected at `server` scope; all five
+  are valid there and inherit into NPM's generated `location /`, which sets none of them itself:
+
+  ```nginx
+  client_max_body_size 0;
+  proxy_request_buffering off;
+  proxy_read_timeout 3h;
+  proxy_send_timeout 3h;
+  proxy_http_version 1.1;
+  ```
+
+  This **widens the whole host**, not just `/api/maintenance/` - which is safe only because the web container's
+  own nginx still enforces `1024m` on every other path, so the backstop moves one hop in rather than
+  disappearing, and `Uploads:MaxBytes` remains the layer that answers a too-large recording readably. It also
+  raises the host's read timeout from the 600s recorded for uploads above; the cost is that a genuinely hung
+  request now occupies a connection for 3 h instead of 10 min. **Both hops must be changed** - the inner
+  location ships inside the web image, so the web container has to be rebuilt, not just restarted.
 - **Why the body is streamed rather than buffered**, when the recording-upload advice above says the same for a
   different reason: buffering costs scratch space equal to the archive *and* doubles the transfer, because the
   API writes its own temp copy either way. Two arguments that normally favour buffering invert here - with an
