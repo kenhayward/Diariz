@@ -232,14 +232,19 @@ function ListToolbar({
               />
             </>
           )}
-          <ToolbarButton
-            label={t("refresh")}
-            onClick={() => {
-              qc.invalidateQueries({ queryKey: ["recordings"] });
-              qc.invalidateQueries({ queryKey: ["sections"] });
-            }}
-            icon={<RefreshIcon />}
-          />
+          {/* Everywhere except the Calendar tab, which has two purpose-built refresh controls of its own -
+              a third generic one beside them read as a duplicate of the pair. What it did there (re-reading
+              the recordings drawn on the day grid) is not lost: a sync now invalidates them too. */}
+          {!calendarMode && (
+            <ToolbarButton
+              label={t("refresh")}
+              onClick={() => {
+                qc.invalidateQueries({ queryKey: ["recordings"] });
+                qc.invalidateQueries({ queryKey: ["sections"] });
+              }}
+              icon={<RefreshIcon />}
+            />
+          )}
           {selectMode && selectedIds.length > 0 && (
             <span className="text-xs text-blue-700 dark:text-blue-300">{selectedIds.length}</span>
           )}

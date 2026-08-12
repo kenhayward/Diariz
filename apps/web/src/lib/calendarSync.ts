@@ -237,6 +237,24 @@ export function useCalendarSync(): {
     return () => clearInterval(tick);
   }, [busy, syncing, setStatus, t]);
 
+  // The message must not outlive the hook that owns it. The effect above only clears its interval, so a
+  // toolbar unmounted mid-sync - switching to the Actions tab, which swaps this toolbar out, or collapsing the
+  // left panel - left a **sticky** progress line frozen on screen with nothing left to count it, and a
+  // remounted toolbar would not clear it either: `pushed` is per-instance, and the new instance's copy
+  // correctly says it wrote nothing. Only ever clears a line we put there ourselves, same guard as above.
+  //
+  // Deliberately its own effect rather than a clause in the one above: that one's cleanup runs on every tick
+  // of `busy`/`syncing`/`t`, and clearing there would blank the bar between each second. `setStatus` is
+  // stable, so this cleanup runs on unmount and nowhere else.
+  useEffect(
+    () => () => {
+      if (!pushed.current) return;
+      pushed.current = false;
+      setStatus(null);
+    },
+    [setStatus],
+  );
+
   const sync = useCallback(
     (scope: CalendarSyncScope) => {
       // One at a time - the shell can only read one window anyway. `busy` rather than `syncing`, so a click
@@ -252,7 +270,16 @@ export function useCalendarSync(): {
         // `refetchType: "all"` rather than the default: the Calendar tab unmounts when you switch away, so its
         // query is often inactive - and an inactive query would be marked stale and silently not refetched,
         // leaving the run "finished" before the data it fetched existed.
-        refetchEvents: () => qc.invalidateQueries({ queryKey: ["calendar-events"], refetchType: "all" }),
+        //
+        // The recordings go with them. The Calendar tab draws recordings alongside the meetings, and its
+        // generic Refresh button - which is what used to re-read them - is no longer offered there, so a sync
+        // is now the one control that refreshes everything the day grid shows. Only the events are awaited:
+        // the recordings are a background top-up, and blocking the "syncing" message on them would make the
+        // calendar's own refresh look slower than it is.
+        refetchEvents: () => {
+          void qc.invalidateQueries({ queryKey: ["recordings"] });
+          return qc.invalidateQueries({ queryKey: ["calendar-events"], refetchType: "all" });
+        },
       })
         .then(({ outlookReason }) => {
           const failure = syncErrorKey(outlookReason);

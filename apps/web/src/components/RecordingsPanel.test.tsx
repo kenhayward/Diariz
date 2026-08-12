@@ -1172,12 +1172,14 @@ describe("RecordingsPanel", () => {
 
     // Today is selected by default, so its recording shows in the day list.
     expect(await screen.findByText("Today call")).toBeTruthy();
-    // List-only toolbar actions are disabled in Calendar; Refresh stays usable.
+    // List-only toolbar actions are disabled in Calendar.
     expect((screen.getByRole("button", { name: /new section/i }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: /select recordings/i }) as HTMLButtonElement).disabled).toBe(true);
-    // Exact, not /refresh/i: the tab's own "Refresh events" link now renders here too (it used to be hidden
-    // behind a Google connection), and a loose match would find both.
-    expect((screen.getByRole("button", { name: "Refresh" }) as HTMLButtonElement).disabled).toBe(false);
+    // The generic Refresh is not offered here at all: this tab has Sync today and Sync calendar, and a third
+    // refresh control beside them read as a duplicate of the pair. A sync now re-reads the recordings the day
+    // grid draws, which is the job Refresh used to do here.
+    expect(screen.queryByRole("button", { name: "Refresh" })).toBeNull();
+    expect(screen.getByRole("button", { name: /sync calendar/i })).toBeTruthy();
   });
 
   // Storage can be disabled outright (Safari private browsing, a locked-down profile) and throw on access,
