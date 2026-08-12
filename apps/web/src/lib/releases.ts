@@ -62,6 +62,26 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.209.1",
+    date: "2026-08-12",
+    pr: 514,
+    headline: "Restoring a backup no longer hits an invisible size limit",
+    summary:
+      "Restoring a platform backup failed with a wall of raw server text ending in \"413 Request Entity Too " +
+      "Large\". A backup archive is the whole platform in one file - the database plus every recording and " +
+      "attachment stored side by side - so it is always bigger than any single upload, and the web server " +
+      "in front of the app was still applying the ceiling meant for uploading one recording. That path now " +
+      "accepts an archive of any size, and is given hours rather than a minute to finish, because both " +
+      "backing up and restoring go quiet for a long time while the work happens. Separately, when any " +
+      "request is refused by a server in front of the app, the page no longer prints that server's own " +
+      "error page at you - a refusal for size now simply says the file is too large.",
+    fixed: [
+      "Restoring a backup no longer fails with \"413 Request Entity Too Large\" - the restore path is no longer capped at the single-upload size limit.",
+      "Backup and restore are no longer cut off after a minute of silence, which showed up as an unexplained failure part-way through.",
+      "Error messages no longer show a raw web-server error page; a request refused for size says so in one line.",
+    ],
+  },
+  {
     version: "0.209.0",
     date: "2026-08-12",
     pr: 515,

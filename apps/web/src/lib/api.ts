@@ -1599,18 +1599,31 @@ function triggerBlobDownload(blob: Blob, filename: string) {
 // Extract a human-readable message from an axios error. Understands the shapes the
 // API returns: plain strings (BadRequest("...")), Identity error arrays, and
 // ASP.NET ProblemDetails ({ title, errors }). Falls back gracefully.
+//
+// Not every error comes from the API: a reverse proxy in front of it answers refusals of its own (413, 502,
+// 504) with an HTML error page, and nginx pads that page with several hundred bytes of "a padding to disable
+// MSIE and Chrome friendly error page" comments. Rendering that verbatim buried the actual problem, so a
+// markup body is treated as no message at all and the status code speaks instead.
 export function apiErrorMessage(e: unknown, fallback = "Something went wrong."): string {
   if (axios.isAxiosError(e)) {
     if (!e.response) return "Cannot reach the server.";
+    const status = e.response.status;
     const data = e.response.data as any;
-    if (typeof data === "string" && data.trim()) return data;
+    if (typeof data === "string" && data.trim() && !isMarkup(data)) return data;
+    if (status === 413) return "The file is too large for the server to accept.";
     if (Array.isArray(data) && data.length) return data.map(String).join(" ");
     if (data?.errors) {
       const msgs = Object.values(data.errors).flat();
       if (msgs.length) return msgs.map(String).join(" ");
     }
     if (data?.title) return data.title;
-    return `Request failed (${e.response.status}).`;
+    return `Request failed (${status}).`;
   }
   return e instanceof Error ? e.message : fallback;
+}
+
+/// True for a body that is an HTML/XML document rather than a message meant to be read - the shape a proxy's
+/// own error page arrives in.
+function isMarkup(body: string): boolean {
+  return body.trimStart().startsWith("<");
 }

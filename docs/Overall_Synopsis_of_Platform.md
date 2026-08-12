@@ -2495,6 +2495,51 @@ LLM API keys can't be decrypted (users re-enter them); everything else is faithf
 shell-out is behind `IDatabaseBackup` so the archive/object orchestration is unit-tested; the real round-trip
 is an integration test that skips when the client tools aren't on the host PATH.
 
+**Proxy limits are the restore's real ceiling.** The API applies **no** size limit of its own here - the action
+is `[DisableRequestSizeLimit]` and reads the raw body - so every refusal comes from a proxy in front of it, and
+a restore body is not comparable to a recording upload: it carries the dump *plus every stored blob,
+uncompressed*, so it is always larger than the sum of all audio and cannot be given a sensible fixed cap. The
+recording-upload chain further up sizes each layer above `Uploads:MaxBytes`; there is no equivalent app-level
+number to size against, so both proxies must simply not cap this path.
+- **In this repo:** `apps/web/nginx.conf` has a `location /api/maintenance/` block (longer prefix, so it wins
+  over `/api/`) with `client_max_body_size 0`, `proxy_request_buffering off`, `proxy_http_version 1.1`, and 3 h
+  read/send timeouts. The server-wide `1024m` still applies to every other endpoint.
+- **On the outer reverse proxy (not in this repo):** the same settings must be applied to the app's host, and
+  **per host** - a staging host added later does not inherit the production host's Advanced config, which is
+  exactly how a first restore on staging met a bare nginx **413** that never reached the API. In
+  nginx-proxy-manager this goes in the host's **Advanced** tab, which is injected at `server` scope; all five
+  are valid there and inherit into NPM's generated `location /`, which sets none of them itself:
+
+  ```nginx
+  client_max_body_size 0;
+  proxy_request_buffering off;
+  proxy_read_timeout 3h;
+  proxy_send_timeout 3h;
+  proxy_http_version 1.1;
+  ```
+
+  This **widens the whole host**, not just `/api/maintenance/` - which is safe only because the web container's
+  own nginx still enforces `1024m` on every other path, so the backstop moves one hop in rather than
+  disappearing, and `Uploads:MaxBytes` remains the layer that answers a too-large recording readably. It also
+  raises the host's read timeout from the 600s recorded for uploads above; the cost is that a genuinely hung
+  request now occupies a connection for 3 h instead of 10 min. **Both hops must be changed** - the inner
+  location ships inside the web image, so the web container has to be rebuilt, not just restarted.
+- **Why the body is streamed rather than buffered**, when the recording-upload advice above says the same for a
+  different reason: buffering costs scratch space equal to the archive *and* doubles the transfer, because the
+  API writes its own temp copy either way. Two arguments that normally favour buffering invert here - with an
+  unlimited body size it would make nginx absorb an **unauthenticated** flood to disk before the API can answer
+  401 (the action doesn't read `Request.Body` until after authorization), and buffering is what enables an
+  upstream retry, which a destructive non-idempotent restore must never get. Truncation is safe: the API's zip
+  fails to open before `pg_restore` or the bucket wipe. Note `proxy_http_version 1.1` is **load-bearing** -
+  nginx buffers a chunked request body regardless of `proxy_request_buffering` unless HTTP/1.1 proxying is on
+  (the default is 1.0), so an outer proxy streaming into this one would otherwise be spooled to disk silently.
+- **Diagnose by status code**, as with uploads: **413** is a body cap, **504** is a timeout. Both endpoints are
+  silent for minutes (backup builds the whole zip before the first byte; restore reloads the database and
+  re-uploads every blob before answering), so a 60s default timeout reads as a crash rather than as work in
+  progress.
+- The browser is shown a readable message for either: `apiErrorMessage` (`apps/web/src/lib/api.ts`) discards a
+  body that is markup rather than a message, so a proxy's HTML error page no longer lands in the panel verbatim.
+
 **Progress reporting.** Because the archive is fully assembled before the first response byte, a download can
 sit silent for minutes on a large platform - the browser shows no download entry until the headers arrive. The
 backup action therefore reports into `IBackupProgress` (a **singleton**, in-memory, per-instance: the build is
