@@ -62,6 +62,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.211.1",
+    date: "2026-08-13",
+    pr: 0,
+    headline: "Internal tidy-up of the live-notes code, with no change to how notes behave",
+    summary:
+      "Housekeeping only - nothing you can see changes. The code that holds your note lines while a " +
+      "recording is running, and keeps a crash-proof copy of them, has been moved out of the recorder " +
+      "into a piece of its own so it can be tested directly rather than only through the whole " +
+      "recording screen. Two behaviours that had no tests at all - editing a note line and deleting " +
+      "one - are now covered, so a future change that broke either would be caught. Notes are " +
+      "stamped, saved, edited, deleted and attached to a recording exactly as before.",
+    changed: [
+      "Internal: the live-notes state moved into its own module, with tests covering editing and deleting a line for the first time.",
+    ],
+  },
+  {
     version: "0.211.0",
     date: "2026-08-13",
     pr: 522,
