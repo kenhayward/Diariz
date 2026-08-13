@@ -62,6 +62,32 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.210.0",
+    date: "2026-08-13",
+    pr: 520,
+    headline: "Microphone processing now starts off, so system audio records properly",
+    summary:
+      "Echo cancellation, noise suppression and auto gain now start OFF for new recordings. They are the " +
+      "browser's own processing, and the echo canceller in particular was quietly destroying system-audio " +
+      "recordings: capturing what your computer is playing hands it a signal identical to what is coming " +
+      "out of the speakers, which is exactly what it is built to remove, so a recording would run for a " +
+      "couple of seconds and then fall silent with nothing to show for it - while the level meter looked " +
+      "healthy the whole time. On modern hardware the processing earns little on an ordinary microphone, " +
+      "so it is better off by default and available for anyone with a specific echo or background-noise " +
+      "problem to solve. All three toggles stay in the capture tuning popover, and if you have already " +
+      "chosen your own settings they are kept exactly as they are. Linux users also get a lasting recipe " +
+      "rather than a one-off command: the Recording audio help article now shows how to make your speaker " +
+      "output permanently selectable as a microphone, so system audio can be recorded without sharing a " +
+      "screen at all.",
+    changed: [
+      "Echo cancellation, noise suppression and auto gain now default to off. They remain available in the capture tuning popover, and previously saved settings are unchanged.",
+      "The Recording audio help article explains how to make system audio permanently selectable as a microphone on Linux, and why a system-audio recording goes silent if echo cancellation is on.",
+    ],
+    fixed: [
+      "System-audio recordings no longer fall silent a second or two in, which happened whenever the browser's echo canceller was active.",
+    ],
+  },
+  {
     version: "0.209.3",
     date: "2026-08-13",
     pr: 519,

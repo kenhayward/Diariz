@@ -424,7 +424,7 @@ describe("Recorder source selection", () => {
     await waitFor(() =>
       expect(getStream).toHaveBeenCalledWith(
         { kind: "device", deviceId: "bbb", label: "USB Headset" },
-        { echoCancellation: true, noiseSuppression: true, autoGainControl: true, mono: true },
+        { echoCancellation: false, noiseSuppression: false, autoGainControl: false, mono: true },
       ),
     );
   });
@@ -451,13 +451,15 @@ describe("Recorder source selection", () => {
     render(<Recorder onUploaded={() => {}} />);
 
     await openSource();
+    // The DSP now starts off, so ticking the chip turns noise suppression ON - the point of the test is
+    // that a chip change reaches getStream, whichever way it is pointing.
     fireEvent.click(screen.getByRole("checkbox", { name: /noise suppression/i }));
     fireEvent.click(screen.getByRole("button", { name: /record/i }));
 
     await waitFor(() =>
       expect(getStream).toHaveBeenCalledWith(
         { kind: "default" },
-        expect.objectContaining({ noiseSuppression: false }),
+        expect.objectContaining({ noiseSuppression: true }),
       ),
     );
   });

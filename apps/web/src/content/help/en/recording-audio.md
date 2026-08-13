@@ -32,18 +32,48 @@ So on Linux, either:
 - **Share the tab** that is playing the audio, which does carry sound; or
 - **Record system audio as a microphone.** Linux can expose whatever your speakers are playing as an
   ordinary input device, which you then pick from the microphone dropdown - no screen sharing at all,
-  and it captures every application rather than one tab. On PipeWire (Ubuntu 24.04 and newer) the
-  monitor is not offered as a device by default, so publish it as one:
+  and it captures every application rather than one tab. This is the route that always works.
 
-  ```bash
-  pw-loopback \
-    --capture-props='{ stream.capture.sink=true }' \
-    --playback-props='{ media.class=Audio/Source node.name=system_audio node.description="System Audio" }'
-  ```
+On PipeWire (Ubuntu 24.04 and newer) that input is not offered by default, because a speaker's "monitor"
+is not published as a device of its own. Create this file once to publish it:
 
-  Leave that running and "System Audio" appears in the microphone dropdown. To make it permanent, run
-  it as a systemd user service. Note it captures system audio **only**; to record your own voice at the
-  same time you need a combined virtual sink.
+`~/.config/pipewire/pipewire.conf.d/99-diariz-system-audio.conf`
+
+```
+context.modules = [
+  { name = libpipewire-module-loopback
+    args = {
+      node.description = "System Audio"
+      capture.props = {
+        stream.capture.sink = true
+        node.target         = "@DEFAULT_AUDIO_SINK@"
+        node.passive        = true
+      }
+      playback.props = {
+        media.class      = "Audio/Source"
+        node.name        = "diariz_system_audio"
+        node.description = "System Audio"
+      }
+    }
+  }
+]
+```
+
+Then apply it with `systemctl --user restart pipewire`. **System Audio** now appears in the microphone
+dropdown, and it comes back automatically every time you log in - there is no script to leave running.
+`@DEFAULT_AUDIO_SINK@` means it follows your current output, so it keeps working when you switch between
+speakers, headphones and HDMI.
+
+It captures system audio **only**. To record your own voice at the same time, tick **System audio**
+alongside a real microphone, or build a combined virtual sink.
+
+### If a system-audio recording comes out silent
+
+Turn **Echo cancellation** off in the capture tuning (it is off by default). An echo canceller exists to
+remove sound that is coming from your own speakers - which, when you record system audio, is the entire
+recording. It lets the first second or two through and then silences the rest, so you get a recording
+that looked fine on the level meter and transcribes to nothing. **Noise suppression** is worth leaving
+off too: it is tuned to keep speech and discard everything else, so it damages music and video audio.
 
 This is a browser limitation on Linux rather than something Diariz can work around - the desktop app
 does not change it either, because the underlying loopback capture is Windows-only.
@@ -55,7 +85,10 @@ does not change it either, because the underlying loopback capture is Windows-on
   toward the recording's duration.
 - **Auto-stop** ends the recording after 15, 30, or 60 minutes, or at a clock time you set. The
   recording stops and starts transcribing on its own, so you can walk away.
-- The gear popover tunes capture: echo cancellation, noise suppression, auto gain, and mono.
+- The gear popover tunes capture: echo cancellation, noise suppression, auto gain, and mono. The three
+  processing options start **off**, which is what you want for system audio and costs little on a modern
+  microphone. Turn them on if you have a specific problem to solve - echo cancellation for a room where
+  the far end comes back through your speakers, noise suppression for constant background noise.
 
 A recording that ends by itself always tells you why - the auto-stop time was reached, the meeting
 ended, or the room went quiet (see below). Pressing Stop yourself stays silent, as you would expect.
