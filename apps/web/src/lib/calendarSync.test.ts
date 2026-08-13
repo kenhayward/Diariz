@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import {
   elapsedSeconds,
   syncStatusKey,
+  dayStartIso,
   syncErrorKey,
   runCalendarSync,
   type CalendarSyncDeps,
@@ -51,7 +52,31 @@ describe("elapsedSeconds", () => {
 describe("syncStatusKey", () => {
   it("names the scope, so the bar says which sync is running", () => {
     expect(syncStatusKey("all")).toBe("statusSyncingCalendar");
-    expect(syncStatusKey("today")).toBe("statusSyncingCalendarToday");
+    // The quick sync now reads whichever day is selected, so its message names that day rather than
+    // claiming "today" - which was wrong every time the user was looking at any other date.
+    expect(syncStatusKey("today")).toBe("statusSyncingCalendarDay");
+  });
+});
+
+describe("dayStartIso", () => {
+  // The status bar must name the same day the shell reads. `new Date("2026-08-20")` is UTC midnight, which
+  // is the 19th locally anywhere west of Greenwich - so a naive parse would have the message and the sync
+  // disagreeing by a day for every user in the Americas.
+  it("reads a calendar key as a local date, not a UTC instant", () => {
+    const d = new Date(dayStartIso("2026-08-20"));
+    expect(d.getFullYear()).toBe(2026);
+    expect(d.getMonth()).toBe(7);
+    expect(d.getDate()).toBe(20);
+    expect(d.getHours()).toBe(0);
+  });
+
+  // No selection means the shell syncs today, so the message has to say today too.
+  it("falls back to today when there is no key, matching what the shell will read", () => {
+    const today = new Date();
+    for (const key of [undefined, "", "not-a-date"]) {
+      const d = new Date(dayStartIso(key));
+      expect(d.toDateString()).toBe(today.toDateString());
+    }
   });
 });
 
@@ -66,12 +91,43 @@ describe("runCalendarSync", () => {
     expect(d.syncOutlookNow).not.toHaveBeenCalled();
   });
 
-  it("passes the scope to the shell so a quick sync reads only today", async () => {
+  it("passes the scope to the shell so a quick sync reads only one day", async () => {
     const shell = fakeShell();
     const d = deps({ outlook: true, syncOutlookNow: shell.syncOutlookNow, onOutlookState: shell.onOutlookState });
 
     const run = runCalendarSync("today", d);
-    await vi.waitFor(() => expect(shell.syncOutlookNow).toHaveBeenCalledWith({ scope: "today" }));
+    await vi.waitFor(() =>
+      expect(shell.syncOutlookNow).toHaveBeenCalledWith({ scope: "today", date: undefined }),
+    );
+    shell.emit("reading");
+    shell.emit("idle");
+    await run;
+  });
+
+  // The whole point of the change: the button reads the day the user is looking at. Without the date the
+  // shell falls back to today, which is what it always used to do.
+  it("passes the selected day to the shell, so it reads that day and not today", async () => {
+    const shell = fakeShell();
+    const d = deps({ outlook: true, syncOutlookNow: shell.syncOutlookNow, onOutlookState: shell.onOutlookState });
+
+    const run = runCalendarSync("today", d, "2026-08-20");
+    await vi.waitFor(() =>
+      expect(shell.syncOutlookNow).toHaveBeenCalledWith({ scope: "today", date: "2026-08-20" }),
+    );
+    shell.emit("reading");
+    shell.emit("idle");
+    await run;
+  });
+
+  // A date on the full sync would be meaningless - that button reads the whole configured window.
+  it("never sends a date with the full sync", async () => {
+    const shell = fakeShell();
+    const d = deps({ outlook: true, syncOutlookNow: shell.syncOutlookNow, onOutlookState: shell.onOutlookState });
+
+    const run = runCalendarSync("all", d, "2026-08-20");
+    await vi.waitFor(() =>
+      expect(shell.syncOutlookNow).toHaveBeenCalledWith({ scope: "all", date: undefined }),
+    );
     shell.emit("reading");
     shell.emit("idle");
     await run;

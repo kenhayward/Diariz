@@ -39,11 +39,13 @@ ahead.
 - When you open the Diariz desktop app
 - From **Sync Outlook Calendar** in the tray menu
 - From **Sync now** in Preferences
-- From **Sync calendar** or **Sync today** in the toolbar above the Calendar tab
+- From **Sync calendar** or **Sync selected day** in the toolbar above the Calendar tab
 
-**Sync today** is the quick one. A full sync reads months of calendar and takes around half a minute on a
-busy mailbox; today alone takes a couple of seconds. It is what to press when a meeting you have just
-accepted is not showing yet. Both buttons cover every calendar you have connected - Outlook, Google and any
+**Sync selected day** is the quick one. A full sync reads months of calendar and takes around half a
+minute on a busy mailbox; a single day takes a couple of seconds. It reads whichever day you have picked in
+the calendar, so if you are looking at next Tuesday it refreshes next Tuesday - not today. The status bar
+names the day it is reading while it works. It is what to press when a meeting you have just accepted is not
+showing yet. Both buttons cover every calendar you have connected - Outlook, Google and any
 .ics feeds - and only touch the ones you actually use. While either is running the bar at the bottom of the
 window counts the seconds, so you can see it is still working.
 

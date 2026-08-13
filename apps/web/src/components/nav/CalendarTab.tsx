@@ -20,10 +20,16 @@ import type { RecordingSummary } from "../../lib/types";
 export default function CalendarTab({
   recordings,
   isPersonalRoom,
+  selectedDay,
+  onSelectDay,
 }: {
   recordings: RecordingSummary[];
   /// The event overlay is personal-only: a shared room shows its own recordings and nothing else.
   isPersonalRoom: boolean;
+  /// The day the grid is showing, as a `yyyy-MM-dd` key. Owned by the parent so the toolbar's quick-sync
+  /// button - a sibling of this component - can read the day it needs to sync.
+  selectedDay: string | null;
+  onSelectDay: (day: string | null) => void;
 }) {
   const { t, i18n } = useTranslation("workspace");
   const qc = useQueryClient();
@@ -36,7 +42,8 @@ export default function CalendarTab({
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
   });
-  const [selectedDay, setSelectedDay] = useState<string | null>(() => dayKey(new Date()));
+  // The selection is owned by RecordingsPanel, not here: the Calendar's quick-sync button lives in the
+  // toolbar, which is this component's sibling, and it has to read the day being looked at to sync it.
   const dayKeys = useMemo(() => recordingDayKeys(recordings), [recordings]);
 
   // Calendar overlay: fetch the visible month's events. Keyed by month, so navigating months auto-refetches;
@@ -112,7 +119,7 @@ export default function CalendarTab({
           daysWithRecordings={dayKeys}
           daysWithEvents={showCalendarOverlay ? eventKeys : undefined}
           selectedKey={selectedDay}
-          onSelect={setSelectedDay}
+          onSelect={onSelectDay}
           onPrev={() => stepMonth(-1)}
           onNext={() => stepMonth(1)}
         />

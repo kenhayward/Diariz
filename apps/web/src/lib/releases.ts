@@ -62,6 +62,25 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.211.3",
+    date: "2026-08-13",
+    pr: 0,
+    headline: "The Calendar's quick sync now refreshes the day you are looking at",
+    summary:
+      "The Calendar tab's quick sync button always re-read today, whichever day you had open. So " +
+      "picking a day in the calendar and pressing it left that day exactly as stale as it was, while " +
+      "quietly refreshing a day you were not looking at. It now reads the day you have selected, and " +
+      "the button says so - it is called Sync selected day. The status bar names the date it is " +
+      "reading while it works, so there is no doubt about which day was refreshed. With no day picked " +
+      "it still reads today, as before.",
+    fixed: [
+      "The Calendar's quick sync refreshes the selected day instead of always refreshing today.",
+    ],
+    changed: [
+      "The quick sync button is now called \"Sync selected day\", and the status bar names the date being read.",
+    ],
+  },
+  {
     version: "0.211.2",
     date: "2026-08-13",
     pr: 524,

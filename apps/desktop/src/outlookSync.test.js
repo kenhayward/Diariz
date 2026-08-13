@@ -50,6 +50,50 @@ test("windowForScope narrows to the day for a quick sync and keeps the rolling w
   assert.deepEqual(windowForScope(now, SYNC_DEFAULTS), windowFor(now, SYNC_DEFAULTS));
 });
 
+// The quick sync reads the day the user is LOOKING AT, which is usually not today - picking a day in the
+// calendar and pressing the button used to re-read today and leave that day exactly as stale as it was.
+test("windowForScope reads the given day rather than today", () => {
+  const now = new Date(2026, 7, 11, 14, 30);
+  const { start, end } = windowForScope(now, SYNC_DEFAULTS, "today", "2026-08-20");
+  assert.equal(new Date(start).getTime(), new Date(2026, 7, 20).getTime());
+  assert.equal(new Date(end).getTime(), new Date(2026, 7, 21).getTime());
+});
+
+// The date is a LOCAL calendar key, so it must be split into parts rather than passed through Date's ISO
+// parser - `new Date("2026-08-20")` is UTC midnight, which is the previous local day west of Greenwich and
+// would sync the wrong day for anyone in the Americas.
+test("windowForScope treats the given day as a local date, not a UTC instant", () => {
+  const { start } = windowForScope(new Date(2026, 7, 11), SYNC_DEFAULTS, "today", "2026-08-20");
+  const s = new Date(start);
+  assert.equal(s.getFullYear(), 2026);
+  assert.equal(s.getMonth(), 7);
+  assert.equal(s.getDate(), 20);
+  assert.equal(s.getHours(), 0);
+});
+
+// A day spanning a DST change is 23 or 25 hours, exactly as todayWindow already handles for today.
+test("windowForScope lands on the next local midnight for the given day", () => {
+  const { start, end } = windowForScope(new Date(2026, 0, 1), SYNC_DEFAULTS, "today", "2026-03-29");
+  assert.equal(new Date(end).getTime(), new Date(2026, 2, 30).getTime());
+  assert.ok(new Date(end) > new Date(start));
+});
+
+// An older web build sends no date, and a malformed one must not silently become "sync some other day".
+test("windowForScope falls back to today when the date is missing or unusable", () => {
+  const now = new Date(2026, 7, 11, 14, 30);
+  assert.deepEqual(windowForScope(now, SYNC_DEFAULTS, "today", undefined), todayWindow(now));
+  assert.deepEqual(windowForScope(now, SYNC_DEFAULTS, "today", ""), todayWindow(now));
+  assert.deepEqual(windowForScope(now, SYNC_DEFAULTS, "today", "not-a-date"), todayWindow(now));
+  assert.deepEqual(windowForScope(now, SYNC_DEFAULTS, "today", "2026-13-45"), todayWindow(now));
+});
+
+// A date on the full-window sync is meaningless and must not narrow it - that button reads the whole
+// configured range by definition.
+test("windowForScope ignores a date on the full sync", () => {
+  const now = new Date(2026, 7, 11, 14, 30);
+  assert.deepEqual(windowForScope(now, SYNC_DEFAULTS, "all", "2026-08-20"), windowFor(now, SYNC_DEFAULTS));
+});
+
 // ---- the all-day off-by-one ----
 
 test("localDateKey formats local date parts, never a UTC instant", () => {

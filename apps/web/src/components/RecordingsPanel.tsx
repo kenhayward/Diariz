@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { dayKey } from "../lib/calendar";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
@@ -103,6 +104,9 @@ export default function RecordingsPanel() {
   // A live search takes the list body over. It is only ever component state: the drill stays in the URL, so
   // clearing the query drops straight back to where the user was browsing, with nothing to restore.
   const [searchQuery, setSearchQuery] = useState("");
+  // The Calendar tab's selected day, owned here rather than in the tab itself because the toolbar's
+  // quick-sync button is the tab's sibling and has to know which day to read. Defaults to today.
+  const [selectedDay, setSelectedDay] = useState<string | null>(() => dayKey(new Date()));
   const searching = searchQuery.length > 0;
   // How the level below is ordered. Persisted globally, and **display only** - see lib/listSort and the
   // note on `rowList`.
@@ -278,6 +282,7 @@ export default function RecordingsPanel() {
           recordings={recordings}
           listMode={tab === "list"}
           calendarMode={tab === "calendar"}
+          selectedDay={selectedDay}
           isPersonalRoom={isPersonalRoom}
           allowFolders={canManageContents}
           sections={sections}
@@ -402,7 +407,12 @@ export default function RecordingsPanel() {
             )}
           </div>
         ) : tab === "calendar" ? (
-          <CalendarTab recordings={recordings} isPersonalRoom={isPersonalRoom} />
+          <CalendarTab
+            recordings={recordings}
+            isPersonalRoom={isPersonalRoom}
+            selectedDay={selectedDay}
+            onSelectDay={setSelectedDay}
+          />
         ) : tab === "actions" ? (
           // Actions: a flat, cross-transcript list with its own filter/select/complete toolbar above.
           <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">

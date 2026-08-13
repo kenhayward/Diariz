@@ -78,14 +78,14 @@ describe("ListToolbar calendar sync", () => {
   it("offers both syncs on the Calendar tab", async () => {
     renderToolbar({ calendarMode: true, listMode: false });
 
-    expect(await screen.findByRole("button", { name: /sync today/i })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: /sync selected day/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /sync calendar/i })).toBeTruthy();
   });
 
   it("offers neither on the list", () => {
     renderToolbar();
 
-    expect(screen.queryByRole("button", { name: /sync today/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /sync selected day/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /sync calendar/i })).toBeNull();
   });
 
@@ -124,14 +124,46 @@ describe("ListToolbar calendar sync", () => {
     expect(syncOutlookNow).not.toHaveBeenCalled();
   });
 
-  it("asks the desktop shell for today only when the quick sync is pressed", async () => {
+  it("asks the desktop shell for one day only when the quick sync is pressed", async () => {
     (api.getUserSettings as Mock).mockResolvedValue({ outlookSyncEnabled: true });
     const { syncOutlookNow, emit } = fakeShell();
     renderToolbar({ calendarMode: true, listMode: false });
 
-    fireEvent.click(await screen.findByRole("button", { name: /sync today/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /sync selected day/i }));
 
-    await waitFor(() => expect(syncOutlookNow).toHaveBeenCalledWith({ scope: "today" }));
+    await waitFor(() =>
+      expect(syncOutlookNow).toHaveBeenCalledWith({ scope: "today", date: undefined }),
+    );
+    emit("reading");
+    emit("idle");
+  });
+
+  // The bug this fixes: with a day picked in the calendar, the button used to re-read TODAY and leave the
+  // day on screen exactly as stale as it was.
+  it("syncs the day the calendar is showing, not today", async () => {
+    (api.getUserSettings as Mock).mockResolvedValue({ outlookSyncEnabled: true });
+    const { syncOutlookNow, emit } = fakeShell();
+    renderToolbar({ calendarMode: true, listMode: false, selectedDay: "2026-08-20" });
+
+    fireEvent.click(await screen.findByRole("button", { name: /sync selected day/i }));
+
+    await waitFor(() =>
+      expect(syncOutlookNow).toHaveBeenCalledWith({ scope: "today", date: "2026-08-20" }),
+    );
+    emit("reading");
+    emit("idle");
+  });
+
+  // "Refreshing" with no date named was the other half of the problem - the message said "today" whatever
+  // day was actually being read.
+  it("names the day being read in the status bar", async () => {
+    (api.getUserSettings as Mock).mockResolvedValue({ outlookSyncEnabled: true });
+    const { emit } = fakeShell();
+    renderToolbar({ calendarMode: true, listMode: false, selectedDay: "2026-08-20" });
+
+    fireEvent.click(await screen.findByRole("button", { name: /sync selected day/i }));
+
+    expect(await screen.findByText(/syncing calendar for 20th august 2026 0s/i)).toBeTruthy();
     emit("reading");
     emit("idle");
   });
@@ -160,7 +192,7 @@ describe("ListToolbar calendar sync", () => {
     const { emit } = fakeShell();
     renderToolbar({ calendarMode: true, listMode: false });
 
-    const today = await screen.findByRole("button", { name: /sync today/i });
+    const today = await screen.findByRole("button", { name: /sync selected day/i });
     const all = screen.getByRole("button", { name: /sync calendar/i });
     await waitFor(() => expect(api.getUserSettings).toHaveBeenCalled());
 
@@ -204,9 +236,9 @@ describe("ListToolbar calendar sync", () => {
     const { emit } = fakeShell();
     renderToolbar({ calendarMode: true, listMode: false });
 
-    fireEvent.click(await screen.findByRole("button", { name: /sync today/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /sync selected day/i }));
 
-    expect(await screen.findByText(/syncing calendar for today 0s/i)).toBeTruthy();
+    expect(await screen.findByText(/syncing calendar for .+ 0s/i)).toBeTruthy();
     emit("reading");
     emit("idle");
   });
