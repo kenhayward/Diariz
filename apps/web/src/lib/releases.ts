@@ -64,7 +64,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.211.1",
     date: "2026-08-13",
-    pr: 0,
+    pr: 523,
     headline: "Internal tidy-up of the live-notes code, with no change to how notes behave",
     summary:
       "Housekeeping only - nothing you can see changes. The code that holds your note lines while a " +
