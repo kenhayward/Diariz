@@ -19,6 +19,35 @@ Press **Record** in the capture panel to start. Press **Stop** to end the take a
 If the browser cannot capture system audio, the checkbox is hidden. If you asked for system audio but
 did not share it, the recording falls back to microphone-only rather than failing.
 
+### On Linux, share a tab and not the whole screen
+
+Chromium (Chrome, Edge) on **Linux** does not capture system audio when you share a **screen or a
+window** - only when you share a **browser tab**. The share dialog still lets you pick a screen, and
+the recording still runs, but the shared stream carries no sound: you get a microphone-only recording,
+which is usually near-silent. Transcription then finds no speech and the recording is marked failed
+with "No speech was detected in this recording."
+
+So on Linux, either:
+
+- **Share the tab** that is playing the audio, which does carry sound; or
+- **Record system audio as a microphone.** Linux can expose whatever your speakers are playing as an
+  ordinary input device, which you then pick from the microphone dropdown - no screen sharing at all,
+  and it captures every application rather than one tab. On PipeWire (Ubuntu 24.04 and newer) the
+  monitor is not offered as a device by default, so publish it as one:
+
+  ```bash
+  pw-loopback \
+    --capture-props='{ stream.capture.sink=true }' \
+    --playback-props='{ media.class=Audio/Source node.name=system_audio node.description="System Audio" }'
+  ```
+
+  Leave that running and "System Audio" appears in the microphone dropdown. To make it permanent, run
+  it as a systemd user service. Note it captures system audio **only**; to record your own voice at the
+  same time you need a combined virtual sink.
+
+This is a browser limitation on Linux rather than something Diariz can work around - the desktop app
+does not change it either, because the underlying loopback capture is Windows-only.
+
 ## While you are recording
 
 - A **live input-level meter** shows you are actually capturing sound, with a hint if it stays silent.

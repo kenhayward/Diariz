@@ -16,7 +16,11 @@ transcription on its own, so you can start a recording and walk away. Also captu
 one device), or pick **No microphone** to record system audio alone. System audio works in **Chromium
 browsers** (tick "Share audio" in the share dialog) and seamlessly in the Electron **desktop app** (Windows
 loopback / **macOS - beta** ScreenCaptureKit); the checkbox is hidden where the browser can't capture it, and
-if system audio isn't shared the take falls back to microphone-only. The desktop app can also **start/stop
+if system audio isn't shared the take falls back to microphone-only. **On Linux**, Chromium only carries
+audio when you share a **browser tab** - sharing a screen or window yields a silent stream (and so a
+microphone-only take), and the desktop app does not help because loopback capture is Windows-only. The
+Linux route that always works is to publish the speaker monitor as an input device (`pw-loopback` on
+PipeWire) and pick it from the microphone dropdown; see the **Recording audio** help article. The desktop app can also **start/stop
 recording from its tray / menu-bar menu** (in the background, with notifications), including a **Record Both**
 item. Or **upload existing audio files** to transcribe (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A) - via the
 Upload button or by **dragging several onto the recordings list**, with per-file status. You can also

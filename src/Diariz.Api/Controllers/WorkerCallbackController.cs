@@ -111,6 +111,23 @@ public class WorkerCallbackController : ControllerBase
 
         transcription.Recording.Error = null;  // clear any error from a prior failed attempt
 
+        // A successful run that found no speech is a dead end, not a transcript: every downstream job
+        // (summary, actions, tags, minutes, embeddings) needs segments, so queueing them only converts a
+        // clear failure into a confusing one - this used to surface as the summariser's own complaint,
+        // "Transcription has no segments to summarise", which describes its problem rather than the user's.
+        // The usual cause is a capture that recorded nothing: most often sharing a screen or window in a
+        // browser on Linux, where Chromium does not implement system-audio capture and the stream is
+        // silent (tab sharing does carry audio). Fail it here, in the user's terms.
+        if (body.Segments is null or { Count: 0 })
+        {
+            transcription.Recording.Status = RecordingStatus.Failed;
+            transcription.Recording.Error = "No speech was detected in this recording.";
+            await _db.SaveChangesAsync();
+            await _hub.NotifyStatusAsync(transcription.Recording.UserId, transcription.RecordingId,
+                RecordingStatus.Failed.ToString());
+            return Ok();
+        }
+
         // Continue the pipeline: when summarisation is configured for the owner, kick it off
         // automatically (which also auto-names the recording when it has no name yet).
         var cfg = await _summarization.ResolveAsync(transcription.Recording.UserId);
