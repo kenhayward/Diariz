@@ -236,7 +236,20 @@ three-second window the case for that work is weak.
    mic-only. For microphone capture the user can pick a **specific input
    device** (`enumerateDevices()`; the choice is persisted in `localStorage` and re-resolved against the live
    device list on hot-plug via `lib/audioDevices.ts`) and toggle **capture constraints** (echo cancellation /
-   noise suppression / auto gain / mono) applied to `getUserMedia`. While recording, a **Web Audio
+   noise suppression / auto gain / mono) applied to `getUserMedia`. The three DSP constraints **default to
+   off** (`DEFAULT_CONSTRAINTS`): capturing system audio means capturing a loopback of the speakers, which is
+   exactly what an echo canceller removes — measured, it converged over a few seconds and nulled a real take
+   from -28 dB to -84 dB, producing an empty transcript with a healthy-looking level meter. They remain
+   available for a genuine echo/room problem, and previously persisted choices are unaffected.
+
+   **Linux system audio** is a special case: Chromium there implements `getDisplayMedia` audio only for
+   **tab** sharing, not screen/window, so the documented "Share audio" route yields a silent mic-only take.
+   The supported route is to record the speaker monitor as an ordinary input. PipeWire does not publish a
+   sink's monitor as a node, so Diariz ships the drop-in that does —
+   `apps/web/public/linux/99-diariz-system-audio.conf`, served at `/linux/...` for a per-user install and
+   packaged by `packaging/linux/build-deb.sh` into a one-file `.deb` that installs it to
+   `/etc/pipewire/pipewire.conf.d/` for every user on a managed machine (config only, depends on `pipewire`,
+   registered as a conffile). One canonical file feeds both routes, pinned by `lib/linuxSystemAudio.test.ts`. While recording, a **Web Audio
    `AnalyserNode`** taps the same stream to drive a live **input-level meter** (`lib/audioLevel.ts` +
    `InputLevelMeter.tsx`; a passive read, not connected to output) with a subtle sustained-silence hint. The
    client `POST`s multipart to `POST /api/recordings` (`source = Microphone | System | Upload`), including

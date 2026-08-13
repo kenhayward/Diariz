@@ -19,8 +19,11 @@ loopback / **macOS - beta** ScreenCaptureKit); the checkbox is hidden where the 
 if system audio isn't shared the take falls back to microphone-only. **On Linux**, Chromium only carries
 audio when you share a **browser tab** - sharing a screen or window yields a silent stream (and so a
 microphone-only take), and the desktop app does not help because loopback capture is Windows-only. The
-Linux route that always works is to publish the speaker monitor as an input device (`pw-loopback` on
-PipeWire) and pick it from the microphone dropdown; see the **Recording audio** help article. The desktop app can also **start/stop
+Linux route that always works is to publish the speaker monitor as an input device and pick it from the
+microphone dropdown. Diariz **ships the PipeWire drop-in that does this** - served at
+`/linux/99-diariz-system-audio.conf` for a per-user install, and packaged as a one-file `.deb`
+(`packaging/linux/build-deb.sh`) that installs it to `/etc/pipewire/pipewire.conf.d/` for every user on a
+managed machine. See the **Recording audio** help article. The desktop app can also **start/stop
 recording from its tray / menu-bar menu** (in the background, with notifications), including a **Record Both**
 item. Or **upload existing audio files** to transcribe (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A) - via the
 Upload button or by **dragging several onto the recordings list**, with per-file status. You can also

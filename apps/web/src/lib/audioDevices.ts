@@ -51,12 +51,22 @@ export interface AudioConstraints {
   mono: boolean;
 }
 
-// Defaults deliberately mirror today's `getUserMedia({ audio: true })` behaviour (browser DSP on),
-// plus mono — diarization/ASR are mono and it keeps uploads smaller.
+// Browser DSP defaults OFF, mono on (diarization/ASR are mono and it keeps uploads smaller).
+//
+// Echo cancellation is the reason. Capturing system audio means selecting a loopback/monitor input, whose
+// signal is identical to what the machine is playing — precisely what an echo canceller is built to remove.
+// It converges over a few seconds and nulls the take: measured on a real 26 s recording, per-second RMS
+// decayed -28 dB -> -84 dB, leaving nothing to transcribe and no error to explain it. Noise suppression is
+// similarly hostile to anything that is not speech (it gates music), and auto gain fights level changes
+// the ASR copes with anyway.
+//
+// On current hardware and microphones the DSP earns little on a normal mic, so the trade is easy: default
+// to the raw stream, and keep all three toggles in the capture-tuning popover for anyone with a specific
+// echo or room problem to solve. This also makes Linux system-audio capture work without any tuning.
 export const DEFAULT_CONSTRAINTS: AudioConstraints = {
-  echoCancellation: true,
-  noiseSuppression: true,
-  autoGainControl: true,
+  echoCancellation: false,
+  noiseSuppression: false,
+  autoGainControl: false,
   mono: true,
 };
 

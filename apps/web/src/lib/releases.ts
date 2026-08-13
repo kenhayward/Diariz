@@ -62,6 +62,37 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.210.0",
+    date: "2026-08-13",
+    pr: 520,
+    headline: "Microphone processing now starts off, so system audio records properly",
+    summary:
+      "Echo cancellation, noise suppression and auto gain now start OFF for new recordings. They are the " +
+      "browser's own processing, and the echo canceller in particular was quietly destroying system-audio " +
+      "recordings: capturing what your computer is playing hands it a signal identical to what is coming " +
+      "out of the speakers, which is exactly what it is built to remove, so a recording would run for a " +
+      "couple of seconds and then fall silent with nothing to show for it - while the level meter looked " +
+      "healthy the whole time. On modern hardware the processing earns little on an ordinary microphone, " +
+      "so it is better off by default and available for anyone with a specific echo or background-noise " +
+      "problem to solve. All three toggles stay in the capture tuning popover, and if you have already " +
+      "chosen your own settings they are kept exactly as they are. Linux users also get a proper answer " +
+      "rather than a one-off command: Diariz now ships the small configuration file that makes your " +
+      "speaker output permanently selectable as a microphone, so system audio can be recorded without " +
+      "sharing a screen at all. Download it from your own Diariz server for a single machine, or install " +
+      "the one-file package to cover every user on a managed machine.",
+    added: [
+      "Diariz now ships the PipeWire configuration that makes system audio selectable as a microphone on Linux, downloadable from your own server at /linux/99-diariz-system-audio.conf.",
+      "A one-file Debian package for administrators, installing the same configuration for every user on a machine (packaging/linux/build-deb.sh).",
+    ],
+    changed: [
+      "Echo cancellation, noise suppression and auto gain now default to off. They remain available in the capture tuning popover, and previously saved settings are unchanged.",
+      "The Recording audio help article explains how to make system audio permanently selectable as a microphone on Linux, for one machine or for a whole fleet, and why a system-audio recording goes silent if echo cancellation is on.",
+    ],
+    fixed: [
+      "System-audio recordings no longer fall silent a second or two in, which happened whenever the browser's echo canceller was active.",
+    ],
+  },
+  {
     version: "0.209.3",
     date: "2026-08-13",
     pr: 519,

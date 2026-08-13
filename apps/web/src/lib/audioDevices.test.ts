@@ -164,17 +164,23 @@ describe("normalizeInputDevices", () => {
 });
 
 describe("toMediaTrackConstraints", () => {
-  it("maps the defaults (all DSP on, mono)", () => {
+  // DSP defaults OFF. The browser's echo canceller is the problem case: capturing system audio through a
+  // loopback/monitor input feeds it a signal identical to what is playing, which is exactly what it exists
+  // to remove - so it converges over a few seconds and nulls the recording to silence. Observed on a real
+  // 26 s take, per-second RMS decaying -28 dB -> -84 dB with nothing recoverable. Noise suppression is no
+  // kinder to non-speech audio (music gets gated). On modern hardware the DSP earns little on a normal mic,
+  // so the toggles stay available for anyone with a specific room/echo problem, but they start off.
+  it("maps the defaults (all DSP off, mono)", () => {
     expect(DEFAULT_CONSTRAINTS).toEqual({
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
       mono: true,
     });
     expect(toMediaTrackConstraints(DEFAULT_CONSTRAINTS)).toEqual({
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
       channelCount: 1,
     });
   });
