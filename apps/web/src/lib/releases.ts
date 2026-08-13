@@ -64,7 +64,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.211.3",
     date: "2026-08-13",
-    pr: 0,
+    pr: 525,
     headline: "The Calendar's quick sync now refreshes the day you are looking at",
     summary:
       "The Calendar tab's quick sync button always re-read today, whichever day you had open. So " +
