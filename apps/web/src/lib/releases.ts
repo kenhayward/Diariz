@@ -20,7 +20,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Transcribe & diarize** | Server-side WhisperX (word-level timestamps) with pyannote speaker diarization; speaker-labelled, editable, playable segments you can re-transcribe any time. |
 | **Recording hub** | Every meeting opens on a hub: a summary card (meeting type, key facts, the summary inline) over tiles for transcript, actions, speakers, notes, files, and formulas - each showing its count and a preview, with new-note / add-file / run-formula available in place. The transcript embeds a conversation-flow player showing who spoke when, which doubles as the scrubber. |
 | **People and speaker identification** | One shared directory of the people in your meetings, where a voiceprint is optional - someone can be listed with no biometric held, or opt out, which erases theirs. Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). Assign a speaker from the Speakers tab or straight from the label on any transcript row, as you read or listen. A **People** directory opens over whatever you are reading; it lists everyone one to a line, searchable by name, email or company; a person carries a job title, company, email, phone and an internal/external marker, and likely duplicates are pointed out for you to merge. The Speakers tab shows an identified speaker's title and company inline, with a contact card (email and phone as links) above their segments and a pencil to edit that person in place. Browsing the directory needs the Manage people permission; opting yourself out, and searching to name a speaker, never do. |
-| **Notes** | Take your own note lines live during a meeting (timestamped, crash-safe); they appear inline in the transcript at the moment you wrote them, steer the minutes, and can be woven into an enhanced-notes section linking to the exact transcript moments. |
+| **Notes** | Take your own note lines live during a meeting (timestamped, crash-safe); they appear inline in the transcript at the moment you wrote them, steer the minutes, and can be woven into an enhanced-notes section linking to the exact transcript moments. In the desktop app, pop the notes out into a small always-on-top window that floats over a full-screen call, so a single monitor is no longer a reason to lose sight of the meeting. |
 | **Meeting screenshots** | Capture the screen during a recording from the desktop app - a hotkey, the tray menu, or the app itself - choosing a screen or a rectangle on the first capture and reusing it after; captures appear in the transcript at the moment they were taken, as a full-size viewer with zoom and pan to read a capture at native resolution, and in a Notes-tab section. |
 | **Summaries & minutes** | Auto summary plus full professional meeting minutes, editable in a rich editor and emailable. A meeting type carries no prompts of its own: it names the **formula** that generates its minutes, plus any others to run alongside (their documents appear in the Formulas tab). Minutes and formulas are the same machinery - any formula you can use can produce your minutes. Templates are built from blocks (H1-H3 headings, literal text, substituted details, model prompts, rules, drag-to-reorder) with JSON import/export. |
 | **Action items** | Auto-extracted with owner and deadline, tracked across every meeting with completion and a person filter, linking back to the transcript. |
@@ -61,6 +61,29 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.211.0",
+    date: "2026-08-13",
+    pr: 0,
+    headline: "Take notes in a small floating window while your call has the screen",
+    summary:
+      "On a single monitor, taking notes during a call meant keeping the whole of Diariz visible - " +
+      "which is exactly the screen the call wants. While a recording is running, the notes panel now " +
+      "has a control that moves it into its own small window, floating above everything else " +
+      "including a full-screen Teams or Zoom call. It is the same notes panel, with the same " +
+      "timestamps and the same screenshot buttons, and you can close the main Diariz window to the " +
+      "tray and carry on typing. Stop the recording and the window closes itself, with your notes " +
+      "attached to the recording as usual. If the main window ever goes away underneath it, the " +
+      "floating window says so and stops accepting notes rather than quietly dropping them. Desktop " +
+      "app only - a browser cannot float a window above another application.",
+    added: [
+      "A control on the notes panel opens your live notes in a small always-on-top window while recording.",
+      "The floating notes window keeps working with the main Diariz window closed to the tray.",
+    ],
+    changed: [
+      "Screenshots taken during a recording are deleted by identity rather than by position, so deleting one while another arrives removes the one you clicked.",
+    ],
+  },
   {
     version: "0.210.1",
     date: "2026-08-13",
