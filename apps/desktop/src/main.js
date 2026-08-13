@@ -26,6 +26,7 @@ const { buildStartUrl, codeFromArgv, notificationForAuthError } = require("./des
 const { cropRectFor, resizeDims, clampRect } = require("./captureTarget");
 const { reconcilePool } = require("./pickerPool");
 const { RENDERER_INVALIDATING_EVENTS } = require("./rendererReadiness");
+const { notesWindowBounds } = require("./notesWindowState");
 const {
   SYNC_DEFAULTS,
   windowForScope,
@@ -63,6 +64,7 @@ let tray = null;
 let mainWindow = null;
 let setupWindow = null;
 let hotkeyWindow = null;
+let notesWindow = null;
 let isQuitting = false;
 
 // Tray-driven recording state. `ready` flips true once the web app's recorder has
@@ -134,6 +136,9 @@ function createMainWindow(url) {
   });
   mainWindow.on("closed", () => {
     mainWindow = null;
+    // A pop-out outliving the window that feeds it can only sit there dead - it has no other source
+    // of notes, and no way to deliver what is typed into it.
+    closeNotesPopout();
     setRecorderReady(false);
   });
 
@@ -178,6 +183,75 @@ function reloadMainWindow() {
   // reloading it here would cancel that load to start the same one again.
   if (existed && mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.reloadIgnoringCache();
 }
+
+// ---- Pop-out live-notes window ----
+//
+// A second window on the SAME origin as the main window, which is what lets the two halves of the
+// notes UI talk over a BroadcastChannel with no IPC of their own. The main window stays the owner of
+// the recorder, the note lines and the capture stash; this one is a remote control.
+//
+// Always-on-top at Electron's DEFAULT level. A spike confirmed that survives another application going
+// full screen, so the higher "screen-saver" band buys nothing here - and it would also float the notes
+// over the lock screen, which they have no business doing.
+
+function showNotesPopout() {
+  const url = targetUrl();
+  if (!url) return { ok: false };
+
+  if (notesWindow && !notesWindow.isDestroyed()) {
+    notesWindow.show();
+    notesWindow.focus();
+    return { ok: true };
+  }
+
+  const bounds = notesWindowBounds(store.get("notesPopout.bounds"), screen.getAllDisplays());
+  notesWindow = new BrowserWindow({
+    ...bounds,
+    alwaysOnTop: true,
+    title: "Diariz - Notes",
+    icon: ICON,
+    webPreferences: {
+      preload: path.join(__dirname, "notes-preload.js"),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+    },
+  });
+  notesWindow.setMenuBarVisibility(false);
+
+  const origin = new URL(url).origin;
+  notesWindow.webContents.setWindowOpenHandler(({ url: target }) => {
+    shell.openExternal(target);
+    return { action: "deny" };
+  });
+  notesWindow.webContents.on("will-navigate", (e, target) => {
+    if (new URL(target).origin !== origin) {
+      e.preventDefault();
+      shell.openExternal(target);
+    }
+  });
+
+  // Remembered on close rather than on every move/resize: the bounds only matter for the next open,
+  // and writing the store on each drag frame would be pure churn.
+  notesWindow.on("close", () => {
+    if (notesWindow && !notesWindow.isDestroyed()) store.set("notesPopout.bounds", notesWindow.getBounds());
+  });
+  notesWindow.on("closed", () => {
+    notesWindow = null;
+    // The guaranteed way back to the inline notes popover. The renderer also sends its own "closing"
+    // over the channel, but that cannot be relied on if the renderer died rather than closed.
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("notes:closed");
+  });
+
+  notesWindow.loadURL(new URL("/notes-popout", url).toString(), documentLoadOptions());
+  return { ok: true };
+}
+
+function closeNotesPopout() {
+  if (notesWindow && !notesWindow.isDestroyed()) notesWindow.close();
+}
+
+ipcMain.handle("notes:open", () => showNotesPopout());
 
 // ---- First-run / settings: server address ----
 
@@ -1320,6 +1394,9 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on("before-quit", () => {
     isQuitting = true;
+    // Closed explicitly rather than left to teardown, so its `close` handler runs and the bounds are
+    // saved for next time.
+    closeNotesPopout();
   });
 
   // The shortcut is scoped to a recording; make sure it never outlives the app either.

@@ -25,6 +25,21 @@ contextBridge.exposeInMainWorld("diariz", {
   /// state: { phase: "idle"|"recording"|"uploading"|"error", source?, error? }.
   reportRecorderState: (state) => ipcRenderer.send("recorder:state", state),
 
+  /// Ask the shell to open the detached live-notes window - a small always-on-top window that can
+  /// float over a full-screen call. Resolves { ok }; false when no server address is configured yet.
+  /// The two windows then talk directly over a same-origin BroadcastChannel, not through here.
+  openNotesPopout: () => ipcRenderer.invoke("notes:open"),
+
+  /// Subscribe to the pop-out window being closed, however it went (its own button, the OS, a crash).
+  /// The web app restores the inline notes popover on this. It is the guaranteed signal - the pop-out
+  /// also announces itself over the channel, but a killed renderer never gets to.
+  /// Returns an unsubscribe function.
+  onNotesPopoutClosed: (cb) => {
+    const listener = () => cb();
+    ipcRenderer.on("notes:closed", listener);
+    return () => ipcRenderer.removeListener("notes:closed", listener);
+  },
+
   /// True when this shell can capture screenshots (used to show the capture affordances).
   canCaptureScreenshot: true,
 
