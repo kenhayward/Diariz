@@ -25,6 +25,8 @@ import {
   type SourceSelection,
 } from "../lib/audioDevices";
 import { connectTrayRecorder, type RecorderState, type TrayBridge } from "../lib/trayRecorder";
+import { useNotesPopout } from "../lib/useNotesPopout";
+import type { NotesState } from "../lib/notesChannel";
 import { onRecordingRequested, type CalendarEventContext, type RecordingRequest } from "../lib/recordRequest";
 import {
   resolveCalendarStopAt,
@@ -823,6 +825,50 @@ export default function Recorder({
     };
   }, []);
 
+  // ---- Pop-out notes window (desktop shell only) ----
+
+  const shellBridge = (window as unknown as { diariz?: TrayBridge }).diariz;
+
+  // Rebuilt on every render the pop-out cares about; useNotesPopout republishes when it changes.
+  const notesState: NotesState = {
+    lines: liveLines,
+    // Only what the pop-out renders. The full-resolution PNG stays in this window.
+    shots: liveShots.map((s) => ({ id: s.id, capturedAtMs: s.capturedAtMs, thumb: s.thumb })),
+    canCapture: canCaptureScreenshots(),
+    captureAreaSet,
+    recording,
+  };
+
+  const { poppedOut, popOut, notifyClosed } = useNotesPopout({
+    state: notesState,
+    openWindow: () => void shellBridge?.openNotesPopout?.(),
+    handlers: {
+      onAdd: addLiveNote,
+      onEdit: editLiveNote,
+      onDelete: deleteLiveNote,
+      onDeleteShot: deleteLiveShot,
+      onCapture: requestCapture,
+      onChangeArea: requestChangeArea,
+    },
+  });
+
+  // Popping out moves the notes into the window, so the inline popover closes. The remembered
+  // preference is deliberately not touched: it records whether the popover auto-opens on the *next*
+  // recording, which is a different question from where the notes are right now.
+  useEffect(() => {
+    if (poppedOut && hub.isOpen("notes")) hub.close();
+  }, [poppedOut]);
+
+  // The shell's report is the guaranteed one - it survives the pop-out's renderer being killed, which
+  // the channel's own "closing" message does not. That message is merely faster.
+  useEffect(() => {
+    if (!poppedOut || !shellBridge?.onNotesPopoutClosed) return;
+    return shellBridge.onNotesPopoutClosed(() => {
+      hub.close();
+      notifyClosed();
+    });
+  }, [poppedOut, notifyClosed]);
+
   // `trayKind` is set only when the Electron tray drives us (it speaks coarse mic/system); the on-screen
   // button passes nothing and records the current `selection`. A tray "mic" maps to the current specific
   // mic (or default), "system" to loopback.
@@ -1434,6 +1480,9 @@ export default function Recorder({
               onChangeCaptureArea={canCaptureScreenshots() ? requestChangeArea : undefined}
               onCapture={canCaptureScreenshots() ? requestCapture : undefined}
               captureAreaSet={captureAreaSet}
+              // Only the shell can pin a window above a full-screen call, so a plain browser gets no
+              // control at all rather than one that opens a tab it cannot float.
+              onPopOut={shellBridge?.openNotesPopout ? popOut : undefined}
             />
           </div>
         )}

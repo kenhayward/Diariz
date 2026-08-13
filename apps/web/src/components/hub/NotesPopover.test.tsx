@@ -165,3 +165,29 @@ describe("NotesPopover screenshots", () => {
     expect(revokeSpy).toHaveBeenCalledWith("blob:mock-1");
   });
 });
+
+describe("NotesPopover pop-out control", () => {
+  it("offers no pop-out control in a plain browser", () => {
+    renderPopover();
+
+    expect(screen.queryByRole("button", { name: /separate window/i })).toBeNull();
+  });
+
+  it("pops out when the shell supports it", () => {
+    const onPopOut = vi.fn();
+    renderPopover({ onPopOut });
+
+    fireEvent.click(screen.getByRole("button", { name: /separate window/i }));
+
+    expect(onPopOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps its close button reachable alongside the pop-out control", () => {
+    const onClose = vi.fn();
+    renderPopover({ onPopOut: vi.fn(), onClose });
+
+    fireEvent.click(screen.getByRole("button", { name: /close notes/i }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});

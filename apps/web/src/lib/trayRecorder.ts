@@ -25,6 +25,12 @@ export interface TrayBridge {
   isElectron?: boolean;
   onTrayCommand?: (cb: (cmd: TrayCommand) => void) => () => void;
   reportRecorderState?: (state: RecorderState) => void;
+  /// Open the detached live-notes window. Present only in the desktop shell, which is what gates the
+  /// pop-out control - a browser cannot float a window above another application.
+  openNotesPopout?: () => Promise<{ ok: boolean }>;
+  /// The shell reporting that the pop-out window has gone, however it went. The guaranteed signal: the
+  /// pop-out also announces itself over its channel, but a killed renderer never gets to.
+  onNotesPopoutClosed?: (cb: () => void) => () => void;
 }
 
 export interface TrayRecorderHandlers {

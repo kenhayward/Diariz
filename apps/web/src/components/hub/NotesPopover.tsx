@@ -5,6 +5,13 @@ import ShotStrip from "./ShotStrip";
 import type { MeetingNote } from "../../lib/types";
 import type { PendingShot } from "../../lib/pendingScreenshots";
 
+const IconPopOut = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true" focusable="false"
+    stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
+  </svg>
+);
+
 const IconClose = () => (
   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true" focusable="false"
     stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -32,6 +39,9 @@ export type NotesPopoverProps = {
   /// stays disabled until the area is set, making "set the area" the visible first step. Defaults to true:
   /// callers that know nothing about the shell's area state (a plain browser, older tests) must not be gated.
   captureAreaSet?: boolean;
+  /// Detach the notes into their own always-on-top window. Absent in a plain browser, which is what
+  /// hides the control - only the desktop shell can pin a window above a full-screen call.
+  onPopOut?: () => void;
 };
 
 /**
@@ -52,6 +62,7 @@ export default function NotesPopover({
   onChangeCaptureArea,
   onCapture,
   captureAreaSet = true,
+  onPopOut,
 }: NotesPopoverProps) {
   const { t } = useTranslation("workspace");
 
@@ -66,12 +77,38 @@ export default function NotesPopover({
           <span style={{ fontFamily: "system-ui", fontWeight: 700, fontSize: 17, color: "var(--hub-text)" }}>
             {t("liveNotesTitle")}
           </span>
+          {onPopOut && (
+            <button
+              type="button"
+              aria-label={t("notesPopOut")}
+              title={t("notesPopOut")}
+              onClick={onPopOut}
+              style={{
+                // Whichever control comes first carries the auto margin, so the pair stays right-aligned.
+                marginLeft: "auto",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 28,
+                height: 28,
+                borderRadius: 8,
+                border: "none",
+                background: "transparent",
+                color: "var(--hub-muted)",
+                cursor: "pointer",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hub-surface-hover)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            >
+              <IconPopOut />
+            </button>
+          )}
           <button
             type="button"
             aria-label={t("liveNotesClose")}
             onClick={onClose}
             style={{
-              marginLeft: "auto",
+              marginLeft: onPopOut ? 0 : "auto",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
