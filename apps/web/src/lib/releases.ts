@@ -64,7 +64,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.211.0",
     date: "2026-08-13",
-    pr: 0,
+    pr: 522,
     headline: "Take notes in a small floating window while your call has the screen",
     summary:
       "On a single monitor, taking notes during a call meant keeping the whole of Diariz visible - " +
