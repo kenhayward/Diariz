@@ -80,6 +80,17 @@ describe("NotesPopout", () => {
     expect(client.remove).toHaveBeenCalledWith("n1");
   });
 
+  // A window opened before its host is ready has not *lost* anything, so it must keep saying it is
+  // waiting rather than claiming contact was broken. Found by opening the real window with no host.
+  it("keeps waiting, rather than claiming lost contact, when there was never a host", () => {
+    render(<NotesPopout />);
+
+    act(() => handlers.onDisconnected());
+
+    expect(screen.getByText(/waiting for the main/i)).toBeTruthy();
+    expect(screen.queryByText(/lost contact/i)).toBeNull();
+  });
+
   it("disables the input when the host stops answering", () => {
     render(<NotesPopout />);
     act(() => handlers.onState(state()));

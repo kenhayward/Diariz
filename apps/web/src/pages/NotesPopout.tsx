@@ -82,7 +82,9 @@ export default function NotesPopout() {
         </p>
       )}
 
-      {lost && (
+      {/* Only once contact actually existed. A window opened before its host is ready has not *lost*
+          anything, and telling the user to "bring it back" when it was never there is just wrong. */}
+      {lost && state !== null && (
         <p role="status" style={{ margin: 0, fontFamily: "system-ui", fontSize: 13, color: "var(--hub-red-text)" }}>
           {t("notesPopoutDisconnected")}
         </p>

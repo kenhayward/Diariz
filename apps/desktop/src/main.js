@@ -204,7 +204,7 @@ function showNotesPopout() {
     return { ok: true };
   }
 
-  const bounds = notesWindowBounds(store.get("notesPopout.bounds"), screen.getAllDisplays());
+  const bounds = notesWindowBounds(store.get("notesPopoutBounds"), screen.getAllDisplays());
   notesWindow = new BrowserWindow({
     ...bounds,
     alwaysOnTop: true,
@@ -231,12 +231,21 @@ function showNotesPopout() {
     }
   });
 
-  // Remembered on close rather than on every move/resize: the bounds only matter for the next open,
-  // and writing the store on each drag frame would be pure churn.
-  notesWindow.on("close", () => {
-    if (notesWindow && !notesWindow.isDestroyed()) store.set("notesPopout.bounds", notesWindow.getBounds());
-  });
+  // Bounds are tracked in memory as the window is dragged and resized, then written once when it has
+  // gone. Writing the store on every drag frame would be pure churn, and writing it from "close" turned
+  // out not to be reliable when the renderer closes itself - "closed" always arrives (it is what drives
+  // the notes:closed report below), but by then the window is destroyed and getBounds() is gone, hence
+  // the cached copy. The key is flat: every other key in this store is, and dotted keys are unproven here.
+  let lastBounds = null;
+  const trackBounds = () => {
+    if (notesWindow && !notesWindow.isDestroyed()) lastBounds = notesWindow.getBounds();
+  };
+  notesWindow.on("move", trackBounds);
+  notesWindow.on("resize", trackBounds);
+  notesWindow.on("close", trackBounds);
+  trackBounds(); // seed it, so a window that is never touched still remembers where it sat
   notesWindow.on("closed", () => {
+    if (lastBounds) store.set("notesPopoutBounds", lastBounds);
     notesWindow = null;
     // The guaranteed way back to the inline notes popover. The renderer also sends its own "closing"
     // over the channel, but that cannot be relied on if the renderer died rather than closed.
