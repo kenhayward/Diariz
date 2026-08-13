@@ -62,6 +62,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.211.2",
+    date: "2026-08-13",
+    pr: 524,
+    headline: "Internal tidy-up of the recording page, with no change to what it does",
+    summary:
+      "Housekeeping only - nothing you can see changes. The recording page had become the largest " +
+      "file in the app, so the dialogs it opens (re-transcribe, edit a segment, rename), the " +
+      "speaker and transcript rows it draws, and its toolbar icons have all moved into files of " +
+      "their own. The page itself is about a fifth smaller as a result. Everything on it behaves " +
+      "exactly as before.",
+    changed: [
+      "Internal: the recording page's dialogs, speaker and transcript rows, and icons moved into separate modules.",
+    ],
+  },
+  {
     version: "0.211.1",
     date: "2026-08-13",
     pr: 523,
