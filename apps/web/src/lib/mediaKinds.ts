@@ -11,14 +11,24 @@ import { fileExtension, MAX_UPLOAD_BYTES } from "./audioFormats";
 /// be demuxed in the browser at all.
 export type MediaKind = "audio" | "container" | "rejected";
 
-/// Formats that are audio by definition, uploaded byte-for-byte as today. `.m4a`/`.aac` stay here
+/// Formats that are audio by definition, uploaded byte-for-byte as today. `.m4a`/`.m4b`/`.aac` stay here
 /// deliberately: they are ISO-BMFF and could in principle carry a track, but treating them as
 /// containers would mean re-encoding ordinary audio uploads over embedded cover art.
-const AUDIO_EXTENSIONS = ["wav", "mp3", "flac", "ogg", "opus", "m4a", "aac"] as const;
+export const AUDIO_EXTENSIONS = [
+  "wav", "mp3", "flac", "ogg", "oga", "opus", "m4a", "m4b", "aac",
+] as const;
 
 /// Formats that may hold video. `.webm` is here rather than in the audio list because it is genuinely
 /// ambiguous - the browser recorder writes audio-only WebM, but a screen capture is also WebM.
-const CONTAINER_EXTENSIONS = ["mp4", "m4v", "mov", "mkv", "webm"] as const;
+///
+/// These lists must stay in step with what the extractor can demux (mediabunny, `ALL_FORMATS`: Ogg,
+/// QuickTime, Matroska, WebM, Wave, Flac, Adts, MpegTs), because they are also what `MEDIA_ACCEPT_ATTR`
+/// offers in the file dialog. Anything the dialog offers but `classifyFile` rejects becomes an
+/// "unsupported file type" error on a file the pipeline could actually have handled - which is how
+/// `.oga`, `.m4b` and the MPEG-TS family were being turned away.
+export const CONTAINER_EXTENSIONS = [
+  "mp4", "m4v", "mov", "mkv", "webm", "ts", "m2ts", "mts", "3gp", "3g2",
+] as const;
 
 /// The `accept` attribute for the hidden <input type="file">.
 export const MEDIA_ACCEPT_ATTR =
@@ -50,7 +60,7 @@ export function sourceProblem(
   maxBytes = MAX_SOURCE_BYTES,
 ): string | null {
   if (classifyFile(file) === "rejected")
-    return "Unsupported file type. Use WAV, MP3, FLAC, Ogg/Opus, WebM, M4A, or a video (MP4, MOV, MKV). Convert anything else first.";
+    return "Unsupported file type. Use WAV, MP3, FLAC, Ogg/Oga/Opus, WebM, M4A/M4B, AAC, or a video (MP4, M4V, MOV, MKV, WebM, TS/M2TS, 3GP). Convert anything else first.";
   if (file.size === 0) return "That file is empty.";
   if (maxBytes > 0 && file.size > maxBytes)
     return `File too large. The maximum is ${Math.round(maxBytes / (1024 * 1024 * 1024))} GB.`;

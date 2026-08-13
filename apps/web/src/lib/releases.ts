@@ -14,7 +14,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 
 | Feature | Description |
 | --- | --- |
-| **Capture** | Record from your mic (device picker, capture tuning, live level meter, pause/resume), system audio, or both mixed together on one device - system audio works in Chromium browsers ("Share audio", though on Linux only when sharing a browser tab) and seamlessly in the desktop app; schedule a recording to auto-stop at a set time or after 15/30/60 minutes; or upload files (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A) - or drop a **video** (MP4, MOV, MKV, WebM) and its audio is extracted in your browser and uploaded on its own, so the video is never sent or stored. Dropped onto the list they land in the folder you dropped them on, and everything else follows your placement preference. |
+| **Capture** | Record from your mic (device picker, capture tuning, live level meter, pause/resume), system audio, or both mixed together on one device - system audio works in Chromium browsers ("Share audio", though on Linux only when sharing a browser tab) and seamlessly in the desktop app; schedule a recording to auto-stop at a set time or after 15/30/60 minutes; or upload files (WAV, MP3, FLAC, Ogg/Oga/Opus, WebM, M4A/M4B, AAC) - or drop a **video** (MP4, M4V, MOV, MKV, WebM, TS/M2TS, 3GP) and its audio is extracted in your browser and uploaded on its own, so the video is never sent or stored. Dropped onto the list they land in the folder you dropped them on, and everything else follows your placement preference. |
 | **Record a calendar meeting** | Join a meeting from your calendar and it records in one click, named after the invite rather than the clock and linked to that meeting from the start (bringing any prep notes with it). Optionally let it end itself - a set number of minutes after the meeting was due to finish, or after a run of silence once everyone has left; if people are still talking when the meeting's scheduled end arrives it asks whether to keep recording instead of cutting you off, doubling the wait each time you say yes, and always tells you why once a recording does end on its own. Joining a second meeting finishes and files the first automatically. |
 | **Recurring meetings** | A calendar event that repeats is marked with a **Repeats** badge, and both the event and a linked recording list your earlier recordings of the same meeting so you can jump straight back. |
 | **Transcribe & diarize** | Server-side WhisperX (word-level timestamps) with pyannote speaker diarization; speaker-labelled, editable, playable segments you can re-transcribe any time. |
@@ -61,6 +61,30 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.210.1",
+    date: "2026-08-13",
+    pr: 521,
+    headline: "The upload dialog says \"Audio and video files\", and stops turning away files it can handle",
+    summary:
+      "The file dialog used to label its filter \"Custom Files\", which said nothing about what you could " +
+      "pick. In Chrome and Edge it now says \"Audio and video files\"; Firefox and Safari do not let a " +
+      "page name a filter, so they keep their own wording and offer the same formats. More usefully, the " +
+      "dialog and the app no longer disagree with each other. The dialog offered any audio or video file, " +
+      "but the app only accepted a fixed list of twelve extensions - so you could pick a file and then be " +
+      "told it was an unsupported type, on a file that would have worked perfectly well. Ogg audio " +
+      "(.oga), audiobooks (.m4b), camera and broadcast recordings (.ts, .m2ts, .mts) and phone video " +
+      "(.3gp, .3g2) are now accepted, matching what the built-in converter has always been able to read.",
+    added: [
+      "Ogg audio (.oga), M4B audiobooks, MPEG-TS recordings (.ts, .m2ts, .mts) and 3GP/3G2 phone video are now accepted for upload.",
+    ],
+    changed: [
+      "The upload dialog's file filter is now named \"Audio and video files\" in Chrome and Edge, instead of \"Custom Files\".",
+    ],
+    fixed: [
+      "The upload dialog no longer offers files the app then rejects as an unsupported type.",
+    ],
+  },
   {
     version: "0.210.0",
     date: "2026-08-13",

@@ -10,18 +10,34 @@ import {
 
 describe("mediaKinds", () => {
   it("classifies audio formats as pass-through", () => {
-    for (const name of ["a.wav", "a.mp3", "a.flac", "a.ogg", "a.opus", "a.m4a", "a.aac"])
+    for (const name of ["a.wav", "a.mp3", "a.flac", "a.ogg", "a.oga", "a.opus", "a.m4a", "a.m4b", "a.aac"])
       expect(classifyFile({ name }), name).toBe("audio");
   });
 
   it("classifies containers that may hold video, including .webm", () => {
-    for (const name of ["a.mp4", "a.m4v", "a.mov", "a.mkv", "a.webm"])
+    for (const name of ["a.mp4", "a.m4v", "a.mov", "a.mkv", "a.webm", "a.ts", "a.m2ts", "a.mts", "a.3gp", "a.3g2"])
       expect(classifyFile({ name }), name).toBe("container");
   });
 
   it("rejects formats we cannot demux", () => {
     for (const name of ["a.avi", "a.wmv", "a.flv", "a.txt", "noext"])
       expect(classifyFile({ name }), name).toBe("rejected");
+  });
+
+  // The extractor (mediabunny, ALL_FORMATS) detects by magic bytes and ships Ogg, QuickTime, Matroska,
+  // WebM, Wave, Flac, Adts and MpegTs readers. These extensions were demuxable all along but the
+  // extension gate refused them, and because `accept` also carries audio/*,video/* the file dialog
+  // offered them first - so the user picked a file the app then called unsupported.
+  it("accepts the formats the extractor can already demux", () => {
+    for (const name of ["talk.oga", "book.m4b", "cam.ts", "cam.m2ts", "cam.mts", "phone.3gp", "phone.3g2"])
+      expect(classifyFile({ name }), name).not.toBe("rejected");
+  });
+
+  it("offers every classified extension in the file dialog", () => {
+    // The dialog and the validator must agree: anything offered must classify, or the user picks a file
+    // and is then told it is unsupported.
+    for (const ext of ["oga", "m4b", "ts", "m2ts", "mts", "3gp", "3g2"])
+      expect(MEDIA_ACCEPT_ATTR, ext).toContain(`.${ext}`);
   });
 
   it("is case-insensitive", () => {

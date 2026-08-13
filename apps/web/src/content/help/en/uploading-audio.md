@@ -1,6 +1,6 @@
 ---
 title: Uploading audio and video files
-summary: Upload recordings you already have. Diariz accepts WAV, MP3, FLAC, Ogg/Opus, WebM, and M4A, and you can drop a video (MP4, MOV, MKV) to transcribe its audio. Video is converted in your browser, so only the audio is ever uploaded.
+summary: Upload recordings you already have - common audio formats plus video (MP4, MOV, MKV, WebM and more). Video is converted in your browser, so only the audio is ever uploaded.
 group: getting-started
 order: 30
 ---
@@ -10,9 +10,12 @@ list. Each file gets its own progress and status, so a large batch is easy to wa
 
 ## Supported formats
 
-Audio: WAV, MP3, FLAC, Ogg/Opus, WebM, and M4A/AAC.
+Audio: WAV, MP3, FLAC, Ogg/Oga/Opus, WebM, M4A/M4B, and AAC.
 
-Video: MP4, MOV, MKV, and WebM.
+Video: MP4, M4V, MOV, MKV, WebM, TS/M2TS/MTS, and 3GP/3G2.
+
+The file dialog lists these under **Audio and video files**. In browsers that cannot name a filter
+(currently Firefox and Safari) the dialog labels it in its own words, but the same formats are offered.
 
 Diariz identifies the format by inspecting the file's actual contents, not by trusting its extension,
 so a mislabelled file is rejected rather than silently failing later in the pipeline. M4A/AAC support

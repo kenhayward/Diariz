@@ -25,7 +25,7 @@ microphone dropdown. Diariz **ships the PipeWire drop-in that does this** - serv
 (`packaging/linux/build-deb.sh`) that installs it to `/etc/pipewire/pipewire.conf.d/` for every user on a
 managed machine. See the **Recording audio** help article. The desktop app can also **start/stop
 recording from its tray / menu-bar menu** (in the background, with notifications), including a **Record Both**
-item. Or **upload existing audio files** to transcribe (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A) - via the
+item. Or **upload existing audio files** to transcribe (WAV, MP3, FLAC, Ogg/Oga/Opus, WebM, M4A/M4B, AAC) - via the
 Upload button or by **dragging several onto the recordings list**, with per-file status. You can also
 drop a **video** (MP4, MOV, MKV, WebM): its audio is extracted **in your browser**, mixed to mono and
 uploaded on its own, so the video is never sent to the server or stored against your quota. Long
