@@ -64,7 +64,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.211.2",
     date: "2026-08-13",
-    pr: 0,
+    pr: 524,
     headline: "Internal tidy-up of the recording page, with no change to what it does",
     summary:
       "Housekeeping only - nothing you can see changes. The recording page had become the largest " +
