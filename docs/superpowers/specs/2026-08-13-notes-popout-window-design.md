@@ -185,14 +185,33 @@ Two things must be spiked **before** implementation, not verified after, because
 rests on them:
 
 1. **`BroadcastChannel` genuinely crossing two Electron `BrowserWindow`s** in the same session. It
-   should - same origin, same session - but nothing in jsdom can demonstrate it.
-2. **`alwaysOnTop` actually floating above a full-screen Teams or Zoom call on Windows.**
-   Full-screen exclusive modes are precisely where always-on-top fails, and this is the entire
-   premise of the feature.
+   should - same origin, same session - but nothing in jsdom can demonstrate it. If it fails, the
+   fallback is relaying through `ipcMain`: same protocol, different transport, so the rest of the
+   design survives.
+2. **`alwaysOnTop` floating above a full-screen call on Windows.** RESOLVED - see below.
 
-If (1) fails, the fallback is relaying through `ipcMain`: same protocol, different transport, so the
-rest of the design survives. If (2) fails, the feature does not deliver and the compact-mode
-alternative should be reconsidered instead.
+### Spike result: always-on-top over a full-screen window (2026-08-13, Windows 11, Electron 43)
+
+**It holds, at Electron's default pin level.** `alwaysOnTop: true` is sufficient; the higher
+`"screen-saver"` band is not needed, and should not be used - it also floats over the lock screen and
+screensaver, which is more than this feature is entitled to.
+
+Method: two pinned windows (default `"floating"` level and `"screen-saver"`) plus an **unpinned
+control**, with a borderless full-screen window in a *separate process* raised over all three, then
+the screen captured via `desktopCapturer`. The control is what makes the result meaningful: it was
+buried, proving the full-screen window really did cover the screen, while both pinned windows stayed
+readable. Without it the spike could not have failed - a full-screen window that never raised itself
+would have left everything visible and looked identical to success.
+
+Incidental finding worth carrying into implementation: `BrowserWindow.isVisible()` returned `true`
+for the buried control. It reports "not hidden or minimised" and knows nothing about occlusion, so it
+must not be used to reason about whether the pop-out is actually on screen.
+
+**Residual gap.** The stand-in was a borderless full-screen window, which is the mode Teams, Zoom and
+Meet use, so it is faithful for calls. Not covered: true exclusive-fullscreen DirectX (games, not
+relevant here), and screen-share toolbars, which some conferencing apps pin topmost themselves - two
+topmost windows are ordered by which was raised last, so such a toolbar could overlap the pop-out,
+but could not bury it. Worth one confirmation against a real call before release.
 
 ## Release surface
 
