@@ -128,7 +128,8 @@ two addressing schemes.
 host (main window)                          client (pop-out)
   |                                            |
   |<---------------- hello ---------------------|  on mount, asks for a snapshot
-  |----- state {lines, shots, flags, seq} ----->|  on every change + a 2s heartbeat
+  |----- state {lines, shots, flags, seq} ----->|  on every change, and in reply to a ping
+  |<---------------- ping ----------------------|  every 2s, driven by the CLIENT (see below)
   |<------ add {text} / edit / delete ----------|  host stamps + mirrors to IndexedDB
   |<------ capture / changeArea ----------------|  host calls window.diariz.* exactly as today
   |<------ closing -----------------------------|  user closed the window -> restore inline
@@ -138,6 +139,14 @@ host (main window)                          client (pop-out)
 `state` carries `canCapture` and `captureAreaSet` as explicit flags rather than the client reading
 `window.diariz` itself - the host is the authority, and the pop-out's preload deliberately does not
 expose the capture bridge.
+
+**The liveness poll is driven by the client, not the host.** This is counter-intuitive - the host owns
+the data, so a host heartbeat is the obvious design - but it is wrong here, and measurably so (see the
+spike results). Once the main window is hidden to the tray, Chromium throttles its timers; a host
+heartbeat would slow down or stop while the host itself is perfectly healthy, and the pop-out would
+declare a false disconnect in exactly the scenario the feature exists for. The pop-out is the visible,
+unthrottled window, so it pings and treats a missing reply as the disconnect signal. Message *delivery*
+to a hidden host is not throttled, so its reply is prompt.
 
 Screenshot thumbnails cross the channel as `Blob`s, which are structured-cloneable; the
 full-resolution PNG stays in the host's stash and is never sent.
@@ -159,7 +168,7 @@ full-resolution PNG stays in the host's stash and is never sent.
 
 | Case | Behaviour |
 |---|---|
-| Host reloads or crashes | Heartbeat gap over ~5s - the pop-out shows a disconnected banner **and disables the input**. Notes already sent are safe (mirrored to IndexedDB before the crash); disabling matters because a note typed into a dead channel must not look accepted. |
+| Host reloads or crashes | Three client pings unanswered (~6s) - the pop-out shows a disconnected banner **and disables the input**. Notes already sent are safe (mirrored to IndexedDB before the crash); disabling matters because a note typed into a dead channel must not look accepted. |
 | Pop-out closed by the user | `closing` - the host reopens the inline popover, nothing lost. |
 | Pop-out killed without sending `closing` | The shell's `closed` handler notifies the host over IPC, giving the same restore. |
 | Two pop-outs requested | `notesWindow` is a singleton handle; a second request focuses the existing window. |
@@ -181,13 +190,10 @@ TDD per CLAUDE.md - the failing test first, in every case.
 
 ### What the tests cannot prove
 
-Two things must be spiked **before** implementation, not verified after, because the whole design
-rests on them:
+Two things had to be spiked **before** implementation, because the whole design rests on them. Both
+are now resolved; the results are recorded below because one of them changed the design.
 
-1. **`BroadcastChannel` genuinely crossing two Electron `BrowserWindow`s** in the same session. It
-   should - same origin, same session - but nothing in jsdom can demonstrate it. If it fails, the
-   fallback is relaying through `ipcMain`: same protocol, different transport, so the rest of the
-   design survives.
+1. **`BroadcastChannel` crossing two Electron `BrowserWindow`s.** RESOLVED - see below.
 2. **`alwaysOnTop` floating above a full-screen call on Windows.** RESOLVED - see below.
 
 ### Spike result: always-on-top over a full-screen window (2026-08-13, Windows 11, Electron 43)
@@ -212,6 +218,47 @@ Meet use, so it is faithful for calls. Not covered: true exclusive-fullscreen Di
 relevant here), and screen-share toolbars, which some conferencing apps pin topmost themselves - two
 topmost windows are ordered by which was raised last, so such a toolbar could overlap the pop-out,
 but could not bury it. Worth one confirmation against a real call before release.
+
+### Spike result: BroadcastChannel across windows (2026-08-13, Windows 11, Electron 43)
+
+**The protocol carries.** Two `BrowserWindow`s served from one origin over HTTP completed the full
+round trip: `hello` produced a snapshot, `add` reached the host, the host stamped the line, and the
+stamped line came back to the client. A `Blob` standing in for a screenshot thumbnail survived the
+structured clone intact, and a window did **not** receive its own broadcasts - so a single channel
+object per window is enough to stop the host reprocessing the state it just sent.
+
+The control was a third window loading the byte-identical client page from `127.0.0.1` instead of
+`localhost` - a different origin to Chromium. It heard nothing, which is what shows the messages
+travelled the origin-scoped channel rather than arriving by some other route. Serving over real HTTP
+mattered for the same reason: `data:` and `file:` documents get opaque origins and would have failed
+for a reason unrelated to Electron.
+
+### Spike result: hidden host, and why the heartbeat inverted
+
+Re-run with the shell's real window settings (no `backgroundThrottling` override) and the host
+**hidden**, as close-to-tray leaves it:
+
+- **Messaging to a hidden host is not throttled.** The command reached it, the state came back, and
+  the line was stamped correctly. The tray scenario works.
+- **Host timers ARE throttled.** A 250 ms `setInterval` in the hidden host fired **4 times in 4
+  seconds instead of 16** - clamped to roughly 1 Hz.
+
+The second point is why the liveness poll moved to the client. A host-side heartbeat would degrade
+precisely when the main window is in the tray, and the pop-out would report a disconnect for a host
+that is working fine.
+
+**Limitation of this spike, stated plainly:** Chromium's *intensive* throttling (timers clamped to
+about once per minute) only engages after roughly five minutes hidden, and a four-second spike cannot
+reproduce it. A call lasts far longer than five minutes, so a host-driven heartbeat would have failed
+worse in production than anything measured here. The client-driven poll sidesteps the whole regime
+rather than relying on a threshold nobody has measured under real conditions.
+
+**Pre-existing issue noticed, not introduced by this work:** `Recorder.tsx` runs the display ticker
+and the auto-stop watcher on `setInterval`, and both are subject to the same throttling while the
+window sits in the tray. The display recovers on its own (`elapsedMs` is a `Date.now()` delta), and
+the auto-stop watcher compares against wall-clock time so it stops at the right moment rather than
+drifting - but under intensive throttling it could *notice* up to a minute late. Worth its own look;
+deliberately out of scope here.
 
 ## Release surface
 
