@@ -87,7 +87,8 @@ import {
   type PendingScreenshots,
   type PendingShot,
 } from "../lib/pendingScreenshots";
-import type { MeetingNote, RecordingSource } from "../lib/types";
+import type { RecordingSource } from "../lib/types";
+import { useLiveNotes } from "../lib/useLiveNotes";
 
 const SOURCE_KEY = "diariz.recorder.source";
 const CONSTRAINTS_KEY = "diariz.recorder.audioConstraints";
@@ -296,16 +297,13 @@ export default function Recorder({
   // An unsaved recording recovered from local storage (its upload failed previously, e.g. the session
   // expired). Offered back for upload so the audio is never lost.
   const [pending, setPending] = useState<PendingRecording | null>(null);
-  // Live notes taken while recording: local lines (fake ids) stamped with the *recorded* clock, mirrored to
-  // IndexedDB so a crash never loses them, and attached to the recording after upload.
-  const [liveLines, setLiveLines] = useState<MeetingNote[]>([]);
   // Lines whose audio uploaded but whose attach failed (durable, with the recording id) - drives the retry banner.
   const [notesAttach, setNotesAttach] = useState<PendingNotes | null>(null);
   // Screenshots captured while recording: stamped with the *recorded* clock, stashed to IndexedDB one
   // capture at a time so a crash never loses them, and attached to the recording after upload (exactly
-  // like live notes). The notes popover shows a live thumbnail strip of these, so - like liveLines - both
-  // a ref (read inside upload()/attachScreenshots(), which may run before state has flushed) and state (to
-  // re-render the strip) are kept in step by addLiveShot/deleteLiveShot.
+  // like live notes). The notes popover shows a live thumbnail strip of these, so - as useLiveNotes does
+  // for note lines - both a ref (read inside upload()/attachScreenshots(), which may run before state has
+  // flushed) and state (to re-render the strip) are kept in step by addLiveShot/deleteLiveShot.
   const liveShotsRef = useRef<PendingShot[]>([]);
   const [liveShots, setLiveShots] = useState<PendingShot[]>([]);
   // Captures whose audio uploaded but whose attach failed - drives the retry banner.
@@ -350,8 +348,6 @@ export default function Recorder({
   // into accumulatedMs and nulls it, so by the time upload() runs the original start is gone from Timing. This
   // is what the server matches meetings against, so it has to survive every pause.
   const startedAtRef = useRef<number | null>(null);
-  // Read inside upload() (state may not have flushed when onstop fires).
-  const liveLinesRef = useRef<MeetingNote[]>([]);
   // Mirrors `recording` (true for the whole recording, including while paused) so the screenshot
   // subscription below - mounted once - can tell a live capture from a stray one arriving before Record or
   // after Stop, without resubscribing to the shell on every recording toggle.
@@ -631,37 +627,13 @@ export default function Recorder({
 
   const NOTES_OPEN_KEY = "diariz.recorder.notesOpen";
 
-  /// Update the local lines and mirror them to IndexedDB (recordingId null = still recording).
-  function mirrorLines(lines: MeetingNote[]) {
-    liveLinesRef.current = lines;
-    setLiveLines(lines);
-    if (userId)
-      void savePendingNotes({
-        userId,
-        recordingId: null,
-        updatedAt: Date.now(),
-        lines: lines.map((l) => ({ text: l.text, capturedAtMs: l.capturedAtMs })),
-      });
-  }
-
-  function addLiveNote(text: string) {
-    const line: MeetingNote = {
-      id: crypto.randomUUID(),
-      text,
-      capturedAtMs: timing.elapsedMs(timingRef.current, Date.now()),
-      ordinal: liveLinesRef.current.length,
-      createdAt: new Date().toISOString(),
-    };
-    mirrorLines([...liveLinesRef.current, line]);
-  }
-
-  function editLiveNote(id: string, text: string) {
-    mirrorLines(liveLinesRef.current.map((l) => (l.id === id ? { ...l, text } : l)));
-  }
-
-  function deleteLiveNote(id: string) {
-    mirrorLines(liveLinesRef.current.filter((l) => l.id !== id));
-  }
+  // The lines themselves and their IndexedDB mirror live in useLiveNotes. Attach-on-stop and the retry
+  // banner stay here: they reach into upload() and the API, which are this component's business.
+  const notes = useLiveNotes({
+    userId,
+    // The recorded clock, which is pause-aware. The hook never reads a clock of its own.
+    stampMs: () => timing.elapsedMs(timingRef.current, Date.now()),
+  });
 
   // The notes popover's open state lives in the shared hub (id "notes"); this only persists the *preference*
   // so a fresh recording reopens it (or not) per the user's last choice. Kept in sync with the pencil toggle
@@ -692,16 +664,14 @@ export default function Recorder({
   async function attachNotes(recordingId: string, fromRetry?: PendingNotes) {
     const lines = fromRetry
       ? fromRetry.lines
-      : liveLinesRef.current.map((l) => ({ text: l.text, capturedAtMs: l.capturedAtMs }));
+      : notes.snapshot().map((l) => ({ text: l.text, capturedAtMs: l.capturedAtMs }));
     if (lines.length === 0) {
       if (userId) void clearPendingNotes(userId);
       return;
     }
     try {
       await api.createNotes(recordingId, lines);
-      if (userId) await clearPendingNotes(userId);
-      liveLinesRef.current = [];
-      setLiveLines([]);
+      await notes.reset();
       setNotesAttach(null);
     } catch {
       const stash: PendingNotes = { userId: userId ?? "", recordingId, lines, updatedAt: Date.now() };
@@ -831,7 +801,7 @@ export default function Recorder({
 
   // Rebuilt on every render the pop-out cares about; useNotesPopout republishes when it changes.
   const notesState: NotesState = {
-    lines: liveLines,
+    lines: notes.lines,
     // Only what the pop-out renders. The full-resolution PNG stays in this window.
     shots: liveShots.map((s) => ({ id: s.id, capturedAtMs: s.capturedAtMs, thumb: s.thumb })),
     canCapture: canCaptureScreenshots(),
@@ -843,9 +813,9 @@ export default function Recorder({
     state: notesState,
     openWindow: () => void shellBridge?.openNotesPopout?.(),
     handlers: {
-      onAdd: addLiveNote,
-      onEdit: editLiveNote,
-      onDelete: deleteLiveNote,
+      onAdd: notes.add,
+      onEdit: notes.edit,
+      onDelete: notes.remove,
       onDeleteShot: deleteLiveShot,
       onCapture: requestCapture,
       onChangeArea: requestChangeArea,
@@ -980,9 +950,7 @@ export default function Recorder({
       setPaused(false);
       // Fresh notes for a fresh recording: clear any stale unattached lines (orphans from a crash whose
       // audio never reached Stop - there is nothing to attach them to) and open the panel per preference.
-      liveLinesRef.current = [];
-      setLiveLines([]);
-      if (userId) void clearPendingNotes(userId);
+      void notes.reset();
       // Same for screenshots: a previous recording whose audio upload never even started (so attach was
       // never reached) would otherwise leak its captures into this new take.
       liveShotsRef.current = [];
@@ -1182,7 +1150,7 @@ export default function Recorder({
       // error banner, not a duplicate-offer) but guarded the same way: an unexpected exception in this
       // recovery/attach path must never be blamed on the audio upload, which already succeeded.
       try {
-        if (liveLinesRef.current.length === 0 && userId) {
+        if (notes.snapshot().length === 0 && userId) {
           const stash = await loadPendingNotes(userId);
           if (stash && stash.recordingId === null && stash.lines.length > 0) {
             await attachNotes(created.id, { ...stash, recordingId: created.id });
@@ -1220,9 +1188,7 @@ export default function Recorder({
     if (userId) await clearPendingRecording(userId);
     setPending(null);
     // Notes and screenshots about discarded audio die with it.
-    if (userId) await clearPendingNotes(userId);
-    liveLinesRef.current = [];
-    setLiveLines([]);
+    await notes.reset();
     if (userId) await clearPendingScreenshots(userId);
     liveShotsRef.current = [];
     setLiveShots([]);
@@ -1471,10 +1437,10 @@ export default function Recorder({
             <NotesPopover
               open={hub.isOpen("notes")}
               onClose={closeNotes}
-              lines={liveLines}
-              onAdd={addLiveNote}
-              onEdit={editLiveNote}
-              onDelete={deleteLiveNote}
+              lines={notes.lines}
+              onAdd={notes.add}
+              onEdit={notes.edit}
+              onDelete={notes.remove}
               shots={liveShots}
               onDeleteShot={deleteLiveShot}
               onChangeCaptureArea={canCaptureScreenshots() ? requestChangeArea : undefined}
