@@ -2002,3 +2002,45 @@ describe("extending a meeting that overruns", () => {
     expect(screen.getByText(`stops at ${calendarStop}`)).toBeTruthy();
   });
 });
+
+describe("notes pop-out", () => {
+  function installShellWithPopout() {
+    const openNotesPopout = vi.fn().mockResolvedValue({ ok: true });
+    (window as unknown as { diariz?: unknown }).diariz = {
+      openNotesPopout,
+      onNotesPopoutClosed: () => () => {},
+    };
+    return openNotesPopout;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
+    (getStream as Mock).mockResolvedValue(fakeSession);
+  });
+
+  afterEach(() => {
+    delete (window as unknown as { diariz?: unknown }).diariz;
+  });
+
+  it("offers no pop-out control in a plain browser", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+
+    expect(screen.queryByRole("button", { name: /separate window/i })).toBeNull();
+  });
+
+  it("popping out closes the inline popover and asks the shell for a window", async () => {
+    const openNotesPopout = installShellWithPopout();
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+
+    fireEvent.click(await screen.findByRole("button", { name: /separate window/i }));
+
+    expect(openNotesPopout).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByTestId("notes-popover")).toBeNull());
+  });
+});

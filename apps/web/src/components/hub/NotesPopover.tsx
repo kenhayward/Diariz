@@ -1,10 +1,16 @@
-import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import HubPopover from "./HubPopover";
 import NotesSection from "../NotesSection";
-import { formatDuration } from "../../lib/format";
+import ShotStrip from "./ShotStrip";
 import type { MeetingNote } from "../../lib/types";
 import type { PendingShot } from "../../lib/pendingScreenshots";
+
+const IconPopOut = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true" focusable="false"
+    stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
+  </svg>
+);
 
 const IconClose = () => (
   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true" focusable="false"
@@ -21,7 +27,9 @@ export type NotesPopoverProps = {
   onEdit: (id: string, text: string) => void;
   onDelete: (id: string) => void;
   shots: PendingShot[];
-  onDeleteShot: (index: number) => void;
+  /// Delete one capture, addressed by id rather than position - captures can arrive at any moment, so
+  /// an index read at render time may not be the one the user clicked by the time the click lands.
+  onDeleteShot: (id: string) => void;
   /// Absent in a plain browser, which is what hides the whole screenshot area.
   onChangeCaptureArea?: () => void;
   /// Takes a screenshot without closing the popover. Absent in a plain browser, same as onChangeCaptureArea.
@@ -31,6 +39,9 @@ export type NotesPopoverProps = {
   /// stays disabled until the area is set, making "set the area" the visible first step. Defaults to true:
   /// callers that know nothing about the shell's area state (a plain browser, older tests) must not be gated.
   captureAreaSet?: boolean;
+  /// Detach the notes into their own always-on-top window. Absent in a plain browser, which is what
+  /// hides the control - only the desktop shell can pin a window above a full-screen call.
+  onPopOut?: () => void;
 };
 
 /**
@@ -51,14 +62,9 @@ export default function NotesPopover({
   onChangeCaptureArea,
   onCapture,
   captureAreaSet = true,
+  onPopOut,
 }: NotesPopoverProps) {
   const { t } = useTranslation("workspace");
-
-  // Local previews for captures that have no server id yet (they're still in the pending stash, not
-  // uploaded). Recomputed whenever the capture set changes, and the previous batch is revoked on
-  // cleanup - otherwise a long meeting with many captures leaks one object URL per capture.
-  const previews = useMemo(() => shots.map((s) => URL.createObjectURL(s.thumb)), [shots]);
-  useEffect(() => () => previews.forEach((url) => URL.revokeObjectURL(url)), [previews]);
 
   return (
     <HubPopover open={open} onClose={onClose} width={400} anchorClassName="right-0" ariaLabel={t("liveNotesTitle")}>
@@ -71,12 +77,38 @@ export default function NotesPopover({
           <span style={{ fontFamily: "system-ui", fontWeight: 700, fontSize: 17, color: "var(--hub-text)" }}>
             {t("liveNotesTitle")}
           </span>
+          {onPopOut && (
+            <button
+              type="button"
+              aria-label={t("notesPopOut")}
+              title={t("notesPopOut")}
+              onClick={onPopOut}
+              style={{
+                // Whichever control comes first carries the auto margin, so the pair stays right-aligned.
+                marginLeft: "auto",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 28,
+                height: 28,
+                borderRadius: 8,
+                border: "none",
+                background: "transparent",
+                color: "var(--hub-muted)",
+                cursor: "pointer",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hub-surface-hover)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            >
+              <IconPopOut />
+            </button>
+          )}
           <button
             type="button"
             aria-label={t("liveNotesClose")}
             onClick={onClose}
             style={{
-              marginLeft: "auto",
+              marginLeft: onPopOut ? 0 : "auto",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -162,48 +194,7 @@ export default function NotesPopover({
                 </button>
               </div>
             </div>
-            <ul style={{ display: "flex", flexWrap: "wrap", gap: 4, margin: 0, padding: 0, listStyle: "none" }}>
-              {previews.map((url, i) => (
-                <li key={url} style={{ position: "relative" }}>
-                  <img
-                    src={url}
-                    alt={t("screenshotAlt", { time: formatDuration(shots[i].capturedAtMs) })}
-                    style={{
-                      display: "block",
-                      height: 56,
-                      width: "auto",
-                      borderRadius: 6,
-                      border: "1px solid var(--hub-border)",
-                    }}
-                  />
-                  <button
-                    type="button"
-                    aria-label={t("screenshotDelete")}
-                    onClick={() => onDeleteShot(i)}
-                    style={{
-                      position: "absolute",
-                      top: -4,
-                      right: -4,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      width: 16,
-                      height: 16,
-                      borderRadius: "50%",
-                      border: "none",
-                      background: "var(--hub-popover-bg)",
-                      color: "var(--hub-red-text)",
-                      fontSize: 11,
-                      lineHeight: 1,
-                      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.3)",
-                      cursor: "pointer",
-                    }}
-                  >
-                    ✕
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <ShotStrip shots={shots} onDelete={onDeleteShot} />
           </div>
         )}
       </div>

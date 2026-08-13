@@ -134,15 +134,16 @@ describe("NotesPopover screenshots", () => {
     expect(screen.getByRole("button", { name: /change capture area/i })).toBeTruthy();
   });
 
-  it("deletes the capture under the clicked button, not a stale index", () => {
+  it("deletes the capture under the clicked button, naming it rather than its position", () => {
     const onDeleteShot = vi.fn();
-    renderPopover({ shots: [shot(1_000), shot(2_000), shot(3_000)], onChangeCaptureArea: () => {}, onDeleteShot });
+    const shots = [shot(1_000), shot(2_000), shot(3_000)];
+    renderPopover({ shots, onChangeCaptureArea: () => {}, onDeleteShot });
 
     const deleteButtons = screen.getAllByRole("button", { name: /delete screenshot/i });
     fireEvent.click(deleteButtons[1]);
 
     expect(onDeleteShot).toHaveBeenCalledTimes(1);
-    expect(onDeleteShot).toHaveBeenCalledWith(1);
+    expect(onDeleteShot).toHaveBeenCalledWith(shots[1].id);
   });
 
   it("revokes the previous object URLs when the capture set changes", () => {
@@ -162,5 +163,31 @@ describe("NotesPopover screenshots", () => {
 
     expect(revokeSpy).toHaveBeenCalledWith("blob:mock-0");
     expect(revokeSpy).toHaveBeenCalledWith("blob:mock-1");
+  });
+});
+
+describe("NotesPopover pop-out control", () => {
+  it("offers no pop-out control in a plain browser", () => {
+    renderPopover();
+
+    expect(screen.queryByRole("button", { name: /separate window/i })).toBeNull();
+  });
+
+  it("pops out when the shell supports it", () => {
+    const onPopOut = vi.fn();
+    renderPopover({ onPopOut });
+
+    fireEvent.click(screen.getByRole("button", { name: /separate window/i }));
+
+    expect(onPopOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps its close button reachable alongside the pop-out control", () => {
+    const onClose = vi.fn();
+    renderPopover({ onPopOut: vi.fn(), onClose });
+
+    fireEvent.click(screen.getByRole("button", { name: /close notes/i }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

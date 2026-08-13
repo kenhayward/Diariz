@@ -26,6 +26,7 @@ const { buildStartUrl, codeFromArgv, notificationForAuthError } = require("./des
 const { cropRectFor, resizeDims, clampRect } = require("./captureTarget");
 const { reconcilePool } = require("./pickerPool");
 const { RENDERER_INVALIDATING_EVENTS } = require("./rendererReadiness");
+const { notesWindowBounds } = require("./notesWindowState");
 const {
   SYNC_DEFAULTS,
   windowForScope,
@@ -63,6 +64,7 @@ let tray = null;
 let mainWindow = null;
 let setupWindow = null;
 let hotkeyWindow = null;
+let notesWindow = null;
 let isQuitting = false;
 
 // Tray-driven recording state. `ready` flips true once the web app's recorder has
@@ -134,6 +136,9 @@ function createMainWindow(url) {
   });
   mainWindow.on("closed", () => {
     mainWindow = null;
+    // A pop-out outliving the window that feeds it can only sit there dead - it has no other source
+    // of notes, and no way to deliver what is typed into it.
+    closeNotesPopout();
     setRecorderReady(false);
   });
 
@@ -178,6 +183,84 @@ function reloadMainWindow() {
   // reloading it here would cancel that load to start the same one again.
   if (existed && mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.reloadIgnoringCache();
 }
+
+// ---- Pop-out live-notes window ----
+//
+// A second window on the SAME origin as the main window, which is what lets the two halves of the
+// notes UI talk over a BroadcastChannel with no IPC of their own. The main window stays the owner of
+// the recorder, the note lines and the capture stash; this one is a remote control.
+//
+// Always-on-top at Electron's DEFAULT level. A spike confirmed that survives another application going
+// full screen, so the higher "screen-saver" band buys nothing here - and it would also float the notes
+// over the lock screen, which they have no business doing.
+
+function showNotesPopout() {
+  const url = targetUrl();
+  if (!url) return { ok: false };
+
+  if (notesWindow && !notesWindow.isDestroyed()) {
+    notesWindow.show();
+    notesWindow.focus();
+    return { ok: true };
+  }
+
+  const bounds = notesWindowBounds(store.get("notesPopoutBounds"), screen.getAllDisplays());
+  notesWindow = new BrowserWindow({
+    ...bounds,
+    alwaysOnTop: true,
+    title: "Diariz - Notes",
+    icon: ICON,
+    webPreferences: {
+      preload: path.join(__dirname, "notes-preload.js"),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+    },
+  });
+  notesWindow.setMenuBarVisibility(false);
+
+  const origin = new URL(url).origin;
+  notesWindow.webContents.setWindowOpenHandler(({ url: target }) => {
+    shell.openExternal(target);
+    return { action: "deny" };
+  });
+  notesWindow.webContents.on("will-navigate", (e, target) => {
+    if (new URL(target).origin !== origin) {
+      e.preventDefault();
+      shell.openExternal(target);
+    }
+  });
+
+  // Bounds are tracked in memory as the window is dragged and resized, then written once when it has
+  // gone. Writing the store on every drag frame would be pure churn, and writing it from "close" turned
+  // out not to be reliable when the renderer closes itself - "closed" always arrives (it is what drives
+  // the notes:closed report below), but by then the window is destroyed and getBounds() is gone, hence
+  // the cached copy. The key is flat: every other key in this store is, and dotted keys are unproven here.
+  let lastBounds = null;
+  const trackBounds = () => {
+    if (notesWindow && !notesWindow.isDestroyed()) lastBounds = notesWindow.getBounds();
+  };
+  notesWindow.on("move", trackBounds);
+  notesWindow.on("resize", trackBounds);
+  notesWindow.on("close", trackBounds);
+  trackBounds(); // seed it, so a window that is never touched still remembers where it sat
+  notesWindow.on("closed", () => {
+    if (lastBounds) store.set("notesPopoutBounds", lastBounds);
+    notesWindow = null;
+    // The guaranteed way back to the inline notes popover. The renderer also sends its own "closing"
+    // over the channel, but that cannot be relied on if the renderer died rather than closed.
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("notes:closed");
+  });
+
+  notesWindow.loadURL(new URL("/notes-popout", url).toString(), documentLoadOptions());
+  return { ok: true };
+}
+
+function closeNotesPopout() {
+  if (notesWindow && !notesWindow.isDestroyed()) notesWindow.close();
+}
+
+ipcMain.handle("notes:open", () => showNotesPopout());
 
 // ---- First-run / settings: server address ----
 
@@ -1320,6 +1403,9 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on("before-quit", () => {
     isQuitting = true;
+    // Closed explicitly rather than left to teardown, so its `close` handler runs and the bounds are
+    // saved for next time.
+    closeNotesPopout();
   });
 
   // The shortcut is scoped to a recording; make sure it never outlives the app either.

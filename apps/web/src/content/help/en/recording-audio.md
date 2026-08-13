@@ -154,6 +154,23 @@ The notes popover lets you jot lines while recording. Each line is stamped with 
 it, so it later links to that exact moment in the transcript. Notes survive a crash and attach to the
 recording once it uploads.
 
+### Keeping notes visible during a call (desktop app)
+
+On one screen, a call usually wants the whole display, which leaves nowhere to type. In the desktop
+app the notes popover has an **Open in a separate window** button: the notes move into a small window
+that stays on top of everything else, including a full-screen Teams or Zoom call. Drag it wherever
+suits you - its size and position are remembered for next time.
+
+It is the same notes panel, so lines are stamped exactly as before, and the screenshot buttons come
+with it. You can close the main Diariz window to the tray and carry on taking notes; the recording
+keeps running. Stop the recording and the window closes on its own, with your notes filed against the
+recording as usual.
+
+If the main Diariz window closes or reloads underneath it, the small window says it has lost contact
+and stops accepting new lines. That is deliberate - a note typed with nowhere to send it would look
+saved when it was not. Bring the main window back and it picks up where it left off. Everything you
+had already typed is safe.
+
 ## From the desktop app
 
 The tray or menu-bar menu can start and stop recording without bringing the window forward, including

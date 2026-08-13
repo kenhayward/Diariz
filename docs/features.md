@@ -89,7 +89,11 @@ show.
 - **Notes & enhanced notes.** Take your own note lines for a meeting — sparse trigger phrases, questions,
 observations. A **live notes panel** while recording stamps each line at the second you wrote it (crash-safe,
 lands on the recording's **Notes** tab after upload); you can also jot **prep notes on an upcoming Google Calendar
-meeting** from its preview page (they attach to the recording once it is linked). Timestamped lines jump to that
+meeting** from its preview page (they attach to the recording once it is linked). In the **desktop app** that live
+panel can be **popped out into its own small window**, always on top, so it stays readable over a full-screen Teams
+or Zoom call on a single monitor - the same panel, the same timestamps, the same screenshot buttons, and it keeps
+working with the main window closed to the tray. Stopping the recording closes it and files the notes as usual; if
+the main window goes away underneath it, it says so and stops accepting notes rather than dropping them. Timestamped lines jump to that
 moment in the transcript. Each timestamped note is also **woven inline into the Transcript tab** - it appears as
 its own **green line** (with your name as the speaker) right after the point in the conversation where you wrote
 it; the **Merge same-speaker rows** action treats a note as a boundary, so transcript text either side of a note

@@ -11,6 +11,7 @@ import RequestAccess from "./pages/RequestAccess";
 import Setup from "./pages/Setup";
 import ReleaseNotes from "./pages/ReleaseNotes";
 import Help from "./pages/Help";
+import NotesPopout from "./pages/NotesPopout";
 import RecordingDetail from "./pages/RecordingDetail";
 import SectionDetail from "./pages/SectionDetail";
 import CalendarEventDetail from "./pages/CalendarEventDetail";
@@ -64,6 +65,11 @@ export default function App() {
           popovers deep link into it from anywhere. */}
       <Route path="/help" element={<Help />} />
       <Route path="/help/:slug" element={<Help />} />
+      {/* The desktop shell's detached live-notes window. Deliberately outside the workspace layout, so
+          it mounts no sidebar, no recorder and no SignalR - and outside RequireAuth, because it holds no
+          server data of its own: it renders nothing until the main window answers on the same-origin
+          channel, and a login redirect inside a 380px window would be nonsense. */}
+      <Route path="/notes-popout" element={<NotesPopout />} />
       <Route
         path="/developers/api"
         element={

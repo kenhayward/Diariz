@@ -764,13 +764,15 @@ inline in the **Transcript tab** right after the segment being spoken when it wa
 `lib/transcriptNotes.ts` `weaveTranscript`; anchor = greatest `StartMs ≤ CapturedAtMs`) as its own green row
 with the current user as the "speaker"; the same anchor rule (server-side `TranscriptNoteAnchor`) makes the
 **merge-segments** action treat a note as a boundary, so `SegmentMerger` won't collapse same-speaker text from
-either side of a note (a `BreakBefore` flag on the segment after each note's anchor). **Live capture:** while recording, a
-`LiveNotesPanel` auto-opens beside the recorder (dismissable; preference in localStorage) - each
+either side of a note (a `BreakBefore` flag on the segment after each note's anchor). **Live capture:** while recording, the **notes popover** in the command hub
+auto-opens (dismissable; preference in localStorage) - each
 Enter-committed line is stamped with the current *recorded* time (`recorderTiming`, pause-aware), mirrored
 to IndexedDB (`lib/pendingNotes.ts`, its own `diariz-notes` DB, keyed by user) so a crash never loses lines,
 and bulk-attached to the recording right after upload; an attach failure keeps the lines durable (with the
 recording id) behind a retry banner, and recovered pending recordings adopt their stashed lines on
-re-upload. **The minutes weave:** notes feed minutes generation two ways (`MeetingMinutesProcessor` loads
+re-upload. **Pop-out window (desktop shell only):** that popover can be detached into a small always-on-top
+`BrowserWindow` at `{origin}/notes-popout`, so notes stay readable over a full-screen call on a single
+monitor - see the pop-out contract under *Cross-boundary contracts*. **The minutes weave:** notes feed minutes generation two ways (`MeetingMinutesProcessor` loads
 them; `IMeetingTypeMinutesGenerator` takes them alongside actions). (1) **Steering** - when notes exist, a
 "NOTE-TAKER'S EMPHASIS" block listing the lines rides the shared section preamble, so **every**
 prompt-driven template section weights them (both SingleCall and PerSection inherit it; no notes → prompts
@@ -2191,6 +2193,22 @@ the least likely to hold.
 - **pgvector is Postgres-only.** All vector matching sits behind `ISpeakerIdentifier`; unit tests fake it,
   integration tests exercise the real cosine query. Vector columns are mapped only when
   `Database.IsNpgsql()`; under the in-memory test provider they're `Ignore`d.
+- **Pop-out notes window (window ↔ window, no server).** The desktop shell can open a second `BrowserWindow`
+  at `{origin}/notes-popout` — a top-level React route deliberately **outside** `WorkspaceLayout` and
+  `RequireAuth`, so it mounts no sidebar, no recorder and no SignalR, and holds no server data of its own.
+  The two windows talk over a **`BroadcastChannel("diariz.live-notes")`**, which is origin-scoped, so being
+  same-origin is the whole of the auth story. The **main window is the host**: it owns the recorder, the note
+  lines, the capture stash and the recorded clock. The pop-out is a remote control — it sends
+  `add`/`edit`/`delete`/`deleteShot`/`capture`/`changeArea` and receives a whole-state snapshot back. It
+  **never stamps a timestamp**: `capturedAtMs` is pause-aware and produced only by the host. Screenshot
+  thumbnails cross as `Blob`s; the full-resolution PNG never leaves the host. Two counter-intuitive rules,
+  both measured (see `docs/superpowers/specs/2026-08-13-notes-popout-window-design.md`): the window is
+  always-on-top at Electron's **default** level (verified to survive another app going full screen;
+  `"screen-saver"` would also float it over the lock screen), and the **liveness poll runs from the pop-out**,
+  because a main window hidden to the tray has its timers throttled to roughly 1 Hz — a host heartbeat would
+  stall exactly when the feature is in use. Message *delivery* to a hidden host is not throttled. The pop-out
+  has its own narrow preload (`notes-preload.js`); reusing `preload.js` would register a second
+  `onTrayCommand` listener and a tray "Stop" would drive two recorders.
 
 ## GPU / worker notes
 

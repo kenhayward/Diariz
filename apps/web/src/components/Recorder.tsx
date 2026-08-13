@@ -25,6 +25,8 @@ import {
   type SourceSelection,
 } from "../lib/audioDevices";
 import { connectTrayRecorder, type RecorderState, type TrayBridge } from "../lib/trayRecorder";
+import { useNotesPopout } from "../lib/useNotesPopout";
+import type { NotesState } from "../lib/notesChannel";
 import { onRecordingRequested, type CalendarEventContext, type RecordingRequest } from "../lib/recordRequest";
 import {
   resolveCalendarStopAt,
@@ -739,17 +741,19 @@ export default function Recorder({
     if (userId) void addPendingScreenshot(userId, stamped);
   }
 
-  /// The popover's per-capture delete button. Filters the *current* ref, not a value captured at render
-  /// time, so a rapid string of deletes (or a delete racing an incoming capture) always removes the
-  /// right item rather than one computed against a stale array. Removes just that one record from
-  /// IndexedDB, not a rewrite of the remaining set.
-  function deleteLiveShot(index: number) {
-    const shot = liveShotsRef.current[index];
-    if (!shot) return;
-    const next = liveShotsRef.current.filter((_, i) => i !== index);
+  /// The per-capture delete button. Filters the *current* ref, not a value captured at render time, so
+  /// a rapid string of deletes (or a delete racing an incoming capture) always removes the right item
+  /// rather than one computed against a stale array. Removes just that one record from IndexedDB, not
+  /// a rewrite of the remaining set.
+  ///
+  /// Addressed by id rather than position, because the pop-out notes window renders its own copy of
+  /// this strip - there the gap between render and click is a whole window boundary wide.
+  function deleteLiveShot(id: string) {
+    const next = liveShotsRef.current.filter((s) => s.id !== id);
+    if (next.length === liveShotsRef.current.length) return;
     liveShotsRef.current = next;
     setLiveShots(next);
-    if (userId) void removePendingScreenshot(userId, shot.id);
+    if (userId) void removePendingScreenshot(userId, id);
   }
 
   /// Attach captures to the created recording. Success clears the durable stash; failure keeps the
@@ -820,6 +824,50 @@ export default function Recorder({
       unsubscribe();
     };
   }, []);
+
+  // ---- Pop-out notes window (desktop shell only) ----
+
+  const shellBridge = (window as unknown as { diariz?: TrayBridge }).diariz;
+
+  // Rebuilt on every render the pop-out cares about; useNotesPopout republishes when it changes.
+  const notesState: NotesState = {
+    lines: liveLines,
+    // Only what the pop-out renders. The full-resolution PNG stays in this window.
+    shots: liveShots.map((s) => ({ id: s.id, capturedAtMs: s.capturedAtMs, thumb: s.thumb })),
+    canCapture: canCaptureScreenshots(),
+    captureAreaSet,
+    recording,
+  };
+
+  const { poppedOut, popOut, notifyClosed } = useNotesPopout({
+    state: notesState,
+    openWindow: () => void shellBridge?.openNotesPopout?.(),
+    handlers: {
+      onAdd: addLiveNote,
+      onEdit: editLiveNote,
+      onDelete: deleteLiveNote,
+      onDeleteShot: deleteLiveShot,
+      onCapture: requestCapture,
+      onChangeArea: requestChangeArea,
+    },
+  });
+
+  // Popping out moves the notes into the window, so the inline popover closes. The remembered
+  // preference is deliberately not touched: it records whether the popover auto-opens on the *next*
+  // recording, which is a different question from where the notes are right now.
+  useEffect(() => {
+    if (poppedOut && hub.isOpen("notes")) hub.close();
+  }, [poppedOut]);
+
+  // The shell's report is the guaranteed one - it survives the pop-out's renderer being killed, which
+  // the channel's own "closing" message does not. That message is merely faster.
+  useEffect(() => {
+    if (!poppedOut || !shellBridge?.onNotesPopoutClosed) return;
+    return shellBridge.onNotesPopoutClosed(() => {
+      hub.close();
+      notifyClosed();
+    });
+  }, [poppedOut, notifyClosed]);
 
   // `trayKind` is set only when the Electron tray drives us (it speaks coarse mic/system); the on-screen
   // button passes nothing and records the current `selection`. A tray "mic" maps to the current specific
@@ -1432,6 +1480,9 @@ export default function Recorder({
               onChangeCaptureArea={canCaptureScreenshots() ? requestChangeArea : undefined}
               onCapture={canCaptureScreenshots() ? requestCapture : undefined}
               captureAreaSet={captureAreaSet}
+              // Only the shell can pin a window above a full-screen call, so a plain browser gets no
+              // control at all rather than one that opens a tab it cannot float.
+              onPopOut={shellBridge?.openNotesPopout ? popOut : undefined}
             />
           </div>
         )}
