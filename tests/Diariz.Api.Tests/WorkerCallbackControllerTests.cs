@@ -226,6 +226,42 @@ public class WorkerCallbackControllerTests
         Assert.Empty(queue.TagsEnqueued);
     }
 
+    // A transcription that yields no segments means the audio held no recognisable speech - the commonest
+    // cause being a capture that silently recorded nothing (e.g. sharing a screen on Linux, where Chromium
+    // does not implement system-audio capture, so the stream carries no sound). That is a dead end for the
+    // whole downstream pipeline, and it used to surface as the summariser's internal complaint
+    // ("Transcription has no segments to summarise"), which describes the summariser's problem rather than
+    // the user's. Fail it here, in the user's terms, and don't queue work that cannot succeed.
+    [Fact]
+    public async Task Result_WithNoSegments_MarksFailedWithNoSpeechMessage()
+    {
+        var (controller, db, hub, _) = BuildEx(Secret, summarizationEnabled: true);
+        var (recordingId, transcriptionId) = await SeedQueuedRecording(db, Guid.NewGuid());
+
+        var result = await controller.Result(new TranscriptionResult(transcriptionId, "en", []));
+
+        Assert.IsType<OkResult>(result);
+        var rec = await db.Recordings.FindAsync(recordingId);
+        Assert.Equal(RecordingStatus.Failed, rec!.Status);
+        Assert.Equal("No speech was detected in this recording.", rec.Error);
+        // The owner still gets told, so the UI leaves its "transcribing" state.
+        Assert.Contains(hub.Sent, m => m.Method == "RecordingStatusChanged");
+    }
+
+    [Fact]
+    public async Task Result_WithNoSegments_DoesNotEnqueueDownstreamJobs()
+    {
+        var (controller, db, _, queue) = BuildEx(Secret, summarizationEnabled: true);
+        var (_, transcriptionId) = await SeedQueuedRecording(db, Guid.NewGuid());
+
+        await controller.Result(new TranscriptionResult(transcriptionId, "en", []));
+
+        Assert.Empty(queue.SummarizationEnqueued);
+        Assert.Empty(queue.ActionsEnqueued);
+        Assert.Empty(queue.TagsEnqueued);
+        Assert.Empty(queue.MeetingMinutesEnqueued);
+    }
+
     [Fact]
     public async Task Result_StoresSpeakerEmbedding_AndAutoIdentifies()
     {

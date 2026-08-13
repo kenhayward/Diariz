@@ -14,7 +14,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 
 | Feature | Description |
 | --- | --- |
-| **Capture** | Record from your mic (device picker, capture tuning, live level meter, pause/resume), system audio, or both mixed together on one device - system audio works in Chromium browsers ("Share audio") and seamlessly in the desktop app; schedule a recording to auto-stop at a set time or after 15/30/60 minutes; or upload files (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A) - or drop a **video** (MP4, MOV, MKV, WebM) and its audio is extracted in your browser and uploaded on its own, so the video is never sent or stored. Dropped onto the list they land in the folder you dropped them on, and everything else follows your placement preference. |
+| **Capture** | Record from your mic (device picker, capture tuning, live level meter, pause/resume), system audio, or both mixed together on one device - system audio works in Chromium browsers ("Share audio", though on Linux only when sharing a browser tab) and seamlessly in the desktop app; schedule a recording to auto-stop at a set time or after 15/30/60 minutes; or upload files (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A) - or drop a **video** (MP4, MOV, MKV, WebM) and its audio is extracted in your browser and uploaded on its own, so the video is never sent or stored. Dropped onto the list they land in the folder you dropped them on, and everything else follows your placement preference. |
 | **Record a calendar meeting** | Join a meeting from your calendar and it records in one click, named after the invite rather than the clock and linked to that meeting from the start (bringing any prep notes with it). Optionally let it end itself - a set number of minutes after the meeting was due to finish, or after a run of silence once everyone has left; if people are still talking when the meeting's scheduled end arrives it asks whether to keep recording instead of cutting you off, doubling the wait each time you say yes, and always tells you why once a recording does end on its own. Joining a second meeting finishes and files the first automatically. |
 | **Recurring meetings** | A calendar event that repeats is marked with a **Repeats** badge, and both the event and a linked recording list your earlier recordings of the same meeting so you can jump straight back. |
 | **Transcribe & diarize** | Server-side WhisperX (word-level timestamps) with pyannote speaker diarization; speaker-labelled, editable, playable segments you can re-transcribe any time. |
@@ -61,6 +61,31 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.209.3",
+    date: "2026-08-13",
+    pr: 519,
+    headline: "A recording with no speech now says so, instead of blaming the summariser",
+    summary:
+      "If a recording captured no speech, transcription finished with nothing in it and the failure you " +
+      "saw was \"Transcription has no segments to summarise\" - which describes the summariser's problem, " +
+      "not yours, and only appeared after a full transcription had run. Diariz now recognises an empty " +
+      "transcript as soon as the worker reports it, marks the recording failed with \"No speech was " +
+      "detected in this recording\", and skips the summary, action-item, tag and minutes jobs that could " +
+      "never have succeeded. The documentation also gains an important correction for Linux users: in " +
+      "Chrome and Edge on Linux, system audio is only captured when you share a browser TAB - sharing a " +
+      "screen or window records silence, which was the commonest way to end up with an empty transcript. " +
+      "The Recording audio help article now explains that, and how to capture system audio on Linux " +
+      "properly by offering your speaker output as an input device.",
+    fixed: [
+      "A recording that contains no speech now fails with \"No speech was detected in this recording\" instead of \"Transcription has no segments to summarise\".",
+      "An empty transcript no longer queues summary, action-item, tag and meeting-minutes jobs that cannot succeed.",
+    ],
+    changed: [
+      "Documentation now states that Chromium on Linux only captures system audio when sharing a browser tab, not a screen or window.",
+      "The Recording audio help article explains how to capture system audio on Linux by publishing the speaker monitor as an input device.",
+    ],
+  },
   {
     version: "0.209.2",
     date: "2026-08-12",
