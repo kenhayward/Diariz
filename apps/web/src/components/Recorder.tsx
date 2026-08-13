@@ -48,6 +48,7 @@ import NotesPopover from "./hub/NotesPopover";
 import HubIconButton from "./hub/HubIconButton";
 import { useHubPopover } from "./hub/hubPopovers";
 import { MEDIA_ACCEPT_ATTR } from "../lib/mediaKinds";
+import { pickMediaFiles } from "../lib/mediaPicker";
 import { retryOnGatewayError } from "../lib/retry";
 import { useUpload } from "../lib/uploadContext";
 import {
@@ -1203,6 +1204,18 @@ export default function Recorder({
     uploads.uploadFiles(files);
   }
 
+  // Prefer the named picker so the dialog's filter reads "Audio and video files" instead of Chromium's
+  // "Custom Files" - `<input accept>` gives no way to label it. Unsupported (Firefox/Safari) or refused
+  // returns null, and we open the ordinary input exactly as before.
+  async function openFileDialog() {
+    const files = await pickMediaFiles();
+    if (files === null) {
+      fileRef.current?.click();
+      return;
+    }
+    if (files.length) uploads.uploadFiles(files);
+  }
+
   // Keep the tray bridge pointed at the latest start/stop without reconnecting.
   const startFn = useRef(start);
   startFn.current = start;
@@ -1365,7 +1378,7 @@ export default function Recorder({
         <HubIconButton
           label={t("recUpload")}
           title={!canRecord ? t("recNoPermission") : t("recUploadTitle")}
-          onClick={() => fileRef.current?.click()}
+          onClick={() => void openFileDialog()}
           disabled={recording || busy || !canRecord}
         >
           <IconUpload />
