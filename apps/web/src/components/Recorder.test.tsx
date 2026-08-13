@@ -926,6 +926,59 @@ describe("live notes", () => {
     );
   });
 
+  // Edit and delete had no coverage at all before the useLiveNotes extraction. They pin the two
+  // behaviours the extraction moves, so a mistake in the move shows up as a failure rather than as
+  // silence. Both mutation-checked when written.
+  it("edits a live line in place and re-mirrors the edited set", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByText(/notes while recording/i);
+
+    const box = screen.getByPlaceholderText(/add a note/i);
+    fireEvent.change(box, { target: { value: "chase the invoice" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    await screen.findByText("chase the invoice");
+
+    fireEvent.click(screen.getByRole("button", { name: /edit note/i }));
+    fireEvent.change(screen.getByLabelText(/edit note/i), { target: { value: "chase the invoice today" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(await screen.findByText("chase the invoice today")).toBeTruthy();
+    expect(screen.queryByText("chase the invoice")).toBeNull();
+    await waitFor(() =>
+      expect(savePendingNotes).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          recordingId: null,
+          lines: [expect.objectContaining({ text: "chase the invoice today" })],
+        }),
+      ),
+    );
+  });
+
+  it("deletes a live line and re-mirrors what is left", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByText(/notes while recording/i);
+
+    const box = screen.getByPlaceholderText(/add a note/i);
+    fireEvent.change(box, { target: { value: "first line" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    await screen.findByText("first line");
+    fireEvent.change(box, { target: { value: "second line" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    await screen.findByText("second line");
+
+    fireEvent.click(screen.getAllByRole("button", { name: /delete note/i })[0]);
+
+    await waitFor(() => expect(screen.queryByText("first line")).toBeNull());
+    expect(screen.getByText("second line")).toBeTruthy();
+    await waitFor(() =>
+      expect(savePendingNotes).toHaveBeenLastCalledWith(
+        expect.objectContaining({ lines: [expect.objectContaining({ text: "second line" })] }),
+      ),
+    );
+  });
+
   it("attaches committed lines to the uploaded recording and clears the stash", async () => {
     render(<Recorder onUploaded={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
