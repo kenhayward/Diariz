@@ -44,16 +44,21 @@ being repeated here.
 
 ## Phase plan and honest expectations
 
-| Phase | Task | Expected reduction | Risk |
-|---|---|---|---|
-| 1 | Move 6 prop-driven components | ~478 lines | very low - they already take props |
-| 1 | Move the icon block | ~35 lines | very low - module constants |
-| 2 | `useAsyncAction` for 9 busy flags | ~70 lines | low - one uniform pattern |
-| 3 | Transcript playback state | ~120 lines | **medium - real design** |
-| 3 | Formula panel state | ~60 lines | medium |
+**Outcome as executed (2026-08-13):** Phase 1 shipped. Phase 2 was abandoned on inspection. Phase 3
+was never started - the user stopped, on the reasoning that Phase 1 had made a meaningful dent and the
+remainder carried more risk than value.
 
-Phases 1-2 land it around **1,780 lines**. That is a real improvement and it will not get the file
-under 1,000. Anyone expecting a small file at the end should read that number now rather than later.
+| Phase | Task | Predicted | Actual | Risk |
+|---|---|---|---|---|
+| 1 | Move 6 prop-driven components + icons | ~513 lines | **-498, shipped** | very low - they already take props |
+| 2 | `useAsyncAction` for 9 busy flags | ~70 lines | **abandoned - only 5 were real, net zero** | see Task 3 |
+| 3 | Transcript playback state | ~120 lines | not attempted | **medium - real design** |
+| 3 | Formula panel state | ~60 lines | not attempted | medium |
+
+Phases 1-2 were predicted to land it around **1,780 lines**. Phase 1 alone landed it at **1,862** -
+close, because Phase 2 was going to contribute almost nothing anyway. That is a real improvement and
+it does not get the file under 1,000. Anyone expecting a small file at the end should read that number
+now rather than later.
 
 **Phase 3 is gated.** Stop after Task 4, measure, and decide. Do not start Task 5 or 6 on momentum.
 
@@ -281,7 +286,39 @@ git commit -m "refactor(detail): move the recording page's icon constants into t
 
 ---
 
-### Task 3: Collapse the nine async-action booleans
+### Task 3: Collapse the async-action booleans - ABANDONED, and why
+
+**Do not attempt this as written. The premise below is wrong, and it is left here with the correction
+because the mistake is the useful part.**
+
+This task claimed nine `useState` booleans all meaning "this async action is in flight". Checking the
+**call sites** rather than the declaration list shows **four of the nine are modal-open flags** that
+merely read like busy flags:
+
+| Flag | What it actually does |
+|---|---|
+| `renaming` | shows the inline `RecordingNameForm` |
+| `moving` | opens the move-to-folder modal |
+| `sharing` | opens `ShareToRoomModal` |
+| `downloading` | opens `DownloadTranscriptModal` |
+
+Converting those would have been a behaviour change dressed as a refactor: `run()` clears
+`actionError` on entry, so opening the share modal would have wiped a visible error message off the
+screen.
+
+That leaves **five** genuine async actions (`requeuing`, `summarizing`, `extracting`,
+`reidentifying`, `translating`), which changes the arithmetic entirely - roughly 35 lines saved
+against a 40-line hook, so **net zero**. The hook was written, tested and mutation-checked before this
+was noticed; it was then deleted, because "no change in size, one fewer duplicated pattern" did not
+justify touching five working async paths.
+
+**The transferable lesson, which applies directly to Phase 3:** both errors in this plan came from
+reading *declarations* instead of *call sites*. Task 1 missed `SpeakerRow` because its declaration
+said `export function` rather than `function`; Task 3 misread four modal flags because their
+declarations look identical to busy flags. Phase 3 involves eight interacting pieces of playback
+state - the same trap, larger. **Read every call site before extracting anything there.**
+
+The original (incorrect) task text follows for reference.
 
 Nine `useState` booleans - `requeuing`, `summarizing`, `extracting`, `reidentifying`, `renaming`,
 `moving`, `sharing`, `downloading`, `translating` - all mean "this async action is in flight", and each
