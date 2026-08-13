@@ -324,6 +324,15 @@ export interface MeetingNote {
   createdAt: string;
 }
 
+/// The part of a not-yet-uploaded capture that the notes UI needs: enough to show a thumbnail and to
+/// delete it by name. `PendingShot` (lib/pendingScreenshots.ts) satisfies this structurally, and it is
+/// also what crosses the pop-out channel - the full-resolution PNG never leaves the main window.
+export interface ShotView {
+  id: string;
+  capturedAtMs: number;
+  thumb: Blob;
+}
+
 /// A screen capture taken during a recording (desktop client only). capturedAtMs is the offset into the
 /// recording clock; immutable after capture. Image bytes come from the content and thumb URLs.
 export interface Screenshot {

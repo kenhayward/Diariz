@@ -739,17 +739,19 @@ export default function Recorder({
     if (userId) void addPendingScreenshot(userId, stamped);
   }
 
-  /// The popover's per-capture delete button. Filters the *current* ref, not a value captured at render
-  /// time, so a rapid string of deletes (or a delete racing an incoming capture) always removes the
-  /// right item rather than one computed against a stale array. Removes just that one record from
-  /// IndexedDB, not a rewrite of the remaining set.
-  function deleteLiveShot(index: number) {
-    const shot = liveShotsRef.current[index];
-    if (!shot) return;
-    const next = liveShotsRef.current.filter((_, i) => i !== index);
+  /// The per-capture delete button. Filters the *current* ref, not a value captured at render time, so
+  /// a rapid string of deletes (or a delete racing an incoming capture) always removes the right item
+  /// rather than one computed against a stale array. Removes just that one record from IndexedDB, not
+  /// a rewrite of the remaining set.
+  ///
+  /// Addressed by id rather than position, because the pop-out notes window renders its own copy of
+  /// this strip - there the gap between render and click is a whole window boundary wide.
+  function deleteLiveShot(id: string) {
+    const next = liveShotsRef.current.filter((s) => s.id !== id);
+    if (next.length === liveShotsRef.current.length) return;
     liveShotsRef.current = next;
     setLiveShots(next);
-    if (userId) void removePendingScreenshot(userId, shot.id);
+    if (userId) void removePendingScreenshot(userId, id);
   }
 
   /// Attach captures to the created recording. Success clears the durable stash; failure keeps the
