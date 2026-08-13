@@ -51,7 +51,12 @@ export interface ChannelLike {
 }
 
 function open(channel?: ChannelLike): ChannelLike {
-  return channel ?? new BroadcastChannel(NOTES_CHANNEL);
+  // A real BroadcastChannel satisfies this contract at runtime, but not to the typechecker: its
+  // `onmessage` is declared with the full `MessageEvent`, and because that is a property rather than a
+  // method its parameter is checked contravariantly - so the narrower `{ data: unknown }` this module
+  // actually uses is rejected. Widening ChannelLike to MessageEvent instead would force every test
+  // fake to construct one, which is a worse trade for a seam that exists only to be faked.
+  return channel ?? (new BroadcastChannel(NOTES_CHANNEL) as unknown as ChannelLike);
 }
 
 // ---- Host (the main window) ----

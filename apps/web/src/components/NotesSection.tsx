@@ -16,12 +16,18 @@ export default function NotesSection({
   onEdit,
   onDelete,
   onJump,
+  disabled = false,
 }: {
   notes: MeetingNote[];
   onAdd?: (text: string) => void;
   onEdit?: (id: string, text: string) => void;
   onDelete?: (id: string) => void;
   onJump?: (ms: number) => void;
+  /// Temporarily inert: the controls stay visible but refuse input. Distinct from omitting `onAdd`,
+  /// which hides the box entirely. The pop-out window uses this when it has lost contact with the
+  /// window that owns the notes - the box disappearing would read as the notes having been lost,
+  /// where a dead box reads as "paused", which is what has actually happened.
+  disabled?: boolean;
 }) {
   const { t } = useTranslation("workspace");
   const [draft, setDraft] = useState("");
@@ -30,7 +36,7 @@ export default function NotesSection({
 
   function add() {
     const text = draft.trim();
-    if (!text || !onAdd) return;
+    if (!text || !onAdd || disabled) return;
     onAdd(text);
     setDraft("");
   }
@@ -53,9 +59,10 @@ export default function NotesSection({
             }}
             placeholder={t("notesAddPlaceholder")}
             aria-label={t("notesAddPlaceholder")}
-            className="min-w-0 flex-1 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+            disabled={disabled}
+            className="min-w-0 flex-1 rounded border px-2 py-1 text-sm disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
           />
-          <button type="button" onClick={add} className={btn}>
+          <button type="button" onClick={add} disabled={disabled} className={btn}>
             {t("notesAdd")}
           </button>
         </div>
