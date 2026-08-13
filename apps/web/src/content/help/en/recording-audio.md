@@ -35,37 +35,46 @@ So on Linux, either:
   and it captures every application rather than one tab. This is the route that always works.
 
 On PipeWire (Ubuntu 24.04 and newer) that input is not offered by default, because a speaker's "monitor"
-is not published as a device of its own. Create this file once to publish it:
+is not published as a device of its own. Diariz ships a small configuration file that publishes it.
+Download it and restart PipeWire:
 
-`~/.config/pipewire/pipewire.conf.d/99-diariz-system-audio.conf`
-
-```
-context.modules = [
-  { name = libpipewire-module-loopback
-    args = {
-      node.description = "System Audio"
-      capture.props = {
-        stream.capture.sink = true
-        node.target         = "@DEFAULT_AUDIO_SINK@"
-        node.passive        = true
-      }
-      playback.props = {
-        media.class      = "Audio/Source"
-        node.name        = "diariz_system_audio"
-        node.description = "System Audio"
-      }
-    }
-  }
-]
+```bash
+mkdir -p ~/.config/pipewire/pipewire.conf.d
+curl -o ~/.config/pipewire/pipewire.conf.d/99-diariz-system-audio.conf \
+  "$(echo $DIARIZ_URL)/linux/99-diariz-system-audio.conf"
+systemctl --user restart pipewire
 ```
 
-Then apply it with `systemctl --user restart pipewire`. **System Audio** now appears in the microphone
-dropdown, and it comes back automatically every time you log in - there is no script to leave running.
-`@DEFAULT_AUDIO_SINK@` means it follows your current output, so it keeps working when you switch between
-speakers, headphones and HDMI.
+Replace `$DIARIZ_URL` with the address you use for Diariz, or just open
+`/linux/99-diariz-system-audio.conf` on your Diariz server and save it to that folder yourself. It is a
+plain text file with comments explaining what it does - worth reading before you install it.
+
+**System Audio (Diariz)** then appears in the microphone dropdown, and comes back automatically every
+time you log in - there is no script to leave running. It follows your current output, so it keeps
+working when you switch between speakers, headphones and HDMI.
 
 It captures system audio **only**. To record your own voice at the same time, tick **System audio**
 alongside a real microphone, or build a combined virtual sink.
+
+Two things to be aware of: the device is visible to **every** application, so Zoom, Teams and Slack will
+list it as a microphone too; and it stays idle until something actually records from it, so it costs
+nothing when unused.
+
+### Installing it for everyone on a machine
+
+Administrators can install the same file system-wide instead of per user, which covers every account on
+the machine and every account created later. Diariz ships a package that does exactly this and nothing
+else:
+
+```bash
+sudo apt install ./diariz-system-audio_<version>_all.deb
+```
+
+It installs one configuration file to `/etc/pipewire/pipewire.conf.d/` and depends only on PipeWire. Each
+logged-in user still has to restart PipeWire once (`systemctl --user restart pipewire`) or log out and
+back in, because PipeWire only reads its configuration at start-up. If you manage machines with Ansible,
+Puppet or an MDM, copying the same file into `/etc/pipewire/pipewire.conf.d/` achieves the same thing
+without the package.
 
 ### If a system-audio recording comes out silent
 
