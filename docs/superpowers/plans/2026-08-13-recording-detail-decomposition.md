@@ -25,9 +25,12 @@ being repeated here.
 
 ## Global Constraints
 
-- **The 84 existing tests in `apps/web/src/pages/RecordingDetail.test.tsx` are the safety net.** They
-  must pass unchanged after every task. A task that needs them edited is a task that changed
-  behaviour - stop and re-read the plan.
+- **The 110 existing tests are the safety net**, across **two** files: `RecordingDetail.test.tsx` (84)
+  and `RecordingDetail.speakers.test.tsx` (26). They must pass unchanged after every task. A task that
+  needs them edited is a task that changed behaviour - stop and re-read the plan. **The one legitimate
+  exception** is repointing an `import` at a symbol this plan deliberately moved: that is an address
+  change, not a behaviour change. `RecordingDetail.speakers.test.tsx` imports `SpeakerRow` from the
+  page and needs exactly that edit in Task 1.
 - **No behaviour changes.** Not a prop default, not a class name, not an aria-label. If something
   looks wrong while moving it, leave it wrong and note it; fixing it here makes the diff unreviewable.
 - **TDD applies to the new hooks** (Tasks 3+): failing test first, then the minimal code. The
@@ -43,7 +46,7 @@ being repeated here.
 
 | Phase | Task | Expected reduction | Risk |
 |---|---|---|---|
-| 1 | Move 5 prop-driven components | ~478 lines | very low - they already take props |
+| 1 | Move 6 prop-driven components | ~478 lines | very low - they already take props |
 | 1 | Move the icon block | ~35 lines | very low - module constants |
 | 2 | `useAsyncAction` for 9 busy flags | ~70 lines | low - one uniform pattern |
 | 3 | Transcript playback state | ~120 lines | **medium - real design** |
@@ -77,10 +80,19 @@ join an established home rather than inventing one.
 
 ---
 
-### Task 1: Move the four prop-driven components out
+### Task 1: Move the six prop-driven components out
 
 These are **module-level functions with explicit typed props**, declared after the main export. They
 close over nothing from the page, so moving them is mechanical: cut, add `export default`, import.
+
+**Two corrections found while executing this, kept here so the record matches what happened:**
+
+1. There are **six**, not five. `SpeakerRow` (149 lines, line 2111) is declared `export function`, so
+   a boundary scan matching only `^function ` misses it and silently swallows its body into
+   `RecordingNameForm`. Match `^(export )?function [A-Z]`.
+2. **`icons.tsx` (Task 2) has to land in the same commit**, because `SpeakerRow` renders
+   `PencilIcon`, `PlayIcon`, `PauseIcon` and `TrashIcon`. Extracting it while the icons still live in
+   the page would mean importing them back out of the page - a dependency pointing the wrong way.
 
 Verified signatures, so the implementer does not have to derive them:
 
