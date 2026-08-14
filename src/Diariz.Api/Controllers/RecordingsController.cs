@@ -1170,6 +1170,124 @@ public class RecordingsController : ControllerBase
         return Accepted();
     }
 
+    /// <summary>Adopt a tag on a recording - either typed by hand or promoted from a suggestion. Idempotent.
+    /// Unlike the other writes here this is open to ANYONE WHO CAN READ the recording (a room member, not
+    /// just the owner), because the tag cloud is room-scoped and a shared room shares its organising layer.
+    /// It is the only write on a recording with that gate - do not copy it onto a neighbouring endpoint
+    /// without meaning to.</summary>
+    [HttpPost("{id:guid}/tags")]
+    [EndpointSummary("Add a tag to a recording")]
+    [EndpointDescription(
+        "Adds one tag. Automatic topic extraction only ever **suggests** tags; this is how a tag becomes real " +
+        "and starts counting towards your tag cloud. Promoting a suggestion is the same call - pass its text " +
+        "and it is accepted in place. Whitespace inside the tag becomes hyphens (`budget planning` -> " +
+        "`budget-planning`), matching is case-insensitive, and adding a tag you already have does nothing. " +
+        "Anyone who can see the recording can tag it; 400 for blank text, 404 if you cannot see it.")]
+    public async Task<IActionResult> AddTag(Guid id, SetRecordingTagRequest req)
+    {
+        if (!await _rooms.CanReadRecordingAsync(UserId, id)) return NotFound();
+
+        var tag = TagText.Normalize(req.Tag);
+        if (tag is null) return BadRequest("A tag needs some text.");
+
+        var candidates = await _db.RecordingTags.Where(t => t.RecordingId == id).ToListAsync();
+        var existing = FindByNormalizedTag(candidates, tag);
+
+        if (existing is null)
+        {
+            _db.RecordingTags.Add(new RecordingTag
+            {
+                Id = Guid.NewGuid(),
+                RecordingId = id,
+                Tag = tag,
+                // Adopted tags all weigh the same: the cloud sums weight, so 1.0 makes the sum a recording
+                // count and sizes words by how often the user reached for them.
+                Weight = 1.0,
+                Ordinal = candidates.Count,
+                Status = RecordingTagStatus.Adopted,
+                AdoptedAt = DateTimeOffset.UtcNow,
+            });
+        }
+        else if (existing.Status != RecordingTagStatus.Adopted)
+        {
+            // Promotion (or reviving something previously dismissed): flip the row we already have, keeping
+            // its stored casing, so the one-row-per-tag-per-recording index stays satisfied.
+            existing.Status = RecordingTagStatus.Adopted;
+            existing.Weight = 1.0;
+            existing.AdoptedAt = DateTimeOffset.UtcNow;
+        }
+        // else: already adopted - leave AdoptedAt alone so re-adding does not reshuffle the chip order.
+
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// <summary>Remove an adopted tag. Deletes the row outright, so it does not reappear as a suggestion;
+    /// only a re-transcription can offer it again. Open to anyone who can read the recording (see
+    /// <see cref="AddTag"/>).</summary>
+    [HttpDelete("{id:guid}/tags")]
+    [EndpointSummary("Remove a tag from a recording")]
+    [EndpointDescription(
+        "Removes the tag from this recording, case-insensitively. It does not come back as a suggestion - only " +
+        "a re-transcription can propose it again. Removing a tag that is not there succeeds (204), so a retry " +
+        "is safe. Anyone who can see the recording can do this; 404 if you cannot see it.")]
+    public async Task<IActionResult> RemoveTag(Guid id, [FromQuery] string tag)
+    {
+        if (!await _rooms.CanReadRecordingAsync(UserId, id)) return NotFound();
+
+        var normalized = TagText.Normalize(tag);
+        if (normalized is null) return NoContent();
+
+        var candidates = await _db.RecordingTags.Where(t => t.RecordingId == id).ToListAsync();
+        var existing = FindByNormalizedTag(candidates, normalized);
+        if (existing is not null)
+        {
+            _db.RecordingTags.Remove(existing);
+            await _db.SaveChangesAsync();
+        }
+        return NoContent();
+    }
+
+    /// <summary>Reject a suggested tag for this recording. The row is kept as a tombstone so a
+    /// re-transcription cannot suggest it here again. Open to anyone who can read the recording (see
+    /// <see cref="AddTag"/>).</summary>
+    [HttpPost("{id:guid}/tags/dismiss")]
+    [EndpointSummary("Dismiss a suggested tag")]
+    [EndpointDescription(
+        "Rejects one of the automatically suggested tags on this recording so it stops being offered here, " +
+        "even after a re-transcription. The dismissal is per recording - the same word can still be suggested " +
+        "on other meetings. 404 when there is no such suggestion (including when you already accepted it). " +
+        "Anyone who can see the recording can do this.")]
+    public async Task<IActionResult> DismissTag(Guid id, SetRecordingTagRequest req)
+    {
+        if (!await _rooms.CanReadRecordingAsync(UserId, id)) return NotFound();
+
+        var tag = TagText.Normalize(req.Tag);
+        if (tag is null) return BadRequest("A tag needs some text.");
+
+        var candidates = await _db.RecordingTags.Where(t => t.RecordingId == id).ToListAsync();
+        var suggestion = FindByNormalizedTag(candidates, tag);
+        if (suggestion is null || suggestion.Status != RecordingTagStatus.Suggested) return NotFound();
+
+        suggestion.Status = RecordingTagStatus.Dismissed;
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// <summary>Finds the tag among <paramref name="candidates"/> (already scoped to one recording) whose
+    /// NORMALISED text matches <paramref name="normalizedTag"/>, case-insensitively. A plain
+    /// <c>t.Tag.ToLower() == tag.ToLower()</c> SQL comparison is not enough here: a machine suggestion is
+    /// stored exactly as the LLM wrote it - Title Case, often several words joined by spaces ("Data
+    /// Collection") - while <see cref="TagText.Normalize"/> always collapses those spaces to hyphens before a
+    /// lookup runs. Typing a suggestion's own text back at it would otherwise never match, so adopting it
+    /// would insert a second row instead of promoting the one that already exists. Comparing normalised forms
+    /// on both sides treats "Data Collection" and "data-collection" as the one tag they are. Per-recording tag
+    /// counts are small (extraction caps at 12, plus whatever the user has adopted or dismissed), so the
+    /// caller loading every row up front and filtering here is not a real cost.</summary>
+    private static RecordingTag? FindByNormalizedTag(IReadOnlyList<RecordingTag> candidates, string normalizedTag) =>
+        candidates.FirstOrDefault(t =>
+            string.Equals(TagText.Normalize(t.Tag), normalizedTag, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>Manually create or edit the current transcription's meeting minutes (Markdown). Works even
     /// with no LLM configured, and marks the minutes user-edited so the automatic generator won't overwrite
     /// them.</summary>

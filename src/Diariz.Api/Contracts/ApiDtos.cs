@@ -376,6 +376,10 @@ public record MeetingTypeRequest(
 /// <summary>Apply a meeting type to a recording (re-runs the minutes). Null = the General default.</summary>
 public record ApplyMeetingTypeRequest(Guid? MeetingTypeId);
 
+/// <summary>Adopt or dismiss one tag on a recording. The text is normalised server-side (whitespace becomes
+/// hyphens, hyphens trimmed) and matched case-insensitively against the recording's existing tags.</summary>
+public record SetRecordingTagRequest(string Tag);
+
 public record RenameSpeakerRequest(string Label, string DisplayName);
 
 // ---- Attachments (supporting documents/URLs on a recording) ----

@@ -3862,6 +3862,17 @@
         ],
         "type": "object"
       },
+      "SetRecordingTagRequest": {
+        "properties": {
+          "tag": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tag"
+        ],
+        "type": "object"
+      },
       "SetupRequest": {
         "properties": {
           "email": {
@@ -9536,6 +9547,126 @@
           }
         },
         "summary": "Write the summary by hand",
+        "tags": [
+          "Recordings"
+        ]
+      }
+    },
+    "/api/recordings/{id}/tags": {
+      "delete": {
+        "description": "Removes the tag from this recording, case-insensitively. It does not come back as a suggestion - only a re-transcription can propose it again. Removing a tag that is not there succeeds (204), so a retry is safe. Anyone who can see the recording can do this; 404 if you cannot see it.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tag",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Remove a tag from a recording",
+        "tags": [
+          "Recordings"
+        ]
+      },
+      "post": {
+        "description": "Adds one tag. Automatic topic extraction only ever **suggests** tags; this is how a tag becomes real and starts counting towards your tag cloud. Promoting a suggestion is the same call - pass its text and it is accepted in place. Whitespace inside the tag becomes hyphens (`budget planning` -> `budget-planning`), matching is case-insensitive, and adding a tag you already have does nothing. Anyone who can see the recording can tag it; 400 for blank text, 404 if you cannot see it.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRecordingTagRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRecordingTagRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRecordingTagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Add a tag to a recording",
+        "tags": [
+          "Recordings"
+        ]
+      }
+    },
+    "/api/recordings/{id}/tags/dismiss": {
+      "post": {
+        "description": "Rejects one of the automatically suggested tags on this recording so it stops being offered here, even after a re-transcription. The dismissal is per recording - the same word can still be suggested on other meetings. 404 when there is no such suggestion (including when you already accepted it). Anyone who can see the recording can do this.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRecordingTagRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRecordingTagRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRecordingTagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Dismiss a suggested tag",
         "tags": [
           "Recordings"
         ]
