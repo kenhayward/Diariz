@@ -172,7 +172,6 @@ public class RecordingsController : ControllerBase
         var rec = await _db.Recordings
             .Include(r => r.Speakers)
             .Include(r => r.Actions)
-            .Include(r => r.Tags)
             .Include(r => r.CalendarLink)
             .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
                 .ThenInclude(t => t.Segments.OrderBy(s => s.Ordinal))
@@ -240,14 +239,24 @@ public class RecordingsController : ControllerBase
                 ? rec.CreatedAt.AddDays(platform.AudioRetentionDays)
                 : null;
 
+        // Tags are read in their OWN query, deliberately not as a fourth `.Include` above. EF is in
+        // single-query mode here (no AsSplitQuery, no global QuerySplittingBehavior), so every sibling
+        // collection on that Include chain multiplies into a cartesian product - and each row of the product
+        // carries a Segment.Embedding (vector(768)). Adding tags as an Include turned this recording's
+        // 11 speakers x 7 actions x 670 segments (51,590 rows) into 11 x 7 x 13 x 670 (670,670 rows), which
+        // measured 10.6 s against 0.6 s on real Postgres - the sort spilled 1.8 GB to disk instead of 133 MB.
+        // A per-recording tag list is tiny (extraction caps at 12, plus what the user adopted or dismissed),
+        // so a second indexed round trip is free (0.04 ms, 3 buffer hits) next to what the join costs.
+        var tagRows = await _db.RecordingTags.Where(t => t.RecordingId == id).ToListAsync();
+
         // Adopted tags in adoption order (AdoptedAt, not CreatedAt: a promoted suggestion was created when
         // the extraction ran). Suggestions heaviest first, which is the order the hint list offers them in.
-        var adoptedTags = rec.Tags
+        var adoptedTags = tagRows
             .Where(t => t.Status == RecordingTagStatus.Adopted)
             .OrderBy(t => t.AdoptedAt ?? t.CreatedAt)
             .Select(t => t.Tag)
             .ToList();
-        var suggestedTags = rec.Tags
+        var suggestedTags = tagRows
             .Where(t => t.Status == RecordingTagStatus.Suggested)
             .OrderByDescending(t => t.Weight)
             .ThenBy(t => t.Ordinal)
