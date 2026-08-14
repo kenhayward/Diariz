@@ -1,5 +1,5 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentProps } from "react";
 import { useState } from "react";
@@ -41,7 +41,13 @@ function renderTags(props: Partial<ComponentProps<typeof RecordingTags>> = {}) {
 }
 
 describe("RecordingTags", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // clearAllMocks drops the resolved values set in the factory too, so restore the default happy path.
+    vi.mocked(api.addRecordingTag).mockResolvedValue(undefined);
+    vi.mocked(api.removeRecordingTag).mockResolvedValue(undefined);
+    vi.mocked(api.dismissRecordingTag).mockResolvedValue(undefined);
+  });
 
   it("shows the adopted tag count on the pill and opens the popover on click", async () => {
     renderTags({ tags: ["metadata", "licensing"] });
@@ -52,6 +58,9 @@ describe("RecordingTags", () => {
     await userEvent.click(pill);
 
     expect(screen.getByLabelText("Add a tag")).toBeTruthy();
+    // The chips come straight from the props, not from any local copy of them.
+    expect(screen.getByText("metadata")).toBeTruthy();
+    expect(screen.getByText("licensing")).toBeTruthy();
   });
 
   it("sends a typed tag to the API", async () => {
@@ -63,23 +72,15 @@ describe("RecordingTags", () => {
     await waitFor(() => expect(api.addRecordingTag).toHaveBeenCalledWith("rec-1", "licensing"));
   });
 
-  it("shows a typed tag immediately, before the server answers", async () => {
-    renderTags({ tags: [] });
-    await userEvent.click(screen.getByRole("button", { name: "Tags" }));
-
-    await userEvent.type(screen.getByLabelText("Add a tag"), "licensing ");
-
-    expect(screen.getByRole("button", { name: "Tags" }).textContent).toContain("1");
-  });
-
-  it("promotes a suggestion, moving it out of the hint list", async () => {
+  it("promotes a suggestion by adding it", async () => {
     renderTags({ tags: [], suggested: ["templates"] });
     await userEvent.click(screen.getByRole("button", { name: "Tags" }));
 
     await userEvent.click(screen.getByRole("button", { name: /templates/ }));
 
     await waitFor(() => expect(api.addRecordingTag).toHaveBeenCalledWith("rec-1", "templates"));
-    expect(screen.getByText("All suggestions dealt with.")).toBeTruthy();
+    // Adopting a suggestion is an add, never a dismissal - the two sit next to each other on the same chip.
+    expect(api.dismissRecordingTag).not.toHaveBeenCalled();
   });
 
   it("removes an adopted tag", async () => {
@@ -113,94 +114,56 @@ describe("RecordingTags", () => {
     );
   });
 
-  it("clears the optimistic chip when the add request fails, rather than leaving it stuck", async () => {
-    vi.mocked(api.addRecordingTag).mockRejectedValueOnce(new Error("boom"));
-    renderTags({ tags: [] });
-    await userEvent.click(screen.getByRole("button", { name: "Tags" }));
-
-    await userEvent.type(screen.getByLabelText("Add a tag"), "licensing ");
-
-    // The server never applied it, so nothing about `tags`/`suggested` ever changes - only the mutation's
-    // own failure can clear the overlay. Without that, this never resolves and the test times out.
-    await waitFor(() => expect(screen.getByRole("button", { name: "Tags" }).textContent).toContain("0"));
-  });
-
-  it("lets fresh server tags win over the optimistic overlay once they actually differ", async () => {
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const { rerender } = render(
-      <QueryClientProvider client={qc}>
-        <RecordingTags recordingId="rec-1" tags={[]} suggested={[]} />
-      </QueryClientProvider>,
-    );
-    await userEvent.click(screen.getByRole("button", { name: "Tags" }));
-    await userEvent.type(screen.getByLabelText("Add a tag"), "licensing ");
-    expect(screen.getByRole("button", { name: "Tags" }).textContent).toContain("1");
-
-    // Simulates the detail query actually refetching with the server's own (now-updated) lists - the
-    // overlay must defer to this, not keep showing its own guess forever.
-    rerender(
-      <QueryClientProvider client={qc}>
-        <RecordingTags recordingId="rec-1" tags={["licensing", "extra"]} suggested={[]} />
-      </QueryClientProvider>,
-    );
-
-    await waitFor(() => expect(screen.getByRole("button", { name: "Tags" }).textContent).toContain("2"));
-  });
-
-  it("keeps an unconfirmed sibling visible when a content change confirms only one op", async () => {
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const { rerender } = render(
-      <QueryClientProvider client={qc}>
-        <RecordingTags recordingId="rec-1" tags={[]} suggested={[]} />
-      </QueryClientProvider>,
-    );
-    await userEvent.click(screen.getByRole("button", { name: "Tags" }));
-
-    // Two adds in one run, as the popover is designed for (space commits a word and keeps focus).
-    await userEvent.type(screen.getByLabelText("Add a tag"), "alpha beta ");
-    expect(screen.getByText("alpha")).toBeTruthy();
-    expect(screen.getByText("beta")).toBeTruthy();
-
-    // Alpha's own invalidate refetches the detail query while beta's request is still in flight - the
-    // server now has alpha adopted, but not beta yet. Reconciling must drop only the confirmed op, not the
-    // whole overlay - otherwise beta's chip would flash out here and only return once beta's own refetch
-    // happens to land, during the exact rapid-typing interaction the popover is built around.
-    rerender(
-      <QueryClientProvider client={qc}>
-        <RecordingTags recordingId="rec-1" tags={["alpha"]} suggested={[]} />
-      </QueryClientProvider>,
-    );
-
-    expect(screen.getByText("beta")).toBeTruthy();
-  });
-
-  it("keeps a still-valid chip visible when an earlier overlapping edit fails", async () => {
-    // The popover keeps focus after a word commits, so typing several tags in a run is the intended flow -
-    // overlapping requests are the normal case, not a corner case. Alpha's request is held open; beta's
-    // resolves right away.
-    let rejectAlpha!: (e: unknown) => void;
-    const alphaPromise = new Promise<void>((_, reject) => {
-      rejectAlpha = reject;
+  it("does not resurrect a tag that was added and then removed", async () => {
+    // The same tag added and then removed is the one sequence a locally-replayed optimistic overlay could
+    // not get right: both edits are about the same chip, so reconciling them against the server's list can
+    // drop the wrong one and bring back a chip the user explicitly removed. With the chips rendering only
+    // from what the server reports, the sequence has nowhere to go wrong - this test pins that.
+    //
+    // The harness closes the real loop rather than pinning fixed props: the mocks mutate a stand-in server
+    // list, and a `useQuery` on the ["recording", id] key - the key the container invalidates - feeds it
+    // back down as props, the way the recording detail query does in the app.
+    let server: string[] = [];
+    vi.mocked(api.addRecordingTag).mockImplementation(async (_id, tag) => {
+      server = [...server, tag];
     });
-    vi.mocked(api.addRecordingTag)
-      .mockImplementationOnce(() => alphaPromise)
-      .mockImplementationOnce(() => Promise.resolve(undefined));
+    vi.mocked(api.removeRecordingTag).mockImplementation(async (_id, tag) => {
+      server = server.filter((x) => x !== tag);
+    });
 
-    renderTags({ tags: [] });
+    function Harness() {
+      const { data } = useQuery({ queryKey: ["recording", "rec-1"], queryFn: async () => [...server] });
+      return <RecordingTags recordingId="rec-1" tags={data ?? []} suggested={[]} />;
+    }
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <StatusProvider>
+          <StatusProbe />
+          <Harness />
+        </StatusProvider>
+      </QueryClientProvider>,
+    );
+
     await userEvent.click(screen.getByRole("button", { name: "Tags" }));
+    await userEvent.type(screen.getByLabelText("Add a tag"), "licensing ");
 
-    await userEvent.type(screen.getByLabelText("Add a tag"), "alpha beta ");
+    // The chip appears once the server has it - the refetch the add's invalidate triggered.
+    await waitFor(() => expect(screen.getByText("licensing")).toBeTruthy());
 
-    await waitFor(() => expect(api.addRecordingTag).toHaveBeenCalledTimes(2));
-    expect(screen.getByText("alpha")).toBeTruthy();
-    expect(screen.getByText("beta")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Remove tag" }));
 
-    // Alpha's request now fails. Retracting it must not take beta - a different, still-valid edit - down
-    // with it.
-    rejectAlpha(new Error("boom"));
+    await waitFor(() => expect(screen.queryByText("licensing")).toBeNull());
+    expect(api.addRecordingTag).toHaveBeenCalledWith("rec-1", "licensing");
+    expect(api.removeRecordingTag).toHaveBeenCalledWith("rec-1", "licensing");
+    expect(screen.getByRole("button", { name: "Tags" }).textContent).toContain("0");
 
-    await waitFor(() => expect(screen.queryByText("alpha")).toBeNull());
-    expect(screen.getByText("beta")).toBeTruthy();
+    // ...and it stays gone. Force one more read of the server list, so a chip that was only waiting on
+    // another refetch to reappear would have its chance here.
+    await act(async () => {
+      await qc.refetchQueries({ queryKey: ["recording", "rec-1"] });
+    });
+    expect(screen.queryByText("licensing")).toBeNull();
   });
 
   it("shows a failure in the shared status bar, and retracts it once a later edit succeeds", async () => {

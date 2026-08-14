@@ -6,25 +6,18 @@ import { useStatus } from "../../lib/status";
 import TagsPill from "./TagsPill";
 import TagsPopover from "./TagsPopover";
 
-/// One in-flight edit, applied on top of the server's own `tags`/`suggested` to render the pill/popover
-/// before the request settles. Tracked individually - rather than as one combined snapshot - because the
-/// popover is built for rapid successive edits (space commits a word and keeps focus, so several can be in
-/// flight at once): one edit failing must retract only itself, never a sibling that is still valid. `type` +
-/// `tag` identifies an op uniquely: the popover never lets the same tag be in flight twice for the same
-/// mutation type (a duplicate add/remove/dismiss of a tag already reflected in `shownTags`/`shownSuggested`
-/// is rejected before it reaches here - see `lib/tagInput.ts`'s `addTag`).
-interface PendingOp {
-  type: "add" | "remove" | "dismiss";
-  tag: string;
-}
-
 /// The hero card's tagging control: the pill, its popover, and the server round-trip behind them. Owns the
 /// mutations itself rather than taking callbacks down through HeroSummaryCard and RecordingDetail - nothing
 /// outside this control needs to know about tagging, and both of those already carry long prop lists.
 ///
-/// Every action persists on its own (no Save button). Local `ops` state applies each change immediately so
-/// the pill count and the chips react to a click without waiting for the refetch; the authoritative lists
-/// arrive back as props when the recording detail query settles.
+/// Every action persists on its own (no Save button): each fires its mutation, invalidates the queries that
+/// feed the affected views, and the chips re-render from whatever the server then reports. There is
+/// deliberately no local optimistic copy of the tag lists - `tags`/`suggested` are the only source of what
+/// is shown, exactly as every other mutation in this app works (speaker renames, applying a meeting type,
+/// completing an action item all simply fire, invalidate, and re-render from the server). An overlay of
+/// locally-replayed edits cannot distinguish "the server confirmed my edit" from "the server happens to
+/// agree for another reason", so it either strands a phantom chip or drops a real one; the round-trip is
+/// short enough that showing the server's answer is the honest thing to do.
 export default function RecordingTags({
   recordingId,
   tags,
@@ -38,68 +31,6 @@ export default function RecordingTags({
   const qc = useQueryClient();
   const { setStatus } = useStatus();
   const [open, setOpen] = useState(false);
-
-  /// One entry per edit still in flight (or not yet reflected by a refetch). Rendered by replaying them, in
-  /// order, on top of the server's own lists - see `applyOps`.
-  const [ops, setOps] = useState<PendingOp[]>([]);
-
-  const lower = (s: string) => s.toLowerCase();
-
-  /// Reconciles `ops` against genuinely new `tags`/`suggested` content (i.e. the detail query actually
-  /// refetched) - not merely once a mutation's promise settles, and not merely on a new array reference. A
-  /// mutation can settle (success) well before the invalidated query refetches, and reconciling on settle
-  /// alone would flash an added chip back out. Comparing by content rather than reference matters too:
-  /// `HeroSummaryCard` passes `rec.tags ?? []`, and that `?? []` mints a fresh array on every one of its
-  /// re-renders whenever a recording has no tags yet - a reference-based dependency would reconcile on any
-  /// unrelated re-render.
-  ///
-  /// Deliberately per-op, not a wholesale `setOps([])`: the popover commits a word on space and keeps
-  /// focus, so several ops are routinely in flight together (see `PendingOp`'s comment). Typing "alpha
-  /// beta" starts two adds; if alpha's request settles first, its invalidate refetches props that now
-  /// contain alpha while beta's is still in flight - clearing every op at that point would flash beta's
-  /// chip out until beta's own refetch happened to land. Each op is dropped only once *its own* effect is
-  /// visible in the incoming lists - an `add` once its tag is adopted, a `remove` once its tag is gone from
-  /// the adopted list, a `dismiss` once its tag is gone from the suggestions - so an unconfirmed sibling
-  /// keeps rendering. This also covers a change this component didn't cause at all (another room member's
-  /// edit, a SignalR-driven refetch): still-open ops without a matching server confirmation are the ones
-  /// that could not have come from an outside change, and are the only ones worth still trusting the
-  /// overlay for.
-  ///
-  /// This only handles the success path. A rejected mutation never changes the server's lists (nothing was
-  /// applied), so this effect alone would never confirm a failed op - each op instead retracts itself
-  /// directly on error, in the mutations' `onError` below.
-  const tagsKey = tags.join("|");
-  const suggestedKey = suggested.join("|");
-  useEffect(() => {
-    setOps((cur) =>
-      cur.filter((op) => {
-        const inTags = tags.some((x) => lower(x) === lower(op.tag));
-        const inSuggested = suggested.some((x) => lower(x) === lower(op.tag));
-        if (op.type === "add") return !inTags;
-        if (op.type === "remove") return inTags;
-        return inSuggested;
-      }),
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tagsKey, suggestedKey]);
-
-  /// Replays the in-flight ops, in the order they were made, on top of the server's own lists.
-  function applyOps(base: { tags: string[]; suggested: string[] }): { tags: string[]; suggested: string[] } {
-    let liveTags = base.tags;
-    let liveSuggested = base.suggested;
-    for (const op of ops) {
-      if (op.type === "add") {
-        if (!liveTags.some((x) => lower(x) === lower(op.tag))) liveTags = [...liveTags, op.tag];
-        liveSuggested = liveSuggested.filter((x) => lower(x) !== lower(op.tag));
-      } else if (op.type === "remove") {
-        liveTags = liveTags.filter((x) => lower(x) !== lower(op.tag));
-      } else {
-        liveSuggested = liveSuggested.filter((x) => lower(x) !== lower(op.tag));
-      }
-    }
-    return { tags: liveTags, suggested: liveSuggested };
-  }
-  const { tags: shownTags, suggested: shownSuggested } = applyOps({ tags, suggested });
 
   /// Both queries: the recording detail feeds this control's props, and the ["tags"] prefix covers every
   /// room variant of the tag cloud the Tags tab renders.
@@ -126,82 +57,53 @@ export default function RecordingTags({
     }
   }, [error, setStatus]);
   // Clear a lingering failure when this control unmounts (e.g. navigating off the recording).
-  useEffect(() => () => {
-    if (pushedErrorRef.current) setStatus(null);
-  }, [setStatus]);
+  useEffect(
+    () => () => {
+      if (pushedErrorRef.current) setStatus(null);
+    },
+    [setStatus],
+  );
 
   /// A later edit going through means whatever the last failure was about is over - the message stops
   /// applying, so retract it (subject to the "only what we pushed" guard in the effect above).
-  function onOpSuccess() {
+  function onEditSuccess() {
     setError(null);
   }
 
-  /// Retracts exactly the op that failed, not the whole overlay - a sibling op still in flight or already
-  /// applied must stay visible - and reports the failure.
-  ///
-  /// Deliberately wired as the *hook-level* `onError`/`onSuccess` (`useMutation({ onError, onSuccess })`),
-  /// not as per-call options passed to `.mutate(tag, { onError })`. `MutationObserver.mutate()` stores
-  /// per-call options on the shared observer and detaches it from whatever mutation was previously in
-  /// flight, so an earlier overlapping call's per-call `onError` would silently never fire once a later
-  /// `.mutate()` on the same hook superseded it. Hook-level options are captured per-`Mutation` instance at
-  /// build time and always run from inside that mutation's own `execute()`, independent of the observer -
-  /// exactly what "several edits genuinely in flight at once" needs.
-  function onOpError(type: PendingOp["type"], tag: string, e: unknown) {
-    setOps((cur) => cur.filter((o) => !(o.type === type && lower(o.tag) === lower(tag))));
+  function onEditError(e: unknown) {
     setError(apiErrorMessage(e, t("workspace:errSaveTag")));
   }
 
   const add = useMutation({
     mutationFn: (tag: string) => api.addRecordingTag(recordingId, tag),
     onSettled: refresh,
-    onSuccess: onOpSuccess,
-    onError: (e, tag) => onOpError("add", tag, e),
+    onSuccess: onEditSuccess,
+    onError: onEditError,
   });
   const remove = useMutation({
     mutationFn: (tag: string) => api.removeRecordingTag(recordingId, tag),
     onSettled: refresh,
-    onSuccess: onOpSuccess,
-    onError: (e, tag) => onOpError("remove", tag, e),
+    onSuccess: onEditSuccess,
+    onError: onEditError,
   });
   const dismiss = useMutation({
     mutationFn: (tag: string) => api.dismissRecordingTag(recordingId, tag),
     onSettled: refresh,
-    onSuccess: onOpSuccess,
-    onError: (e, tag) => onOpError("dismiss", tag, e),
+    onSuccess: onEditSuccess,
+    onError: onEditError,
   });
-
-  function onAdd(tag: string) {
-    // A promoted suggestion leaves the hint list in the same beat it becomes a chip - see `applyOps`.
-    setOps((cur) => [...cur, { type: "add", tag }]);
-    add.mutate(tag);
-  }
-
-  function onRemove(tag: string) {
-    setOps((cur) => [...cur, { type: "remove", tag }]);
-    remove.mutate(tag);
-  }
-
-  function onDismiss(tag: string) {
-    setOps((cur) => [...cur, { type: "dismiss", tag }]);
-    dismiss.mutate(tag);
-  }
 
   return (
     <div className="relative">
-      <TagsPill
-        count={shownTags.length}
-        tags={shownTags}
-        open={open}
-        onToggle={() => setOpen((o) => !o)}
-      />
+      <TagsPill count={tags.length} tags={tags} open={open} onToggle={() => setOpen((o) => !o)} />
       <TagsPopover
         open={open}
         onClose={() => setOpen(false)}
-        tags={shownTags}
-        suggested={shownSuggested}
-        onAdd={onAdd}
-        onRemove={onRemove}
-        onDismiss={onDismiss}
+        tags={tags}
+        suggested={suggested}
+        onAdd={(tag) => add.mutate(tag)}
+        onRemove={(tag) => remove.mutate(tag)}
+        onDismiss={(tag) => dismiss.mutate(tag)}
       />
     </div>
   );
