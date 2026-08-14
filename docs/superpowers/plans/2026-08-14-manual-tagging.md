@@ -1694,7 +1694,7 @@ describe("TagsPill", () => {
   it("shows the tag count", () => {
     render(<TagsPill count={3} tags={["a", "b", "c"]} open={false} onToggle={() => {}} />);
     const pill = screen.getByRole("button", { name: "Tags" });
-    expect(pill).toHaveTextContent("3");
+    expect(pill.textContent).toContain("3");
   });
 
   it("names the first four tags in its hover text", () => {
@@ -1706,8 +1706,7 @@ describe("TagsPill", () => {
         onToggle={() => {}}
       />,
     );
-    expect(screen.getByRole("button", { name: "Tags" })).toHaveAttribute(
-      "title",
+    expect(screen.getByRole("button", { name: "Tags" }).getAttribute("title")).toBe(
       "one · two · three · four",
     );
   });
@@ -1721,8 +1720,7 @@ describe("TagsPill", () => {
         onToggle={() => {}}
       />,
     );
-    expect(screen.getByRole("button", { name: "Tags" })).toHaveAttribute(
-      "title",
+    expect(screen.getByRole("button", { name: "Tags" }).getAttribute("title")).toBe(
       "one · two · three · four · +2 more",
     );
   });
@@ -1730,8 +1728,8 @@ describe("TagsPill", () => {
   it("invites a first tag when there are none", () => {
     render(<TagsPill count={0} tags={[]} open={false} onToggle={() => {}} />);
     const pill = screen.getByRole("button", { name: "Tags" });
-    expect(pill).toHaveAttribute("title", "No tags yet - click to add");
-    expect(pill).toHaveTextContent("0");
+    expect(pill.getAttribute("title")).toBe("No tags yet - click to add");
+    expect(pill.textContent).toContain("0");
   });
 
   it("reports its popover state and toggles on click", async () => {
@@ -1739,8 +1737,8 @@ describe("TagsPill", () => {
     render(<TagsPill count={0} tags={[]} open={false} onToggle={onToggle} />);
     const pill = screen.getByRole("button", { name: "Tags" });
 
-    expect(pill).toHaveAttribute("aria-expanded", "false");
-    expect(pill).toHaveAttribute("aria-haspopup", "dialog");
+    expect(pill.getAttribute("aria-expanded")).toBe("false");
+    expect(pill.getAttribute("aria-haspopup")).toBe("dialog");
 
     await userEvent.click(pill);
     expect(onToggle).toHaveBeenCalledTimes(1);
@@ -1748,7 +1746,7 @@ describe("TagsPill", () => {
 
   it("marks itself expanded while the popover is open", () => {
     render(<TagsPill count={1} tags={["a"]} open onToggle={() => {}} />);
-    expect(screen.getByRole("button", { name: "Tags" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Tags" }).getAttribute("aria-expanded")).toBe("true");
   });
 });
 ```
@@ -1925,8 +1923,8 @@ describe("TagsPopover", () => {
     await userEvent.type(input, "metadata ");
 
     expect(onAdd).toHaveBeenCalledWith("metadata");
-    expect(input).toHaveFocus();
-    expect(input).toHaveValue("");
+    expect(document.activeElement).toBe(input);
+    expect((input as HTMLInputElement).value).toBe("");
   });
 
   it("commits on Enter and closes, because Enter means done", async () => {
@@ -2007,17 +2005,17 @@ describe("TagsPopover", () => {
 
   it("counts the suggestions still to deal with", () => {
     setup({ suggested: ["a", "b", "c"] });
-    expect(screen.getByText("3 left")).toBeInTheDocument();
+    expect(screen.getByText("3 left")).toBeTruthy();
   });
 
   it("says so when every suggestion has been dealt with", () => {
     setup({ suggested: [] });
-    expect(screen.getByText("All suggestions dealt with.")).toBeInTheDocument();
+    expect(screen.getByText("All suggestions dealt with.")).toBeTruthy();
   });
 
   it("renders nothing when closed", () => {
     setup({ open: false });
-    expect(screen.queryByLabelText("Add a tag")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Add a tag")).toBeNull();
   });
 });
 ```
@@ -2347,12 +2345,12 @@ describe("RecordingTags", () => {
   it("shows the adopted tag count on the pill and opens the popover on click", async () => {
     renderTags({ tags: ["metadata", "licensing"] });
     const pill = screen.getByRole("button", { name: "Tags" });
-    expect(pill).toHaveTextContent("2");
-    expect(screen.queryByLabelText("Add a tag")).not.toBeInTheDocument();
+    expect(pill.textContent).toContain("2");
+    expect(screen.queryByLabelText("Add a tag")).toBeNull();
 
     await userEvent.click(pill);
 
-    expect(screen.getByLabelText("Add a tag")).toBeInTheDocument();
+    expect(screen.getByLabelText("Add a tag")).toBeTruthy();
   });
 
   it("sends a typed tag to the API", async () => {
@@ -2370,7 +2368,7 @@ describe("RecordingTags", () => {
 
     await userEvent.type(screen.getByLabelText("Add a tag"), "licensing ");
 
-    expect(screen.getByRole("button", { name: "Tags" })).toHaveTextContent("1");
+    expect(screen.getByRole("button", { name: "Tags" }).textContent).toContain("1");
   });
 
   it("promotes a suggestion, moving it out of the hint list", async () => {
@@ -2380,7 +2378,7 @@ describe("RecordingTags", () => {
     await userEvent.click(screen.getByRole("button", { name: /templates/ }));
 
     await waitFor(() => expect(api.addRecordingTag).toHaveBeenCalledWith("rec-1", "templates"));
-    expect(screen.getByText("All suggestions dealt with.")).toBeInTheDocument();
+    expect(screen.getByText("All suggestions dealt with.")).toBeTruthy();
   });
 
   it("removes an adopted tag", async () => {
