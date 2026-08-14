@@ -2,7 +2,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentProps } from "react";
+import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { StatusProvider, useStatus } from "../../lib/status";
 import RecordingTags from "./RecordingTags";
 
 vi.mock("../../lib/api", () => ({
@@ -18,11 +20,21 @@ vi.mock("../../lib/api", () => ({
 
 import { api } from "../../lib/api";
 
+/// Renders the current global status message, so a test can see what the container pushed to (and
+/// retracted from) the shared status bar. Mirrors the same probe in `pages/RecordingDetail.test.tsx`.
+function StatusProbe() {
+  const { status } = useStatus();
+  return <div data-testid="status">{status?.text ?? ""}</div>;
+}
+
 function renderTags(props: Partial<ComponentProps<typeof RecordingTags>> = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={qc}>
-      <RecordingTags recordingId="rec-1" tags={["metadata"]} suggested={["templates"]} {...props} />
+      <StatusProvider>
+        <StatusProbe />
+        <RecordingTags recordingId="rec-1" tags={["metadata"]} suggested={["templates"]} {...props} />
+      </StatusProvider>
     </QueryClientProvider>,
   );
   return qc;
@@ -133,5 +145,83 @@ describe("RecordingTags", () => {
     );
 
     await waitFor(() => expect(screen.getByRole("button", { name: "Tags" }).textContent).toContain("2"));
+  });
+
+  it("keeps a still-valid chip visible when an earlier overlapping edit fails", async () => {
+    // The popover keeps focus after a word commits, so typing several tags in a run is the intended flow -
+    // overlapping requests are the normal case, not a corner case. Alpha's request is held open; beta's
+    // resolves right away.
+    let rejectAlpha!: (e: unknown) => void;
+    const alphaPromise = new Promise<void>((_, reject) => {
+      rejectAlpha = reject;
+    });
+    vi.mocked(api.addRecordingTag)
+      .mockImplementationOnce(() => alphaPromise)
+      .mockImplementationOnce(() => Promise.resolve(undefined));
+
+    renderTags({ tags: [] });
+    await userEvent.click(screen.getByRole("button", { name: "Tags" }));
+
+    await userEvent.type(screen.getByLabelText("Add a tag"), "alpha beta ");
+
+    await waitFor(() => expect(api.addRecordingTag).toHaveBeenCalledTimes(2));
+    expect(screen.getByText("alpha")).toBeTruthy();
+    expect(screen.getByText("beta")).toBeTruthy();
+
+    // Alpha's request now fails. Retracting it must not take beta - a different, still-valid edit - down
+    // with it.
+    rejectAlpha(new Error("boom"));
+
+    await waitFor(() => expect(screen.queryByText("alpha")).toBeNull());
+    expect(screen.getByText("beta")).toBeTruthy();
+  });
+
+  it("shows a failure in the shared status bar, and retracts it once a later edit succeeds", async () => {
+    vi.mocked(api.addRecordingTag).mockRejectedValueOnce(new Error("boom"));
+    renderTags({ tags: [] });
+    await userEvent.click(screen.getByRole("button", { name: "Tags" }));
+
+    await userEvent.type(screen.getByLabelText("Add a tag"), "licensing ");
+
+    await waitFor(() =>
+      expect(screen.getByTestId("status").textContent).toBe("Could not save the tag change."),
+    );
+
+    // A later edit goes through - the earlier failure must not linger over it (the "error" tone is sticky
+    // and never auto-clears on its own; only this component retracting it clears the bar).
+    await userEvent.type(screen.getByLabelText("Add a tag"), "metadata ");
+
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe(""));
+  });
+
+  it("retracts its failure message from the status bar when it unmounts", async () => {
+    vi.mocked(api.addRecordingTag).mockRejectedValueOnce(new Error("boom"));
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    // Mirrors how the real app mounts this control: RecordingTags can disappear (navigating off the
+    // recording) while the rest of the app - and its shared status bar - stays up.
+    function Harness() {
+      const [mounted, setMounted] = useState(true);
+      return (
+        <StatusProvider>
+          <StatusProbe />
+          <button onClick={() => setMounted(false)}>unmount</button>
+          {mounted && <RecordingTags recordingId="rec-1" tags={[]} suggested={[]} />}
+        </StatusProvider>
+      );
+    }
+    render(
+      <QueryClientProvider client={qc}>
+        <Harness />
+      </QueryClientProvider>,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Tags" }));
+    await userEvent.type(screen.getByLabelText("Add a tag"), "licensing ");
+    await waitFor(() => expect(screen.getByTestId("status").textContent).not.toBe(""));
+
+    await userEvent.click(screen.getByRole("button", { name: "unmount" }));
+
+    expect(screen.getByTestId("status").textContent).toBe("");
   });
 });
