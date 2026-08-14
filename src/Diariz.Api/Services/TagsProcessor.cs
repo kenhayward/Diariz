@@ -71,7 +71,13 @@ public static class TagsProcessor
             var keep = rec.Tags
                 .Where(t => t.Status != RecordingTagStatus.Suggested)
                 .ToList();
-            db.RecordingTags.RemoveRange(rec.Tags.Where(t => t.Status == RecordingTagStatus.Suggested));
+            // Materialised, like `keep` above: RemoveRange enumerates what it is given while it marks each
+            // entity Deleted, so handing it a live query over the same collection it is mutating is a trap
+            // waiting for the day RemoveRange starts touching rec.Tags. It costs nothing here (<= 12 rows).
+            var replace = rec.Tags
+                .Where(t => t.Status == RecordingTagStatus.Suggested)
+                .ToList();
+            db.RecordingTags.RemoveRange(replace);
 
             // Never re-offer a word the user already holds or has already rejected on this recording. Compare
             // NORMALISED forms, not raw text: an adopted (or dismissed) tag can be stored in a different

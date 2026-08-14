@@ -193,6 +193,45 @@ public class RecordingTagEndpointsTests
     }
 
     [Fact]
+    public async Task RemoveTag_LeavesADismissalTombstoneAlone()
+    {
+        // A dismissal is the row that stops a word being suggested here again. Removing an adopted tag must
+        // not take a tombstone with it, or the next extraction re-offers the word the user rejected - which
+        // is the whole point of dismissing it.
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        Users.Ensure(db, me);
+        var rec = AddRecording(db, me);
+        Tag(db, rec.Id, "metadata", 1.0, RecordingTagStatus.Adopted);
+        Tag(db, rec.Id, "boilerplate", 0.3, RecordingTagStatus.Dismissed, ordinal: 1);
+        await db.SaveChangesAsync();
+
+        Assert.IsType<NoContentResult>(await Recordings.Build(db, me).RemoveTag(rec.Id, "boilerplate"));
+
+        var rows = db.RecordingTags.ToList();
+        Assert.Equal(2, rows.Count);
+        Assert.Equal(RecordingTagStatus.Dismissed, rows.Single(t => t.Tag == "boilerplate").Status);
+    }
+
+    [Fact]
+    public async Task RemoveTag_OfAWordThatIsOnlyASuggestion_LeavesTheSuggestion()
+    {
+        // Remove means "un-adopt". A suggestion was never adopted, so there is nothing to remove - deleting
+        // the row would silently dismiss it without leaving the tombstone a dismissal leaves.
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        Users.Ensure(db, me);
+        var rec = AddRecording(db, me);
+        Tag(db, rec.Id, "suggested-word", 0.5, RecordingTagStatus.Suggested);
+        await db.SaveChangesAsync();
+
+        Assert.IsType<NoContentResult>(await Recordings.Build(db, me).RemoveTag(rec.Id, "SUGGESTED word"));
+
+        var row = Assert.Single(db.RecordingTags.ToList());
+        Assert.Equal(RecordingTagStatus.Suggested, row.Status);
+    }
+
+    [Fact]
     public async Task RemoveTag_ThatIsNotThere_IsStillNoContent()
     {
         using var db = TestDb.Create();

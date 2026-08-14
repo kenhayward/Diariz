@@ -2,9 +2,11 @@ using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
 using Diariz.Api.IntegrationTests.Infrastructure;
 using Diariz.Api.Tests.Infrastructure;
+using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Diariz.Api.IntegrationTests;
 
@@ -248,5 +250,130 @@ public class TagsIntegrationTests(ContainersFixture fx)
             Assert.Equal(RecordingTagStatus.Adopted, tag.Status);
             Assert.Equal("Data-Collection", tag.Tag);
         }
+    }
+
+    /// <summary>Inserts <paramref name="tag"/> on <paramref name="recordingId"/> from its OWN connection, the
+    /// first time the context it is attached to tries to save. That is the deterministic stand-in for the real
+    /// race: two room members add the same tag at once, both read the rows and find no adopted match, and both
+    /// insert. Real concurrency cannot be reproduced reliably in a test, but the DATABASE sees exactly this -
+    /// another transaction's row already committed under the unique index when ours arrives.</summary>
+    private sealed class InsertsTheSameTagFirst(string connectionString, Guid recordingId, string tag)
+        : SaveChangesInterceptor
+    {
+        public bool Fired { get; private set; }
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken ct = default)
+        {
+            if (Fired) return result;
+            Fired = true;
+
+            var options = new DbContextOptionsBuilder<DiarizDbContext>()
+                .UseNpgsql(connectionString, o => o.UseVector())
+                .Options;
+            await using var rival = new DiarizDbContext(options);
+            rival.RecordingTags.Add(new RecordingTag
+            {
+                Id = Guid.NewGuid(),
+                RecordingId = recordingId,
+                Tag = tag,
+                Weight = 1.0,
+                Ordinal = 0,
+                Status = RecordingTagStatus.Adopted,
+                AdoptedAt = DateTimeOffset.UtcNow,
+            });
+            await rival.SaveChangesAsync(ct);
+            return result;
+        }
+    }
+
+    // AddTag calls itself idempotent, and it is - for anything it can SEE. Two members adding the same tag at
+    // the same time both find no adopted row and both insert, and IX_RecordingTags_RecordingId_TagLower
+    // rejects the second one. DiarizDbContext's own comment on that index predicts this ("a duplicate here
+    // means a race between two room members"). Postgres-only: the in-memory provider has no unique index, so
+    // nothing there can reproduce the violation.
+    [Fact]
+    public async Task AddTag_WhenAnotherMemberWinsTheRace_IsStillIdempotentRatherThanA500()
+    {
+        Guid userId, recId;
+        await using (var db = fx.CreateDbContext())
+        {
+            var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test", Email = "u4@x.test" };
+            var rec = new Recording { Id = Guid.NewGuid(), UserId = user.Id, BlobKey = $"k/{Guid.NewGuid()}" };
+            db.AddRange(user, rec);
+            await db.SaveChangesAsync();
+            userId = user.Id;
+            recId = rec.Id;
+        }
+
+        var rival = new InsertsTheSameTagFirst(fx.PostgresConnectionString, recId, "metadata");
+        var options = new DbContextOptionsBuilder<DiarizDbContext>()
+            .UseNpgsql(fx.PostgresConnectionString, o => o.UseVector())
+            .AddInterceptors(rival)
+            .Options;
+        await using (var db = new DiarizDbContext(options))
+        {
+            // No adopted match exists when AddTag reads, so it takes the insert branch; the rival's row lands
+            // in between. The caller asked for a tag that is now there, which is the outcome they wanted.
+            var result = await Recordings.Build(db, userId).AddTag(recId, new SetRecordingTagRequest("metadata"));
+            Assert.IsType<NoContentResult>(result);
+        }
+        Assert.True(rival.Fired);   // the race really was staged, so NoContent is not a false pass
+
+        await using (var verify = fx.CreateDbContext())
+        {
+            // Exactly one adopted row - the rival's. Ours never landed, and nothing was corrupted.
+            var tag = Assert.Single(await verify.RecordingTags.Where(t => t.RecordingId == recId).ToListAsync());
+            Assert.Equal(RecordingTagStatus.Adopted, tag.Status);
+            Assert.Equal("metadata", tag.Tag);
+        }
+    }
+
+    /// <summary>Deletes the recording out from under the context it is attached to, the first time that context
+    /// saves - so the pending INSERT fails on the RecordingId foreign key rather than on the unique index. The
+    /// other side of the coin from <see cref="InsertsTheSameTagFirst"/>.</summary>
+    private sealed class DeletesTheRecordingFirst(string connectionString, Guid recordingId) : SaveChangesInterceptor
+    {
+        private bool _fired;
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken ct = default)
+        {
+            if (_fired) return result;
+            _fired = true;
+
+            var options = new DbContextOptionsBuilder<DiarizDbContext>()
+                .UseNpgsql(connectionString, o => o.UseVector())
+                .Options;
+            await using var rival = new DiarizDbContext(options);
+            await rival.Recordings.Where(r => r.Id == recordingId).ExecuteDeleteAsync(ct);
+            return result;
+        }
+    }
+
+    // The guard on the catch above: AddTag reports success for a losing race ONLY because the tag really is
+    // adopted afterwards. Any other write failure has to keep failing, or the catch would be a blanket
+    // swallow that turns a lost tag into a silent 204.
+    [Fact]
+    public async Task AddTag_WhenTheWriteFailsForAnyOtherReason_StillFails()
+    {
+        Guid userId, recId;
+        await using (var db = fx.CreateDbContext())
+        {
+            var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test", Email = "u5@x.test" };
+            var rec = new Recording { Id = Guid.NewGuid(), UserId = user.Id, BlobKey = $"k/{Guid.NewGuid()}" };
+            db.AddRange(user, rec);
+            await db.SaveChangesAsync();
+            userId = user.Id;
+            recId = rec.Id;
+        }
+
+        var options = new DbContextOptionsBuilder<DiarizDbContext>()
+            .UseNpgsql(fx.PostgresConnectionString, o => o.UseVector())
+            .AddInterceptors(new DeletesTheRecordingFirst(fx.PostgresConnectionString, recId))
+            .Options;
+        await using var ctx = new DiarizDbContext(options);
+        await Assert.ThrowsAsync<DbUpdateException>(
+            () => Recordings.Build(ctx, userId).AddTag(recId, new SetRecordingTagRequest("metadata")));
     }
 }

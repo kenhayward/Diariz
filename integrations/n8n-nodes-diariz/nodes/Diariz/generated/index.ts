@@ -1662,7 +1662,7 @@ const GENERATED: GeneratedResource[] = [
       {
         "value": "removeATagFromARecording",
         "displayName": "Remove a tag from a recording",
-        "description": "Removes the tag from this recording, case-insensitively. It does not come back as a suggestion - only a re-transcription can propose it again. Removing a tag that is not there succeeds (204), so a retry is safe. Same permission as adding a tag: 404 if you cannot see the recording, 403 if you can but lack EditOthersRecordings.",
+        "description": "Removes the tag from this recording, case-insensitively. Only an adopted tag is removed: a suggestion stays on offer (dismiss it instead) and a dismissal stays as it is, so a word you rejected cannot be made suggestible again through this call. It does not come back as a suggestion - only a re-transcription can propose it again. Removing a tag that is not there succeeds (204), so a retry is safe. Same permission as adding a tag: 404 if you cannot see the recording, 403 if you can but lack EditOthersRecordings.",
         "method": "DELETE",
         "path": "/api/recordings/{id}/tags",
         "pathParams": [

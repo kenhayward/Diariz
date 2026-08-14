@@ -1285,7 +1285,29 @@ public class RecordingsController : ControllerBase
             winner.AdoptedAt = DateTimeOffset.UtcNow;
         }
 
-        await _db.SaveChangesAsync();
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // Two members adding the same tag at once both read no adopted match and both write, and
+            // IX_RecordingTags_RecordingId_TagLower rejects whichever arrives second (DiarizDbContext's
+            // comment on that index predicts exactly this). The endpoint promises idempotency, so a loser
+            // whose tag is now present got the outcome it asked for - report success instead of a 500.
+            //
+            // Deliberately NOT a blanket swallow: the state is re-read on a clean tracker and the exception
+            // is rethrown unless the tag really is adopted now, so any other write failure (say the recording
+            // was deleted underneath us, an FK violation) still surfaces as an error rather than a quiet 204.
+            // Both branches are covered on real Postgres in TagsIntegrationTests -
+            // AddTag_WhenAnotherMemberWinsTheRace_IsStillIdempotentRatherThanA500 and
+            // AddTag_WhenTheWriteFailsForAnyOtherReason_StillFails, and a mutation check confirmed the second
+            // of those fails if this re-read is dropped for a bare catch.
+            _db.ChangeTracker.Clear();
+            var settled = await _db.RecordingTags.Where(t => t.RecordingId == id).ToListAsync();
+            if (!FindAllByNormalizedTag(settled, tag).Any(t => t.Status == RecordingTagStatus.Adopted))
+                throw;
+        }
         return NoContent();
     }
 
@@ -1294,10 +1316,12 @@ public class RecordingsController : ControllerBase
     [HttpDelete("{id:guid}/tags")]
     [EndpointSummary("Remove a tag from a recording")]
     [EndpointDescription(
-        "Removes the tag from this recording, case-insensitively. It does not come back as a suggestion - only " +
-        "a re-transcription can propose it again. Removing a tag that is not there succeeds (204), so a retry " +
-        "is safe. Same permission as adding a tag: 404 if you cannot see the recording, 403 if you can but " +
-        "lack `EditOthersRecordings`.")]
+        "Removes the tag from this recording, case-insensitively. Only an **adopted** tag is removed: a " +
+        "suggestion stays on offer (dismiss it instead) and a dismissal stays as it is, so a word you " +
+        "rejected cannot be made suggestible again through this call. It does not come back as a suggestion " +
+        "- only a re-transcription can propose it again. Removing a tag that is not there succeeds (204), so " +
+        "a retry is safe. Same permission as adding a tag: 404 if you cannot see the recording, 403 if you " +
+        "can but lack `EditOthersRecordings`.")]
     public async Task<IActionResult> RemoveTag(Guid id, [FromQuery] string tag)
     {
         if (await GateTagWriteAsync(id) is { } denied) return denied;
@@ -1306,9 +1330,17 @@ public class RecordingsController : ControllerBase
         if (normalized is null) return NoContent();
 
         var candidates = await _db.RecordingTags.Where(t => t.RecordingId == id).ToListAsync();
-        // Act on EVERY row that normalises to this tag, not just the first: asking to remove a tag should
-        // leave none behind, including the rare case (older data, a race) where more than one row matches.
-        var matches = FindAllByNormalizedTag(candidates, normalized);
+        // ADOPTED rows only. "Remove" means "un-adopt", and the other two statuses must survive it: deleting
+        // a Dismissed tombstone would make the word suggestible again, which is precisely what dismissing it
+        // was for, and deleting a live Suggested row would dismiss it without leaving the tombstone a real
+        // dismissal leaves. Not reachable from the web UI (it only offers Remove on a chip), but this is a
+        // public endpoint - also on the MCP surface and the n8n node - so the status filter belongs here.
+        // Within Adopted, act on EVERY row that normalises to this tag, not just the first: asking to remove
+        // a tag should leave none behind, including the rare case (older data, a race) where more than one
+        // adopted row matches.
+        var matches = FindAllByNormalizedTag(candidates, normalized)
+            .Where(t => t.Status == RecordingTagStatus.Adopted)
+            .ToList();
         if (matches.Count > 0)
         {
             _db.RecordingTags.RemoveRange(matches);
