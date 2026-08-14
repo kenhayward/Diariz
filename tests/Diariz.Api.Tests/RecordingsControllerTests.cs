@@ -236,6 +236,49 @@ public class RecordingsControllerTests
         Assert.IsType<NotFoundResult>(result.Result);
     }
 
+    [Fact]
+    public async Task Get_ReturnsAdoptedTagsInAdoptionOrder_AndSuggestionsByWeight_NeverDismissed()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        Users.Ensure(db, me);
+        var rec = new Recording { Id = Guid.NewGuid(), UserId = me, BlobKey = "k" };
+        db.Recordings.Add(rec);
+        var t0 = DateTimeOffset.UtcNow.AddMinutes(-5);
+        db.RecordingTags.AddRange(
+            new RecordingTag
+            {
+                Id = Guid.NewGuid(), RecordingId = rec.Id, Tag = "second", Weight = 1.0, Ordinal = 0,
+                Status = RecordingTagStatus.Adopted, AdoptedAt = t0.AddMinutes(1),
+            },
+            new RecordingTag
+            {
+                Id = Guid.NewGuid(), RecordingId = rec.Id, Tag = "first", Weight = 1.0, Ordinal = 1,
+                Status = RecordingTagStatus.Adopted, AdoptedAt = t0,
+            },
+            new RecordingTag
+            {
+                Id = Guid.NewGuid(), RecordingId = rec.Id, Tag = "light", Weight = 0.2, Ordinal = 2,
+                Status = RecordingTagStatus.Suggested,
+            },
+            new RecordingTag
+            {
+                Id = Guid.NewGuid(), RecordingId = rec.Id, Tag = "heavy", Weight = 0.9, Ordinal = 3,
+                Status = RecordingTagStatus.Suggested,
+            },
+            new RecordingTag
+            {
+                Id = Guid.NewGuid(), RecordingId = rec.Id, Tag = "gone", Weight = 0.7, Ordinal = 4,
+                Status = RecordingTagStatus.Dismissed,
+            });
+        await db.SaveChangesAsync();
+
+        var dto = (await Build(db, me, new FakeJobQueue()).Get(rec.Id)).Value!;
+
+        Assert.Equal(new[] { "first", "second" }, dto.Tags);
+        Assert.Equal(new[] { "heavy", "light" }, dto.SuggestedTags);
+    }
+
     /// <summary>Phase 6: List(?roomId=) browses a room's recordings. A recording shared into a room shows up
     /// when a member lists that room; a non-member 404s.</summary>
     [Fact]

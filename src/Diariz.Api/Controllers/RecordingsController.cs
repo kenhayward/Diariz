@@ -172,6 +172,7 @@ public class RecordingsController : ControllerBase
         var rec = await _db.Recordings
             .Include(r => r.Speakers)
             .Include(r => r.Actions)
+            .Include(r => r.Tags)
             .Include(r => r.CalendarLink)
             .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
                 .ThenInclude(t => t.Segments.OrderBy(s => s.Ordinal))
@@ -239,11 +240,25 @@ public class RecordingsController : ControllerBase
                 ? rec.CreatedAt.AddDays(platform.AudioRetentionDays)
                 : null;
 
+        // Adopted tags in adoption order (AdoptedAt, not CreatedAt: a promoted suggestion was created when
+        // the extraction ran). Suggestions heaviest first, which is the order the hint list offers them in.
+        var adoptedTags = rec.Tags
+            .Where(t => t.Status == RecordingTagStatus.Adopted)
+            .OrderBy(t => t.AdoptedAt ?? t.CreatedAt)
+            .Select(t => t.Tag)
+            .ToList();
+        var suggestedTags = rec.Tags
+            .Where(t => t.Status == RecordingTagStatus.Suggested)
+            .OrderByDescending(t => t.Weight)
+            .ThenBy(t => t.Ordinal)
+            .Select(t => t.Tag)
+            .ToList();
+
         return new RecordingDetailDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.SizeBytes,
             rec.Status, rec.Error, rec.CreatedAt, rec.MinSpeakers, rec.MaxSpeakers, names, speakers, tDto, sDto,
             mDto, actions, rec.ActionsExtractedAt != null, rec.HasAudio, ToLinkDto(rec.CalendarLink),
             rec.MeetingTypeId, rec.AudioProtectedAt, rec.AudioDeletedAt, scheduledDeletion,
-            rec.UserId, recordedByName, visibleRooms, rec.StartedAt, rec.EndedAt);
+            rec.UserId, recordedByName, visibleRooms, rec.StartedAt, rec.EndedAt, adoptedTags, suggestedTags);
     }
 
     /// <summary>Whether the caller has a calendar other than Google - a subscribed <c>.ics</c> feed or a

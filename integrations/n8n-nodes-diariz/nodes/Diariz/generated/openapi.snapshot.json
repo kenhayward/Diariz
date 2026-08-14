@@ -2753,6 +2753,15 @@
           "status": {
             "$ref": "#/components/schemas/RecordingStatus"
           },
+          "suggestedTags": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "null",
+              "array"
+            ]
+          },
           "summary": {
             "oneOf": [
               {
@@ -2761,6 +2770,15 @@
               {
                 "$ref": "#/components/schemas/SummaryDto"
               }
+            ]
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "null",
+              "array"
             ]
           },
           "title": {
