@@ -68,7 +68,32 @@ public class RecordingTagStatusIntegrationTests
     }
 
     [Fact]
-    public async Task NewTag_DefaultsToSuggested_WithNoAdoptedAt()
+    public async Task ALegacyRowWithNoStatusColumnValue_LandsAsSuggested_WhichIsTheDemotion()
+    {
+        var rec = await SeedRecordingAsync();
+
+        // Insert the way a pre-migration row existed: without naming Status at all. The demotion of every
+        // existing tag rests on the COLUMN DEFAULT, and only a raw insert proves it - going through EF would
+        // send Status = 0 from the C# property initialiser and pass even if the migration forgot the default.
+        await using (var db = _fx.CreateDbContext())
+        {
+            var id = Guid.NewGuid();
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "RecordingTags" ("Id", "RecordingId", "Tag", "Weight", "Ordinal", "CreatedAt")
+                VALUES ({id}, {rec.Id}, 'legacy-tag', 0.7, 0, now())
+                """);
+        }
+
+        await using (var db = _fx.CreateDbContext())
+        {
+            var saved = await db.RecordingTags.SingleAsync(t => t.RecordingId == rec.Id);
+            Assert.Equal(RecordingTagStatus.Suggested, saved.Status);
+            Assert.Null(saved.AdoptedAt);
+        }
+    }
+
+    [Fact]
+    public async Task NewTag_FromTheApp_DefaultsToSuggested_WithNoAdoptedAt()
     {
         var rec = await SeedRecordingAsync();
 
@@ -167,6 +192,10 @@ Run: `dotnet test tests/Diariz.Api.IntegrationTests --filter "FullyQualifiedName
 Expected: FAIL to compile - `RecordingTagStatus` and `RecordingTag.Status` do not exist.
 
 (Docker must be running. `--filter "Name=X"` does not work in this repo; always use `FullyQualifiedName~X`.)
+
+Once it compiles, `ALegacyRowWithNoStatusColumnValue_LandsAsSuggested_WhichIsTheDemotion` is the one to
+watch: it must fail before the migration adds the column default and pass after. If it passes with the
+default removed from the migration, the test is not testing what it claims.
 
 - [ ] **Step 3: Add the enum**
 
@@ -325,7 +354,7 @@ C# raw string literals carry the source file's line endings, so never byte-compa
 - [ ] **Step 8: Run the tests to verify they pass**
 
 Run: `dotnet test tests/Diariz.Api.IntegrationTests --filter "FullyQualifiedName~RecordingTagStatusIntegrationTests"`
-Expected: PASS (4 tests). The migration runs automatically when `ContainersFixture` applies migrations.
+Expected: PASS (5 tests). The migration runs automatically when `ContainersFixture` applies migrations.
 
 - [ ] **Step 9: Confirm the rest of the suite still builds and passes**
 
