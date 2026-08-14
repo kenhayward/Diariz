@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
 using Diariz.Api.IntegrationTests.Infrastructure;
@@ -250,6 +251,80 @@ public class TagsIntegrationTests(ContainersFixture fx)
             Assert.Equal(RecordingTagStatus.Adopted, tag.Status);
             Assert.Equal("Data-Collection", tag.Tag);
         }
+    }
+
+    /// <summary>Records the SQL text of every reader query the context runs, so a test can assert the SHAPE of
+    /// what EF emitted rather than only its results.</summary>
+    private sealed class RecordsSql : DbCommandInterceptor
+    {
+        public List<string> Statements { get; } = [];
+
+        public override InterceptionResult<DbDataReader> ReaderExecuting(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result)
+        {
+            Statements.Add(command.CommandText);
+            return result;
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result,
+            CancellationToken ct = default)
+        {
+            Statements.Add(command.CommandText);
+            return ValueTask.FromResult(result);
+        }
+    }
+
+    // The detail query single-queries three sibling collections already (Speakers, Actions, and
+    // Transcriptions -> Segments), and EF is in single-query mode - no AsSplitQuery here, no global
+    // QuerySplittingBehavior anywhere in the repo. Including a fourth collection therefore multiplies the
+    // cartesian product by the tag count, and EVERY row of that product carries a Segment.Embedding
+    // (vector(768)). Measured on a 57-minute recording (11 speakers, 7 actions, 670 segments, 13 tags):
+    // 670,670 rows and a 1.8 GB external sort spill at 10.6 s WITH the tags joined in, against 51,590 rows,
+    // 133 MB and 0.6 s without - while reading the tags separately costs 0.036 ms off the index. So this test
+    // asserts the shape, not the timing: the tags must not ride on the segment query.
+    [Fact]
+    public async Task Get_ReadsTheTagsInTheirOwnQuery_NotJoinedOntoTheSegments()
+    {
+        Guid userId, recId;
+        await using (var db = fx.CreateDbContext())
+        {
+            var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test", Email = "u6@x.test" };
+            var rec = new Recording { Id = Guid.NewGuid(), UserId = user.Id, BlobKey = $"k/{Guid.NewGuid()}" };
+            var tr = new Transcription { Id = Guid.NewGuid(), RecordingId = rec.Id, Model = "m", Version = 1 };
+            var adoptedFirst = DateTimeOffset.UtcNow.AddMinutes(-5);
+            db.AddRange(user, rec, tr,
+                new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, Ordinal = 0, SpeakerLabel = "SPEAKER_00", Original = "one", StartMs = 0, EndMs = 10 },
+                new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, Ordinal = 1, SpeakerLabel = "SPEAKER_01", Original = "two", StartMs = 10, EndMs = 20 },
+                new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "A" },
+                new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_01", DisplayName = "B" },
+                new RecordingAction { Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "do it", Ordinal = 0 },
+                new RecordingTag { Id = Guid.NewGuid(), RecordingId = rec.Id, Tag = "first", Weight = 1.0, Ordinal = 0, Status = RecordingTagStatus.Adopted, AdoptedAt = adoptedFirst },
+                new RecordingTag { Id = Guid.NewGuid(), RecordingId = rec.Id, Tag = "second", Weight = 1.0, Ordinal = 1, Status = RecordingTagStatus.Adopted, AdoptedAt = DateTimeOffset.UtcNow },
+                new RecordingTag { Id = Guid.NewGuid(), RecordingId = rec.Id, Tag = "hint", Weight = 0.6, Ordinal = 2, Status = RecordingTagStatus.Suggested },
+                new RecordingTag { Id = Guid.NewGuid(), RecordingId = rec.Id, Tag = "rejected", Weight = 0.9, Ordinal = 3, Status = RecordingTagStatus.Dismissed });
+            await db.SaveChangesAsync();
+            userId = user.Id;
+            recId = rec.Id;
+        }
+
+        var sql = new RecordsSql();
+        var options = new DbContextOptionsBuilder<DiarizDbContext>()
+            .UseNpgsql(fx.PostgresConnectionString, o => o.UseVector())
+            .AddInterceptors(sql)
+            .Options;
+        await using (var db = new DiarizDbContext(options))
+        {
+            var dto = (await Recordings.Build(db, userId).Get(recId)).Value!;
+            // The behaviour the shape must not cost: adopted in adoption order, suggestions by weight, and
+            // the dismissal invisible.
+            Assert.Equal(["first", "second"], dto.Tags!);
+            Assert.Equal(["hint"], dto.SuggestedTags!);
+        }
+
+        var segmentQuery = Assert.Single(sql.Statements.Where(s => s.Contains("\"Segments\"")));
+        Assert.DoesNotContain("\"RecordingTags\"", segmentQuery);
+        Assert.Contains(sql.Statements, s => s.Contains("\"RecordingTags\"") && !s.Contains("\"Segments\""));
     }
 
     /// <summary>Inserts <paramref name="tag"/> on <paramref name="recordingId"/> from its OWN connection, the

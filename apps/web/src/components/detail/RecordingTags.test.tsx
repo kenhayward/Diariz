@@ -50,8 +50,8 @@ interface Detail {
 /// Mounts the control the way the app does, so an optimistic patch can actually be seen: the container
 /// patches the ["recording", id] cache entry, and the detail query feeds that entry back down as
 /// `tags`/`suggested` props. `queryFn` decides whether a refetch ever answers - by default it hands back a
-/// promise that never settles (the real `GET /api/recordings/{id}` takes ~20 s on a long recording), so the
-/// only thing that can put a chip on screen in these tests is the optimistic patch itself.
+/// promise that never settles (the real `GET /api/recordings/{id}` is slow on a long recording - it carries
+/// every segment), so the only thing that can put a chip on screen in these tests is the optimistic patch.
 function renderLive(
   detail: Partial<Detail> = {},
   queryFn: () => Promise<Detail> = () => new Promise<Detail>(() => {}),

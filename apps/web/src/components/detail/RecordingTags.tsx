@@ -96,9 +96,10 @@ function undoEdit(current: RecordingDetail, snapshot: RecordingDetail, edit: Tag
 /// recording, and patches it; `onError` undoes that patch from the snapshot; `onSettled` invalidates. The
 /// chips render from `tags`/`suggested`, which are the very cache entry being patched (the detail query
 /// feeds them down through HeroSummaryCard), so the patch is what puts the chip on screen. That matters
-/// because the save takes ~11 ms while `GET /api/recordings/{id}` takes ~20 s on a long recording - the user
-/// should not wait twenty seconds to see their own typing. Nothing here ever asks the server's content
-/// whether an edit landed; state only ever comes back from the snapshot the edit itself took.
+/// because the save takes ~11 ms while the detail refetch is orders of magnitude slower on a long recording
+/// (it carries every segment) - the user should not wait for it to see their own typing. Nothing here ever
+/// asks the server's content whether an edit landed; state only ever comes back from the snapshot the edit
+/// itself took.
 export default function RecordingTags({
   recordingId,
   tags,
