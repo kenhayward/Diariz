@@ -40,6 +40,52 @@ function renderTags(props: Partial<ComponentProps<typeof RecordingTags>> = {}) {
   return qc;
 }
 
+/// The shape the container patches: the slice of `RecordingDetail` that tagging touches.
+interface Detail {
+  id: string;
+  tags: string[];
+  suggestedTags: string[];
+}
+
+/// Mounts the control the way the app does, so an optimistic patch can actually be seen: the container
+/// patches the ["recording", id] cache entry, and the detail query feeds that entry back down as
+/// `tags`/`suggested` props. `queryFn` decides whether a refetch ever answers - by default it hands back a
+/// promise that never settles (the real `GET /api/recordings/{id}` takes ~20 s on a long recording), so the
+/// only thing that can put a chip on screen in these tests is the optimistic patch itself.
+function renderLive(
+  detail: Partial<Detail> = {},
+  queryFn: () => Promise<Detail> = () => new Promise<Detail>(() => {}),
+) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  qc.setQueryData<Detail>(["recording", "rec-1"], { id: "rec-1", tags: [], suggestedTags: [], ...detail });
+
+  function Live() {
+    const { data } = useQuery({ queryKey: ["recording", "rec-1"], queryFn });
+    return (
+      <RecordingTags recordingId="rec-1" tags={data?.tags ?? []} suggested={data?.suggestedTags ?? []} />
+    );
+  }
+  render(
+    <QueryClientProvider client={qc}>
+      <StatusProvider>
+        <StatusProbe />
+        <Live />
+      </StatusProvider>
+    </QueryClientProvider>,
+  );
+  return qc;
+}
+
+/// A tag mock whose promise the test settles by hand, so a mutation can be held in flight across
+/// assertions - the only way to observe the optimistic state, and to control the order two edits fail in.
+function heldAdd() {
+  let reject!: (e: unknown) => void;
+  const held = new Promise<void>((_, rj) => {
+    reject = rj;
+  });
+  return { held: () => held, fail: (e: unknown) => reject(e) };
+}
+
 describe("RecordingTags", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -114,15 +160,92 @@ describe("RecordingTags", () => {
     );
   });
 
+  it("shows a typed tag's chip immediately, without waiting for the detail refetch", async () => {
+    renderLive();
+    await userEvent.click(screen.getByRole("button", { name: "Tags" }));
+
+    await userEvent.type(screen.getByLabelText("Add a tag"), "licensing ");
+
+    // The detail query in this harness never answers, so this chip can only have come from the patch the
+    // container wrote into the cache in `onMutate`.
+    await waitFor(() => expect(screen.getByText("licensing")).toBeTruthy());
+    expect(screen.getByRole("button", { name: "Tags" }).textContent).toContain("1");
+    expect(api.addRecordingTag).toHaveBeenCalledWith("rec-1", "licensing");
+  });
+
+  it("rolls a failed add's chip back off the screen", async () => {
+    const alpha = heldAdd();
+    vi.mocked(api.addRecordingTag).mockImplementationOnce(alpha.held);
+    renderLive();
+    await userEvent.click(screen.getByRole("button", { name: "Tags" }));
+
+    await userEvent.type(screen.getByLabelText("Add a tag"), "licensing ");
+    await waitFor(() => expect(screen.getByText("licensing")).toBeTruthy());
+
+    await act(async () => alpha.fail(new Error("boom")));
+
+    // Rolled back from the snapshot `onMutate` took - not inferred from what the server now says, which is
+    // unchanged by a failed request and so can never tell the two apart.
+    await waitFor(() => expect(screen.queryByText("licensing")).toBeNull());
+    expect(screen.getByRole("button", { name: "Tags" }).textContent).toContain("0");
+  });
+
+  it("moves a promoted hint out of the hint list immediately", async () => {
+    renderLive({ suggestedTags: ["templates"] });
+    await userEvent.click(screen.getByRole("button", { name: "Tags" }));
+
+    await userEvent.click(screen.getByRole("button", { name: /templates/ }));
+
+    // Adopting a hint has to move it in the same beat: it becomes a chip and stops being a hint.
+    await waitFor(() => expect(screen.getByText("All suggestions dealt with.")).toBeTruthy());
+    expect(screen.getByRole("button", { name: "Tags" }).textContent).toContain("1");
+    expect(api.addRecordingTag).toHaveBeenCalledWith("rec-1", "templates");
+  });
+
+  it("takes a removed chip and a dismissed hint off the screen immediately", async () => {
+    // The other two patches, on the same never-answering harness: what disappears here can only have
+    // disappeared because the cache was patched.
+    renderLive({ tags: ["metadata"], suggestedTags: ["templates"] });
+    await userEvent.click(screen.getByRole("button", { name: "Tags" }));
+
+    await userEvent.click(screen.getByRole("button", { name: "Remove tag" }));
+    await waitFor(() => expect(screen.queryByText("metadata")).toBeNull());
+    expect(screen.getByRole("button", { name: "Tags" }).textContent).toContain("0");
+
+    await userEvent.click(screen.getByRole("button", { name: "Never suggest this" }));
+    await waitFor(() => expect(screen.getByText("All suggestions dealt with.")).toBeTruthy());
+  });
+
+  it("keeps a later edit's chip when an earlier overlapping edit fails", async () => {
+    // Space commits a word and keeps focus, so several tags typed in a run are the intended usage. The
+    // caveat of snapshot rollback is that alpha's snapshot predates beta's patch, so restoring it wholesale
+    // would take beta's perfectly good chip down with alpha's.
+    const alpha = heldAdd();
+    vi.mocked(api.addRecordingTag)
+      .mockImplementationOnce(alpha.held)
+      .mockImplementationOnce(async () => undefined);
+    renderLive();
+    await userEvent.click(screen.getByRole("button", { name: "Tags" }));
+
+    await userEvent.type(screen.getByLabelText("Add a tag"), "alpha beta ");
+    await waitFor(() => expect(screen.getByText("alpha")).toBeTruthy());
+    expect(screen.getByText("beta")).toBeTruthy();
+
+    await act(async () => alpha.fail(new Error("boom")));
+
+    await waitFor(() => expect(screen.queryByText("alpha")).toBeNull());
+    expect(screen.getByText("beta")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Tags" }).textContent).toContain("1");
+  });
+
   it("does not resurrect a tag that was added and then removed", async () => {
     // The same tag added and then removed is the one sequence a locally-replayed optimistic overlay could
     // not get right: both edits are about the same chip, so reconciling them against the server's list can
-    // drop the wrong one and bring back a chip the user explicitly removed. With the chips rendering only
-    // from what the server reports, the sequence has nowhere to go wrong - this test pins that.
+    // drop the wrong one and bring back a chip the user explicitly removed. Rolling back to a snapshot never
+    // asks that question, and the invalidated refetch has the last word - this test pins that.
     //
-    // The harness closes the real loop rather than pinning fixed props: the mocks mutate a stand-in server
-    // list, and a `useQuery` on the ["recording", id] key - the key the container invalidates - feeds it
-    // back down as props, the way the recording detail query does in the app.
+    // Unlike the tests above, this harness lets the refetch answer: the mocks mutate a stand-in server list
+    // that the query hands back, so the whole loop runs - patch, request, invalidate, refetch, settle.
     let server: string[] = [];
     vi.mocked(api.addRecordingTag).mockImplementation(async (_id, tag) => {
       server = [...server, tag];
@@ -131,24 +254,11 @@ describe("RecordingTags", () => {
       server = server.filter((x) => x !== tag);
     });
 
-    function Harness() {
-      const { data } = useQuery({ queryKey: ["recording", "rec-1"], queryFn: async () => [...server] });
-      return <RecordingTags recordingId="rec-1" tags={data ?? []} suggested={[]} />;
-    }
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={qc}>
-        <StatusProvider>
-          <StatusProbe />
-          <Harness />
-        </StatusProvider>
-      </QueryClientProvider>,
-    );
+    const qc = renderLive({}, async () => ({ id: "rec-1", tags: [...server], suggestedTags: [] }));
 
     await userEvent.click(screen.getByRole("button", { name: "Tags" }));
     await userEvent.type(screen.getByLabelText("Add a tag"), "licensing ");
 
-    // The chip appears once the server has it - the refetch the add's invalidate triggered.
     await waitFor(() => expect(screen.getByText("licensing")).toBeTruthy());
 
     await userEvent.click(screen.getByRole("button", { name: "Remove tag" }));
