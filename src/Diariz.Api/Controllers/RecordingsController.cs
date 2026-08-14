@@ -1180,9 +1180,10 @@ public class RecordingsController : ControllerBase
     [EndpointDescription(
         "Adds one tag. Automatic topic extraction only ever **suggests** tags; this is how a tag becomes real " +
         "and starts counting towards your tag cloud. Promoting a suggestion is the same call - pass its text " +
-        "and it is accepted in place. Whitespace inside the tag becomes hyphens (`budget planning` -> " +
-        "`budget-planning`), matching is case-insensitive, and adding a tag you already have does nothing. " +
-        "Anyone who can see the recording can tag it; 400 for blank text, 404 if you cannot see it.")]
+        "and it is stored in its normalised form, not kept verbatim. Whitespace inside the tag becomes " +
+        "hyphens (`budget planning` -> `budget-planning`), matching is case-insensitive, and adding a tag " +
+        "you already have does nothing. Anyone who can see the recording can tag it; 400 for blank text, " +
+        "404 if you cannot see it.")]
     public async Task<IActionResult> AddTag(Guid id, SetRecordingTagRequest req)
     {
         if (!await _rooms.CanReadRecordingAsync(UserId, id)) return NotFound();
@@ -1230,16 +1231,27 @@ public class RecordingsController : ControllerBase
             // flip the row we already have to Adopted AND rewrite its text to the normalised form. Keeping
             // the suggestion's raw text (e.g. "Data Collection") would let an adopted tag contain a space
             // and, worse, split the tag cloud - the same concept typed as "data collection" on another
-            // recording only merges case-insensitively, not across whitespace-vs-hyphen spellings. If more
-            // than one non-adopted row matches (a suggestion AND a dismissal for the same word, say), flip
-            // the first and drop the rest so only one row for this tag survives.
+            // recording only merges case-insensitively, not across whitespace-vs-hyphen spellings.
+            //
+            // Since extraction now normalises tags at insert time (see TagsProcessor), more than one
+            // non-adopted row matching the same normalised tag should not happen in practice any more - but
+            // if it ever does (a dismissal plus a stale suggestion for the same word, say), remove the extras
+            // and PERSIST that removal in its own round trip before touching the winner's text. EF Core sends
+            // updates before deletes within a single SaveChangesAsync, so writing the winner's Tag first would
+            // transiently give two rows the same lower(Tag) and trip the unique index on Postgres even though
+            // the end state is fine. Doing the delete first removes the dependency on that command ordering
+            // entirely, rather than relying on it staying favourable.
             var winner = matches[0];
+            var redundant = matches.Skip(1).ToList();
+            if (redundant.Count > 0)
+            {
+                _db.RecordingTags.RemoveRange(redundant);
+                await _db.SaveChangesAsync();
+            }
             winner.Status = RecordingTagStatus.Adopted;
             winner.Tag = tag;
             winner.Weight = 1.0;
             winner.AdoptedAt = DateTimeOffset.UtcNow;
-            foreach (var redundant in matches.Skip(1))
-                _db.RecordingTags.Remove(redundant);
         }
 
         await _db.SaveChangesAsync();
@@ -1263,10 +1275,12 @@ public class RecordingsController : ControllerBase
         if (normalized is null) return NoContent();
 
         var candidates = await _db.RecordingTags.Where(t => t.RecordingId == id).ToListAsync();
-        var existing = FindByNormalizedTag(candidates, normalized);
-        if (existing is not null)
+        // Act on EVERY row that normalises to this tag, not just the first: asking to remove a tag should
+        // leave none behind, including the rare case (older data, a race) where more than one row matches.
+        var matches = FindAllByNormalizedTag(candidates, normalized);
+        if (matches.Count > 0)
         {
-            _db.RecordingTags.Remove(existing);
+            _db.RecordingTags.RemoveRange(matches);
             await _db.SaveChangesAsync();
         }
         return NoContent();
@@ -1290,10 +1304,14 @@ public class RecordingsController : ControllerBase
         if (tag is null) return BadRequest("A tag needs some text.");
 
         var candidates = await _db.RecordingTags.Where(t => t.RecordingId == id).ToListAsync();
-        var suggestion = FindByNormalizedTag(candidates, tag);
-        if (suggestion is null || suggestion.Status != RecordingTagStatus.Suggested) return NotFound();
+        // Act on EVERY matching Suggested row, not just the first - the same reasoning as RemoveTag above.
+        var suggestions = FindAllByNormalizedTag(candidates, tag)
+            .Where(t => t.Status == RecordingTagStatus.Suggested)
+            .ToList();
+        if (suggestions.Count == 0) return NotFound();
 
-        suggestion.Status = RecordingTagStatus.Dismissed;
+        foreach (var suggestion in suggestions)
+            suggestion.Status = RecordingTagStatus.Dismissed;
         await _db.SaveChangesAsync();
         return NoContent();
     }
@@ -1313,11 +1331,6 @@ public class RecordingsController : ControllerBase
     private static List<RecordingTag> FindAllByNormalizedTag(IReadOnlyList<RecordingTag> candidates, string normalizedTag) =>
         candidates.Where(t =>
             string.Equals(TagText.Normalize(t.Tag), normalizedTag, StringComparison.OrdinalIgnoreCase)).ToList();
-
-    /// <summary>The single-row form of <see cref="FindAllByNormalizedTag"/>, for callers (remove, dismiss)
-    /// that don't need to reconcile more than one matching row.</summary>
-    private static RecordingTag? FindByNormalizedTag(IReadOnlyList<RecordingTag> candidates, string normalizedTag) =>
-        FindAllByNormalizedTag(candidates, normalizedTag).FirstOrDefault();
 
     /// <summary>Manually create or edit the current transcription's meeting minutes (Markdown). Works even
     /// with no LLM configured, and marks the minutes user-edited so the automatic generator won't overwrite

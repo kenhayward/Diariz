@@ -84,21 +84,34 @@ public static class TagsProcessor
                 .Select(t => TagText.Normalize(t.Tag))
                 .OfType<string>()
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            // Suggestions are stored in their NORMALISED form (TagText.Normalize, which also does the
+            // 64-char truncation, so no manual slicing here). TagsPrompt.ParseResponse only dedupes the raw
+            // LLM text, so "Data Collection" and "Data-Collection" both survive that step as distinct
+            // candidates while normalising to the same thing - inserting both would try to write two rows
+            // whose lower(Tag) happens to differ (so the unique index would not catch it) but which the
+            // user experiences as one duplicated hint. Dedupe by normalised form here too, keeping the first
+            // (highest-weighted, same rule ParseResponse itself uses) of any clash.
             var ordinal = 0;
-            var newTags = extracted
-                // This also keeps the (RecordingId, lower(Tag)) unique index satisfied on re-extraction.
-                // An extracted tag that normalises to nothing usable is dropped rather than suggested.
-                .Where(e => TagText.Normalize(e.Tag) is { } normalized && !spoken.Contains(normalized))
-                .Select(e => new RecordingTag
+            var newTags = new List<RecordingTag>();
+            var seenNormalized = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var e in extracted)
+            {
+                var normalized = TagText.Normalize(e.Tag);
+                if (normalized is null) continue;               // nothing usable left - drop it.
+                if (spoken.Contains(normalized)) continue;       // already held or dismissed here.
+                if (!seenNormalized.Add(normalized)) continue;   // duplicate within this batch.
+
+                newTags.Add(new RecordingTag
                 {
                     Id = Guid.NewGuid(),
                     RecordingId = rec.Id,
-                    Tag = e.Tag.Length > 64 ? e.Tag[..64] : e.Tag,
+                    Tag = normalized,
                     Weight = Math.Clamp(e.Weight, 0.0, 1.0),
                     Ordinal = ordinal++,
                     Status = RecordingTagStatus.Suggested,
-                })
-                .ToList();
+                });
+            }
             db.RecordingTags.AddRange(newTags);
             // Set even when zero tags came back: a thin transcript is "done", not retry-forever.
             rec.TagsExtractedAt = DateTimeOffset.UtcNow;

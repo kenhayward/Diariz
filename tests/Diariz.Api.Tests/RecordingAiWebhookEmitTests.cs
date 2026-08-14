@@ -230,7 +230,7 @@ public class RecordingAiWebhookEmitTests
         Assert.Equal(nameof(RecordingStatus.Summarizing), data.GetProperty("status").GetString());
         Assert.Equal(1, data.GetProperty("count").GetInt32());
         var tag = Assert.Single(data.GetProperty("tags").EnumerateArray());
-        Assert.Equal("Budget Planning", tag.GetProperty("name").GetString());
+        Assert.Equal("Budget-Planning", tag.GetProperty("name").GetString()); // stored normalised
         Assert.Equal(0.9, tag.GetProperty("weight").GetDouble(), 3);
         Assert.Contains($"https://app.test/api/recordings/{rec.Id}", data.GetProperty("links").GetRawText());
     }

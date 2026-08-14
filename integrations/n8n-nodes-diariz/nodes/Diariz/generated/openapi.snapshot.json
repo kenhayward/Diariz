@@ -9584,7 +9584,7 @@
         ]
       },
       "post": {
-        "description": "Adds one tag. Automatic topic extraction only ever **suggests** tags; this is how a tag becomes real and starts counting towards your tag cloud. Promoting a suggestion is the same call - pass its text and it is accepted in place. Whitespace inside the tag becomes hyphens (`budget planning` -> `budget-planning`), matching is case-insensitive, and adding a tag you already have does nothing. Anyone who can see the recording can tag it; 400 for blank text, 404 if you cannot see it.",
+        "description": "Adds one tag. Automatic topic extraction only ever **suggests** tags; this is how a tag becomes real and starts counting towards your tag cloud. Promoting a suggestion is the same call - pass its text and it is stored in its normalised form, not kept verbatim. Whitespace inside the tag becomes hyphens (`budget planning` -> `budget-planning`), matching is case-insensitive, and adding a tag you already have does nothing. Anyone who can see the recording can tag it; 400 for blank text, 404 if you cannot see it.",
         "parameters": [
           {
             "in": "path",

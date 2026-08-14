@@ -50,10 +50,10 @@ public class TagsProcessorTests
 
         var tags = await db.RecordingTags.Where(t => t.RecordingId == rec.Id).OrderBy(t => t.Ordinal).ToListAsync();
         Assert.Equal(2, tags.Count);
-        Assert.Equal("Budget Planning", tags[0].Tag);
+        Assert.Equal("Budget-Planning", tags[0].Tag);   // stored normalised, not the LLM's raw spaced text
         Assert.Equal(0.9, tags[0].Weight, 3);
         Assert.Equal(0, tags[0].Ordinal);
-        Assert.Equal("Vendor Selection", tags[1].Tag);
+        Assert.Equal("Vendor-Selection", tags[1].Tag);
         Assert.Equal(1, tags[1].Ordinal);
         Assert.Equal(userId, resolver.LastUserId);        // resolved for the owner
         Assert.Equal(resolver.Config, client.LastConfig); // passed straight to the client
@@ -85,7 +85,7 @@ public class TagsProcessorTests
             NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         var tag = await db.RecordingTags.SingleAsync(t => t.RecordingId == rec.Id);
-        Assert.Equal("Fresh Topic", tag.Tag); // a re-run replaces the still-suggested set (adopted/dismissed rows survive - see below)
+        Assert.Equal("Fresh-Topic", tag.Tag); // a re-run replaces the still-suggested set (adopted/dismissed rows survive - see below); stored normalised
     }
 
     [Fact]
@@ -183,6 +183,57 @@ public class TagsProcessorTests
         var tag = await db.RecordingTags.SingleAsync(t => t.RecordingId == rec.Id);
         Assert.Equal("Data-Collection", tag.Tag);
         Assert.Equal(RecordingTagStatus.Adopted, tag.Status);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_DoesNotResuggest_ADismissedHyphenatedTag_WhenTheLlmReturnsTheSpacedVariant()
+    {
+        using var db = TestDb.Create();
+        var (rec, tr) = await Seed(db, Guid.NewGuid());
+        // Dismissed via RecordingsController.DismissTag matching against the normalised form, but the row
+        // itself keeps whatever text it had when it was Suggested - here, already hyphenated (e.g. it was
+        // itself deduped-and-normalised by a previous extraction run).
+        db.RecordingTags.Add(new RecordingTag
+        {
+            Id = Guid.NewGuid(), RecordingId = rec.Id, Tag = "Data-Collection", Weight = 0.5, Ordinal = 0,
+            Status = RecordingTagStatus.Dismissed,
+        });
+        await db.SaveChangesAsync();
+        // The LLM returns its own raw, spaced spelling of the very same concept.
+        var client = new FakeTagsClient { Result = { new ExtractedTag("Data Collection", 0.9) } };
+
+        await TagsProcessor.ProcessAsync(
+            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
+            NullLogger.Instance, new CapturingWebhookPublisher(), "");
+
+        // A raw-text comparison would miss that these are the same tag and resurrect "Data Collection" as a
+        // fresh suggestion right next to its own dismissal. Comparing normalised forms stops that.
+        var tag = await db.RecordingTags.SingleAsync(t => t.RecordingId == rec.Id);
+        Assert.Equal("Data-Collection", tag.Tag);
+        Assert.Equal(RecordingTagStatus.Dismissed, tag.Status);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_DedupesCandidatesThatNormaliseToTheSameTag()
+    {
+        using var db = TestDb.Create();
+        var (rec, tr) = await Seed(db, Guid.NewGuid());
+        // TagsPrompt.ParseResponse only dedupes the raw LLM text (case-insensitive), so a response
+        // containing both spellings of the same concept survives that step as two distinct candidates.
+        var client = new FakeTagsClient
+        {
+            Result = { new ExtractedTag("Data Collection", 0.9), new ExtractedTag("Data-Collection", 0.5) }
+        };
+
+        await TagsProcessor.ProcessAsync(
+            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
+            NullLogger.Instance, new CapturingWebhookPublisher(), "");
+
+        // Both candidates normalise to "Data-Collection" - inserting both would slip past the unique index
+        // (their raw lower-case forms differ) and show up as a duplicated hint. Exactly one row survives.
+        var tag = await db.RecordingTags.SingleAsync(t => t.RecordingId == rec.Id);
+        Assert.Equal("Data-Collection", tag.Tag);
+        Assert.Equal(RecordingTagStatus.Suggested, tag.Status);
     }
 
     [Fact]
