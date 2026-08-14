@@ -12951,7 +12951,7 @@
     },
     "/api/tags": {
       "get": {
-        "description": "Every topic tag across your meetings, each with how many recordings carry it, its summed weight, and the recording ids behind it - enough to render a weighted cloud and drill into any entry without a second call. Sorted by weight, heaviest first.\n\nTags are assigned automatically when a recording is summarised; there is no endpoint to set them by hand. Matching is **case-insensitive** and the most common casing is used for display, so LLM casing drift does not split an entry in two.\n\nWith no `roomId` this covers your own library; with one it covers the recordings placed in that room (404 if you are not a member).",
+        "description": "Every topic tag across your meetings, each with how many recordings carry it, its summed weight, and the recording ids behind it - enough to render a weighted cloud and drill into any entry without a second call. Sorted by weight, heaviest first.\n\nTags are yours: topics are extracted automatically when a recording is summarised, but they are only **suggestions** until you accept one on the recording, and this cloud counts accepted tags only. Add or remove them with the tag endpoints on a recording. Matching is **case-insensitive** and the most common casing is used for display.\n\nWith no `roomId` this covers your own library; with one it covers the recordings placed in that room (404 if you are not a member).",
         "parameters": [
           {
             "in": "query",

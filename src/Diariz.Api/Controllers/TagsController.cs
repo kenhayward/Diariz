@@ -9,8 +9,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Diariz.Api.Controllers;
 
-/// <summary>The caller's aggregated tag cloud: every tag across their recordings with a recording count,
-/// summed weight, and the carrying recording ids. Ownership is transitive via <c>Recording.UserId</c> —
+/// <summary>The caller's aggregated tag cloud: every tag the caller has adopted across their recordings,
+/// with a recording count, summed weight, and the carrying recording ids. Suggestions the caller never
+/// acted on, and tags they dismissed, are excluded. Ownership is transitive via <c>Recording.UserId</c> —
 /// expressed as an explicit join so it works on both Npgsql and the in-memory test provider. Aggregation
 /// happens in memory: it must be case-insensitive (LLM casing drift would otherwise split entries), which
 /// is provider-agnostic that way, and the row count is small (≤ 12 per recording). If libraries ever grow
@@ -40,9 +41,10 @@ public class TagsController : ControllerBase
         "Every topic tag across your meetings, each with how many recordings carry it, its summed weight, and " +
         "the recording ids behind it - enough to render a weighted cloud and drill into any entry without a " +
         "second call. Sorted by weight, heaviest first.\n\n" +
-        "Tags are assigned automatically when a recording is summarised; there is no endpoint to set them by " +
-        "hand. Matching is **case-insensitive** and the most common casing is used for display, so LLM casing " +
-        "drift does not split an entry in two.\n\n" +
+        "Tags are yours: topics are extracted automatically when a recording is summarised, but they are only " +
+        "**suggestions** until you accept one on the recording, and this cloud counts accepted tags only. Add " +
+        "or remove them with the tag endpoints on a recording. Matching is **case-insensitive** and the most " +
+        "common casing is used for display.\n\n" +
         "With no `roomId` this covers your own library; with one it covers the recordings placed in that room " +
         "(404 if you are not a member).")]
     public async Task<ActionResult<IReadOnlyList<TagCloudEntryDto>>> List([FromQuery] Guid? roomId = null)
@@ -61,6 +63,9 @@ public class TagsController : ControllerBase
         var rows = await (
             from t in _db.RecordingTags
             join r in recs on t.RecordingId equals r.Id
+            // Adopted only. A suggestion nobody picked, and a word the user rejected, are both invisible to
+            // every aggregate - that separation is the entire point of RecordingTagStatus.
+            where t.Status == RecordingTagStatus.Adopted
             select new { t.Tag, t.Weight, t.RecordingId }).ToListAsync();
 
         var entries = rows

@@ -17,10 +17,14 @@ public class TagsControllerTests
         return rec;
     }
 
-    private static void AddTag(DiarizDbContext db, Guid recId, string tag, double weight, int ordinal = 0) =>
+    private static void AddTag(
+        DiarizDbContext db, Guid recId, string tag, double weight, int ordinal = 0,
+        RecordingTagStatus status = RecordingTagStatus.Adopted) =>
         db.RecordingTags.Add(new RecordingTag
         {
             Id = Guid.NewGuid(), RecordingId = recId, Tag = tag, Weight = weight, Ordinal = ordinal,
+            Status = status,
+            AdoptedAt = status == RecordingTagStatus.Adopted ? DateTimeOffset.UtcNow : null,
         });
 
     [Fact]
@@ -138,6 +142,23 @@ public class TagsControllerTests
         var list = (await Build(db, userId).List()).Value!;
 
         Assert.Equal(["Heavy", "Alpha", "Zeta"], list.Select(t => t.Tag).ToArray());
+    }
+
+    [Fact]
+    public async Task List_ReturnsAdoptedTagsOnly_IgnoringSuggestionsAndDismissals()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        Users.Ensure(db, me);
+        var rec = AddRecording(db, me);
+        AddTag(db, rec.Id, "chosen", 1.0, 0, RecordingTagStatus.Adopted);
+        AddTag(db, rec.Id, "merely-suggested", 0.9, 1, RecordingTagStatus.Suggested);
+        AddTag(db, rec.Id, "rejected", 0.8, 2, RecordingTagStatus.Dismissed);
+        await db.SaveChangesAsync();
+
+        var list = (await Build(db, me).List()).Value!;
+
+        Assert.Equal("chosen", Assert.Single(list).Tag);
     }
 
     [Fact]
