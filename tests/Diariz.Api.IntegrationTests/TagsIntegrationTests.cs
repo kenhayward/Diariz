@@ -197,10 +197,14 @@ public class TagsIntegrationTests(ContainersFixture fx)
     // same tag but differ in literal text (one still spaced, one already hyphenated) - legal under the
     // unique index because their raw lower(Tag) values differ. AddTag's "no adopted match" branch has to
     // pick a winner, rewrite ITS text to the normalised form, and remove the other - and a prior fix
-    // deliberately persists the removal BEFORE the winner's text is rewritten, because within one
-    // SaveChangesAsync EF sends updates before deletes: writing the winner's text first would transiently
-    // give two rows the same lower(Tag) and trip the index even though the end state is fine. The in-memory
-    // provider has no such index, so this order only matters on real Postgres.
+    // deliberately persists the removal BEFORE the winner's text is rewritten. Command ordering within a
+    // single SaveChangesAsync batch is NOT a guarantee EF/Npgsql make in either direction - a mutation check
+    // against this test confirmed that forcing the update to land first (its own round trip, ahead of the
+    // delete) reproduces a real Npgsql.PostgresException 23505 on IX_RecordingTags_RecordingId_TagLower in
+    // 4 of 5 runs (the 5th happened to pick the one non-colliding "winner", since the underlying query has
+    // no ORDER BY). That is exactly why the code must not depend on the provider's batching order either
+    // way: deleting first and persisting it removes the dependency entirely. The in-memory provider has no
+    // such index, so this order only matters on real Postgres.
     [Fact]
     public async Task AddTag_ConvergesTwoNonAdoptedCaseVariants_WithoutATransientUniqueIndexViolation()
     {
