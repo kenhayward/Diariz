@@ -1236,11 +1236,16 @@ public class RecordingsController : ControllerBase
             // Since extraction now normalises tags at insert time (see TagsProcessor), more than one
             // non-adopted row matching the same normalised tag should not happen in practice any more - but
             // if it ever does (a dismissal plus a stale suggestion for the same word, say), remove the extras
-            // and PERSIST that removal in its own round trip before touching the winner's text. EF Core sends
-            // updates before deletes within a single SaveChangesAsync, so writing the winner's Tag first would
-            // transiently give two rows the same lower(Tag) and trip the unique index on Postgres even though
-            // the end state is fine. Doing the delete first removes the dependency on that command ordering
-            // entirely, rather than relying on it staying favourable.
+            // and PERSIST that removal in its own round trip before touching the winner's text. Command
+            // ordering within a single SaveChangesAsync batch is NOT a guarantee EF/Npgsql make either way -
+            // if the winner's Tag were written before the redundant rows are actually gone, the two rows
+            // would transiently share the same lower(Tag) and Postgres would reject it as a collision on the
+            // (RecordingId, lower(Tag)) unique index. Doing the delete first and persisting it removes the
+            // dependency on that ordering entirely, rather than assuming any particular provider behaviour.
+            // See AddTag_ConvergesTwoNonAdoptedCaseVariants_WithoutATransientUniqueIndexViolation in
+            // TagsIntegrationTests.cs, which reproduces the exact 23505 violation on real Postgres by forcing
+            // the update to land first, and confirms this two-phase order avoids it regardless of which row
+            // the (unordered) query above happens to return as the winner.
             var winner = matches[0];
             var redundant = matches.Skip(1).ToList();
             if (redundant.Count > 0)
