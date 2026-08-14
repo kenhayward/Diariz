@@ -263,11 +263,17 @@ public class RecordingsController : ControllerBase
             .Select(t => t.Tag)
             .ToList();
 
+        // Same gate as the write endpoints (GateTagWriteAsync), reused rather than reimplemented so the flag
+        // and the gate cannot drift: null = allowed, so a viewer without EditOthersRecordings gets a
+        // read-only popover instead of the 403 they'd hit by trying to write.
+        var canEditTags = await _rooms.AuthorizeRecordingPermissionAsync(UserId, id, RoomPermission.EditOthersRecordings) is null;
+
         return new RecordingDetailDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.SizeBytes,
             rec.Status, rec.Error, rec.CreatedAt, rec.MinSpeakers, rec.MaxSpeakers, names, speakers, tDto, sDto,
             mDto, actions, rec.ActionsExtractedAt != null, rec.HasAudio, ToLinkDto(rec.CalendarLink),
             rec.MeetingTypeId, rec.AudioProtectedAt, rec.AudioDeletedAt, scheduledDeletion,
-            rec.UserId, recordedByName, visibleRooms, rec.StartedAt, rec.EndedAt, adoptedTags, suggestedTags);
+            rec.UserId, recordedByName, visibleRooms, rec.StartedAt, rec.EndedAt, adoptedTags, suggestedTags,
+            canEditTags);
     }
 
     /// <summary>Whether the caller has a calendar other than Google - a subscribed <c>.ics</c> feed or a

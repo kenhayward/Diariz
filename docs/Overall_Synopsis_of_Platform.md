@@ -484,7 +484,13 @@ large folders silently rolled up only their first ~18 meetings. The old per-work
   Status codes follow the folder gates' NotFound-before-Forbidden order - 404 for someone who cannot see the
   recording at all, 403 for a member who can see it but lacks the flag. These are the first endpoints to
   enforce `EditOthersRecordings`, which until now was granted by default to new shared-room members and read
-  by nothing. Note that a member's tag does not land in THEIR cloud: `GET /api/tags` with no `roomId` scopes by
+  by nothing else - `RecordingsController.Get` now also reads it: `RecordingDetailDto.CanEditTags` is computed
+  with the same `AuthorizeRecordingPermissionAsync(..., RoomPermission.EditOthersRecordings)` call that gates
+  the three write endpoints, so the flag and the gate cannot drift, and it defaults to `false` (fail closed).
+  The web's `TagsPopover` reads `rec.canEditTags ?? false` and, when false, renders the recording's adopted
+  tags as a read-only chip list - no entry field, remove buttons, or suggestions section - instead of letting
+  a viewer who cannot write reach the same controls and hit a 403. Note that a member's tag does not land in
+  THEIR cloud: `GET /api/tags` with no `roomId` scopes by
   `Recording.UserId`, so tagging a shared recording feeds the owner's personal cloud plus the room-scoped
   cloud (`?roomId=`) of any room it sits in. The web reads **`GET /api/tags`**: owner-scoped,
   case-insensitive aggregation over **`Adopted`** rows only (count + summed weight + carrying recording ids) -

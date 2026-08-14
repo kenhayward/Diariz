@@ -12,13 +12,13 @@ function setup(props: Partial<ComponentProps<typeof TagsPopover>> = {}) {
     onDismiss: vi.fn(),
   };
   const view = render(
-    <TagsPopover open tags={[]} suggested={[]} {...handlers} {...props} />,
+    <TagsPopover open tags={[]} suggested={[]} canEdit {...handlers} {...props} />,
   );
   /// Re-renders with a different `open`, the way the parent does. `RecordingTags` renders the popover
   /// unconditionally and only flips this prop, so the component stays mounted while closed.
   const setOpen = (open: boolean) =>
     view.rerender(
-      <TagsPopover open={open} tags={[]} suggested={[]} {...handlers} {...props} />,
+      <TagsPopover open={open} tags={[]} suggested={[]} canEdit {...handlers} {...props} />,
     );
   return { ...handlers, setOpen };
 }
@@ -164,5 +164,48 @@ describe("TagsPopover", () => {
   it("renders nothing when closed", () => {
     setup({ open: false });
     expect(screen.queryByLabelText("Add a tag")).toBeNull();
+  });
+
+  describe("read-only mode (canEdit=false)", () => {
+    it("shows the adopted tags as plain text, with no remove button", () => {
+      setup({ canEdit: false, tags: ["metadata", "licensing"] });
+
+      expect(screen.getByText("metadata")).toBeTruthy();
+      expect(screen.getByText("licensing")).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Remove tag" })).toBeNull();
+    });
+
+    it("renders no entry field and no input hint", () => {
+      setup({ canEdit: false, tags: ["metadata"] });
+
+      expect(screen.queryByLabelText("Add a tag")).toBeNull();
+      expect(screen.queryByText(/Space or Enter adds the word/)).toBeNull();
+    });
+
+    it("hides the suggestions section entirely, even with suggestions present", () => {
+      setup({ canEdit: false, suggested: ["templates", "document-map"] });
+
+      expect(screen.queryByText("AUTO-GENERATED · PICK OR IGNORE")).toBeNull();
+      expect(screen.queryByText("templates")).toBeNull();
+      expect(screen.queryByText("document-map")).toBeNull();
+      expect(screen.queryByText("2 left")).toBeNull();
+      expect(screen.queryByText("All suggestions dealt with.")).toBeNull();
+    });
+
+    it("shows the view-only note instead of the saved-as-you-type subtitle", () => {
+      setup({ canEdit: false });
+
+      expect(screen.getByText("view only - you cannot change these tags")).toBeTruthy();
+      expect(screen.queryByText("saved as you type")).toBeNull();
+    });
+
+    it("keeps the header title and close button, and the close button still works", async () => {
+      const { onClose } = setup({ canEdit: false });
+
+      expect(screen.getByText("Tags")).toBeTruthy();
+      await userEvent.click(screen.getByLabelText("Close"));
+
+      expect(onClose).toHaveBeenCalled();
+    });
   });
 });

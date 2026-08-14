@@ -93,7 +93,12 @@ export default function HeroSummaryCard({
           onApply={onApplyMeetingType}
         />
 
-        <RecordingTags recordingId={rec.id} tags={rec.tags ?? []} suggested={rec.suggestedTags ?? []} />
+        <RecordingTags
+          recordingId={rec.id}
+          tags={rec.tags ?? []}
+          suggested={rec.suggestedTags ?? []}
+          canEdit={rec.canEditTags ?? false}
+        />
 
         <div className="ml-auto flex items-center gap-0.5">
           <ToolbarButton

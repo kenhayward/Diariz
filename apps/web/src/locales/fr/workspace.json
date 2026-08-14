@@ -503,6 +503,7 @@
   "tagsPillMore": "+{{count}} de plus",
   "tagsPopoverTitle": "Tags",
   "tagsPopoverSaved": "enregistré au fur et à mesure",
+  "tagsPopoverViewOnly": "lecture seule - vous ne pouvez pas modifier ces tags",
   "tagsPopoverClose": "Fermer",
   "tagsInputPlaceholder": "Ajouter un tag...",
   "tagsInputLabel": "Ajouter un tag",

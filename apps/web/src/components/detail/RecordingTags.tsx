@@ -104,10 +104,14 @@ export default function RecordingTags({
   recordingId,
   tags,
   suggested,
+  canEdit,
 }: {
   recordingId: string;
   tags: string[];
   suggested: string[];
+  /// Whether the caller may edit this recording's tags - passed straight through to `TagsPopover`. The pill
+  /// itself is unaffected either way (it keeps its count and hover text): only the popover's content changes.
+  canEdit: boolean;
 }) {
   const { t } = useTranslation(["workspace"]);
   const qc = useQueryClient();
@@ -203,6 +207,7 @@ export default function RecordingTags({
         onClose={() => setOpen(false)}
         tags={tags}
         suggested={suggested}
+        canEdit={canEdit}
         onAdd={(tag) => add.mutate(tag)}
         onRemove={(tag) => remove.mutate(tag)}
         onDismiss={(tag) => dismiss.mutate(tag)}

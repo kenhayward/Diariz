@@ -33,7 +33,13 @@ function renderTags(props: Partial<ComponentProps<typeof RecordingTags>> = {}) {
     <QueryClientProvider client={qc}>
       <StatusProvider>
         <StatusProbe />
-        <RecordingTags recordingId="rec-1" tags={["metadata"]} suggested={["templates"]} {...props} />
+        <RecordingTags
+          recordingId="rec-1"
+          tags={["metadata"]}
+          suggested={["templates"]}
+          canEdit
+          {...props}
+        />
       </StatusProvider>
     </QueryClientProvider>,
   );
@@ -62,7 +68,12 @@ function renderLive(
   function Live() {
     const { data } = useQuery({ queryKey: ["recording", "rec-1"], queryFn });
     return (
-      <RecordingTags recordingId="rec-1" tags={data?.tags ?? []} suggested={data?.suggestedTags ?? []} />
+      <RecordingTags
+        recordingId="rec-1"
+        tags={data?.tags ?? []}
+        suggested={data?.suggestedTags ?? []}
+        canEdit
+      />
     );
   }
   render(
@@ -357,6 +368,27 @@ describe("RecordingTags", () => {
     await waitFor(() => expect(screen.getByTestId("status").textContent).toBe(""));
   });
 
+  it("wires canEdit=false through to a read-only popover: no control can trigger a mutation, and the pill still shows the count", async () => {
+    renderTags({ tags: ["metadata", "licensing"], suggested: ["templates"], canEdit: false });
+    const pill = screen.getByRole("button", { name: "Tags" });
+    expect(pill.textContent).toContain("2");
+
+    await userEvent.click(pill);
+
+    // The chips are still visible as plain text...
+    expect(screen.getByText("metadata")).toBeTruthy();
+    expect(screen.getByText("licensing")).toBeTruthy();
+    // ...but nothing in the popover can drive a mutation: no entry field, no remove buttons, and the
+    // suggestions section (which is where "add"/"dismiss" live) is gone entirely.
+    expect(screen.queryByLabelText("Add a tag")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Remove tag" })).toBeNull();
+    expect(screen.queryByText("templates")).toBeNull();
+
+    expect(api.addRecordingTag).not.toHaveBeenCalled();
+    expect(api.removeRecordingTag).not.toHaveBeenCalled();
+    expect(api.dismissRecordingTag).not.toHaveBeenCalled();
+  });
+
   it("retracts its failure message from the status bar when it unmounts", async () => {
     vi.mocked(api.addRecordingTag).mockRejectedValueOnce(new Error("boom"));
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -369,7 +401,7 @@ describe("RecordingTags", () => {
         <StatusProvider>
           <StatusProbe />
           <button onClick={() => setMounted(false)}>unmount</button>
-          {mounted && <RecordingTags recordingId="rec-1" tags={[]} suggested={[]} />}
+          {mounted && <RecordingTags recordingId="rec-1" tags={[]} suggested={[]} canEdit />}
         </StatusProvider>
       );
     }

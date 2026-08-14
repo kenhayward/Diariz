@@ -279,6 +279,68 @@ public class RecordingsControllerTests
         Assert.Equal(new[] { "heavy", "light" }, dto.SuggestedTags);
     }
 
+    /// <summary>Read-only tags popover: the recording's owner can always edit its tags.</summary>
+    [Fact]
+    public async Task Get_SetsCanEditTags_TrueForOwner()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var rec = await SeedRecording(db, owner, versions: 1);
+        var controller = Build(db, owner, new FakeJobQueue());
+
+        var detail = (await controller.Get(rec.Id)).Value!;
+
+        Assert.True(detail.CanEditTags);
+    }
+
+    /// <summary>A room member holding <see cref="RoomPermission.EditOthersRecordings"/> may also edit tags -
+    /// the flag must stay in lockstep with <c>GateTagWriteAsync</c>, which authorizes the same permission.</summary>
+    [Fact]
+    public async Task Get_SetsCanEditTags_TrueForRoomMemberWithEditOthersRecordings()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var member = Guid.NewGuid();
+        await SeedUser(db, owner);
+        Users.Ensure(db, member);
+        var rec = await SeedRecording(db, owner, versions: 1);
+        var scope = new RoomScope(db);
+        var roomId = await scope.CreateSharedRoomAsync("Engineering", null, null, null);
+        await scope.SetMemberAsync(roomId, RoomPrincipalType.User, member,
+            RoomPermission.CreateRecording | RoomPermission.EditOthersRecordings);
+        await scope.ShareIntoRoomAsync(rec.Id, roomId, owner, sectionId: null);
+
+        var detail = (await Build(db, member, new FakeJobQueue()).Get(rec.Id)).Value!;
+
+        Assert.True(detail.CanEditTags);
+    }
+
+    /// <summary>A room member who can see the recording but lacks <see cref="RoomPermission.EditOthersRecordings"/>
+    /// still gets the recording back (reading is allowed) - just with the flag false, so the web renders a
+    /// read-only tags popover instead of hiding the Tags pill.</summary>
+    [Fact]
+    public async Task Get_SetsCanEditTags_FalseForRoomMemberWithoutEditOthersRecordings()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var member = Guid.NewGuid();
+        await SeedUser(db, owner);
+        Users.Ensure(db, member);
+        var rec = await SeedRecording(db, owner, versions: 1);
+        var scope = new RoomScope(db);
+        var roomId = await scope.CreateSharedRoomAsync("Engineering", null, null, null);
+        // Every permission EXCEPT EditOthersRecordings - membership alone must not grant tag edit rights.
+        await scope.SetMemberAsync(roomId, RoomPrincipalType.User, member,
+            RoomPermission.ManageRoom | RoomPermission.CreateRecording | RoomPermission.RemoveOthersRecordings |
+            RoomPermission.ShareOut | RoomPermission.ManageContents);
+        await scope.ShareIntoRoomAsync(rec.Id, roomId, owner, sectionId: null);
+
+        var result = await Build(db, member, new FakeJobQueue()).Get(rec.Id);
+
+        var detail = result.Value!;
+        Assert.False(detail.CanEditTags);
+    }
+
     /// <summary>Phase 6: List(?roomId=) browses a room's recordings. A recording shared into a room shows up
     /// when a member lists that room; a non-member 404s.</summary>
     [Fact]

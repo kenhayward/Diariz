@@ -503,6 +503,7 @@
   "tagsPillMore": "+{{count}} weitere",
   "tagsPopoverTitle": "Tags",
   "tagsPopoverSaved": "wird beim Tippen gespeichert",
+  "tagsPopoverViewOnly": "nur Ansicht - diese Tags können nicht geändert werden",
   "tagsPopoverClose": "Schließen",
   "tagsInputPlaceholder": "Tag hinzufügen...",
   "tagsInputLabel": "Tag hinzufügen",

@@ -503,6 +503,7 @@
   "tagsPillMore": "+{{count}} más",
   "tagsPopoverTitle": "Etiquetas",
   "tagsPopoverSaved": "se guarda mientras escribes",
+  "tagsPopoverViewOnly": "solo lectura - no puedes cambiar estas etiquetas",
   "tagsPopoverClose": "Cerrar",
   "tagsInputPlaceholder": "Añadir una etiqueta...",
   "tagsInputLabel": "Añadir una etiqueta",
