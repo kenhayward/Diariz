@@ -102,6 +102,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddCalendarRecordingPreferences` | `UserSettings.CalendarAutoStopEnabled` (boolean NOT NULL DEFAULT false) + `CalendarAutoStopAfterMinutes` (int NOT NULL **DEFAULT 3**) + `CalendarSilenceStopSeconds` (int NOT NULL **DEFAULT 30**) - how a recording started by joining a meeting from the calendar should end. The two int defaults are set in the **column**, not just the C# initialiser: these columns land on a table that already has rows, and EF's usual `defaultValue: 0` would have meant "stop the moment recording starts" / "end on zero seconds of silence" for every existing user. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddCalendarSeriesId` | `RecordingCalendarLinks.SeriesId` (varchar(1024) null) - which recurring series a linked event belongs to, so a recording's earlier occurrences of the same meeting can be listed. **Backfills** existing Google/`.ics` links by stripping the `_{yyyyMMddTHHmmssZ}` occurrence suffix off `EventId`, and existing Outlook links (`EventId` = `outlook:{id}`) by joining `OutlookCalendarEvents` on that id and taking the `#`-prefix of its `Uid`; links the backfill cannot resolve are left null. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `OutlookNarrowSyncStamp` | `OutlookCalendarSources.LastNarrowSyncedAt` (timestamptz null) - when this device last completed a narrow (<= 2 day) push, so the desktop's "Sync today" has its own 10s cooldown instead of sharing the full run's 60s one and being refused in the moment it exists for. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddRecordingTagStatus` | `RecordingTags.Status` (int, NOT NULL, **default 0** = `Suggested`) + `RecordingTags.AdoptedAt` (timestamptz null) - tags become manual: the default demotes every existing tag to a suggestion, so the tag cloud and tag search start empty and rebuild only as users adopt tags. Also creates the Postgres-only unique index `IX_RecordingTags_RecordingId_TagLower` on `(RecordingId, lower("Tag"))`, first deleting legacy case-variant duplicates so the index can be created. Additive and forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) - an older backup's tags simply arrive as suggestions |
 
 ### Entity-relationship overview
 
@@ -284,21 +285,30 @@ Index: `(RecordingId, Ordinal)`. The cross-meeting Actions list (`GET /api/actio
 for ownership + display name; bulk complete/un-complete via `POST /api/actions/complete`.
 
 #### `RecordingTags`
-LLM-extracted weighted tag-cloud tags. Machine-only (never user-edited): the tags worker **replaces the
-whole set** on every (re)transcription, guarded against stale jobs (only the recording's latest
-transcription version may write). `GET /api/tags` aggregates them case-insensitively per owner (count +
-summed weight + carrying recording ids) for the web's Tags tab cloud.
+A tag on a recording, either typed by hand or extracted by the LLM as a suggestion. `Status` is what makes
+the two kinds meaningful: only `Adopted` rows are the user's own and reach the cross-transcript tag cloud;
+`Suggested` rows are candidates nobody has acted on yet; `Dismissed` rows are tombstones so a rejected
+suggestion is not offered again on that recording. The tags worker **replaces only the `Suggested` rows** on
+every (re)transcription - adopted tags and dismissals survive - guarded against stale jobs (only the
+recording's latest transcription version may write). `GET /api/tags` aggregates **`Adopted`** rows only,
+case-insensitively per owner (count + summed weight + carrying recording ids), for the web's Tags tab cloud.
 
 | Column | Type | Notes |
 |---|---|---|
 | `Id` | uuid PK | |
 | `RecordingId` | uuid FK → Recordings | cascade |
-| `Tag` | varchar(64) | canonical tag text (Title Case, 1-2 words per the prompt) |
-| `Weight` | double precision | per-recording salience 0-1 (clamped on ingest) |
-| `Ordinal` | int | 0-based, the LLM's weight-descending order |
+| `Tag` | varchar(64) | tag text, normalised: internal whitespace collapsed to hyphens, case preserved, never contains a space. Stored normalised whether it arrived as an LLM suggestion or was typed by hand; promoting a suggestion rewrites its text to the normalised form |
+| `Weight` | double precision | for a `Suggested` row, the LLM's per-recording salience 0-1 (clamped on ingest); for an `Adopted` row, always `1.0` so summed weight across recordings equals a plain count |
+| `Ordinal` | int | 0-based, the LLM's weight-descending order at extraction time |
+| `Status` | `RecordingTagStatus` (int) | `Suggested = 0`, `Adopted = 1`, `Dismissed = 2`. Append-only ints, same rule as `RecordingStatus` / `Source` |
+| `AdoptedAt` | timestamptz null | when the tag became the user's (typed, or a suggestion promoted); null for suggestions and dismissals. Orders the chips in the tag popover, since `CreatedAt` would shuffle hand-typed and promoted tags by whenever extraction happened to run |
 | `CreatedAt` | timestamptz | |
 
-Index: `(RecordingId, Ordinal)`.
+Indexes: `(RecordingId, Ordinal)`, and a **Postgres-only** unique index `IX_RecordingTags_RecordingId_TagLower`
+on `(RecordingId, lower("Tag"))` - one tag per recording regardless of case. Created via raw SQL in the
+`AddRecordingTagStatus` migration (not an EF `HasIndex`, so it can express the lowercase expression), which
+first deletes any legacy case-variant duplicates (keeping the lowest `Ordinal`) so the index can be created
+at all.
 
 #### `MeetingNotes`
 The user's own note lines for a meeting - sparse trigger phrases that (from a later PR) steer minutes

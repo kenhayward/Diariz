@@ -85,6 +85,19 @@ public interface IRoomScope
     /// recording's placements twice (once to build the room list, once inside CanReadRecordingAsync).</summary>
     Task<RecordingReadAccess> ReadAccessForRecordingAsync(Guid userId, Guid recordingId, CancellationToken ct = default);
 
+    /// <summary>The recording-level twin of <see cref="AuthorizeManageContentsAsync"/>, for a write on a
+    /// recording rather than on a room or folder: null when the caller may proceed, otherwise the error the
+    /// endpoint should return. The caller may proceed when they OWN the recording (ownership is its own grant,
+    /// never inferred from a room walk - a recording with no placement yet is still its recorder's), or when
+    /// they hold <paramref name="required"/> in at least one room the recording is placed in AND belong to.
+    /// Same NotFound-before-Forbidden ordering as the folder gates: someone who cannot even see the recording
+    /// gets <see cref="RoomAccessError.NotFound"/> so its existence stays private, while a member who can see
+    /// it but lacks the permission gets <see cref="RoomAccessError.Forbidden"/> - lying to them about a
+    /// recording already on their screen would only be confusing. "Can see it" is exactly
+    /// <see cref="CanReadRecordingAsync"/>'s rule, walked once here for both answers.</summary>
+    Task<RoomAccessError?> AuthorizeRecordingPermissionAsync(
+        Guid userId, Guid recordingId, RoomPermission required, CancellationToken ct = default);
+
     /// <summary>Throws <see cref="RoomForbiddenException"/> unless the caller holds <paramref name="required"/>.</summary>
     Task RequireAsync(Guid userId, Guid roomId, RoomPermission required, CancellationToken ct = default);
 
@@ -362,6 +375,30 @@ public class RoomScope(DiarizDbContext db) : IRoomScope
             if (await IsMemberAsync(userId, p.RoomId, ct)) visible.Add(p);
 
         return new RecordingReadAccess(ownerId == userId || visible.Count > 0, visible);
+    }
+
+    public async Task<RoomAccessError?> AuthorizeRecordingPermissionAsync(
+        Guid userId, Guid recordingId, RoomPermission required, CancellationToken ct = default)
+    {
+        var ownerId = await db.Recordings
+            .Where(r => r.Id == recordingId)
+            .Select(r => (Guid?)r.UserId)
+            .FirstOrDefaultAsync(ct);
+        if (ownerId is null) return RoomAccessError.NotFound;   // no such recording
+        if (ownerId == userId) return null;                      // its recorder, always
+
+        // One walk answers both questions: membership anywhere is "can read" (else 404), and the permission
+        // in any of those same rooms is the grant. Deliberately the union across rooms, not the intersection -
+        // holding the flag in one room the recording sits in is authority over the recording, exactly as
+        // ManageContents in one room is authority over its copy of a folder.
+        var member = false;
+        foreach (var p in await RoomsForRecordingAsync(recordingId, ct))
+        {
+            if (!await IsMemberAsync(userId, p.RoomId, ct)) continue;
+            member = true;
+            if ((await PermissionsAsync(userId, p.RoomId, ct)).HasFlag(required)) return null;
+        }
+        return member ? RoomAccessError.Forbidden : RoomAccessError.NotFound;
     }
 
     public async Task RequireAsync(Guid userId, Guid roomId, RoomPermission required, CancellationToken ct = default)

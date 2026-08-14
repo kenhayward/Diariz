@@ -17,6 +17,9 @@
   --hub-popover-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
   --hub-border: rgba(15, 23, 42, 0.1);
   --hub-border-hover: rgba(47, 107, 237, 0.45);
+  --hub-field-border: rgba(15, 23, 42, 0.14);
+  --hub-divider: rgba(15, 23, 42, 0.08);
+  --hub-hint-border: rgba(15, 23, 42, 0.2);
   --hub-text: #0f172a;
   --hub-text-2: #334155;
   --hub-muted: #64748b;
@@ -48,6 +51,9 @@
   --hub-popover-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
   --hub-border: rgba(255, 255, 255, 0.1);
   --hub-border-hover: rgba(120, 150, 220, 0.5);
+  --hub-field-border: rgba(255, 255, 255, 0.14);
+  --hub-divider: rgba(255, 255, 255, 0.08);
+  --hub-hint-border: rgba(255, 255, 255, 0.2);
   --hub-text: #eef2f8;
   --hub-text-2: #c7d0e0;
   --hub-muted: #7c8aa3;
@@ -123,4 +129,15 @@ body {
 }
 .dark .chat-md thead th {
   background: #1f2937;
+}
+
+/* The hub's Tags pill: both the resting and hover backgrounds live here, together, rather than resting
+   in the component's inline `style` - an inline `background` always wins over this class's `:hover`
+   regardless of the cascade, so the hover would be dead code if the resting value stayed inline.
+   Theme-neutral, like the pill's own border/text colour - same blue accent in both themes. */
+.hub-tags-pill {
+  background: rgba(47, 107, 237, 0.16);
+}
+.hub-tags-pill:hover {
+  background: rgba(47, 107, 237, 0.28);
 }

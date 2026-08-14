@@ -1262,6 +1262,19 @@ const GENERATED: GeneratedResource[] = [
     "value": "recordings",
     "operations": [
       {
+        "value": "addATagToARecording",
+        "displayName": "Add a tag to a recording",
+        "description": "Adds one tag. Automatic topic extraction only ever suggests tags; this is how a tag becomes real and starts counting towards your tag cloud. Promoting a suggestion is the same call - pass its text and it is stored in its normalised form, not kept verbatim. Whitespace inside the tag becomes hyphens (budget planning -> budget-planning), matching is case-insensitive, and adding a tag you already have does nothing. You can always tag your own recording; tagging someone else's needs the EditOthersRecordings permission in a room it is shared into. 400 for blank text, 404 if you cannot see the recording, 403 if you can see it but lack that permission.",
+        "method": "POST",
+        "path": "/api/recordings/{id}/tags",
+        "pathParams": [
+          "id"
+        ],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": false
+      },
+      {
         "value": "assignASpeakerToAnEnrolledVoiceprint",
         "displayName": "Assign a speaker to an enrolled voiceprint",
         "description": "Points a diarization label at one of your enrolled speaker profiles, taking its name from the profile. Pass a null profileId to unassign.",
@@ -1335,6 +1348,19 @@ const GENERATED: GeneratedResource[] = [
         "method": "POST",
         "path": "/api/recordings/audio/delete",
         "pathParams": [],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": false
+      },
+      {
+        "value": "dismissASuggestedTag",
+        "displayName": "Dismiss a suggested tag",
+        "description": "Rejects one of the automatically suggested tags on this recording so it stops being offered here, even after a re-transcription. The dismissal is per recording - the same word can still be suggested on other meetings. 404 when there is no such suggestion (including when you already accepted it). Same permission as adding a tag: 404 if you cannot see the recording, 403 if you can but lack EditOthersRecordings.",
+        "method": "POST",
+        "path": "/api/recordings/{id}/tags/dismiss",
+        "pathParams": [
+          "id"
+        ],
         "queryParams": [],
         "hasBody": true,
         "returnsArray": false
@@ -1630,6 +1656,25 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
+        "hasBody": false,
+        "returnsArray": false
+      },
+      {
+        "value": "removeATagFromARecording",
+        "displayName": "Remove a tag from a recording",
+        "description": "Removes the tag from this recording, case-insensitively. Only an adopted tag is removed: a suggestion stays on offer (dismiss it instead) and a dismissal stays as it is, so a word you rejected cannot be made suggestible again through this call. It does not come back as a suggestion - only a re-transcription can propose it again. Removing a tag that is not there succeeds (204), so a retry is safe. Same permission as adding a tag: 404 if you cannot see the recording, 403 if you can but lack EditOthersRecordings.",
+        "method": "DELETE",
+        "path": "/api/recordings/{id}/tags",
+        "pathParams": [
+          "id"
+        ],
+        "queryParams": [
+          {
+            "name": "tag",
+            "required": false,
+            "description": "tag"
+          }
+        ],
         "hasBody": false,
         "returnsArray": false
       },

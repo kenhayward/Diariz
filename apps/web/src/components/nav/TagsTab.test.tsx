@@ -161,7 +161,7 @@ describe("TagsTab", () => {
   it("shows the empty state when nothing is tagged", async () => {
     (api.listTags as Mock).mockResolvedValue([]);
     renderTab();
-    expect(await screen.findByText(/no tagged meetings yet/i)).toBeTruthy();
+    expect(await screen.findByText(/haven't tagged any meetings yet/i)).toBeTruthy();
   });
 
   it("keeps the count slider working when localStorage cannot be written", async () => {

@@ -407,6 +407,10 @@ export interface RecordingDetail {
   startedAt?: string | null;
   /// Wall clock the capture stopped. Null when unknown. Distinct from `durationMs`, which excludes pauses.
   endedAt?: string | null;
+  /// Tags the user adopted on this recording, in adoption order. The only tags the tag cloud counts.
+  tags?: string[];
+  /// Automatically suggested tags nobody has accepted or dismissed yet, heaviest first - the hub's hints.
+  suggestedTags?: string[];
 }
 
 /// A room a recording sits in, for the detail Overview. `isMain` = the recorder's personal (home) room -

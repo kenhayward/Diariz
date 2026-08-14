@@ -2753,6 +2753,15 @@
           "status": {
             "$ref": "#/components/schemas/RecordingStatus"
           },
+          "suggestedTags": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "null",
+              "array"
+            ]
+          },
           "summary": {
             "oneOf": [
               {
@@ -2761,6 +2770,15 @@
               {
                 "$ref": "#/components/schemas/SummaryDto"
               }
+            ]
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "null",
+              "array"
             ]
           },
           "title": {
@@ -3841,6 +3859,17 @@
         },
         "required": [
           "enabled"
+        ],
+        "type": "object"
+      },
+      "SetRecordingTagRequest": {
+        "properties": {
+          "tag": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tag"
         ],
         "type": "object"
       },
@@ -9523,6 +9552,126 @@
         ]
       }
     },
+    "/api/recordings/{id}/tags": {
+      "delete": {
+        "description": "Removes the tag from this recording, case-insensitively. Only an **adopted** tag is removed: a suggestion stays on offer (dismiss it instead) and a dismissal stays as it is, so a word you rejected cannot be made suggestible again through this call. It does not come back as a suggestion - only a re-transcription can propose it again. Removing a tag that is not there succeeds (204), so a retry is safe. Same permission as adding a tag: 404 if you cannot see the recording, 403 if you can but lack `EditOthersRecordings`.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tag",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Remove a tag from a recording",
+        "tags": [
+          "Recordings"
+        ]
+      },
+      "post": {
+        "description": "Adds one tag. Automatic topic extraction only ever **suggests** tags; this is how a tag becomes real and starts counting towards your tag cloud. Promoting a suggestion is the same call - pass its text and it is stored in its normalised form, not kept verbatim. Whitespace inside the tag becomes hyphens (`budget planning` -> `budget-planning`), matching is case-insensitive, and adding a tag you already have does nothing. You can always tag your own recording; tagging someone else's needs the `EditOthersRecordings` permission in a room it is shared into. 400 for blank text, 404 if you cannot see the recording, 403 if you can see it but lack that permission.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRecordingTagRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRecordingTagRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRecordingTagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Add a tag to a recording",
+        "tags": [
+          "Recordings"
+        ]
+      }
+    },
+    "/api/recordings/{id}/tags/dismiss": {
+      "post": {
+        "description": "Rejects one of the automatically suggested tags on this recording so it stops being offered here, even after a re-transcription. The dismissal is per recording - the same word can still be suggested on other meetings. 404 when there is no such suggestion (including when you already accepted it). Same permission as adding a tag: 404 if you cannot see the recording, 403 if you can but lack `EditOthersRecordings`.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRecordingTagRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRecordingTagRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRecordingTagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Dismiss a suggested tag",
+        "tags": [
+          "Recordings"
+        ]
+      }
+    },
     "/api/recordings/{id}/transcript.md": {
       "get": {
         "description": "The same content as the plain-text export, formatted as Markdown for pasting into a document or wiki.",
@@ -12951,7 +13100,7 @@
     },
     "/api/tags": {
       "get": {
-        "description": "Every topic tag across your meetings, each with how many recordings carry it, its summed weight, and the recording ids behind it - enough to render a weighted cloud and drill into any entry without a second call. Sorted by weight, heaviest first.\n\nTags are assigned automatically when a recording is summarised; there is no endpoint to set them by hand. Matching is **case-insensitive** and the most common casing is used for display, so LLM casing drift does not split an entry in two.\n\nWith no `roomId` this covers your own library; with one it covers the recordings placed in that room (404 if you are not a member).",
+        "description": "Every topic tag across your meetings, each with how many recordings carry it, its summed weight, and the recording ids behind it - enough to render a weighted cloud and drill into any entry without a second call. Sorted by weight, heaviest first.\n\nTags are yours: topics are extracted automatically when a recording is summarised, but they are only **suggestions** until you accept one on the recording, and this cloud counts accepted tags only. Add or remove them with the tag endpoints on a recording. Matching is **case-insensitive** and the most common casing is used for display.\n\nWith no `roomId` this covers your own library; with one it covers the recordings placed in that room (404 if you are not a member).",
         "parameters": [
           {
             "in": "query",

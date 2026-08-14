@@ -451,22 +451,49 @@ large folders silently rolled up only their first ~18 meetings. The old per-work
   calls the LLM inline and **replaces** the recording's **`RecordingAction`** rows. Actions also travel into
   transcript downloads, the emailed transcript, and the chat context. Its instruction prompt is the **editable**
   `prompts/extract-actions.md` (`{calendar_date}` substituted).
-- **Tag cloud (pipeline + backfill).** Every transcription also gets **weighted topic tags** for the web's
-  cross-transcript tag cloud: a Redis stream **`tag-cloud-jobs`** (group `tag-extractors`) with its own
-  `TagsWorker` (singleton `BackgroundService`) runs `TagsProcessor` → `TagsClient`/`TagsPrompt` (editable
+- **Tag cloud (pipeline + backfill) - tags are adopted, not auto-applied.** Every transcription still gets
+  **weighted topic candidates** via a Redis stream **`tag-cloud-jobs`** (group `tag-extractors`) with its own
+  `TagsWorker` (singleton `BackgroundService`) running `TagsProcessor` → `TagsClient`/`TagsPrompt` (editable
   prompt `prompts/tagcloud.md`; strict JSON array of `{tag, weight}` hardened for reasoning models via
-  `ActionsPrompt.ExtractJsonArray`), enqueued alongside the summary/actions after transcription. Unlike
-  actions, tags are **machine-only**, so the processor **replaces the recording's `RecordingTag` set
-  wholesale** on every (re)transcription — guarded instead against **stale jobs** (only the recording's
-  latest transcription version may write) — and sets `Recording.TagsExtractedAt` even on a zero-tag result.
-  Status-neutral; no LLM configured → silent no-op with the marker left null. **Backfill:** a one-shot
-  `TagBackfillService` enqueues jobs for every never-tagged recording at startup (gated on a server-wide
-  summarisation endpoint), and a Platform Admin can trigger the same via
+  `ActionsPrompt.ExtractJsonArray`), enqueued alongside the summary/actions after transcription - but the LLM
+  only ever **suggests**. `RecordingTag.Status` (`Suggested`/`Adopted`/`Dismissed`) separates a machine
+  candidate from the user's own tag: `TagsProcessor` writes new candidates as `Suggested` and **replaces only
+  the `Suggested` rows** on every (re)transcription, so an adopted tag or a dismissal survives a
+  re-transcribe untouched - guarded, as before, against **stale jobs** (only the recording's latest
+  transcription version may write) - and sets `Recording.TagsExtractedAt` even on a zero-tag result.
+  Status-neutral; no LLM configured → silent no-op with the marker left null. Suggestion text is stored
+  **normalised** (`TagText.Normalize`: internal whitespace collapsed to hyphens, case preserved, deduplicated
+  by normalised form) rather than verbatim, so a suggestion and a hand-typed tag for the same concept compare
+  equal. **Backfill:** a one-shot `TagBackfillService` enqueues jobs for every never-tagged recording at
+  startup (gated on a server-wide summarisation endpoint), and a Platform Admin can trigger the same via
   `POST /api/platform/settings/run-tag-backfill` (Settings → Maintenance; returns the enqueued count —
-  per-user-only LLM configs are covered this way). The web reads **`GET /api/tags`**: owner-scoped,
-  case-insensitive aggregation (count + summed weight + carrying recording ids) that the left panel's
-  **Tags tab** renders as a flat weighted cloud (log-scaled font sizes, single-select filter, an expanded
-  80% modal sharing the same selection state).
+  per-user-only LLM configs are covered this way) - backfilled recordings get suggestions, not adopted tags.
+  Three endpoints on `RecordingsController` turn a suggestion into the user's own tag or dispose of it:
+  `POST /api/recordings/{id}/tags` (adopt - typed by hand or promoted from a suggestion; idempotent; a
+  promoted suggestion's stored text is rewritten to the normalised form so an adopted tag never keeps a
+  space), `DELETE /api/recordings/{id}/tags?tag=x` (remove an adopted tag by deleting the row outright, so it
+  does not reappear as a suggestion - only a fresh extraction can offer it again), and
+  `POST /api/recordings/{id}/tags/dismiss` (reject a suggestion; the row becomes a `Dismissed` tombstone so
+  the same word is not re-suggested on that recording; 404 when there is no such suggestion). An adopted tag
+  always carries `Weight = 1.0`, so the cloud's summed weight equals a plain count of recordings carrying it.
+  **These three are gated by `IRoomScope.AuthorizeRecordingPermissionAsync(..., RoomPermission.EditOthersRecordings)`**
+  - the recording's owner may always tag it (ownership is its own grant, so a recording with no placement yet
+  is still taggable by its recorder), and a non-owner needs `EditOthersRecordings` in a room the recording is
+  placed in. Bare membership is deliberately NOT enough: these are writes on someone else's recording, and a
+  member granted `RoomPermission.None` could otherwise delete every adopted tag on a colleague's meeting.
+  Status codes follow the folder gates' NotFound-before-Forbidden order - 404 for someone who cannot see the
+  recording at all, 403 for a member who can see it but lacks the flag. These are the first endpoints to
+  enforce `EditOthersRecordings`, which until now was granted by default to new shared-room members and read
+  by nothing. Note that a member's tag does not land in THEIR cloud: `GET /api/tags` with no `roomId` scopes by
+  `Recording.UserId`, so tagging a shared recording feeds the owner's personal cloud plus the room-scoped
+  cloud (`?roomId=`) of any room it sits in. The web reads **`GET /api/tags`**: owner-scoped,
+  case-insensitive aggregation over **`Adopted`** rows only (count + summed weight + carrying recording ids) -
+  suggestions and dismissals never reach the cloud or search - that the left panel's **Tags tab** renders as a
+  flat weighted cloud (log-scaled font sizes, single-select filter, an expanded 80% modal sharing the same
+  selection state). `GET /api/recordings/{id}` returns both `tags` (adopted, in adoption order) and
+  `suggestedTags` (suggestions, heaviest first); dismissed tags are never returned. A migration
+  (`AddRecordingTagStatus`) demotes every pre-existing tag to a suggestion on upgrade, so the cloud and tag
+  search start empty on an existing library and rebuild only as tags are adopted.
 - **Folder (section) pages (async roll-ups).** A **folder page** (`GET /api/sections/{id}` +
   `SectionPageController`, web route `/sections/:id`) aggregates everything across a section **and every folder
   beneath it** (`SectionTree.SubtreeIdsAsync`), resolving placements by the folder's **own room**: stats, an LLM

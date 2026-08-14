@@ -335,7 +335,13 @@ public record RecordingDetailDto(
     DateTimeOffset? StartedAt = null,
     /// <summary>Wall-clock instant capture stopped. Null when unknown; fall back to
     /// <see cref="StartedAt"/> + <see cref="DurationMs"/>, which excludes any paused time.</summary>
-    DateTimeOffset? EndedAt = null);
+    DateTimeOffset? EndedAt = null,
+    /// <summary>The tags the user adopted on this recording, in the order they adopted them. These are the
+    /// only tags the tag cloud counts.</summary>
+    IReadOnlyList<string>? Tags = null,
+    /// <summary>Tags the LLM proposed that nobody has accepted or dismissed yet, heaviest first - the hub's
+    /// "pick or ignore" hints. Dismissed suggestions are never returned.</summary>
+    IReadOnlyList<string>? SuggestedTags = null);
 
 /// <summary>A room a recording sits in, for the detail Overview. <paramref name="IsMain"/> marks the recorder's
 /// personal (home) room - the only room a recording can be deleted from.</summary>
@@ -369,6 +375,10 @@ public record MeetingTypeRequest(
 
 /// <summary>Apply a meeting type to a recording (re-runs the minutes). Null = the General default.</summary>
 public record ApplyMeetingTypeRequest(Guid? MeetingTypeId);
+
+/// <summary>Adopt or dismiss one tag on a recording. The text is normalised server-side (whitespace becomes
+/// hyphens, hyphens trimmed) and matched case-insensitively against the recording's existing tags.</summary>
+public record SetRecordingTagRequest(string Tag);
 
 public record RenameSpeakerRequest(string Label, string DisplayName);
 

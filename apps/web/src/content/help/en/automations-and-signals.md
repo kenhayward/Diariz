@@ -42,12 +42,12 @@ while - a workflow you are rebuilding, a system that is down for maintenance - p
 | `recording.summarized` | A summary is ready |
 | `recording.minutes_ready` | Meeting minutes are ready |
 | `recording.action_items_ready` | Action items are ready |
-| `recording.tags_ready` | Tags are ready |
+| `recording.tags_ready` | Suggested tags are ready |
 | `formula_result.completed` | A formula finishes |
 | `formula_result.failed` | A formula fails |
 
 The four AI-output events carry **their output inline** - the summary text, the minutes Markdown, the
-actions, the tags - so your workflow does not need a second call back to the API.
+actions, the suggested tags - so your workflow does not need a second call back to the API.
 
 ## Who was in the meeting
 

@@ -239,11 +239,35 @@ public class RecordingsController : ControllerBase
                 ? rec.CreatedAt.AddDays(platform.AudioRetentionDays)
                 : null;
 
+        // Tags are read in their OWN query, deliberately not as a fourth `.Include` above. EF is in
+        // single-query mode here (no AsSplitQuery, no global QuerySplittingBehavior), so every sibling
+        // collection on that Include chain multiplies into a cartesian product - and each row of the product
+        // carries a Segment.Embedding (vector(768)). Adding tags as an Include turned this recording's
+        // 11 speakers x 7 actions x 670 segments (51,590 rows) into 11 x 7 x 13 x 670 (670,670 rows), which
+        // measured 10.6 s against 0.6 s on real Postgres - the sort spilled 1.8 GB to disk instead of 133 MB.
+        // A per-recording tag list is tiny (extraction caps at 12, plus what the user adopted or dismissed),
+        // so a second indexed round trip is free (0.04 ms, 3 buffer hits) next to what the join costs.
+        var tagRows = await _db.RecordingTags.Where(t => t.RecordingId == id).ToListAsync();
+
+        // Adopted tags in adoption order (AdoptedAt, not CreatedAt: a promoted suggestion was created when
+        // the extraction ran). Suggestions heaviest first, which is the order the hint list offers them in.
+        var adoptedTags = tagRows
+            .Where(t => t.Status == RecordingTagStatus.Adopted)
+            .OrderBy(t => t.AdoptedAt ?? t.CreatedAt)
+            .Select(t => t.Tag)
+            .ToList();
+        var suggestedTags = tagRows
+            .Where(t => t.Status == RecordingTagStatus.Suggested)
+            .OrderByDescending(t => t.Weight)
+            .ThenBy(t => t.Ordinal)
+            .Select(t => t.Tag)
+            .ToList();
+
         return new RecordingDetailDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.SizeBytes,
             rec.Status, rec.Error, rec.CreatedAt, rec.MinSpeakers, rec.MaxSpeakers, names, speakers, tDto, sDto,
             mDto, actions, rec.ActionsExtractedAt != null, rec.HasAudio, ToLinkDto(rec.CalendarLink),
             rec.MeetingTypeId, rec.AudioProtectedAt, rec.AudioDeletedAt, scheduledDeletion,
-            rec.UserId, recordedByName, visibleRooms, rec.StartedAt, rec.EndedAt);
+            rec.UserId, recordedByName, visibleRooms, rec.StartedAt, rec.EndedAt, adoptedTags, suggestedTags);
     }
 
     /// <summary>Whether the caller has a calendar other than Google - a subscribed <c>.ics</c> feed or a
@@ -1154,6 +1178,223 @@ public class RecordingsController : ControllerBase
         await _db.SaveChangesAsync();
         return Accepted();
     }
+
+    /// <summary>The write gate shared by the three tag endpoints: the recording's owner, or a room member
+    /// holding <see cref="RoomPermission.EditOthersRecordings"/> in a room it is placed in. Returns null when
+    /// the caller may proceed, else the result to return - 404 for someone who cannot see the recording at all
+    /// (its existence stays private), 403 for a member who can see it but was not granted that permission.
+    ///
+    /// Tagging is a write on SOMEONE ELSE'S recording, so it is not open to bare membership: a room member
+    /// granted <c>RoomPermission.None</c> could otherwise delete every tag on a colleague's meeting. Note that
+    /// a member's tag does NOT land in their own tag cloud - <see cref="TagsController.List"/> scopes the
+    /// unfiltered cloud by <c>Recording.UserId</c>, so tagging a shared recording feeds the OWNER's personal
+    /// cloud, plus the room-scoped cloud (<c>?roomId=</c>) of any room the recording sits in.</summary>
+    private async Task<IActionResult?> GateTagWriteAsync(Guid id) =>
+        await _rooms.AuthorizeRecordingPermissionAsync(UserId, id, RoomPermission.EditOthersRecordings) switch
+        {
+            RoomAccessError.NotFound => NotFound(),
+            RoomAccessError.Forbidden => Forbid(),
+            _ => null,
+        };
+
+    /// <summary>Adopt a tag on a recording - either typed by hand or promoted from a suggestion. Idempotent.
+    /// Gated by <see cref="GateTagWriteAsync"/>: the owner, or a member with
+    /// <see cref="RoomPermission.EditOthersRecordings"/>.</summary>
+    [HttpPost("{id:guid}/tags")]
+    [EndpointSummary("Add a tag to a recording")]
+    [EndpointDescription(
+        "Adds one tag. Automatic topic extraction only ever **suggests** tags; this is how a tag becomes real " +
+        "and starts counting towards your tag cloud. Promoting a suggestion is the same call - pass its text " +
+        "and it is stored in its normalised form, not kept verbatim. Whitespace inside the tag becomes " +
+        "hyphens (`budget planning` -> `budget-planning`), matching is case-insensitive, and adding a tag " +
+        "you already have does nothing. You can always tag your own recording; tagging someone else's needs " +
+        "the `EditOthersRecordings` permission in a room it is shared into. 400 for blank text, 404 if you " +
+        "cannot see the recording, 403 if you can see it but lack that permission.")]
+    public async Task<IActionResult> AddTag(Guid id, SetRecordingTagRequest req)
+    {
+        if (await GateTagWriteAsync(id) is { } denied) return denied;
+
+        var tag = TagText.Normalize(req.Tag);
+        if (tag is null) return BadRequest("A tag needs some text.");
+
+        var candidates = await _db.RecordingTags.Where(t => t.RecordingId == id).ToListAsync();
+        // Every row (any status) whose NORMALISED text matches - there can be more than one, because the
+        // unique index only blocks exact-lower-case duplicates of the RAW text: a suggestion stored as "Data
+        // Collection" and an adopted "Data-Collection" both satisfy it while meaning the same tag.
+        var matches = FindAllByNormalizedTag(candidates, tag);
+        var adopted = matches.FirstOrDefault(t => t.Status == RecordingTagStatus.Adopted);
+
+        if (adopted is not null)
+        {
+            // The normalised tag is already adopted - possibly under a different row than the one that
+            // literally matches the request (the case above: "Data-Collection" already adopted while
+            // "Data Collection" is a separate, later suggestion). Rewriting a second row's text to converge
+            // on the same value would collide with the (RecordingId, lower(Tag)) unique index, so drop every
+            // OTHER matching row instead: the user's intent is already satisfied and the hint correctly
+            // disappears. When `matches` is just the adopted row itself this is the plain idempotent
+            // no-op - leave AdoptedAt alone so re-adding does not reshuffle the chip order.
+            foreach (var redundant in matches.Where(t => t.Id != adopted.Id))
+                _db.RecordingTags.Remove(redundant);
+        }
+        else if (matches.Count == 0)
+        {
+            _db.RecordingTags.Add(new RecordingTag
+            {
+                Id = Guid.NewGuid(),
+                RecordingId = id,
+                Tag = tag,
+                // Adopted tags all weigh the same: the cloud sums weight, so 1.0 makes the sum a recording
+                // count and sizes words by how often the user reached for them.
+                Weight = 1.0,
+                Ordinal = candidates.Count,
+                Status = RecordingTagStatus.Adopted,
+                AdoptedAt = DateTimeOffset.UtcNow,
+            });
+        }
+        else
+        {
+            // Promotion (typed by hand or picked from a hint), or reviving something previously dismissed:
+            // flip the row we already have to Adopted AND rewrite its text to the normalised form. Keeping
+            // the suggestion's raw text (e.g. "Data Collection") would let an adopted tag contain a space
+            // and, worse, split the tag cloud - the same concept typed as "data collection" on another
+            // recording only merges case-insensitively, not across whitespace-vs-hyphen spellings.
+            //
+            // Since extraction now normalises tags at insert time (see TagsProcessor), more than one
+            // non-adopted row matching the same normalised tag should not happen in practice any more - but
+            // if it ever does (a dismissal plus a stale suggestion for the same word, say), remove the extras
+            // and PERSIST that removal in its own round trip before touching the winner's text. Command
+            // ordering within a single SaveChangesAsync batch is NOT a guarantee EF/Npgsql make either way -
+            // if the winner's Tag were written before the redundant rows are actually gone, the two rows
+            // would transiently share the same lower(Tag) and Postgres would reject it as a collision on the
+            // (RecordingId, lower(Tag)) unique index. Doing the delete first and persisting it removes the
+            // dependency on that ordering entirely, rather than assuming any particular provider behaviour.
+            // See AddTag_ConvergesTwoNonAdoptedCaseVariants_WithoutATransientUniqueIndexViolation in
+            // TagsIntegrationTests.cs, which reproduces the exact 23505 violation on real Postgres by forcing
+            // the update to land first, and confirms this two-phase order avoids it regardless of which row
+            // the (unordered) query above happens to return as the winner.
+            var winner = matches[0];
+            var redundant = matches.Skip(1).ToList();
+            if (redundant.Count > 0)
+            {
+                _db.RecordingTags.RemoveRange(redundant);
+                await _db.SaveChangesAsync();
+            }
+            winner.Status = RecordingTagStatus.Adopted;
+            winner.Tag = tag;
+            winner.Weight = 1.0;
+            winner.AdoptedAt = DateTimeOffset.UtcNow;
+        }
+
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // Two members adding the same tag at once both read no adopted match and both write, and
+            // IX_RecordingTags_RecordingId_TagLower rejects whichever arrives second (DiarizDbContext's
+            // comment on that index predicts exactly this). The endpoint promises idempotency, so a loser
+            // whose tag is now present got the outcome it asked for - report success instead of a 500.
+            //
+            // Deliberately NOT a blanket swallow: the state is re-read on a clean tracker and the exception
+            // is rethrown unless the tag really is adopted now, so any other write failure (say the recording
+            // was deleted underneath us, an FK violation) still surfaces as an error rather than a quiet 204.
+            // Both branches are covered on real Postgres in TagsIntegrationTests -
+            // AddTag_WhenAnotherMemberWinsTheRace_IsStillIdempotentRatherThanA500 and
+            // AddTag_WhenTheWriteFailsForAnyOtherReason_StillFails, and a mutation check confirmed the second
+            // of those fails if this re-read is dropped for a bare catch.
+            _db.ChangeTracker.Clear();
+            var settled = await _db.RecordingTags.Where(t => t.RecordingId == id).ToListAsync();
+            if (!FindAllByNormalizedTag(settled, tag).Any(t => t.Status == RecordingTagStatus.Adopted))
+                throw;
+        }
+        return NoContent();
+    }
+
+    /// <summary>Remove an adopted tag. Deletes the row outright, so it does not reappear as a suggestion;
+    /// only a re-transcription can offer it again. Same gate as <see cref="AddTag"/>.</summary>
+    [HttpDelete("{id:guid}/tags")]
+    [EndpointSummary("Remove a tag from a recording")]
+    [EndpointDescription(
+        "Removes the tag from this recording, case-insensitively. Only an **adopted** tag is removed: a " +
+        "suggestion stays on offer (dismiss it instead) and a dismissal stays as it is, so a word you " +
+        "rejected cannot be made suggestible again through this call. It does not come back as a suggestion " +
+        "- only a re-transcription can propose it again. Removing a tag that is not there succeeds (204), so " +
+        "a retry is safe. Same permission as adding a tag: 404 if you cannot see the recording, 403 if you " +
+        "can but lack `EditOthersRecordings`.")]
+    public async Task<IActionResult> RemoveTag(Guid id, [FromQuery] string tag)
+    {
+        if (await GateTagWriteAsync(id) is { } denied) return denied;
+
+        var normalized = TagText.Normalize(tag);
+        if (normalized is null) return NoContent();
+
+        var candidates = await _db.RecordingTags.Where(t => t.RecordingId == id).ToListAsync();
+        // ADOPTED rows only. "Remove" means "un-adopt", and the other two statuses must survive it: deleting
+        // a Dismissed tombstone would make the word suggestible again, which is precisely what dismissing it
+        // was for, and deleting a live Suggested row would dismiss it without leaving the tombstone a real
+        // dismissal leaves. Not reachable from the web UI (it only offers Remove on a chip), but this is a
+        // public endpoint - also on the MCP surface and the n8n node - so the status filter belongs here.
+        // Within Adopted, act on EVERY row that normalises to this tag, not just the first: asking to remove
+        // a tag should leave none behind, including the rare case (older data, a race) where more than one
+        // adopted row matches.
+        var matches = FindAllByNormalizedTag(candidates, normalized)
+            .Where(t => t.Status == RecordingTagStatus.Adopted)
+            .ToList();
+        if (matches.Count > 0)
+        {
+            _db.RecordingTags.RemoveRange(matches);
+            await _db.SaveChangesAsync();
+        }
+        return NoContent();
+    }
+
+    /// <summary>Reject a suggested tag for this recording. The row is kept as a tombstone so a
+    /// re-transcription cannot suggest it here again. Same gate as <see cref="AddTag"/>.</summary>
+    [HttpPost("{id:guid}/tags/dismiss")]
+    [EndpointSummary("Dismiss a suggested tag")]
+    [EndpointDescription(
+        "Rejects one of the automatically suggested tags on this recording so it stops being offered here, " +
+        "even after a re-transcription. The dismissal is per recording - the same word can still be suggested " +
+        "on other meetings. 404 when there is no such suggestion (including when you already accepted it). " +
+        "Same permission as adding a tag: 404 if you cannot see the recording, 403 if you can but lack " +
+        "`EditOthersRecordings`.")]
+    public async Task<IActionResult> DismissTag(Guid id, SetRecordingTagRequest req)
+    {
+        if (await GateTagWriteAsync(id) is { } denied) return denied;
+
+        var tag = TagText.Normalize(req.Tag);
+        if (tag is null) return BadRequest("A tag needs some text.");
+
+        var candidates = await _db.RecordingTags.Where(t => t.RecordingId == id).ToListAsync();
+        // Act on EVERY matching Suggested row, not just the first - the same reasoning as RemoveTag above.
+        var suggestions = FindAllByNormalizedTag(candidates, tag)
+            .Where(t => t.Status == RecordingTagStatus.Suggested)
+            .ToList();
+        if (suggestions.Count == 0) return NotFound();
+
+        foreach (var suggestion in suggestions)
+            suggestion.Status = RecordingTagStatus.Dismissed;
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// <summary>Every tag among <paramref name="candidates"/> (already scoped to one recording) whose
+    /// NORMALISED text matches <paramref name="normalizedTag"/>, case-insensitively. A plain
+    /// <c>t.Tag.ToLower() == tag.ToLower()</c> SQL comparison is not enough here: every tag written today is
+    /// normalised at insert time (see <see cref="TagText.Normalize"/>), but a row written before that
+    /// started - a suggestion from an older extraction run, say - can still hold spaced, un-normalised text
+    /// ("Data Collection"). Comparing raw strings would miss that such a row means the same tag as its
+    /// normalised spelling ("data-collection"), so adopting it would insert a second row instead of
+    /// promoting the one that already exists. Comparing normalised forms on both sides treats "Data
+    /// Collection" and "data-collection" as the one tag they are - which is also why this can return MORE
+    /// than one row: the unique index only blocks exact-lower-case duplicates of the raw text, so an old
+    /// un-normalised row and a newer normalised one can independently hold spellings that normalise the same
+    /// way. Per-recording tag counts are small (extraction caps at 12, plus whatever the user has adopted or
+    /// dismissed), so the caller loading every row up front and filtering here is not a real cost.</summary>
+    private static List<RecordingTag> FindAllByNormalizedTag(IReadOnlyList<RecordingTag> candidates, string normalizedTag) =>
+        candidates.Where(t =>
+            string.Equals(TagText.Normalize(t.Tag), normalizedTag, StringComparison.OrdinalIgnoreCase)).ToList();
 
     /// <summary>Manually create or edit the current transcription's meeting minutes (Markdown). Works even
     /// with no LLM configured, and marks the minutes user-edited so the automatic generator won't overwrite

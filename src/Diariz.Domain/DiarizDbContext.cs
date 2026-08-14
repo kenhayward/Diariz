@@ -258,13 +258,36 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.HasIndex(a => new { a.RecordingId, a.Ordinal });
         });
 
-        // Machine-extracted tag-cloud tags. Provider-agnostic (plain columns, no vector/jsonb), so it
-        // stays outside the Npgsql guard and loads under the in-memory test provider too.
+        // Tag-cloud tags: LLM suggestions plus the tags the user adopted (see RecordingTagStatus). Plain
+        // columns only (no vector/jsonb), so the entity itself stays outside the Npgsql guard and loads
+        // under the in-memory test provider.
         builder.Entity<RecordingTag>(e =>
         {
             e.HasIndex(t => new { t.RecordingId, t.Ordinal });
             e.Property(t => t.Tag).HasMaxLength(64);
         });
+
+        // One row per tag per recording, case-insensitively: promotion flips an existing suggestion rather
+        // than inserting, so a duplicate here means a race between two room members. A functional index on
+        // lower(Tag) is Postgres-only, hence the guard - the in-memory provider cannot enforce it, which is
+        // why RecordingTagStatusIntegrationTests covers it instead.
+        if (Database.IsNpgsql())
+        {
+            // The NAME is load-bearing, not cosmetic. EF cannot express a functional index, so the model
+            // declares it on (RecordingId, Tag) while the AddRecordingTagStatus migration creates the real
+            // thing on (RecordingId, lower("Tag")) in raw SQL, deliberately sharing this name. The model
+            // snapshot therefore describes an index the database does not have, and that is the accepted
+            // trade: do NOT rename this or "correct" it to match the snapshot. A future migration that
+            // touches the Tag column may emit a DropIndex/CreateIndex pair from the model definition here,
+            // which would silently downgrade the functional index to a plain unique one on the raw text and
+            // let "Metadata" and "metadata" coexist on one recording again - review any generated migration
+            // that mentions this name and re-create it with the raw SQL. What catches the downgrade is
+            // RecordingTagStatusIntegrationTests.CaseVariantDuplicate_OnTheSameRecording_IsRejected.
+            builder.Entity<RecordingTag>()
+                .HasIndex(t => new { t.RecordingId, t.Tag })
+                .HasDatabaseName("IX_RecordingTags_RecordingId_TagLower")
+                .IsUnique();
+        }
 
         builder.Entity<MeetingNote>(e =>
         {

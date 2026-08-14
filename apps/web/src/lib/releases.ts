@@ -24,7 +24,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Meeting screenshots** | Capture the screen during a recording from the desktop app - a hotkey, the tray menu, or the app itself - choosing a screen or a rectangle on the first capture and reusing it after; captures appear in the transcript at the moment they were taken, as a full-size viewer with zoom and pan to read a capture at native resolution, and in a Notes-tab section. |
 | **Summaries & minutes** | Auto summary plus full professional meeting minutes, editable in a rich editor and emailable. A meeting type carries no prompts of its own: it names the **formula** that generates its minutes, plus any others to run alongside (their documents appear in the Formulas tab). Minutes and formulas are the same machinery - any formula you can use can produce your minutes. Templates are built from blocks (H1-H3 headings, literal text, substituted details, model prompts, rules, drag-to-reorder) with JSON import/export. |
 | **Action items** | Auto-extracted with owner and deadline, tracked across every meeting with completion and a person filter, linking back to the transcript. |
-| **Tag cloud** | Every meeting is auto-tagged with weighted topics; a Tags tab shows a weighted cloud and the meetings behind each tag. |
+| **Tag cloud** | Tags are yours to add - a Tags pill on each meeting suggests topics automatically extracted from it, and adopting one builds the weighted cloud on the Tags tab, which shows the meetings behind each tag. |
 | **Chat over transcripts** | Stream answers over one meeting, a folder (its summary/minutes/actions), several selected, or all meetings - context inferred from what you're viewing - via your OpenAI-compatible model, with attachments and saved conversations. |
 | **Formulas** | Build a document from headings, literal text, substituted meeting details and instructions to the model; choose what it may see (transcript, notes, summary, minutes, actions) and run it over a recording - or a whole folder and its sub-sections - to generate a Markdown document you can edit, download, or email. Runs in the background (\"Generating...\" then fills in); re-running one replaces its previous document, and a document you edited by hand is left alone. Personal, platform-wide, or built-in; from the Formulas tab (on a recording or a folder), \`/formula\` in chat, or Claude via MCP; share a personal one so others can find and add it (a live link); admins manage the shared ones. |
 | **Search** | A search box above the meetings list, scoped by default to the folder you are browsing: typing takes the list over, each hit shows the matching words in context plus the folder it lives in, and clicking one opens the transcript at that moment. Matching folders show up too. **Search everywhere** widens it to every room you can see, grouping the results by folder with Section / Date / Speaker chips to narrow them. Keyword search across your library, upgraded to semantic (meaning-based) search when an embeddings endpoint is configured. |
@@ -61,6 +61,33 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.212.0",
+    date: "2026-08-14",
+    pr: 526,
+    headline: "Tags are now yours to add - automatic topics are only suggestions",
+    summary:
+      "Tags used to be entirely automatic: the AI picked topics after each meeting and they went " +
+      "straight into the tag cloud, with no way to add, remove, or correct one by hand. Tags are now " +
+      "yours. A new Tags pill on a meeting's summary card opens a popover where you can type your own " +
+      "tags and see the AI's picks as suggestions - pick one to adopt it, or dismiss it if it is not " +
+      "useful. Only tags you have adopted count toward the tag cloud and tag search. " +
+      "**This release demotes every tag you already have to a suggestion** - none of them carry over " +
+      "as adopted, so the tag cloud and tag search start empty on your existing library and rebuild " +
+      "only as you adopt tags going forward. Re-transcribing a meeting still refreshes its automatic " +
+      "suggestions, but never touches a tag you have already adopted or dismissed. You can always tag " +
+      "your own meeting; tagging someone else's in a shared room needs that room's \"Edit or regenerate " +
+      "other people's recordings\" permission, which new members are given by default.",
+    added: [
+      "A Tags pill on a meeting's summary card - type your own tags, and accept or dismiss the automatically suggested ones.",
+      "Tagging a shared recording no longer requires ownership - a room member with the \"Edit or regenerate other people's recordings\" permission can add, remove, or dismiss its tags too.",
+    ],
+    changed: [
+      "Every previously auto-applied tag is demoted to a suggestion; the tag cloud and tag search start empty and fill in only as tags are adopted.",
+      "The automatic topic pass now only ever suggests tags - it no longer writes directly into the tag cloud.",
+      "Re-transcribing a meeting refreshes its suggested tags only; tags you adopted or dismissed are left alone.",
+    ],
+  },
   {
     version: "0.211.3",
     date: "2026-08-13",

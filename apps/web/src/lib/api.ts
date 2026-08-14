@@ -767,6 +767,22 @@ export const api = {
     return data;
   },
 
+  /// Adopt a tag on a recording - typed by hand, or promoted from a suggestion (same call, pass its text).
+  /// Idempotent, so the optimistic UI can retry safely.
+  async addRecordingTag(recordingId: string, tag: string): Promise<void> {
+    await http.post(`/api/recordings/${recordingId}/tags`, { tag });
+  },
+
+  /// Remove an adopted tag. It does not return as a suggestion - only a re-transcription can offer it again.
+  async removeRecordingTag(recordingId: string, tag: string): Promise<void> {
+    await http.delete(`/api/recordings/${recordingId}/tags`, { params: { tag } });
+  },
+
+  /// Reject a suggested tag so it stops being offered on this recording, even after a re-transcription.
+  async dismissRecordingTag(recordingId: string, tag: string): Promise<void> {
+    await http.post(`/api/recordings/${recordingId}/tags/dismiss`, { tag });
+  },
+
   /// Mark a set of actions complete (or not) in one call — works across recordings. Ids not owned are ignored.
   async completeActions(ids: string[], completed: boolean): Promise<void> {
     await http.post(`/api/actions/complete`, { ids, completed });

@@ -1211,6 +1211,9 @@ namespace Diariz.Domain.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("AdoptedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1219,6 +1222,9 @@ namespace Diariz.Domain.Migrations
 
                     b.Property<Guid>("RecordingId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Tag")
                         .IsRequired()
@@ -1231,6 +1237,10 @@ namespace Diariz.Domain.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("RecordingId", "Ordinal");
+
+                    b.HasIndex("RecordingId", "Tag")
+                        .IsUnique()
+                        .HasDatabaseName("IX_RecordingTags_RecordingId_TagLower");
 
                     b.ToTable("RecordingTags");
                 });

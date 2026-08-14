@@ -1,6 +1,6 @@
 ---
 title: Search and tags
-summary: Search your meetings from the box above the list, widen it to every room, and browse by the topics Diariz tags each meeting with automatically.
+summary: Search your meetings from the box above the list, widen it to every room, and add your own tags to a meeting from the automatic suggestions Diariz offers, or type your own.
 group: recordings
 order: 40
 ---
@@ -30,12 +30,24 @@ search stays keyword-only.
 
 ## Tags
 
-After transcription, the AI model tags each meeting with up to 12 weighted concepts it was actually
-about. Participant names and filler words are excluded.
+Tags are yours to add. Open a meeting and click the **Tags** pill on its summary card to type a tag, see
+the ones you have already added, and review suggestions.
 
-The left panel's **Tags** tab shows them as a weighted cloud, where font size scales with how central a
-topic is across your library. Click a tag to list the meetings that carry it. The expand button opens
-the cloud in a large modal, where picking a tag also filters the panel and picking a meeting opens it.
+After transcription, the AI model proposes up to 12 weighted topics it thinks the meeting was actually
+about (participant names and filler words are excluded), but these are only suggestions - shown in the
+pill's popover with dashed borders. Click one to adopt it, or dismiss it if it is not useful. A dismissed
+suggestion will not be offered again on that meeting, but the same word can still be suggested on others.
 
-Re-transcribing a meeting refreshes its tags. Existing libraries are backfilled automatically when a
-server-wide AI model is configured.
+Only tags you have adopted - typed by hand or picked from a suggestion - count toward your library. The
+left panel's **Tags** tab shows them as a weighted cloud, where font size scales with how central a topic
+is across your library. Click a tag to list the meetings that carry it. The expand button opens the cloud
+in a large modal, where picking a tag also filters the panel and picking a meeting opens it.
+
+Re-transcribing a meeting refreshes its suggestions, but never touches a tag you have already adopted or
+dismissed. Existing libraries get fresh suggestions automatically when a server-wide AI model is
+configured - each one still needs to be adopted before it joins the cloud.
+
+You can always tag your own meetings. In a shared room, tagging someone else's meeting needs the room's
+**Edit or regenerate other people's recordings** permission, which new members are given by default; without
+it you can still see its tags but not change them. Your tags on someone else's meeting count toward that
+room's cloud and the owner's, not toward your own personal cloud.

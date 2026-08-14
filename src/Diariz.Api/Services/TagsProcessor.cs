@@ -11,10 +11,11 @@ namespace Diariz.Api.Services;
 
 /// <summary>
 /// Processes a single tag-extraction job as part of the pipeline: builds the transcript, calls the LLM,
-/// and REPLACES the recording's <see cref="RecordingTag"/>s wholesale. Tags are machine-only (never
-/// user-edited), so unlike <see cref="ActionsProcessor"/> there is no once-only guard — a re-transcription
-/// simply refreshes them. Instead it guards against STALE jobs: a slow/backfilled job for a superseded
-/// transcription version must not overwrite the newer version's tags. Status-neutral (never touches
+/// and replaces the recording's <see cref="RecordingTagStatus.Suggested"/> <see cref="RecordingTag"/>s -
+/// adopted and dismissed rows are the user's own and are left alone. Unlike <see cref="ActionsProcessor"/>
+/// there is no once-only guard — a re-transcription simply refreshes the suggestions. Instead it guards
+/// against STALE jobs: a slow/backfilled job for a superseded transcription version must not overwrite the
+/// newer version's tags. Status-neutral (never touches
 /// <c>Recording.Status</c>, never marks Failed); on success it notifies the owner so the browser refetches.
 /// Pulled out of the BackgroundService so it can be unit-tested with a fake client + in-memory DbContext.
 /// </summary>
@@ -64,17 +65,59 @@ public static class TagsProcessor
 
             var extracted = await client.ExtractAsync(cfg, segs, template, ct);
 
-            // Replace only AFTER a successful extraction so a failed re-run keeps the previous set.
-            db.RecordingTags.RemoveRange(rec.Tags);
+            // Replace only AFTER a successful extraction so a failed re-run keeps the previous set - and
+            // replace only the SUGGESTIONS. Adopted tags are the user's own and must survive a
+            // re-transcription; dismissals are tombstones that stop a word coming back here.
+            var keep = rec.Tags
+                .Where(t => t.Status != RecordingTagStatus.Suggested)
+                .ToList();
+            // Materialised, like `keep` above: RemoveRange enumerates what it is given while it marks each
+            // entity Deleted, so handing it a live query over the same collection it is mutating is a trap
+            // waiting for the day RemoveRange starts touching rec.Tags. It costs nothing here (<= 12 rows).
+            var replace = rec.Tags
+                .Where(t => t.Status == RecordingTagStatus.Suggested)
+                .ToList();
+            db.RecordingTags.RemoveRange(replace);
+
+            // Never re-offer a word the user already holds or has already rejected on this recording. Compare
+            // NORMALISED forms, not raw text: an adopted (or dismissed) tag can be stored in a different
+            // spelling than whatever the LLM returns next time - Task 6's AddTag rewrites an adopted row to
+            // TagText.Normalize's hyphenated form ("Data-Collection"), while extraction always hands back its
+            // own raw, un-normalised text ("Data Collection"). Comparing raw strings would miss that they are
+            // the same word, defeating this guard in both directions - re-suggesting a tag the user already
+            // holds, and resurrecting one they dismissed.
+            var spoken = keep
+                .Select(t => TagText.Normalize(t.Tag))
+                .OfType<string>()
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            // Suggestions are stored in their NORMALISED form (TagText.Normalize, which also does the
+            // 64-char truncation, so no manual slicing here). TagsPrompt.ParseResponse only dedupes the raw
+            // LLM text, so "Data Collection" and "Data-Collection" both survive that step as distinct
+            // candidates while normalising to the same thing - inserting both would try to write two rows
+            // whose lower(Tag) happens to differ (so the unique index would not catch it) but which the
+            // user experiences as one duplicated hint. Dedupe by normalised form here too, keeping the first
+            // (highest-weighted, same rule ParseResponse itself uses) of any clash.
             var ordinal = 0;
-            var newTags = extracted.Select(e => new RecordingTag
+            var newTags = new List<RecordingTag>();
+            var seenNormalized = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var e in extracted)
             {
-                Id = Guid.NewGuid(),
-                RecordingId = rec.Id,
-                Tag = e.Tag.Length > 64 ? e.Tag[..64] : e.Tag,
-                Weight = Math.Clamp(e.Weight, 0.0, 1.0),
-                Ordinal = ordinal++,
-            }).ToList();
+                var normalized = TagText.Normalize(e.Tag);
+                if (normalized is null) continue;               // nothing usable left - drop it.
+                if (spoken.Contains(normalized)) continue;       // already held or dismissed here.
+                if (!seenNormalized.Add(normalized)) continue;   // duplicate within this batch.
+
+                newTags.Add(new RecordingTag
+                {
+                    Id = Guid.NewGuid(),
+                    RecordingId = rec.Id,
+                    Tag = normalized,
+                    Weight = Math.Clamp(e.Weight, 0.0, 1.0),
+                    Ordinal = ordinal++,
+                    Status = RecordingTagStatus.Suggested,
+                });
+            }
             db.RecordingTags.AddRange(newTags);
             // Set even when zero tags came back: a thin transcript is "done", not retry-forever.
             rec.TagsExtractedAt = DateTimeOffset.UtcNow;

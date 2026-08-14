@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<style>
+  body { margin:0; background:#f1f5f9; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color:#2563eb; text-decoration:none; }
+  a:hover { color:#bfdbfe; text-decoration:underline; }
+  @keyframes popIn { from { opacity:0; transform:translateY(-6px);} to {opacity:1; transform:translateY(0);} }
+  input { font-family: inherit; }
+</style>
+</helmet>
+
+<section style="display:flex; flex-direction:column; gap:26px; padding:34px">
+  <div style="display:flex; flex-direction:column; gap:6px; max-width:900px">
+    <div style="font-size:12px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:#6b7280">Turn 1 · Manual tags on the recording hub</div>
+    <div style="font-size:15px; line-height:1.55; color:#6b7280">The chosen direction: a Tags pill beside the meeting-type chip — the two actionable controls on the card sit together — opening a popover with one word-per-tag entry field, the tags already on the recording, and the auto-generated tags as a hint list. Picking a hint promotes it out of the list; <b style="color:#374151">×</b> on a hint dismisses it for good. Space adds a tag, Enter adds and closes, pasting a phrase joins it with hyphens. Earlier options are kept in <a href="Manual Tagging v1 (three options).dc.html">v1</a>.</div>
+  </div>
+
+  <div style="display:flex; flex-wrap:wrap; gap:26px; align-items:flex-start">
+
+    <!-- ============================ 1a ============================ -->
+    <div id="1a" style="display:flex; flex-direction:column; gap:10px; width:1600px">
+      <div style="display:flex; align-items:baseline; gap:10px">
+        <span style="font-size:11px; font-weight:700; letter-spacing:.1em; color:#ffffff; background:#2563eb; border-radius:5px; padding:3px 7px">1A</span>
+        <span style="font-size:14px; font-weight:600; color:#374151">Tags pill beside the meeting type · stacked popover</span>
+        <span style="font-size:13px; color:#6b7280">The pill carries the count and names the first few tags on hover, so nothing needs to be shown inline on the page.</span>
+      </div>
+
+      <div style="display:flex; flex-direction:column; height:960px; background:#f9fafb; color:#111827; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden">
+        <div style="display:flex; flex:1; min-height:0">
+
+          <!-- left panel -->
+          <aside style="width:288px; flex-shrink:0; display:flex; flex-direction:column; background:#ffffff; border-right:1px solid #e5e7eb">
+            <div style="height:36px; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; gap:6px; border-bottom:1px solid #e5e7eb; padding:0 8px">
+              <span style="width:24px; height:24px; border-radius:9999px; background:#0f172a; color:#ffffff; font-size:10px; font-weight:500; display:flex; align-items:center; justify-content:center">PA</span>
+              <span style="flex:1; min-width:0; font-size:12px; font-weight:500; letter-spacing:.05em; text-transform:uppercase; color:#6b7280; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">Platform Administrator</span>
+              <span style="font-size:10px; color:#6b7280">▾</span>
+              <span style="font-size:11px; color:#6b7280">◀</span>
+            </div>
+            <div style="height:36px; flex-shrink:0; display:flex; align-items:center; gap:2px; border-bottom:1px solid #e5e7eb; padding:0 12px; color:#6b7280">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#93c5fd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:6px"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:6px"><path d="M6 3v6a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"></path><line x1="12" y1="15" x2="12" y2="21"></line></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:6px"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:6px"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:6px"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            </div>
+            <div role="tablist" style="display:flex; flex-shrink:0; gap:4px; border-bottom:1px solid #e5e7eb; padding:0 6px">
+              <span style="border-bottom:2px solid #111827; padding:8px 12px; font-size:12.5px; font-weight:500; color:#111827; margin-bottom:-1px">List</span>
+              <span style="border-bottom:2px solid transparent; padding:8px 12px; font-size:12.5px; color:#6b7280">Calendar</span>
+              <span style="border-bottom:2px solid transparent; padding:8px 12px; font-size:12.5px; color:#6b7280">Actions</span>
+              <span style="border-bottom:2px solid transparent; padding:8px 12px; font-size:12.5px; color:#6b7280">Tags</span>
+            </div>
+            <div style="display:flex; flex-shrink:0; align-items:center; gap:6px; border-bottom:1px solid #f3f4f6; padding:6px 8px">
+              <div style="display:flex; flex:1; min-width:0; align-items:center; gap:6px; border:1px solid #e5e7eb; background:#f9fafb; border-radius:8px; padding:4px 8px">
+                <span style="display:flex; flex-shrink:0; color:#6b7280"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg></span>
+                <span style="min-width:0; flex:1; font-size:12px; color:#6b7280">Search…</span>
+              </div>
+              <div style="display:flex; flex-shrink:0; align-items:center; gap:4px">
+                <span style="border:1px solid #e5e7eb; background:#f9fafb; border-radius:4px; padding:2px 4px; font-size:11px; color:#374151">Date/Time</span>
+                <span style="display:flex; align-items:center; border:1px solid #e5e7eb; border-radius:4px; padding:2px 4px; color:#6b7280"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></span>
+              </div>
+            </div>
+            <div style="flex:1; min-height:0; overflow:hidden">
+              <sc-for list="{{ folders }}" as="f" hint-placeholder-count="10">
+                <div style="display:flex; align-items:center; gap:6px; border-bottom:1px solid #f3f4f6; padding:7px 6px 7px 10px">
+                  <span style="display:flex; flex:1; min-width:0; align-items:center; gap:7px; color:{{ f.color }}">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                    <span style="flex:1; min-width:0; font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ f.name }}</span>
+                  </span>
+                  <span style="font-size:11px; color:#6b7280; font-variant-numeric:tabular-nums">{{ f.count }}</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                  <span style="font-size:15px; line-height:1; color:#6b7280; padding:0 4px">⋮</span>
+                </div>
+              </sc-for>
+            </div>
+          </aside>
+
+          <!-- content column -->
+          <div style="display:flex; flex:1; min-width:0; flex-direction:column">
+            <!-- capture bar -->
+            <div style="height:72px; flex-shrink:0; display:flex; align-items:center; gap:16px; padding:0 18px; box-sizing:border-box; background:#ffffff; border-bottom:1px solid rgba(15,23,42,0.08)">
+              <div style="flex:1"></div>
+              <div style="display:flex; align-items:center; gap:14px">
+                <span style="display:flex; align-items:center; gap:10px; height:44px; border-radius:11px; padding:0 14px; background:#f1f5f9; border:1px solid rgba(15,23,42,.1)">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8"></path></svg>
+                  <span style="font-size:14.5px; font-weight:500; color:#0f172a">Audio source</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
+                </span>
+                <span style="display:flex; align-items:center; gap:13px; height:52px; border-radius:26px; padding:0 8px; background:#f1f5f9; border:1px solid rgba(15,23,42,.1)">
+                  <span style="width:36px; height:36px; border-radius:9999px; background:#e5484d; box-shadow:0 3px 12px rgba(229,72,77,.5); display:flex; align-items:center; justify-content:center"><span style="width:13px; height:13px; border-radius:9999px; background:#fff"></span></span>
+                  <span style="font-size:16px; font-weight:600; color:#0f172a; padding-right:14px">Start recording</span>
+                </span>
+                <span style="width:44px; height:44px; border-radius:11px; border:1px solid rgba(15,23,42,.1); display:flex; align-items:center; justify-content:center; color:#334155">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3.5 2"></path></svg>
+                </span>
+                <span style="width:44px; height:44px; border-radius:11px; border:1px solid rgba(15,23,42,.1); display:flex; align-items:center; justify-content:center; color:#334155">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="M7 9l5-5 5 5"></path><line x1="12" y1="4" x2="12" y2="16"></line></svg>
+                </span>
+              </div>
+              <div style="flex:1"></div>
+            </div>
+
+            <!-- recording page -->
+            <div style="flex:1; min-height:0; overflow:hidden; background:#f9fafb">
+              <div style="padding:24px; display:flex; flex-direction:column; gap:14px">
+
+                <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:20px">
+                  <h1 style="margin:0; min-width:0; font-size:22px; font-weight:600; letter-spacing:-.01em; color:#111827; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">FW: Relations + Standalone Data Collection Edit…</h1>
+                  <div style="display:flex; flex-shrink:0; align-items:center; gap:6px">
+                    <span style="display:inline-flex; align-items:center; gap:6px; border-radius:8px; background:#2563eb; padding:8px 14px; font-size:13px; font-weight:600; color:#fff">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4l13 8-13 8z" fill="currentColor" stroke="none"></path></svg>Play
+                    </span>
+                    <span style="display:grid; place-items:center; width:36px; height:36px; border-radius:8px; border:1px solid #e5e7eb; background:#ffffff; color:#6b7280"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></span>
+                    <span style="display:grid; place-items:center; width:36px; height:36px; border-radius:8px; border:1px solid #e5e7eb; background:#ffffff; color:#6b7280"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg></span>
+                    <span style="display:grid; place-items:center; width:36px; height:36px; border-radius:8px; border:1px solid #e5e7eb; background:#ffffff; color:#6b7280"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="M7 10l5 5 5-5"></path><line x1="12" y1="15" x2="12" y2="3"></line></svg></span>
+                    <span style="padding:4px 8px; font-size:18px; line-height:1; color:#6b7280">⋮</span>
+                  </div>
+                </div>
+
+                <div style="display:flex; flex-wrap:wrap; align-items:center; gap:4px; margin-top:-6px">
+                  <span style="display:flex; flex-shrink:0; color:#d97706"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></span>
+                  <span style="border-radius:9999px; border:1px solid #e5e7eb; background:#f9fafb; padding:2px 10px; font-size:12px; color:#374151">Platform Administrator</span>
+                  <span style="color:#374151; padding:0 2px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></span>
+                  <span style="border-radius:9999px; border:1px solid #e5e7eb; background:#f9fafb; padding:2px 10px; font-size:12px; color:#374151">Product Management Planning</span>
+                  <span style="color:#374151; padding:0 2px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></span>
+                  <span style="border-radius:9999px; border:1px solid #e5e7eb; background:#f9fafb; padding:2px 10px; font-size:12px; color:#374151">Regulatory Management</span>
+                </div>
+
+                <p style="margin:-4px 0 0; font-size:12px; color:#6b7280">Microphone · 8/13/2026 · 1:31:04 · Summarized · 83.8 MB · transcribed in 1:55</p>
+
+                <!-- hero summary card -->
+                <section style="position:relative; border-radius:16px; border:1px solid #e5e7eb; background:#ffffff; padding:20px">
+                  <div style="display:flex; flex-wrap:wrap; align-items:center; gap:10px">
+                    <span style="display:grid; place-items:center; width:34px; height:34px; flex-shrink:0; border-radius:9px; background:rgba(16,185,129,.15); color:#059669">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8"></path><path d="M8 17h6"></path></svg>
+                    </span>
+                    <h2 style="margin:0; font-size:15px; font-weight:600; color:#111827">Summary</h2>
+                    <span style="display:flex; align-items:center; gap:6px; border-radius:9999px; border:1px solid rgba(167,139,250,.4); background:rgba(139,92,246,.15); padding:4px 12px; font-size:12px; font-weight:600; color:#6d28d9">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg>
+                      General Meeting <span style="color:#6b7280">▾</span>
+                    </span>
+
+                    <!-- THE AFFORDANCE -->
+                    <button type="button" onClick="{{ a.onToggle }}" title="{{ a.hoverList }}" aria-label="Tags" style="display:inline-flex; align-items:center; gap:6px; border-radius:9999px; border:1px solid rgba(47,107,237,.45); background:rgba(47,107,237,.16); padding:4px 12px; font-size:12px; font-weight:600; color:#1e40af; cursor:pointer" style-hover="background:rgba(47,107,237,.28)">
+                      <span style="display:flex"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 12.6 21.4a2 2 0 0 1-2.8 0l-7-7a2 2 0 0 1-.6-1.4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 1.4.6l7 7a2 2 0 0 1 0 2.8z"></path><circle cx="7.5" cy="7.5" r="1.3" fill="currentColor" stroke="none"></circle></svg></span>
+                      Tags <span style="color:#6b7280; font-weight:500">{{ a.count }}</span>
+                      <span style="display:flex; color:#64748b"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg></span>
+                    </button>
+
+                    <div style="margin-left:auto; display:flex; align-items:center; gap:2px; color:#6b7280">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 6px"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path></svg>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 6px"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                      <span style="display:inline-flex; align-items:center; gap:4px; margin-left:6px; font-size:12px; font-weight:600; color:#2563eb">Open full minutes <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg></span>
+                    </div>
+                  </div>
+
+                  <div style="margin-top:14px; display:flex; flex-wrap:wrap; align-items:center; gap:8px">
+                    <span style="display:inline-flex; align-items:center; gap:6px; border-radius:8px; border:1px solid #e5e7eb; background:#f9fafb; padding:4px 10px; font-size:12px; color:#374151"><span style="display:flex; color:#0284c7"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16.5" rx="2"></rect><line x1="3" y1="9.5" x2="21" y2="9.5"></line><line x1="8" y1="2.5" x2="8" y2="6.5"></line><line x1="16" y1="2.5" x2="16" y2="6.5"></line></svg></span>13th August 2026 · 10:03</span>
+                    <span style="display:inline-flex; align-items:center; gap:6px; border-radius:8px; border:1px solid #e5e7eb; background:#f9fafb; padding:4px 10px; font-size:12px; color:#374151"><span style="display:flex; color:#6b7280"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3.5 2"></path></svg></span>1 h 31 min</span>
+                    <span style="display:inline-flex; align-items:center; gap:6px; border-radius:8px; border:1px solid #e5e7eb; background:#f9fafb; padding:4px 10px; font-size:12px; color:#374151"><span style="display:flex; color:#059669"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="10" x2="4" y2="14"></line><line x1="8" y1="6" x2="8" y2="18"></line><line x1="12" y1="9" x2="12" y2="15"></line><line x1="16" y1="4" x2="16" y2="20"></line><line x1="20" y1="8" x2="20" y2="16"></line></svg></span>Available <span style="color:#d97706">· 90d left</span></span>
+                    <span style="display:inline-flex; align-items:center; gap:6px; border-radius:8px; border:1px solid #e5e7eb; background:#f9fafb; padding:4px 10px; font-size:12px; color:#374151"><span style="display:flex; color:#7c3aed"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18"></path></svg></span>EN</span>
+                    <span style="display:inline-flex; align-items:center; gap:6px; border-radius:8px; border:1px solid #e5e7eb; background:#f9fafb; padding:4px 10px; font-size:12px; color:#374151">
+                      <span style="display:flex; align-items:center">
+                        <span style="width:18px; height:18px; border-radius:9999px; background:#38bdf8; color:#030712; font-size:8px; font-weight:700; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 1.5px #ffffff">SI</span>
+                        <span style="width:18px; height:18px; border-radius:9999px; background:#f472b6; color:#030712; font-size:8px; font-weight:700; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 1.5px #ffffff; margin-left:-6px">SI</span>
+                        <span style="width:18px; height:18px; border-radius:9999px; background:#34d399; color:#030712; font-size:8px; font-weight:700; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 1.5px #ffffff; margin-left:-6px">SI</span>
+                        <span style="width:18px; height:18px; border-radius:9999px; background:#fbbf24; color:#030712; font-size:8px; font-weight:700; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 1.5px #ffffff; margin-left:-6px">SP</span>
+                        <span style="margin-left:4px; font-size:11px; font-weight:500; color:#6b7280">+5</span>
+                      </span>
+                      10 speakers
+                    </span>
+                    <span style="display:inline-flex; align-items:center; gap:6px; border-radius:8px; border:1px solid #e5e7eb; background:#f9fafb; padding:4px 10px; font-size:12px; color:#374151"><span style="display:flex; color:#db2777"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></span>Platform Administrator</span>
+
+                  </div>
+
+                  <p style="margin:14px 0 0; font-size:13.5px; line-height:1.65; color:#374151; text-wrap:pretty">The team discussed extending the platform's data-collection architecture to support metadata by treating metadata as a specialized data collection with optional required-at-instantiation or release flags; they explored how to expose these fields in templates, topics, and document maps, debated scoping options (per repository vs per document map), and identified the need for clearer UI and licensing considerations aro…<span style="margin-left:6px; font-weight:600; color:#2563eb">Show more</span></p>
+
+                  <!-- POPOVER A -->
+                  <sc-if value="{{ a.open }}" hint-placeholder-val="{{ true }}">
+                    <div role="dialog" aria-label="Tags" style="position:absolute; z-index:50; left:300px; top:62px; width:392px; background:#ffffff; border:1px solid rgba(15,23,42,.1); border-radius:14px; box-shadow:0 16px 40px rgba(15,23,42,.16); color:#0f172a; animation:popIn .14s ease">
+                      <div style="display:flex; flex-direction:column; gap:12px; padding:16px 18px 18px">
+                        <div style="display:flex; align-items:center; gap:9px">
+                          <span style="display:flex; align-items:center; justify-content:center; width:19px; height:22px; margin-top:1px; color:#2f6bed"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 12.6 21.4a2 2 0 0 1-2.8 0l-7-7a2 2 0 0 1-.6-1.4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 1.4.6l7 7a2 2 0 0 1 0 2.8z"></path><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" stroke="none"></circle></svg></span>
+                          <span style="font-size:16px; font-weight:700; color:#0f172a">Tags</span>
+                          <span style="font-size:11px; color:#64748b">saved as you type</span>
+                          <button type="button" onClick="{{ a.onToggle }}" style="margin-left:auto; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border:none; border-radius:8px; background:transparent; color:#64748b; cursor:pointer" style-hover="background:rgba(15,23,42,.06)">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+                          </button>
+                        </div>
+
+                        <div onClick="{{ a.onFocusField }}" style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; min-height:46px; padding:8px; border:1px solid rgba(15,23,42,.14); border-radius:10px; background:#f1f5f9; cursor:text">
+                          <sc-for list="{{ a.tags }}" as="tag" hint-placeholder-count="3">
+                            <span style="display:inline-flex; align-items:center; gap:5px; height:28px; padding:0 4px 0 10px; border-radius:8px; background:rgba(47,107,237,.16); border:1px solid rgba(47,107,237,.35); font-size:12.5px; font-weight:500; color:#1e40af">
+                              {{ tag.text }}
+                              <button type="button" aria-label="Remove tag" onClick="{{ tag.onRemove }}" style="display:flex; align-items:center; justify-content:center; width:22px; height:22px; border:none; border-radius:6px; background:transparent; color:#2f6bed; cursor:pointer" style-hover="background:rgba(15,23,42,.1); color:#ffffff">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+                              </button>
+                            </span>
+                          </sc-for>
+                          <input type="text" ref="{{ a.inputRef }}" value="{{ a.draft }}" onChange="{{ a.onDraft }}" onKeyDown="{{ a.onKey }}" onPaste="{{ a.onPaste }}" placeholder="Add a tag…" aria-label="Add a tag" style="flex:1; min-width:96px; height:26px; border:none; outline:none; background:transparent; font-size:12.5px; color:#0f172a" />
+                        </div>
+                        <p style="margin:0; font-size:11.5px; line-height:1.5; color:#64748b">Space or Enter adds the word · pasting a phrase joins it with hyphens · Backspace removes the last tag</p>
+
+                        <div style="height:1px; background:rgba(15,23,42,.08)"></div>
+
+                        <div style="display:flex; align-items:center; gap:8px">
+                          <span style="font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#64748b">Auto-generated · pick or ignore</span>
+                          <span style="margin-left:auto; font-size:11px; color:#94a3b8">{{ a.hintCount }} left</span>
+                        </div>
+                        <div style="display:flex; flex-wrap:wrap; gap:6px">
+                          <sc-for list="{{ a.hints }}" as="h" hint-placeholder-count="6">
+                            <span style="display:inline-flex; align-items:center; gap:2px; height:26px; padding:0 2px 0 4px; border-radius:7px; border:1px dashed rgba(15,23,42,.2); background:transparent">
+                              <button type="button" onClick="{{ h.onAdd }}" title="Add this tag" style="display:inline-flex; align-items:center; gap:5px; height:22px; padding:0 5px; border:none; border-radius:5px; background:transparent; font-size:12.5px; color:#334155; cursor:pointer" style-hover="background:rgba(15,23,42,.07)">
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#2f6bed" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                {{ h.text }}
+                              </button>
+                              <button type="button" onClick="{{ h.onDismiss }}" title="Never suggest this" style="display:flex; align-items:center; justify-content:center; width:18px; height:18px; border:none; border-radius:5px; background:transparent; color:#94a3b8; cursor:pointer" style-hover="background:rgba(15,23,42,.08); color:#ff8b8f">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+                              </button>
+                            </span>
+                          </sc-for>
+                          <sc-if value="{{ a.noHints }}" hint-placeholder-val="{{ false }}">
+                            <span style="font-size:12px; color:#94a3b8">All suggestions dealt with.</span>
+                          </sc-if>
+                        </div>
+                      </div>
+                    </div>
+                  </sc-if>
+                </section>
+
+                <!-- hub tiles -->
+                <div style="display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:12px; align-content:start">
+                  <div style="display:flex; flex-direction:column; border-radius:16px; border:1px solid #e5e7eb; background:#ffffff; padding:16px">
+                    <div style="display:flex; align-items:center; gap:10px">
+                      <span style="display:grid; place-items:center; width:32px; height:32px; flex-shrink:0; border-radius:9px; background:rgba(59,130,246,.15); color:#2563eb"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5.5h12.5A1.5 1.5 0 0 1 17 7v6a1.5 1.5 0 0 1-1.5 1.5H8l-4 3.2V14.5H3A1.5 1.5 0 0 1 1.5 13V7A1.5 1.5 0 0 1 3 5.5z"></path><path d="M4.5 8.8h9"></path><path d="M4.5 11.2h6"></path><path d="M20 3.2l.62 1.66 1.66.62-1.66.62L20 7.78l-.62-1.66-1.66-.62 1.66-.62z" fill="#fbbf24" stroke="none"></path></svg></span>
+                      <div style="min-width:0">
+                        <div style="font-size:14px; font-weight:600; color:#111827">Transcript</div>
+                        <div style="font-size:11.5px; color:#6b7280">920 segments · 1 h 31 m…</div>
+                      </div>
+                      <span style="margin-left:auto; color:#6b7280"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg></span>
+                    </div>
+                    <div style="margin-top:12px; display:flex; height:24px; align-items:flex-end; gap:2px">
+                      <span style="flex:1; height:40%; border-radius:2px; background:#e5e7eb"></span><span style="flex:1; height:75%; border-radius:2px; background:#e5e7eb"></span><span style="flex:1; height:55%; border-radius:2px; background:#e5e7eb"></span><span style="flex:1; height:95%; border-radius:2px; background:#3b82f6"></span><span style="flex:1; height:35%; border-radius:2px; background:#e5e7eb"></span><span style="flex:1; height:65%; border-radius:2px; background:#e5e7eb"></span><span style="flex:1; height:80%; border-radius:2px; background:#e5e7eb"></span><span style="flex:1; height:45%; border-radius:2px; background:#e5e7eb"></span><span style="flex:1; height:70%; border-radius:2px; background:#e5e7eb"></span><span style="flex:1; height:50%; border-radius:2px; background:#e5e7eb"></span><span style="flex:1; height:85%; border-radius:2px; background:#e5e7eb"></span><span style="flex:1; height:60%; border-radius:2px; background:#e5e7eb"></span>
+                    </div>
+                  </div>
+
+                  <div style="display:flex; flex-direction:column; border-radius:16px; border:1px solid #e5e7eb; background:#ffffff; padding:16px">
+                    <div style="display:flex; align-items:center; gap:10px">
+                      <span style="display:grid; place-items:center; width:32px; height:32px; flex-shrink:0; border-radius:9px; background:rgba(245,158,11,.15); color:#d97706"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"></rect><path d="M9.5 4V3.2A.8.8 0 0 1 10.3 2.4h3.4a.8.8 0 0 1 .8.8V4z" fill="currentColor" stroke="none"></path><path d="M8.4 12.6l2.4 2.4 4.8-5.2" stroke="#34d399"></path></svg></span>
+                      <div style="min-width:0">
+                        <div style="font-size:14px; font-weight:600; color:#111827">Actions</div>
+                        <div style="font-size:11.5px; color:#6b7280">5 open · 0 done</div>
+                      </div>
+                      <span style="margin-left:auto; color:#6b7280"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg></span>
+                    </div>
+                    <div style="margin-top:12px; display:flex; flex-direction:column; gap:6px">
+                      <div style="display:flex; align-items:center; gap:8px; font-size:12px; color:#374151"><span style="width:14px; height:14px; flex-shrink:0; border-radius:3px; border:1.5px solid #6b7280"></span><span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap">Schedule a dedicated metadata…</span></div>
+                      <div style="display:flex; align-items:center; gap:8px; font-size:12px; color:#374151"><span style="width:14px; height:14px; flex-shrink:0; border-radius:3px; border:1.5px solid #6b7280"></span><span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap">Set up a meeting for conditiona…</span></div>
+                    </div>
+                  </div>
+
+                  <div style="display:flex; flex-direction:column; border-radius:16px; border:1px solid #e5e7eb; background:#ffffff; padding:16px">
+                    <div style="display:flex; align-items:center; gap:10px">
+                      <span style="display:grid; place-items:center; width:32px; height:32px; flex-shrink:0; border-radius:9px; background:rgba(236,72,153,.15); color:#db2777"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"></circle><path d="M3.5 20a5.5 5.5 0 0 1 11 0"></path><path d="M16.4 6.6a6 6 0 0 1 0 10.8" stroke="#38bdf8"></path><path d="M19 4a9 9 0 0 1 0 16" stroke="#38bdf8" opacity=".55"></path></svg></span>
+                      <div style="min-width:0">
+                        <div style="font-size:14px; font-weight:600; color:#111827">Speakers</div>
+                        <div style="font-size:11.5px; color:#6b7280">10 identified</div>
+                      </div>
+                      <span style="margin-left:auto; color:#6b7280"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg></span>
+                    </div>
+                    <div style="margin-top:12px; display:flex; align-items:center">
+                      <span style="width:28px; height:28px; border-radius:9999px; background:#38bdf8; color:#030712; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 2px #ffffff">SP</span>
+                      <span style="width:28px; height:28px; border-radius:9999px; background:#f472b6; color:#030712; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 2px #ffffff; margin-left:-6px">SP</span>
+                      <span style="width:28px; height:28px; border-radius:9999px; background:#34d399; color:#030712; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 2px #ffffff; margin-left:-6px">SP</span>
+                      <span style="width:28px; height:28px; border-radius:9999px; background:#fbbf24; color:#030712; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 2px #ffffff; margin-left:-6px">SP</span>
+                      <span style="width:28px; height:28px; border-radius:9999px; background:#a78bfa; color:#030712; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 2px #ffffff; margin-left:-6px">SP</span>
+                      <span style="margin-left:6px; font-size:11px; font-weight:500; color:#6b7280">+5</span>
+                    </div>
+                  </div>
+
+                  <div style="display:flex; flex-direction:column; border-radius:16px; border:1px solid #e5e7eb; background:#ffffff; padding:16px">
+                    <div style="display:flex; align-items:center; gap:10px">
+                      <span style="display:grid; place-items:center; width:32px; height:32px; flex-shrink:0; border-radius:9px; background:rgba(139,92,246,.15); color:#7c3aed"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h7.3L18 8.2V19.5A1 1 0 0 1 17 20.5H6A1 1 0 0 1 5 19.5v-15A1 1 0 0 1 6 3.5z"></path><path d="M13.2 3.6l4.4 4.4h-4.4z" fill="#fbbf24" stroke="none"></path><path d="M8 12.5h6.4"></path><path d="M8 15.4h4.4"></path></svg></span>
+                      <div style="min-width:0">
+                        <div style="font-size:14px; font-weight:600; color:#111827">Notes</div>
+                        <div style="font-size:11.5px; color:#6b7280">0 notes · 3 scr…</div>
+                      </div>
+                      <span style="margin-left:auto; display:inline-flex; align-items:center; gap:6px; border-radius:8px; border:1px solid #e5e7eb; background:#f9fafb; padding:4px 10px; font-size:11.5px; font-weight:600; color:#2563eb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>New</span>
+                    </div>
+                    <p style="margin:12px 0 0; font-size:12px; color:#6b7280">No notes yet</p>
+                  </div>
+
+                  <div style="display:flex; flex-direction:column; border-radius:16px; border:1px solid #e5e7eb; background:#ffffff; padding:16px">
+                    <div style="display:flex; align-items:center; gap:10px">
+                      <span style="display:grid; place-items:center; width:32px; height:32px; flex-shrink:0; border-radius:9px; background:rgba(14,165,233,.15); color:#0284c7"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 5.5h5L17 9v8.5a1 1 0 0 1-1 1H8.5a1 1 0 0 1-1-1v-11a1 1 0 0 1 1-1z"></path><path d="M13.2 5.6L17 9.4h-3.8z" fill="#a78bfa" stroke="none"></path><path d="M5.5 8v10.5a1.5 1.5 0 0 0 1.5 1.5h7" opacity=".5"></path></svg></span>
+                      <div style="min-width:0">
+                        <div style="font-size:14px; font-weight:600; color:#111827">Files</div>
+                        <div style="font-size:11.5px; color:#6b7280">0 attached</div>
+                      </div>
+                      <span style="margin-left:auto; display:inline-flex; align-items:center; gap:6px; border-radius:8px; border:1px solid #e5e7eb; background:#f9fafb; padding:4px 10px; font-size:11.5px; font-weight:600; color:#2563eb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>Add</span>
+                    </div>
+                    <p style="margin:12px 0 0; font-size:12px; color:#6b7280">No files yet</p>
+                  </div>
+
+                  <div style="display:flex; flex-direction:column; border-radius:16px; border:1px solid #e5e7eb; background:#ffffff; padding:16px">
+                    <div style="display:flex; align-items:center; gap:10px">
+                      <span style="display:grid; place-items:center; width:32px; height:32px; flex-shrink:0; border-radius:9px; background:rgba(59,130,246,.15); color:#2563eb"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.6 14 L4.6 17.9 a2 2 0 0 0 1.7 3 h11.4 a2 2 0 0 0 1.7 -3 L17.4 14 Z" fill="#2563eb" stroke="none"></path><path d="M9 2h6"></path><path d="M10 2v6.5L4.5 18a2 2 0 0 0 1.7 3h11.6a2 2 0 0 0 1.7-3L14 8.5V2"></path><path d="M6.5 14h11"></path><path d="M19 3l.6 1.4L21 5l-1.4.6L19 7l-.6-1.4L17 5l1.4-.6z"></path></svg></span>
+                      <div style="min-width:0">
+                        <div style="font-size:14px; font-weight:600; color:#111827">Formulas</div>
+                        <div style="font-size:11.5px; color:#6b7280">0 runs</div>
+                      </div>
+                      <span style="margin-left:auto; display:inline-flex; align-items:center; gap:6px; border-radius:8px; background:#2563eb; padding:4px 10px; font-size:11.5px; font-weight:600; color:#fff"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4l13 8-13 8z" fill="currentColor" stroke="none"></path></svg>Run</span>
+                    </div>
+                    <div style="margin-top:12px; display:flex; flex-direction:column; gap:6px">
+                      <p style="margin:0; font-size:12px; color:#6b7280">No runs yet</p>
+                      <div style="display:flex; align-items:center; gap:8px; font-size:12px; color:#6b7280"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>From General Meeting</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- chat panel -->
+          <aside style="width:320px; flex-shrink:0; display:flex; flex-direction:column; background:#ffffff; border-left:1px solid #e5e7eb">
+            <div style="height:36px; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #e5e7eb; padding:0 12px">
+              <span style="font-size:12px; font-weight:500; letter-spacing:.05em; text-transform:uppercase; color:#6b7280">Chat</span>
+              <span style="font-size:11px; color:#6b7280">▶</span>
+            </div>
+            <div style="display:flex; height:36px; flex-shrink:0; align-items:center; gap:4px; border-bottom:1px solid #e5e7eb; padding:0 8px; color:#6b7280">
+              <span style="display:inline-flex; align-items:center; justify-content:center; border-radius:4px; padding:4px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg></span>
+              <span style="display:inline-flex; align-items:center; justify-content:center; border-radius:4px; padding:4px; opacity:.4"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21h10M4 13l6 6 9-9a2 2 0 0 0 0-3l-3-3a2 2 0 0 0-3 0L4 13z"></path></svg></span>
+              <span style="display:inline-flex; align-items:center; justify-content:center; border-radius:4px; padding:4px; opacity:.4"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><path d="M17 21v-8H7v8M7 3v5h8"></path></svg></span>
+              <span style="display:inline-flex; align-items:center; justify-content:center; border-radius:4px; padding:4px; opacity:.4"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path></svg></span>
+              <span style="margin-left:auto; display:inline-flex; align-items:center; gap:6px">
+                <svg width="22" height="22" viewBox="0 0 26 26"><circle cx="13" cy="13" r="9" fill="none" stroke-width="3.5" stroke="#e5e7eb"></circle></svg>
+                <span style="font-size:11px; color:#6b7280; font-variant-numeric:tabular-nums">0 / 131,072 (0%)</span>
+              </span>
+            </div>
+            <div style="flex:1; min-height:0; padding:12px">
+              <p style="margin:0; padding:0 4px; font-size:12px; line-height:1.6; color:#6b7280">Ask a question about your recordings. Pick which transcripts the assistant can see below.</p>
+            </div>
+            <div style="flex-shrink:0; border-top:1px solid #e5e7eb; padding:6px 8px">
+              <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px">
+                <span style="display:inline-flex; align-items:center; gap:4px; border-radius:9999px; border:1px solid #e5e7eb; padding:2px 8px; font-size:12px; color:#374151"><span style="width:6px; height:6px; border-radius:9999px; background:#3b82f6"></span>Context: Current Transcript <span style="color:#6b7280">▼</span></span>
+                <span style="display:inline-flex; align-items:center; border-radius:9999px; border:1px solid #e5e7eb; padding:2px 8px; font-size:12px; color:#374151">Attach file</span>
+              </div>
+              <div style="margin-top:8px; display:flex; align-items:flex-end; gap:8px">
+                <div style="flex:1; min-width:0; border:1px solid #e5e7eb; background:#f9fafb; border-radius:4px; padding:4px 8px; font-size:14px; line-height:1.45; color:#6b7280">Ask about your transcripts. Type / for the command list.</div>
+                <span style="flex-shrink:0; display:flex; align-items:center; justify-content:center; border-radius:4px; border:1px solid #e5e7eb; padding:8px; color:#374151"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"></rect><path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8"></path></svg></span>
+                <span style="flex-shrink:0; display:flex; align-items:center; justify-content:center; border-radius:4px; background:#2563eb; padding:8px; color:#fff"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"></path></svg></span>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <footer style="display:flex; height:20px; flex-shrink:0; align-items:center; gap:12px; border-top:1px solid #e5e7eb; background:#ffffff; padding:0 12px; font-size:12px">
+          <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#6b7280"></span>
+          <span style="flex-shrink:0; color:#6b7280">Storage 3.4 GB / 50 GB (7%)  |  Transcription 2:28:20  |  131 transcripts</span>
+        </footer>
+      </div>
+    </div>
+
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showCounts&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Tagging&quot;},&quot;maxHints&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:7,&quot;min&quot;:3,&quot;max&quot;:12,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Tagging&quot;},&quot;tagAccent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#1e40af&quot;,&quot;options&quot;:[&quot;#1e40af&quot;,&quot;#a7f3d0&quot;,&quot;#fbcfe8&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Tagging&quot;}}">
+class Component extends DCLogic {
+  state = {
+    a: { open: true, draft: "", tags: ["metadata", "data-collection", "licensing"], hints: ["templates", "document-map", "repository-scoping", "required-flags", "release-flags", "ui-design", "topics"] },
+    b: { open: true, draft: "reg", tags: ["metadata", "roadmap"], hints: ["templates", "document-map", "repository-scoping", "release-flags", "topics"] },
+    c: { open: true, draft: "", tags: ["metadata", "data-collection", "licensing", "roadmap", "regulatory"], hints: ["templates", "document-map", "repository-scoping", "required-flags", "release-flags", "ui-design", "topics"] },
+  };
+
+  library = [
+    { text: "regulatory", uses: 24 },
+    { text: "regression", uses: 6 },
+    { text: "release-flags", uses: 11 },
+    { text: "metadata", uses: 31 },
+    { text: "roadmap", uses: 18 },
+    { text: "pricing", uses: 9 },
+    { text: "packaging", uses: 7 },
+    { text: "fhir", uses: 14 },
+  ];
+
+  weights = { templates: 0.92, "document-map": 0.78, "repository-scoping": 0.64, "required-flags": 0.55, "release-flags": 0.48, "ui-design": 0.36, topics: 0.28 };
+
+  inputs = { a: React.createRef(), b: React.createRef(), c: React.createRef() };
+
+  edit(key, fn) {
+    this.setState((s) => {
+      const next = { ...s[key] };
+      fn(next);
+      return { [key]: next };
+    });
+  }
+
+  norm(word) {
+    return word.trim().replace(/\s+/g, "-").replace(/^-+|-+$/g, "");
+  }
+
+  has(list, word) {
+    const lc = word.toLowerCase();
+    return list.some((t) => t.toLowerCase() === lc);
+  }
+
+  commit(key, raw) {
+    const word = this.norm(raw);
+    if (!word) return;
+    this.edit(key, (o) => {
+      if (!this.has(o.tags, word)) o.tags = [...o.tags, word];
+      o.hints = o.hints.filter((h) => h.toLowerCase() !== word.toLowerCase());
+      o.draft = "";
+    });
+  }
+
+  bind(key) {
+    const o = this.state[key];
+    const maxHints = this.props.maxHints ?? 7;
+    const accent = this.props.tagAccent ?? "#1e40af";
+    const hints = o.hints.slice(0, maxHints).map((h) => ({
+      text: h,
+      weightPct: `${Math.round((this.weights[h] ?? 0.5) * 100)}%`,
+      onAdd: () => this.commit(key, h),
+      onDismiss: () => this.edit(key, (n) => { n.hints = n.hints.filter((x) => x !== h); }),
+    }));
+    const q = o.draft.trim().toLowerCase();
+    const suggestions = q
+      ? this.library
+          .filter((l) => l.text.includes(q) && !this.has(o.tags, l.text))
+          .slice(0, 4)
+          .map((l) => ({ text: l.text, uses: l.uses, onPick: () => this.commit(key, l.text) }))
+      : [];
+    return {
+      open: o.open,
+      draft: o.draft,
+      count: this.props.showCounts === false ? "" : String(o.tags.length),
+      // Hover text on the pill: the first few tags, so the page never has to show them all inline.
+      hoverList: o.tags.length === 0
+        ? "No tags yet — click to add"
+        : o.tags.slice(0, 4).join(" · ") + (o.tags.length > 4 ? ` · +${o.tags.length - 4} more` : ""),
+      hintCount: String(o.hints.length),
+      noHints: o.hints.length === 0,
+      accent,
+      inputRef: this.inputs[key],
+      tags: o.tags.map((t) => ({
+        text: t,
+        onRemove: () => this.edit(key, (n) => { n.tags = n.tags.filter((x) => x !== t); }),
+      })),
+      hints,
+      suggestions,
+      showSuggest: suggestions.length > 0,
+      onToggle: () => this.edit(key, (n) => { n.open = !n.open; }),
+      onFocusField: () => this.inputs[key].current && this.inputs[key].current.focus(),
+      onDraft: (e) => {
+        const v = e.target.value;
+        if (v.endsWith(" ")) this.commit(key, v);
+        else this.edit(key, (n) => { n.draft = v; });
+      },
+      onKey: (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          // Enter is "done": it commits whatever is typed and closes the popover.
+          this.commit(key, o.draft);
+          this.edit(key, (n) => { n.open = false; });
+          return;
+        }
+        if (e.key === "Backspace" && o.draft === "" && o.tags.length > 0) {
+          e.preventDefault();
+          this.edit(key, (n) => { n.tags = n.tags.slice(0, -1); });
+        }
+      },
+      onPaste: (e) => {
+        const text = (e.clipboardData && e.clipboardData.getData("text")) || "";
+        if (!text) return;
+        e.preventDefault();
+        this.commit(key, text);
+      },
+    };
+  }
+
+  renderVals() {
+    return {
+      folders: [
+        { name: "AI Planning", count: 10, color: "#0ea371" },
+        { name: "FHIR and Regulatory Submissions", count: 1, color: "#db2777" },
+        { name: "Packaging & Pricing", count: 2, color: "#0891b2" },
+        { name: "Podcasts for Fun", count: 7, color: "#db2777" },
+        { name: "Product Management Planning", count: 10, color: "#d97706" },
+        { name: "Staff", count: 3, color: "#0891b2" },
+        { name: "Cadence Calls", count: 26, color: "#0891b2" },
+        { name: "Customer Calls", count: 64, color: "#db2777" },
+        { name: "R&D, HR, GEO All Hands", count: 5, color: "#db2777" },
+        { name: "XCOM", count: 3, color: "#0891b2" },
+      ],
+      a: this.bind("a"),
+    };
+  }
+}
+</script>
+</body>
+</html>
