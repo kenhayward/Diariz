@@ -96,7 +96,9 @@ public class RecordingTagEndpointsTests
 
         var tag = Assert.Single(db.RecordingTags.ToList());
         Assert.Equal(RecordingTagStatus.Adopted, tag.Status);
-        Assert.Equal("Metadata", tag.Tag);   // the stored casing wins; we do not rewrite it
+        Assert.Equal("metadata", tag.Tag);   // rewritten to the normalised form of what was typed - an
+                                              // adopted tag's text is always normalised, never the LLM's raw
+                                              // suggestion casing, so the cloud can merge it correctly
     }
 
     [Fact]
@@ -131,6 +133,28 @@ public class RecordingTagEndpointsTests
 
         var tag = Assert.Single(db.RecordingTags.ToList());
         Assert.Equal(RecordingTagStatus.Adopted, tag.Status);
+    }
+
+    [Fact]
+    public async Task AddTag_WhenTheNormalizedFormIsAlreadyAdoptedUnderADifferentRow_ConvergesInsteadOfDuplicating()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        Users.Ensure(db, me);
+        var rec = AddRecording(db, me);
+        // The user already adopted this tag by hand (stored normalised, per AddTag). A later extraction
+        // separately suggested the same concept in the LLM's raw, spaced spelling - a different row, because
+        // the unique index only blocks exact lower-case duplicates of the raw text.
+        Tag(db, rec.Id, "Data-Collection", 1.0, RecordingTagStatus.Adopted);
+        Tag(db, rec.Id, "Data Collection", 0.8, RecordingTagStatus.Suggested, ordinal: 1);
+        await db.SaveChangesAsync();
+
+        var result = await Recordings.Build(db, me).AddTag(rec.Id, new SetRecordingTagRequest("Data Collection"));
+
+        Assert.IsType<NoContentResult>(result);
+        var tag = Assert.Single(db.RecordingTags.ToList());   // the redundant suggestion is dropped, not flipped
+        Assert.Equal(RecordingTagStatus.Adopted, tag.Status);
+        Assert.Equal("Data-Collection", tag.Tag);   // the already-adopted row is untouched
     }
 
     [Theory]

@@ -1191,9 +1191,25 @@ public class RecordingsController : ControllerBase
         if (tag is null) return BadRequest("A tag needs some text.");
 
         var candidates = await _db.RecordingTags.Where(t => t.RecordingId == id).ToListAsync();
-        var existing = FindByNormalizedTag(candidates, tag);
+        // Every row (any status) whose NORMALISED text matches - there can be more than one, because the
+        // unique index only blocks exact-lower-case duplicates of the RAW text: a suggestion stored as "Data
+        // Collection" and an adopted "Data-Collection" both satisfy it while meaning the same tag.
+        var matches = FindAllByNormalizedTag(candidates, tag);
+        var adopted = matches.FirstOrDefault(t => t.Status == RecordingTagStatus.Adopted);
 
-        if (existing is null)
+        if (adopted is not null)
+        {
+            // The normalised tag is already adopted - possibly under a different row than the one that
+            // literally matches the request (the case above: "Data-Collection" already adopted while
+            // "Data Collection" is a separate, later suggestion). Rewriting a second row's text to converge
+            // on the same value would collide with the (RecordingId, lower(Tag)) unique index, so drop every
+            // OTHER matching row instead: the user's intent is already satisfied and the hint correctly
+            // disappears. When `matches` is just the adopted row itself this is the plain idempotent
+            // no-op - leave AdoptedAt alone so re-adding does not reshuffle the chip order.
+            foreach (var redundant in matches.Where(t => t.Id != adopted.Id))
+                _db.RecordingTags.Remove(redundant);
+        }
+        else if (matches.Count == 0)
         {
             _db.RecordingTags.Add(new RecordingTag
             {
@@ -1208,15 +1224,23 @@ public class RecordingsController : ControllerBase
                 AdoptedAt = DateTimeOffset.UtcNow,
             });
         }
-        else if (existing.Status != RecordingTagStatus.Adopted)
+        else
         {
-            // Promotion (or reviving something previously dismissed): flip the row we already have, keeping
-            // its stored casing, so the one-row-per-tag-per-recording index stays satisfied.
-            existing.Status = RecordingTagStatus.Adopted;
-            existing.Weight = 1.0;
-            existing.AdoptedAt = DateTimeOffset.UtcNow;
+            // Promotion (typed by hand or picked from a hint), or reviving something previously dismissed:
+            // flip the row we already have to Adopted AND rewrite its text to the normalised form. Keeping
+            // the suggestion's raw text (e.g. "Data Collection") would let an adopted tag contain a space
+            // and, worse, split the tag cloud - the same concept typed as "data collection" on another
+            // recording only merges case-insensitively, not across whitespace-vs-hyphen spellings. If more
+            // than one non-adopted row matches (a suggestion AND a dismissal for the same word, say), flip
+            // the first and drop the rest so only one row for this tag survives.
+            var winner = matches[0];
+            winner.Status = RecordingTagStatus.Adopted;
+            winner.Tag = tag;
+            winner.Weight = 1.0;
+            winner.AdoptedAt = DateTimeOffset.UtcNow;
+            foreach (var redundant in matches.Skip(1))
+                _db.RecordingTags.Remove(redundant);
         }
-        // else: already adopted - leave AdoptedAt alone so re-adding does not reshuffle the chip order.
 
         await _db.SaveChangesAsync();
         return NoContent();
@@ -1274,19 +1298,26 @@ public class RecordingsController : ControllerBase
         return NoContent();
     }
 
-    /// <summary>Finds the tag among <paramref name="candidates"/> (already scoped to one recording) whose
+    /// <summary>Every tag among <paramref name="candidates"/> (already scoped to one recording) whose
     /// NORMALISED text matches <paramref name="normalizedTag"/>, case-insensitively. A plain
     /// <c>t.Tag.ToLower() == tag.ToLower()</c> SQL comparison is not enough here: a machine suggestion is
     /// stored exactly as the LLM wrote it - Title Case, often several words joined by spaces ("Data
     /// Collection") - while <see cref="TagText.Normalize"/> always collapses those spaces to hyphens before a
     /// lookup runs. Typing a suggestion's own text back at it would otherwise never match, so adopting it
     /// would insert a second row instead of promoting the one that already exists. Comparing normalised forms
-    /// on both sides treats "Data Collection" and "data-collection" as the one tag they are. Per-recording tag
-    /// counts are small (extraction caps at 12, plus whatever the user has adopted or dismissed), so the
-    /// caller loading every row up front and filtering here is not a real cost.</summary>
+    /// on both sides treats "Data Collection" and "data-collection" as the one tag they are - which is also
+    /// why this can return MORE than one row: the unique index only blocks exact-lower-case duplicates of the
+    /// raw text, so a suggestion and an adopted tag can independently hold spellings that normalise the same
+    /// way. Per-recording tag counts are small (extraction caps at 12, plus whatever the user has adopted or
+    /// dismissed), so the caller loading every row up front and filtering here is not a real cost.</summary>
+    private static List<RecordingTag> FindAllByNormalizedTag(IReadOnlyList<RecordingTag> candidates, string normalizedTag) =>
+        candidates.Where(t =>
+            string.Equals(TagText.Normalize(t.Tag), normalizedTag, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    /// <summary>The single-row form of <see cref="FindAllByNormalizedTag"/>, for callers (remove, dismiss)
+    /// that don't need to reconcile more than one matching row.</summary>
     private static RecordingTag? FindByNormalizedTag(IReadOnlyList<RecordingTag> candidates, string normalizedTag) =>
-        candidates.FirstOrDefault(t =>
-            string.Equals(TagText.Normalize(t.Tag), normalizedTag, StringComparison.OrdinalIgnoreCase));
+        FindAllByNormalizedTag(candidates, normalizedTag).FirstOrDefault();
 
     /// <summary>Manually create or edit the current transcription's meeting minutes (Markdown). Works even
     /// with no LLM configured, and marks the minutes user-edited so the automatic generator won't overwrite

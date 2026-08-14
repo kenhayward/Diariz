@@ -73,12 +73,22 @@ public static class TagsProcessor
                 .ToList();
             db.RecordingTags.RemoveRange(rec.Tags.Where(t => t.Status == RecordingTagStatus.Suggested));
 
-            var spoken = keep.Select(t => t.Tag).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            // Never re-offer a word the user already holds or has already rejected on this recording. Compare
+            // NORMALISED forms, not raw text: an adopted (or dismissed) tag can be stored in a different
+            // spelling than whatever the LLM returns next time - Task 6's AddTag rewrites an adopted row to
+            // TagText.Normalize's hyphenated form ("Data-Collection"), while extraction always hands back its
+            // own raw, un-normalised text ("Data Collection"). Comparing raw strings would miss that they are
+            // the same word, defeating this guard in both directions - re-suggesting a tag the user already
+            // holds, and resurrecting one they dismissed.
+            var spoken = keep
+                .Select(t => TagText.Normalize(t.Tag))
+                .OfType<string>()
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var ordinal = 0;
             var newTags = extracted
-                // Never re-offer a word the user already holds or has already rejected on this recording.
                 // This also keeps the (RecordingId, lower(Tag)) unique index satisfied on re-extraction.
-                .Where(e => !spoken.Contains(e.Tag))
+                // An extracted tag that normalises to nothing usable is dropped rather than suggested.
+                .Where(e => TagText.Normalize(e.Tag) is { } normalized && !spoken.Contains(normalized))
                 .Select(e => new RecordingTag
                 {
                     Id = Guid.NewGuid(),

@@ -159,6 +159,33 @@ public class TagsProcessorTests
     }
 
     [Fact]
+    public async Task ProcessAsync_DoesNotResuggest_AnAdoptedHyphenatedTag_WhenTheLlmReturnsTheSpacedVariant()
+    {
+        using var db = TestDb.Create();
+        var (rec, tr) = await Seed(db, Guid.NewGuid());
+        // Adopted via RecordingsController.AddTag, which always rewrites the row to TagText.Normalize's
+        // hyphenated form - so a real adopted tag looks like this, never like the LLM's raw Title Case.
+        db.RecordingTags.Add(new RecordingTag
+        {
+            Id = Guid.NewGuid(), RecordingId = rec.Id, Tag = "Data-Collection", Weight = 1.0, Ordinal = 0,
+            Status = RecordingTagStatus.Adopted, AdoptedAt = DateTimeOffset.UtcNow,
+        });
+        await db.SaveChangesAsync();
+        // The LLM returns its own raw, spaced spelling of the very same concept.
+        var client = new FakeTagsClient { Result = { new ExtractedTag("Data Collection", 0.9) } };
+
+        await TagsProcessor.ProcessAsync(
+            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
+            NullLogger.Instance, new CapturingWebhookPublisher(), "");
+
+        // A raw-text comparison would miss that these are the same tag and re-suggest "Data Collection"
+        // alongside the adopted "Data-Collection". Comparing normalised forms recognises them as one tag.
+        var tag = await db.RecordingTags.SingleAsync(t => t.RecordingId == rec.Id);
+        Assert.Equal("Data-Collection", tag.Tag);
+        Assert.Equal(RecordingTagStatus.Adopted, tag.Status);
+    }
+
+    [Fact]
     public async Task ProcessAsync_DoesNotResuggest_ADismissedTag_EvenInADifferentCase()
     {
         using var db = TestDb.Create();
