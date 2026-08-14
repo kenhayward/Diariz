@@ -124,3 +124,10 @@ body {
 .dark .chat-md thead th {
   background: #1f2937;
 }
+
+/* The hub's Tags pill: the handoff's hover tint (rgba(47,107,237,.28)) can't be expressed as a plain
+   inline-style hover, so it lives here beside the other --hub-* rules instead. Theme-neutral, like the
+   pill's own border/background - same blue accent in both themes. */
+.hub-tags-pill:hover {
+  background: rgba(47, 107, 237, 0.28);
+}

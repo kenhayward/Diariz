@@ -155,3 +155,12 @@ export const HelpCircleIcon = (p: IconProps) => (
     <line x1="12" y1="17" x2="12.01" y2="17" />
   </svg>
 );
+
+/// A luggage-tag outline with its punched hole. The recording hub's Tags pill glyph - the tag family's
+/// only new shape here.
+export const TagIcon = (p: IconProps) => (
+  <svg {...svgProps(p)}>
+    <path d="M20.6 13.4 12.6 21.4a2 2 0 0 1-2.8 0l-7-7a2 2 0 0 1-.6-1.4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 1.4.6l7 7a2 2 0 0 1 0 2.8z" />
+    <circle cx="7.5" cy="7.5" r="1.3" fill="currentColor" />
+  </svg>
+);
