@@ -43,25 +43,45 @@ export default function RecordingTags({
   /// order, on top of the server's own lists - see `applyOps`.
   const [ops, setOps] = useState<PendingOp[]>([]);
 
-  /// The overlay clears once the parent hands back genuinely new `tags`/`suggested` content (i.e. the
-  /// detail query actually refetched) - not merely once a mutation's promise settles, and not merely on a
-  /// new array reference. A mutation can settle (success) well before the invalidated query refetches, and
-  /// clearing on settle alone would flash an added chip back out. Comparing by content rather than
-  /// reference matters too: `HeroSummaryCard` passes `rec.tags ?? []`, and that `?? []` mints a fresh array
-  /// on every one of its re-renders whenever a recording has no tags yet - a reference-based dependency
-  /// would clear the overlay on any unrelated re-render.
+  const lower = (s: string) => s.toLowerCase();
+
+  /// Reconciles `ops` against genuinely new `tags`/`suggested` content (i.e. the detail query actually
+  /// refetched) - not merely once a mutation's promise settles, and not merely on a new array reference. A
+  /// mutation can settle (success) well before the invalidated query refetches, and reconciling on settle
+  /// alone would flash an added chip back out. Comparing by content rather than reference matters too:
+  /// `HeroSummaryCard` passes `rec.tags ?? []`, and that `?? []` mints a fresh array on every one of its
+  /// re-renders whenever a recording has no tags yet - a reference-based dependency would reconcile on any
+  /// unrelated re-render.
+  ///
+  /// Deliberately per-op, not a wholesale `setOps([])`: the popover commits a word on space and keeps
+  /// focus, so several ops are routinely in flight together (see `PendingOp`'s comment). Typing "alpha
+  /// beta" starts two adds; if alpha's request settles first, its invalidate refetches props that now
+  /// contain alpha while beta's is still in flight - clearing every op at that point would flash beta's
+  /// chip out until beta's own refetch happened to land. Each op is dropped only once *its own* effect is
+  /// visible in the incoming lists - an `add` once its tag is adopted, a `remove` once its tag is gone from
+  /// the adopted list, a `dismiss` once its tag is gone from the suggestions - so an unconfirmed sibling
+  /// keeps rendering. This also covers a change this component didn't cause at all (another room member's
+  /// edit, a SignalR-driven refetch): still-open ops without a matching server confirmation are the ones
+  /// that could not have come from an outside change, and are the only ones worth still trusting the
+  /// overlay for.
   ///
   /// This only handles the success path. A rejected mutation never changes the server's lists (nothing was
-  /// applied), so this effect alone would never fire for a failure - each op instead retracts itself
+  /// applied), so this effect alone would never confirm a failed op - each op instead retracts itself
   /// directly on error, in the mutations' `onError` below.
   const tagsKey = tags.join("|");
   const suggestedKey = suggested.join("|");
   useEffect(() => {
-    setOps([]);
+    setOps((cur) =>
+      cur.filter((op) => {
+        const inTags = tags.some((x) => lower(x) === lower(op.tag));
+        const inSuggested = suggested.some((x) => lower(x) === lower(op.tag));
+        if (op.type === "add") return !inTags;
+        if (op.type === "remove") return inTags;
+        return inSuggested;
+      }),
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tagsKey, suggestedKey]);
-
-  const lower = (s: string) => s.toLowerCase();
 
   /// Replays the in-flight ops, in the order they were made, on top of the server's own lists.
   function applyOps(base: { tags: string[]; suggested: string[] }): { tags: string[]; suggested: string[] } {

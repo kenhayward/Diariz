@@ -147,6 +147,33 @@ describe("RecordingTags", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Tags" }).textContent).toContain("2"));
   });
 
+  it("keeps an unconfirmed sibling visible when a content change confirms only one op", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { rerender } = render(
+      <QueryClientProvider client={qc}>
+        <RecordingTags recordingId="rec-1" tags={[]} suggested={[]} />
+      </QueryClientProvider>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Tags" }));
+
+    // Two adds in one run, as the popover is designed for (space commits a word and keeps focus).
+    await userEvent.type(screen.getByLabelText("Add a tag"), "alpha beta ");
+    expect(screen.getByText("alpha")).toBeTruthy();
+    expect(screen.getByText("beta")).toBeTruthy();
+
+    // Alpha's own invalidate refetches the detail query while beta's request is still in flight - the
+    // server now has alpha adopted, but not beta yet. Reconciling must drop only the confirmed op, not the
+    // whole overlay - otherwise beta's chip would flash out here and only return once beta's own refetch
+    // happens to land, during the exact rapid-typing interaction the popover is built around.
+    rerender(
+      <QueryClientProvider client={qc}>
+        <RecordingTags recordingId="rec-1" tags={["alpha"]} suggested={[]} />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByText("beta")).toBeTruthy();
+  });
+
   it("keeps a still-valid chip visible when an earlier overlapping edit fails", async () => {
     // The popover keeps focus after a word commits, so typing several tags in a run is the intended flow -
     // overlapping requests are the normal case, not a corner case. Alpha's request is held open; beta's
