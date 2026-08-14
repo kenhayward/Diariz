@@ -48,9 +48,7 @@ export default function TagsPill({
     >
       <TagIcon size={14} />
       <span>{t("workspace:tagsPillLabel")}</span>
-      <span className="font-medium" style={{ color: "var(--hub-muted)" }}>
-        {count}
-      </span>
+      <span className="font-medium text-gray-500 dark:text-gray-400">{count}</span>
       <svg
         width={12}
         height={12}
