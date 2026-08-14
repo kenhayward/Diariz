@@ -4,6 +4,44 @@ import HubPopover from "../hub/HubPopover";
 import { TagIcon } from "../icons";
 import { addTag, normalizeTag } from "../../lib/tagInput";
 
+/// The two small glyphs the popover draws itself (Feather-style, 24-grid, `currentColor` stroke - see
+/// `components/icons.tsx`). A text "&#10005;"/"+" glyph has no stroke-width control and its metrics shift
+/// between platform fonts, so every control the handoff gives a stroke width to is real SVG.
+function XIcon({ size, strokeWidth }: { size: number; strokeWidth: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}
+
+function PlusIcon({ size, strokeWidth }: { size: number; strokeWidth: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  );
+}
+
 /// The hub's tag editor: type tags, remove tags, and pick or ignore the automatically suggested ones.
 /// Presentational and callback-driven - the parent owns the data and the server round-trip, so this file
 /// can be tested without a query client. There is no Save button: each action is its own change, which is
@@ -72,8 +110,8 @@ export default function TagsPopover({
         {/* a. Header: what this is, that it saves itself, and a way out. */}
         <div className="flex items-center gap-2.5">
           <span
-            className="grid shrink-0 place-items-center"
-            style={{ width: 19, height: 22, color: "var(--hub-blue)" }}
+            className="grid shrink-0 place-items-center text-[#2f6bed] dark:text-[#8ab0ff]"
+            style={{ width: 19, height: 22 }}
           >
             <TagIcon size={19} />
           </span>
@@ -87,10 +125,10 @@ export default function TagsPopover({
             type="button"
             onClick={onClose}
             aria-label={t("workspace:tagsPopoverClose")}
-            className="ml-auto grid h-7 w-7 place-items-center rounded-lg text-base hover:bg-[var(--hub-surface-hover)]"
+            className="ml-auto grid h-7 w-7 place-items-center rounded-lg hover:bg-[var(--hub-surface-hover)]"
             style={{ color: "var(--hub-muted)" }}
           >
-            &#10005;
+            <XIcon size={16} strokeWidth={2} />
           </button>
         </div>
 
@@ -126,10 +164,10 @@ export default function TagsPopover({
                   type="button"
                   onClick={() => onRemove(tag)}
                   aria-label={t("workspace:tagsRemove")}
-                  className="ml-0.5 grid place-items-center rounded-md hover:bg-[rgba(15,23,42,.1)] hover:text-white dark:hover:bg-[rgba(255,255,255,.12)]"
-                  style={{ width: 22, height: 22, fontSize: 15 }}
+                  className="ml-0.5 grid place-items-center rounded-md text-[#2f6bed] hover:bg-[rgba(15,23,42,.1)] hover:text-white dark:text-[#9ec2ff] dark:hover:bg-[rgba(255,255,255,.12)]"
+                  style={{ width: 22, height: 22 }}
                 >
-                  &#10005;
+                  <XIcon size={15} strokeWidth={2.2} />
                 </button>
               </span>
             ))}
@@ -191,8 +229,8 @@ export default function TagsPopover({
                     title={t("workspace:tagsSuggestedAdd")}
                     className="inline-flex h-full items-center gap-1 rounded-l-[7px] px-2 hover:bg-[rgba(15,23,42,.07)] dark:hover:bg-[rgba(255,255,255,.07)]"
                   >
-                    <span className="text-[11px]" style={{ color: "var(--hub-blue)" }}>
-                      +
+                    <span className="grid place-items-center text-[#2f6bed] dark:text-[#8ab0ff]">
+                      <PlusIcon size={11} strokeWidth={2.6} />
                     </span>
                     <span className="text-[12.5px]" style={{ color: "var(--hub-text-2)" }}>
                       {tag}
@@ -204,9 +242,9 @@ export default function TagsPopover({
                     title={t("workspace:tagsSuggestedDismiss")}
                     aria-label={t("workspace:tagsSuggestedDismiss")}
                     className="mr-1 grid place-items-center rounded text-[var(--hub-muted-2)] hover:bg-[rgba(15,23,42,.08)] hover:text-[var(--hub-red-text)] dark:hover:bg-[rgba(255,255,255,.08)]"
-                    style={{ width: 18, height: 18, fontSize: 10 }}
+                    style={{ width: 18, height: 18 }}
                   >
-                    &#10005;
+                    <XIcon size={10} strokeWidth={2.6} />
                   </button>
                 </span>
               ))}
