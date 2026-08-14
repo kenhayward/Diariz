@@ -78,13 +78,22 @@ function renderLive(
 
 /// A tag mock whose promise the test settles by hand, so a mutation can be held in flight across
 /// assertions - the only way to observe the optimistic state, and to control the order two edits fail in.
-function heldAdd() {
+function held() {
   let reject!: (e: unknown) => void;
-  const held = new Promise<void>((_, rj) => {
+  const promise = new Promise<void>((_, rj) => {
     reject = rj;
   });
-  return { held: () => held, fail: (e: unknown) => reject(e) };
+  return { request: () => promise, fail: (e: unknown) => reject(e) };
 }
+
+/// The adopted chips, in the order they are drawn. Each chip is a span holding the tag text plus its remove
+/// button (icon only, no text of its own), so the button's parent reads back as exactly the tag. Order
+/// matters here: rolling a failed remove back has to put the tag where it was, not on the end.
+const chipOrder = () =>
+  screen.getAllByRole("button", { name: "Remove tag" }).map((b) => b.parentElement?.textContent);
+
+/// The hint chips, in the order they are drawn - read off each hint's "add" half, whose text is the tag.
+const hintOrder = () => screen.getAllByTitle("Add this tag").map((b) => b.textContent);
 
 describe("RecordingTags", () => {
   beforeEach(() => {
@@ -174,8 +183,8 @@ describe("RecordingTags", () => {
   });
 
   it("rolls a failed add's chip back off the screen", async () => {
-    const alpha = heldAdd();
-    vi.mocked(api.addRecordingTag).mockImplementationOnce(alpha.held);
+    const alpha = held();
+    vi.mocked(api.addRecordingTag).mockImplementationOnce(alpha.request);
     renderLive();
     await userEvent.click(screen.getByRole("button", { name: "Tags" }));
 
@@ -216,13 +225,67 @@ describe("RecordingTags", () => {
     await waitFor(() => expect(screen.getByText("All suggestions dealt with.")).toBeTruthy());
   });
 
+  // The three tests below cover the rollback's reinsert branch - putting back what a patch struck out. It is
+  // the half of the undo that a failed remove, a failed dismiss, and a failed promotion all depend on, and
+  // each asserts the *position* it came back at, not merely that it came back.
+
+  it("puts a failed remove's chip back where it was", async () => {
+    const beta = held();
+    vi.mocked(api.removeRecordingTag).mockImplementationOnce(beta.request);
+    renderLive({ tags: ["alpha", "beta", "gamma"] });
+    await userEvent.click(screen.getByRole("button", { name: "Tags" }));
+
+    await userEvent.click(screen.getAllByRole("button", { name: "Remove tag" })[1]);
+    await waitFor(() => expect(chipOrder()).toEqual(["alpha", "gamma"]));
+
+    await act(async () => beta.fail(new Error("boom")));
+
+    // Back in the middle, not appended on the end - the chips are in adoption order and a rollback is not
+    // an adoption.
+    await waitFor(() => expect(chipOrder()).toEqual(["alpha", "beta", "gamma"]));
+  });
+
+  it("puts a failed dismissal's hint back where it was", async () => {
+    const two = held();
+    vi.mocked(api.dismissRecordingTag).mockImplementationOnce(two.request);
+    renderLive({ suggestedTags: ["one", "two", "three"] });
+    await userEvent.click(screen.getByRole("button", { name: "Tags" }));
+
+    await userEvent.click(screen.getAllByRole("button", { name: "Never suggest this" })[1]);
+    await waitFor(() => expect(hintOrder()).toEqual(["one", "three"]));
+
+    await act(async () => two.fail(new Error("boom")));
+
+    // Hints are ordered heaviest first, so the position carries meaning here too.
+    await waitFor(() => expect(hintOrder()).toEqual(["one", "two", "three"]));
+  });
+
+  it("puts a failed promotion's hint back, and takes its chip away", async () => {
+    // Promoting a hint moves it: the add patch both appends a chip and strikes the hint out. Undoing it has
+    // to reverse both halves, which is the only case where one rollback runs `unadded` and `restored`.
+    const templates = held();
+    vi.mocked(api.addRecordingTag).mockImplementationOnce(templates.request);
+    renderLive({ suggestedTags: ["alpha", "templates", "beta"] });
+    await userEvent.click(screen.getByRole("button", { name: "Tags" }));
+
+    await userEvent.click(screen.getByRole("button", { name: /templates/ }));
+    await waitFor(() => expect(chipOrder()).toEqual(["templates"]));
+    expect(hintOrder()).toEqual(["alpha", "beta"]);
+
+    await act(async () => templates.fail(new Error("boom")));
+
+    await waitFor(() => expect(hintOrder()).toEqual(["alpha", "templates", "beta"]));
+    expect(screen.queryByRole("button", { name: "Remove tag" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Tags" }).textContent).toContain("0");
+  });
+
   it("keeps a later edit's chip when an earlier overlapping edit fails", async () => {
     // Space commits a word and keeps focus, so several tags typed in a run are the intended usage. The
     // caveat of snapshot rollback is that alpha's snapshot predates beta's patch, so restoring it wholesale
     // would take beta's perfectly good chip down with alpha's.
-    const alpha = heldAdd();
+    const alpha = held();
     vi.mocked(api.addRecordingTag)
-      .mockImplementationOnce(alpha.held)
+      .mockImplementationOnce(alpha.request)
       .mockImplementationOnce(async () => undefined);
     renderLive();
     await userEvent.click(screen.getByRole("button", { name: "Tags" }));
