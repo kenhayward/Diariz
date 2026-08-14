@@ -1323,14 +1323,15 @@ public class RecordingsController : ControllerBase
 
     /// <summary>Every tag among <paramref name="candidates"/> (already scoped to one recording) whose
     /// NORMALISED text matches <paramref name="normalizedTag"/>, case-insensitively. A plain
-    /// <c>t.Tag.ToLower() == tag.ToLower()</c> SQL comparison is not enough here: a machine suggestion is
-    /// stored exactly as the LLM wrote it - Title Case, often several words joined by spaces ("Data
-    /// Collection") - while <see cref="TagText.Normalize"/> always collapses those spaces to hyphens before a
-    /// lookup runs. Typing a suggestion's own text back at it would otherwise never match, so adopting it
-    /// would insert a second row instead of promoting the one that already exists. Comparing normalised forms
-    /// on both sides treats "Data Collection" and "data-collection" as the one tag they are - which is also
-    /// why this can return MORE than one row: the unique index only blocks exact-lower-case duplicates of the
-    /// raw text, so a suggestion and an adopted tag can independently hold spellings that normalise the same
+    /// <c>t.Tag.ToLower() == tag.ToLower()</c> SQL comparison is not enough here: every tag written today is
+    /// normalised at insert time (see <see cref="TagText.Normalize"/>), but a row written before that
+    /// started - a suggestion from an older extraction run, say - can still hold spaced, un-normalised text
+    /// ("Data Collection"). Comparing raw strings would miss that such a row means the same tag as its
+    /// normalised spelling ("data-collection"), so adopting it would insert a second row instead of
+    /// promoting the one that already exists. Comparing normalised forms on both sides treats "Data
+    /// Collection" and "data-collection" as the one tag they are - which is also why this can return MORE
+    /// than one row: the unique index only blocks exact-lower-case duplicates of the raw text, so an old
+    /// un-normalised row and a newer normalised one can independently hold spellings that normalise the same
     /// way. Per-recording tag counts are small (extraction caps at 12, plus whatever the user has adopted or
     /// dismissed), so the caller loading every row up front and filtering here is not a real cost.</summary>
     private static List<RecordingTag> FindAllByNormalizedTag(IReadOnlyList<RecordingTag> candidates, string normalizedTag) =>

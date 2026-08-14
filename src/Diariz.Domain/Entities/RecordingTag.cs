@@ -11,9 +11,12 @@ public class RecordingTag
     public Guid RecordingId { get; set; }
     public Recording? Recording { get; set; }
 
-    /// <summary>The tag text, stored as written. A machine suggestion arrives in the extraction prompt's
-    /// Title Case ("Data Collection"); a hand-typed tag is kept verbatim with internal whitespace collapsed
-    /// to hyphens ("data-collection"). Never contains a space. Unique per recording, case-insensitively.</summary>
+    /// <summary>The tag text. Every tag written from now on is normalised at write time - internal
+    /// whitespace collapsed to hyphens, case preserved as written, never a space - whether it started as a
+    /// machine suggestion or was typed by hand (see <c>TagText.Normalize</c>). A row written before this
+    /// normalisation existed can still hold un-normalised text with a space in it ("Data Collection"), so
+    /// nothing may assume the stored value is already normalised: every comparison re-normalises both sides
+    /// before matching, case-insensitively. Unique per recording, case-insensitively.</summary>
     public string Tag { get; set; } = string.Empty;
 
     /// <summary>For a suggestion, the model's relative salience within this recording (0-1, clamped on

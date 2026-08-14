@@ -2,11 +2,14 @@ using System.Text.RegularExpressions;
 
 namespace Diariz.Api.Services;
 
-/// <summary>The one place that decides what a tag may look like. A tag never contains whitespace: internal
-/// whitespace collapses to a hyphen so a pasted phrase becomes one token ("budget planning 2026" ->
-/// "budget-planning-2026"). Case is preserved deliberately - suggestions arrive in the extraction prompt's
-/// Title Case and hand-typed tags stay as typed, while every comparison and the tag cloud are
-/// case-insensitive, so the two styles coexist without a data migration.
+/// <summary>The one place that decides what a tag may look like. A tag written through this normaliser never
+/// contains whitespace: internal whitespace collapses to a hyphen so a pasted phrase becomes one token
+/// ("budget planning 2026" -> "budget-planning-2026"). Case is preserved deliberately, whether the tag is a
+/// machine suggestion or typed by hand - only case is folded for comparison, never the words themselves.
+/// A row written before extraction started calling this on suggestions can still hold un-normalised text
+/// with a space in it ("Data Collection"), so callers must never assume a stored tag is already normalised:
+/// every lookup normalises both sides again before comparing, case-insensitively - which is also what lets
+/// an old spaced row and a new hyphenated one match as the same tag.
 /// Mirrored in TypeScript by <c>apps/web/src/lib/tagInput.ts</c>; change both together.</summary>
 public static partial class TagText
 {
