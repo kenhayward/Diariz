@@ -61,10 +61,17 @@ Each of these was settled explicitly, and each closes off an alternative that lo
    `recording.tags_changed` event on manual edits (no consumer asked for it, and it would need the n8n
    node regenerated and documented), and retiring `tags_ready` (would silently break existing
    subscriptions).
-6. **Anyone who can see a recording can tag it.** Tagging follows the `IRoomScope.CanReadRecordingAsync`
-   gate used by per-recording sub-resources such as meeting notes and screenshots, not the owner-only
-   predicate `POST /{id}/meeting-type` uses. The tag cloud is already room-scoped, so a shared room gets
-   a shared organising layer rather than only the owner's vocabulary.
+6. **Anyone who can see a recording can tag it.** Tagging is gated by
+   `IRoomScope.CanReadRecordingAsync`, not the owner-only predicate `POST /{id}/meeting-type` uses. The
+   tag cloud is already room-scoped, so a shared room gets a shared organising layer rather than only
+   the owner's vocabulary.
+
+   **This is a new precedent and worth knowing.** Meeting notes and screenshots use
+   `CanReadRecordingAsync` for their *reads* while keeping create/update/delete strictly owner-only, and
+   a sweep of every `[HttpPost/Put/Delete/Patch]` action in `src/Diariz.Api/Controllers` found **zero**
+   mutating endpoints currently gated by read access. The three tag endpoints are therefore the first
+   writes in the codebase a non-owner can perform. The controller doc comments should say so explicitly,
+   so the next person copying a nearby pattern does not widen a gate by accident.
 7. **Removing an adopted tag deletes the row.** It does not revert to a suggestion, so it will not pop
    back into the hint list; it can only return when a re-transcription regenerates suggestions. One
    predictable rule instead of "removal sometimes un-does an adoption and sometimes deletes".
