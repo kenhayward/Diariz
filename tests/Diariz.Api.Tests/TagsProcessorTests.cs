@@ -68,7 +68,7 @@ public class TagsProcessorTests
     }
 
     [Fact]
-    public async Task ProcessAsync_ReplacesExistingTags_Wholesale()
+    public async Task ProcessAsync_ReplacesExistingSuggestion()
     {
         using var db = TestDb.Create();
         var (rec, tr) = await Seed(db, Guid.NewGuid());
@@ -85,7 +85,98 @@ public class TagsProcessorTests
             NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         var tag = await db.RecordingTags.SingleAsync(t => t.RecordingId == rec.Id);
-        Assert.Equal("Fresh Topic", tag.Tag); // machine-only data: a re-run replaces the whole set
+        Assert.Equal("Fresh Topic", tag.Tag); // a re-run replaces the still-suggested set (adopted/dismissed rows survive - see below)
+    }
+
+    [Fact]
+    public async Task ProcessAsync_InsertsTagsAsSuggested_WithNoAdoptedAt()
+    {
+        using var db = TestDb.Create();
+        var (rec, tr) = await Seed(db, Guid.NewGuid());
+        var client = new FakeTagsClient { Result = { new ExtractedTag("Roadmap", 0.9) } };
+
+        await TagsProcessor.ProcessAsync(
+            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
+            NullLogger.Instance, new CapturingWebhookPublisher(), "");
+
+        var tag = await db.RecordingTags.SingleAsync(t => t.RecordingId == rec.Id);
+        Assert.Equal(RecordingTagStatus.Suggested, tag.Status);
+        Assert.Null(tag.AdoptedAt);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ReplacesSuggestions_ButKeepsAdoptedAndDismissed()
+    {
+        using var db = TestDb.Create();
+        var (rec, tr) = await Seed(db, Guid.NewGuid());
+        db.RecordingTags.AddRange(
+            new RecordingTag { Id = Guid.NewGuid(), RecordingId = rec.Id, Tag = "stale-suggestion", Weight = 0.5, Ordinal = 0 },
+            new RecordingTag
+            {
+                Id = Guid.NewGuid(), RecordingId = rec.Id, Tag = "my-tag", Weight = 1.0, Ordinal = 1,
+                Status = RecordingTagStatus.Adopted, AdoptedAt = DateTimeOffset.UtcNow,
+            },
+            new RecordingTag
+            {
+                Id = Guid.NewGuid(), RecordingId = rec.Id, Tag = "never-again", Weight = 0.4, Ordinal = 2,
+                Status = RecordingTagStatus.Dismissed,
+            });
+        await db.SaveChangesAsync();
+        var client = new FakeTagsClient { Result = { new ExtractedTag("Fresh", 0.7) } };
+
+        await TagsProcessor.ProcessAsync(
+            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
+            NullLogger.Instance, new CapturingWebhookPublisher(), "");
+
+        var byStatus = (await db.RecordingTags.Where(t => t.RecordingId == rec.Id).ToListAsync())
+            .ToDictionary(t => t.Tag, t => t.Status);
+        Assert.False(byStatus.ContainsKey("stale-suggestion"));             // replaced
+        Assert.Equal(RecordingTagStatus.Adopted, byStatus["my-tag"]);       // survived
+        Assert.Equal(RecordingTagStatus.Dismissed, byStatus["never-again"]); // survived
+        Assert.Equal(RecordingTagStatus.Suggested, byStatus["Fresh"]);      // added
+    }
+
+    [Fact]
+    public async Task ProcessAsync_DoesNotResuggest_AnAlreadyAdoptedTag_EvenInADifferentCase()
+    {
+        using var db = TestDb.Create();
+        var (rec, tr) = await Seed(db, Guid.NewGuid());
+        db.RecordingTags.Add(new RecordingTag
+        {
+            Id = Guid.NewGuid(), RecordingId = rec.Id, Tag = "metadata", Weight = 1.0, Ordinal = 0,
+            Status = RecordingTagStatus.Adopted, AdoptedAt = DateTimeOffset.UtcNow,
+        });
+        await db.SaveChangesAsync();
+        var client = new FakeTagsClient { Result = { new ExtractedTag("Metadata", 0.9) } };
+
+        await TagsProcessor.ProcessAsync(
+            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
+            NullLogger.Instance, new CapturingWebhookPublisher(), "");
+
+        var tag = await db.RecordingTags.SingleAsync(t => t.RecordingId == rec.Id);
+        Assert.Equal("metadata", tag.Tag);
+        Assert.Equal(RecordingTagStatus.Adopted, tag.Status);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_DoesNotResuggest_ADismissedTag_EvenInADifferentCase()
+    {
+        using var db = TestDb.Create();
+        var (rec, tr) = await Seed(db, Guid.NewGuid());
+        db.RecordingTags.Add(new RecordingTag
+        {
+            Id = Guid.NewGuid(), RecordingId = rec.Id, Tag = "Boilerplate", Weight = 0.3, Ordinal = 0,
+            Status = RecordingTagStatus.Dismissed,
+        });
+        await db.SaveChangesAsync();
+        var client = new FakeTagsClient { Result = { new ExtractedTag("boilerplate", 0.9) } };
+
+        await TagsProcessor.ProcessAsync(
+            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
+            NullLogger.Instance, new CapturingWebhookPublisher(), "");
+
+        var tag = await db.RecordingTags.SingleAsync(t => t.RecordingId == rec.Id);
+        Assert.Equal(RecordingTagStatus.Dismissed, tag.Status);
     }
 
     [Fact]

@@ -11,10 +11,11 @@ namespace Diariz.Api.Services;
 
 /// <summary>
 /// Processes a single tag-extraction job as part of the pipeline: builds the transcript, calls the LLM,
-/// and REPLACES the recording's <see cref="RecordingTag"/>s wholesale. Tags are machine-only (never
-/// user-edited), so unlike <see cref="ActionsProcessor"/> there is no once-only guard — a re-transcription
-/// simply refreshes them. Instead it guards against STALE jobs: a slow/backfilled job for a superseded
-/// transcription version must not overwrite the newer version's tags. Status-neutral (never touches
+/// and replaces the recording's <see cref="RecordingTagStatus.Suggested"/> <see cref="RecordingTag"/>s -
+/// adopted and dismissed rows are the user's own and are left alone. Unlike <see cref="ActionsProcessor"/>
+/// there is no once-only guard — a re-transcription simply refreshes the suggestions. Instead it guards
+/// against STALE jobs: a slow/backfilled job for a superseded transcription version must not overwrite the
+/// newer version's tags. Status-neutral (never touches
 /// <c>Recording.Status</c>, never marks Failed); on success it notifies the owner so the browser refetches.
 /// Pulled out of the BackgroundService so it can be unit-tested with a fake client + in-memory DbContext.
 /// </summary>
@@ -64,17 +65,30 @@ public static class TagsProcessor
 
             var extracted = await client.ExtractAsync(cfg, segs, template, ct);
 
-            // Replace only AFTER a successful extraction so a failed re-run keeps the previous set.
-            db.RecordingTags.RemoveRange(rec.Tags);
+            // Replace only AFTER a successful extraction so a failed re-run keeps the previous set - and
+            // replace only the SUGGESTIONS. Adopted tags are the user's own and must survive a
+            // re-transcription; dismissals are tombstones that stop a word coming back here.
+            var keep = rec.Tags
+                .Where(t => t.Status != RecordingTagStatus.Suggested)
+                .ToList();
+            db.RecordingTags.RemoveRange(rec.Tags.Where(t => t.Status == RecordingTagStatus.Suggested));
+
+            var spoken = keep.Select(t => t.Tag).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var ordinal = 0;
-            var newTags = extracted.Select(e => new RecordingTag
-            {
-                Id = Guid.NewGuid(),
-                RecordingId = rec.Id,
-                Tag = e.Tag.Length > 64 ? e.Tag[..64] : e.Tag,
-                Weight = Math.Clamp(e.Weight, 0.0, 1.0),
-                Ordinal = ordinal++,
-            }).ToList();
+            var newTags = extracted
+                // Never re-offer a word the user already holds or has already rejected on this recording.
+                // This also keeps the (RecordingId, lower(Tag)) unique index satisfied on re-extraction.
+                .Where(e => !spoken.Contains(e.Tag))
+                .Select(e => new RecordingTag
+                {
+                    Id = Guid.NewGuid(),
+                    RecordingId = rec.Id,
+                    Tag = e.Tag.Length > 64 ? e.Tag[..64] : e.Tag,
+                    Weight = Math.Clamp(e.Weight, 0.0, 1.0),
+                    Ordinal = ordinal++,
+                    Status = RecordingTagStatus.Suggested,
+                })
+                .ToList();
             db.RecordingTags.AddRange(newTags);
             // Set even when zero tags came back: a thin transcript is "done", not retry-forever.
             rec.TagsExtractedAt = DateTimeOffset.UtcNow;
