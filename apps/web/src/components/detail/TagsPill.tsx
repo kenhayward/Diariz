@@ -42,7 +42,6 @@ export default function TagsPill({
       className="hub-tags-pill inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-colors"
       style={{
         border: "1px solid rgba(47,107,237,.45)",
-        background: "rgba(47,107,237,.16)",
         color: "var(--hub-blue-text)",
       }}
     >

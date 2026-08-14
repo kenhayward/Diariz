@@ -125,9 +125,13 @@ body {
   background: #1f2937;
 }
 
-/* The hub's Tags pill: the handoff's hover tint (rgba(47,107,237,.28)) can't be expressed as a plain
-   inline-style hover, so it lives here beside the other --hub-* rules instead. Theme-neutral, like the
-   pill's own border/background - same blue accent in both themes. */
+/* The hub's Tags pill: both the resting and hover backgrounds live here, together, rather than resting
+   in the component's inline `style` - an inline `background` always wins over this class's `:hover`
+   regardless of the cascade, so the hover would be dead code if the resting value stayed inline.
+   Theme-neutral, like the pill's own border/text colour - same blue accent in both themes. */
+.hub-tags-pill {
+  background: rgba(47, 107, 237, 0.16);
+}
 .hub-tags-pill:hover {
   background: rgba(47, 107, 237, 0.28);
 }
