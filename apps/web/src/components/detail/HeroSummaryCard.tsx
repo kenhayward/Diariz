@@ -7,6 +7,7 @@ import MeetingTypeMenu from "../MeetingTypeMenu";
 import RoomBadge from "../RoomBadge";
 import ToolbarButton, { iconProps } from "../ToolbarButton";
 import DetailChip from "./DetailChip";
+import RecordingTags from "./RecordingTags";
 import { SpeakerAvatarStack } from "./SpeakerAvatar";
 import {
   AudioIcon,
@@ -91,6 +92,8 @@ export default function HeroSummaryCard({
           busy={minutesRunning}
           onApply={onApplyMeetingType}
         />
+
+        <RecordingTags recordingId={rec.id} tags={rec.tags ?? []} suggested={rec.suggestedTags ?? []} />
 
         <div className="ml-auto flex items-center gap-0.5">
           <ToolbarButton
