@@ -12,7 +12,15 @@ const MAX_LENGTH = 64;
 export function normalizeTag(raw: string): string | null {
   const joined = raw.trim().replace(/\s+/g, "-").replace(/^-+|-+$/g, "");
   if (joined.length === 0) return null;
-  return joined.length > MAX_LENGTH ? joined.slice(0, MAX_LENGTH) : joined;
+  if (joined.length <= MAX_LENGTH) return joined;
+
+  // Trim hyphens AGAIN after the slice, or this function is not idempotent: the cut can land right after a
+  // hyphen (or after whitespace that just became one), leaving a trailing hyphen that normalising the result
+  // would strip. Adopting an over-long suggestion would then insert a second row on the server and the chip
+  // would visibly re-spell itself after the refetch. Cannot empty the string: `joined` is longer than
+  // MAX_LENGTH and its first character is already known not to be a hyphen. `TagText.Normalize` does the
+  // same; see SHARED_FIXTURE in `tagInput.test.ts` for the exact cases, mirrored in the C# test.
+  return joined.slice(0, MAX_LENGTH).replace(/^-+|-+$/g, "");
 }
 
 /// Adds `raw` to `list`, case-insensitively de-duplicated. `added` is the tag that went in, or null when

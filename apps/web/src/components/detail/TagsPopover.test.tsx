@@ -11,11 +11,19 @@ function setup(props: Partial<ComponentProps<typeof TagsPopover>> = {}) {
     onRemove: vi.fn(),
     onDismiss: vi.fn(),
   };
-  render(
+  const view = render(
     <TagsPopover open tags={[]} suggested={[]} {...handlers} {...props} />,
   );
-  return handlers;
+  /// Re-renders with a different `open`, the way the parent does. `RecordingTags` renders the popover
+  /// unconditionally and only flips this prop, so the component stays mounted while closed.
+  const setOpen = (open: boolean) =>
+    view.rerender(
+      <TagsPopover open={open} tags={[]} suggested={[]} {...handlers} {...props} />,
+    );
+  return { ...handlers, setOpen };
 }
+
+const field = () => screen.getByLabelText("Add a tag") as HTMLInputElement;
 
 describe("TagsPopover", () => {
   it("commits a word on space and keeps the field focused for the next one", async () => {
@@ -63,6 +71,44 @@ describe("TagsPopover", () => {
     await userEvent.paste("budget planning 2026");
 
     expect(onAdd).toHaveBeenCalledWith("budget-planning-2026");
+  });
+
+  it("keeps what was already typed when text is pasted onto it", async () => {
+    // The paste handler commits instead of letting the field take the text, so it has to account for the
+    // draft the caret is sitting in - otherwise typing "budg" then pasting "et planning" loses the prefix.
+    const { onAdd } = setup();
+
+    await userEvent.type(field(), "budg");
+    await userEvent.paste("et planning");
+
+    expect(onAdd).toHaveBeenCalledWith("budget-planning");
+  });
+
+  it("pastes into the middle of the draft, where the caret is", async () => {
+    const { onAdd } = setup();
+
+    await userEvent.type(field(), "bud-ning");
+    field().setSelectionRange(4, 4);
+    await userEvent.paste("plan");
+
+    expect(onAdd).toHaveBeenCalledWith("bud-planning");
+  });
+
+  it("forgets a draft that was abandoned instead of committing it later", async () => {
+    // The popover stays mounted while closed (HubPopover renders null, the component keeps its state), so a
+    // draft the user walked away from used to survive - and the next Enter, days of scrolling later, adopted
+    // a half-typed word nobody asked for.
+    const { onAdd, setOpen } = setup();
+
+    await userEvent.type(field(), "budg");
+    setOpen(false); // Escape, or a click outside
+    expect(onAdd).not.toHaveBeenCalled(); // closing is not a commit
+
+    setOpen(true);
+    expect(field().value).toBe("");
+
+    await userEvent.type(field(), "{Enter}");
+    expect(onAdd).not.toHaveBeenCalled(); // and the abandoned word cannot be committed after the fact
   });
 
   it("removes the last tag on Backspace in an empty field", async () => {

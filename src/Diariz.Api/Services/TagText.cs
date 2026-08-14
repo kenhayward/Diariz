@@ -26,7 +26,17 @@ public static partial class TagText
 
         var joined = Whitespace().Replace(raw.Trim(), "-").Trim('-');
         if (joined.Length == 0) return null;
+        if (joined.Length <= MaxLength) return joined;
 
-        return joined.Length > MaxLength ? joined[..MaxLength] : joined;
+        // Trim hyphens AGAIN after the slice, or this method is not idempotent: the cut can land right after a
+        // hyphen (or after whitespace that just became one), leaving a trailing hyphen that normalising the
+        // result would strip. That mattered because every lookup normalises both sides before comparing, so a
+        // stored value Normalize would still change could never be found by its own text - re-adding such a
+        // tag missed the existing row, inserted, and turned the unique-index violation into an unhandled 500,
+        // while adopting an over-long suggestion inserted a second row and the chip visibly re-spelled itself
+        // after the refetch. Cannot empty the string: `joined` is longer than MaxLength and its first
+        // character is already known not to be a hyphen. See TagTextTests.SharedFixture (and its TypeScript
+        // twin) for the exact cases.
+        return joined[..MaxLength].Trim('-');
     }
 }

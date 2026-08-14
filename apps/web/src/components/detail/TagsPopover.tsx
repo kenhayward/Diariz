@@ -1,4 +1,4 @@
-import { useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import HubPopover from "../hub/HubPopover";
 import { TagIcon } from "../icons";
@@ -67,6 +67,14 @@ export default function TagsPopover({
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
+  /// Closing abandons whatever was half-typed. This component is NOT unmounted when it closes - the parent
+  /// renders it unconditionally and `HubPopover` returns null - so without this the draft outlived the
+  /// popover: type half a tag, press Escape, come back later, press Enter to close, and the abandoned word
+  /// was silently adopted.
+  useEffect(() => {
+    if (!open) setDraft("");
+  }, [open]);
+
   /// Commits the draft if it is a tag we do not already have. Returns nothing: the parent decides what a
   /// successful add does to `tags`, and this component re-renders from the new props.
   function commit(raw: string) {
@@ -97,11 +105,16 @@ export default function TagsPopover({
   }
 
   function onPaste(e: ClipboardEvent<HTMLInputElement>) {
-    // A pasted phrase becomes one hyphenated tag rather than silently losing its spaces.
+    // A pasted phrase becomes one hyphenated tag rather than silently losing its spaces. Because this commits
+    // instead of letting the field take the text, it has to do what the field would have done: drop the
+    // pasted text in at the caret, replacing any selection. Committing the clipboard alone would throw away
+    // whatever was already typed - "budg" + a pasted "et planning" became "et-planning".
     const pasted = e.clipboardData.getData("text");
-    if (normalizeTag(pasted) === null) return;
+    if (normalizeTag(pasted) === null) return; // nothing usable in the clipboard - leave it to the browser
     e.preventDefault();
-    commit(pasted);
+    const at = e.currentTarget.selectionStart ?? draft.length;
+    const to = e.currentTarget.selectionEnd ?? draft.length;
+    commit(draft.slice(0, at) + pasted + draft.slice(to));
   }
 
   return (
