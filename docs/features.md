@@ -438,14 +438,18 @@ and its sub-folders, each tagged with the **meeting** it came from - editable an
 (attachments removable). The **Attachments** tab also has a separate, **addable** list of attachments filed
 **directly on the folder** (files or URLs) that don't belong to any one transcript, shown above the aggregated
 list.
-- **Tag cloud across your meetings**: every meeting is **tagged automatically** after transcription — the
-LLM extracts up to 12 weighted concepts/themes it was actually about (participant names and filler are
-excluded). The left panel's **Tags** tab shows them as a flat weighted cloud (font size scales with how
-central a topic is across your library); click a tag to list the meetings that carry it, and an **expand**
-button opens the cloud in a large modal (picking a tag there filters the panel too; picking a meeting opens
-it). Re-transcribing refreshes a meeting's tags. Existing libraries are **backfilled** automatically at
-startup (when a server-wide LLM is configured), and a Platform Administrator can trigger the backfill from
-**Settings → Maintenance** (e.g. for per-user-only LLM configs).
+- **Tag cloud across your meetings**: tags are yours to add. After transcription, the LLM extracts up to 12
+weighted concepts/themes a meeting was actually about (participant names and filler are excluded) and offers
+them as **suggestions** on a Tags pill on the meeting - pick one to adopt it, or dismiss it if it is not
+useful, or type your own tag directly. Only **adopted** tags count: the left panel's **Tags** tab shows them
+as a flat weighted cloud (font size scales with how central a topic is across your library); click a tag to
+list the meetings that carry it, and an **expand** button opens the cloud in a large modal (picking a tag
+there filters the panel too; picking a meeting opens it). Re-transcribing refreshes a meeting's suggestions
+only - tags you already adopted or dismissed are left alone. Existing libraries are **backfilled** with fresh
+suggestions automatically at startup (when a server-wide LLM is configured), and a Platform Administrator can
+trigger the backfill from **Settings → Maintenance** (e.g. for per-user-only LLM configs); a suggestion still
+has to be adopted before it joins the cloud. Anyone who can see a shared recording can tag it, not only its
+owner.
 - **Attach supporting documents** to a transcript — or **directly to a folder** — upload files (PDFs, Office
 docs, emails, calendar invites, images, …) or add URLs, then rename, open, and remove them from an
 "Attachments (N)" button (or drag files onto the page). Files are stored in object storage and count toward

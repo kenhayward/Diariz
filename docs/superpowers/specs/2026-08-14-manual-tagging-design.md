@@ -49,13 +49,17 @@ Each of these was settled explicitly, and each closes off an alternative that lo
    next. Rejected: a per-user global blocklist, which needs its own table, a settings screen to review
    and undo it, and a filter on every suggestion read - and a single misclick would silently suppress a
    word library-wide.
-4. **Tags are stored verbatim, with spaces banned.** No case folding and no Title Case canonicalisation.
-   Internal whitespace collapses to `-` (`"budget planning 2026"` -> `budget-planning-2026`), leading
-   and trailing hyphens are trimmed, and duplicates are rejected case-insensitively per recording. The
-   extraction prompt is **not** changed, so a promoted suggestion keeps its Title Case ("Data
-   Collection") while hand-typed tags look like the handoff's chips. The cloud already merges case
-   variants and picks the most frequent casing for display, so the two styles coexist without a data
-   migration or a prompt rewrite.
+4. **Tags are stored normalised, with spaces banned - suggestions included.** No case folding, but
+   internal whitespace collapses to `-` (`"budget planning 2026"` -> `budget-planning-2026`), leading
+   and trailing hyphens are trimmed, and duplicates are rejected case-insensitively per recording. This
+   now applies to a promoted suggestion too: promoting one rewrites its stored text to the normalised
+   form, and the extraction pass itself normalises a candidate before it is ever inserted as a
+   suggestion. **Revised from the original design**, which left the extraction prompt untouched and let
+   a promoted suggestion keep its Title Case ("Data Collection") on the theory that the cloud's existing
+   case-insensitive merge would keep the two styles tidy without a data migration or a prompt rewrite. It
+   didn't: keeping a space in an adopted tag made the entity's own "never contains a space" invariant
+   false, and the cloud merges case only - not whitespace-vs-hyphen - so "Data Collection" and
+   "data-collection" landed as two separate cloud entries for what a user experienced as one tag.
 5. **`recording.tags_ready` is unchanged and no new event is added.** It keeps firing when the LLM pass
    completes, with the same payload; its `tags` array now means "suggested". Rejected: a
    `recording.tags_changed` event on manual edits (no consumer asked for it, and it would need the n8n
@@ -226,6 +230,15 @@ settle invalidates `["recording", id]` plus `["tags", roomId]` so the cloud and 
 step. Failures surface through the existing `apiErrorMessage` treatment and roll the optimistic patch
 back.
 
+**Optimism here is load-bearing, not cosmetic.** Measured on a 57-minute recording (213KB transcript, 670
+segments): the tag write itself takes **11ms**, but the `GET /api/recordings/{id}` refetch the
+invalidation above triggers takes **22.6 seconds**. Without the optimistic patch, a clicked chip would sit
+absent from the screen for roughly 22 seconds after the click - which reads as broken, not merely slow.
+The slow endpoint is pre-existing and out of scope for this feature. The optimistic path uses React
+Query's snapshot pattern: `onMutate` takes a snapshot of `["recording", id]` before applying the patch,
+and `onError` rolls back to *that* snapshot - never to anything inferred from server content, since the
+slow request the rollback is compensating for may not have returned by the time it runs.
+
 **i18n.** New `workspace.json` keys in all four locales (`en`, `de`, `es`, `fr`). Note the handoff's
 copy uses an em dash in `No tags yet — click to add`; the repo forbids em and en dashes in user-facing
 text, so it ships with a plain hyphen.
@@ -309,6 +322,9 @@ Functional enhancement, so **0.211.3 -> 0.212.0**.
 - **The Tags tab looks broken on day one** - an empty cloud with no explanation. Accepted, per the
   no-bulk-tooling decision. The existing `tagsEmpty` string is what a user will see; worth a read to
   confirm it reads sensibly for "you have not tagged anything yet" rather than "no tags were found".
-- **Two coexisting tag styles** ("Data Collection" from promotion, `data-collection` from typing).
-  Accepted as the price of not rewriting the prompt or migrating data; the cloud's existing
-  case-merging keeps it tidy enough.
+- **Two coexisting tag styles** ("Data Collection" from promotion, `data-collection` from typing) was the
+  original plan's accepted risk - the price of not rewriting the prompt or migrating data, on the theory
+  that the cloud's existing case-merging would keep it tidy enough. It didn't hold: the two styles split
+  the cloud into separate entries for one concept, so Decision 4 was revised instead. Promotion and
+  extraction both write the normalised form now, so there is only one style and this risk does not apply
+  to the shipped code.
