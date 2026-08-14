@@ -258,13 +258,26 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.HasIndex(a => new { a.RecordingId, a.Ordinal });
         });
 
-        // Machine-extracted tag-cloud tags. Provider-agnostic (plain columns, no vector/jsonb), so it
-        // stays outside the Npgsql guard and loads under the in-memory test provider too.
+        // Tag-cloud tags: LLM suggestions plus the tags the user adopted (see RecordingTagStatus). Plain
+        // columns only (no vector/jsonb), so the entity itself stays outside the Npgsql guard and loads
+        // under the in-memory test provider.
         builder.Entity<RecordingTag>(e =>
         {
             e.HasIndex(t => new { t.RecordingId, t.Ordinal });
             e.Property(t => t.Tag).HasMaxLength(64);
         });
+
+        // One row per tag per recording, case-insensitively: promotion flips an existing suggestion rather
+        // than inserting, so a duplicate here means a race between two room members. A functional index on
+        // lower(Tag) is Postgres-only, hence the guard - the in-memory provider cannot enforce it, which is
+        // why RecordingTagStatusIntegrationTests covers it instead.
+        if (Database.IsNpgsql())
+        {
+            builder.Entity<RecordingTag>()
+                .HasIndex(t => new { t.RecordingId, t.Tag })
+                .HasDatabaseName("IX_RecordingTags_RecordingId_TagLower")
+                .IsUnique();
+        }
 
         builder.Entity<MeetingNote>(e =>
         {
