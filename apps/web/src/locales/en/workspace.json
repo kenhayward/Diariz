@@ -503,6 +503,7 @@
   "tagsPillMore": "+{{count}} more",
   "tagsPopoverTitle": "Tags",
   "tagsPopoverSaved": "saved as you type",
+  "tagsPopoverViewOnly": "view only - you cannot change these tags",
   "tagsPopoverClose": "Close",
   "tagsInputPlaceholder": "Add a tag...",
   "tagsInputLabel": "Add a tag",

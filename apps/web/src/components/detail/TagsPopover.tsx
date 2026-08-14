@@ -51,6 +51,7 @@ export default function TagsPopover({
   onClose,
   tags,
   suggested,
+  canEdit,
   onAdd,
   onRemove,
   onDismiss,
@@ -59,6 +60,12 @@ export default function TagsPopover({
   onClose: () => void;
   tags: string[];
   suggested: string[];
+  /// Whether the caller may add/remove/dismiss tags on this recording (server's `RecordingDetail.canEditTags`).
+  /// False for a room member who can see the recording but lacks `EditOthersRecordings`: the pill stays
+  /// visible either way (per the repo owner's decision), but the popover drops to a read-only list of the
+  /// tags actually assigned - no entry field, no remove buttons, and no suggestions section (unadopted
+  /// machine guesses the viewer cannot act on are noise, and its own label invites an action they lack).
+  canEdit: boolean;
   onAdd: (tag: string) => void;
   onRemove: (tag: string) => void;
   onDismiss: (tag: string) => void;
@@ -132,7 +139,7 @@ export default function TagsPopover({
             {t("workspace:tagsPopoverTitle")}
           </h3>
           <span className="text-[11px]" style={{ color: "var(--hub-muted)" }}>
-            {t("workspace:tagsPopoverSaved")}
+            {canEdit ? t("workspace:tagsPopoverSaved") : t("workspace:tagsPopoverViewOnly")}
           </span>
           <button
             type="button"
@@ -145,10 +152,10 @@ export default function TagsPopover({
           </button>
         </div>
 
-        {/* b. One control: the chips the user has, and the field that adds the next one. */}
+        {/* b. One control: the chips the user has, and (when editable) the field that adds the next one. */}
         <div>
           <div
-            onClick={() => inputRef.current?.focus()}
+            onClick={canEdit ? () => inputRef.current?.focus() : undefined}
             className="flex flex-wrap items-center gap-1.5"
             style={{
               minHeight: 46,
@@ -156,7 +163,7 @@ export default function TagsPopover({
               borderRadius: 10,
               border: "1px solid var(--hub-field-border)",
               background: "var(--hub-surface)",
-              cursor: "text",
+              cursor: canEdit ? "text" : "default",
             }}
           >
             {tags.map((tag) => (
@@ -165,7 +172,7 @@ export default function TagsPopover({
                 className="inline-flex items-center text-[12.5px] font-medium"
                 style={{
                   height: 28,
-                  padding: "0 4px 0 10px",
+                  padding: canEdit ? "0 4px 0 10px" : "0 10px",
                   borderRadius: 8,
                   background: "rgba(47,107,237,.16)",
                   border: "1px solid rgba(47,107,237,.35)",
@@ -173,97 +180,110 @@ export default function TagsPopover({
                 }}
               >
                 {tag}
-                <button
-                  type="button"
-                  onClick={() => onRemove(tag)}
-                  aria-label={t("workspace:tagsRemove")}
-                  className="ml-0.5 grid place-items-center rounded-md text-[#2f6bed] hover:bg-[rgba(15,23,42,.1)] hover:text-white dark:text-[#9ec2ff] dark:hover:bg-[rgba(255,255,255,.12)]"
-                  style={{ width: 22, height: 22 }}
-                >
-                  <XIcon size={15} strokeWidth={2.2} />
-                </button>
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => onRemove(tag)}
+                    aria-label={t("workspace:tagsRemove")}
+                    className="ml-0.5 grid place-items-center rounded-md text-[#2f6bed] hover:bg-[rgba(15,23,42,.1)] hover:text-white dark:text-[#9ec2ff] dark:hover:bg-[rgba(255,255,255,.12)]"
+                    style={{ width: 22, height: 22 }}
+                  >
+                    <XIcon size={15} strokeWidth={2.2} />
+                  </button>
+                )}
               </span>
             ))}
-            <input
-              ref={inputRef}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={onKeyDown}
-              onPaste={onPaste}
-              aria-label={t("workspace:tagsInputLabel")}
-              placeholder={t("workspace:tagsInputPlaceholder")}
-              className="min-w-24 flex-1 bg-transparent text-[12.5px] outline-none"
-              style={{ height: 26, color: "var(--hub-text)" }}
-            />
-          </div>
-          <p className="mt-1.5 text-[11.5px]" style={{ color: "var(--hub-muted)" }}>
-            {t("workspace:tagsInputHint")}
-          </p>
-        </div>
-
-        {/* c. Divider. */}
-        <div style={{ height: 1, background: "var(--hub-divider)" }} />
-
-        {/* d. What the machine thought, offered rather than applied. */}
-        <div>
-          <div className="flex items-center">
-            <span
-              className="text-[11px] font-bold uppercase"
-              style={{ letterSpacing: ".08em", color: "var(--hub-muted)" }}
-            >
-              {t("workspace:tagsSuggestedLabel")}
-            </span>
-            {suggested.length > 0 && (
-              <span className="ml-auto text-[11px]" style={{ color: "var(--hub-muted-2)" }}>
-                {t("workspace:tagsSuggestedLeft", { count: suggested.length })}
-              </span>
+            {canEdit && (
+              <input
+                ref={inputRef}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={onKeyDown}
+                onPaste={onPaste}
+                aria-label={t("workspace:tagsInputLabel")}
+                placeholder={t("workspace:tagsInputPlaceholder")}
+                className="min-w-24 flex-1 bg-transparent text-[12.5px] outline-none"
+                style={{ height: 26, color: "var(--hub-text)" }}
+              />
             )}
           </div>
-
-          {suggested.length === 0 ? (
-            <p className="mt-2 text-[12px]" style={{ color: "var(--hub-muted-2)" }}>
-              {t("workspace:tagsSuggestedDone")}
+          {canEdit && (
+            <p className="mt-1.5 text-[11.5px]" style={{ color: "var(--hub-muted)" }}>
+              {t("workspace:tagsInputHint")}
             </p>
-          ) : (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {suggested.map((tag) => (
-                <span
-                  key={tag}
-                  className="inline-flex items-center"
-                  style={{
-                    height: 26,
-                    borderRadius: 7,
-                    border: "1px dashed var(--hub-hint-border)",
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => onAdd(tag)}
-                    title={t("workspace:tagsSuggestedAdd")}
-                    className="inline-flex h-full items-center gap-1 rounded-l-[7px] px-2 hover:bg-[rgba(15,23,42,.07)] dark:hover:bg-[rgba(255,255,255,.07)]"
-                  >
-                    <span className="grid place-items-center text-[#2f6bed] dark:text-[#8ab0ff]">
-                      <PlusIcon size={11} strokeWidth={2.6} />
-                    </span>
-                    <span className="text-[12.5px]" style={{ color: "var(--hub-text-2)" }}>
-                      {tag}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onDismiss(tag)}
-                    title={t("workspace:tagsSuggestedDismiss")}
-                    aria-label={t("workspace:tagsSuggestedDismiss")}
-                    className="mr-1 grid place-items-center rounded text-[var(--hub-muted-2)] hover:bg-[rgba(15,23,42,.08)] hover:text-[var(--hub-red-text)] dark:hover:bg-[rgba(255,255,255,.08)]"
-                    style={{ width: 18, height: 18 }}
-                  >
-                    <XIcon size={10} strokeWidth={2.6} />
-                  </button>
-                </span>
-              ))}
-            </div>
           )}
         </div>
+
+        {/* c/d. Suggestions: hidden entirely in read-only mode. Unadopted machine guesses a viewer cannot
+            act on are noise, and the section's own label ("AUTO-GENERATED - PICK OR IGNORE") invites an
+            action they do not have. */}
+        {canEdit && (
+          <>
+            {/* c. Divider. */}
+            <div style={{ height: 1, background: "var(--hub-divider)" }} />
+
+            {/* d. What the machine thought, offered rather than applied. */}
+            <div>
+              <div className="flex items-center">
+                <span
+                  className="text-[11px] font-bold uppercase"
+                  style={{ letterSpacing: ".08em", color: "var(--hub-muted)" }}
+                >
+                  {t("workspace:tagsSuggestedLabel")}
+                </span>
+                {suggested.length > 0 && (
+                  <span className="ml-auto text-[11px]" style={{ color: "var(--hub-muted-2)" }}>
+                    {t("workspace:tagsSuggestedLeft", { count: suggested.length })}
+                  </span>
+                )}
+              </div>
+
+              {suggested.length === 0 ? (
+                <p className="mt-2 text-[12px]" style={{ color: "var(--hub-muted-2)" }}>
+                  {t("workspace:tagsSuggestedDone")}
+                </p>
+              ) : (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {suggested.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center"
+                      style={{
+                        height: 26,
+                        borderRadius: 7,
+                        border: "1px dashed var(--hub-hint-border)",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => onAdd(tag)}
+                        title={t("workspace:tagsSuggestedAdd")}
+                        className="inline-flex h-full items-center gap-1 rounded-l-[7px] px-2 hover:bg-[rgba(15,23,42,.07)] dark:hover:bg-[rgba(255,255,255,.07)]"
+                      >
+                        <span className="grid place-items-center text-[#2f6bed] dark:text-[#8ab0ff]">
+                          <PlusIcon size={11} strokeWidth={2.6} />
+                        </span>
+                        <span className="text-[12.5px]" style={{ color: "var(--hub-text-2)" }}>
+                          {tag}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDismiss(tag)}
+                        title={t("workspace:tagsSuggestedDismiss")}
+                        aria-label={t("workspace:tagsSuggestedDismiss")}
+                        className="mr-1 grid place-items-center rounded text-[var(--hub-muted-2)] hover:bg-[rgba(15,23,42,.08)] hover:text-[var(--hub-red-text)] dark:hover:bg-[rgba(255,255,255,.08)]"
+                        style={{ width: 18, height: 18 }}
+                      >
+                        <XIcon size={10} strokeWidth={2.6} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </HubPopover>
   );

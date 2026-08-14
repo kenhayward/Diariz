@@ -411,6 +411,10 @@ export interface RecordingDetail {
   tags?: string[];
   /// Automatically suggested tags nobody has accepted or dismissed yet, heaviest first - the hub's hints.
   suggestedTags?: string[];
+  /// Whether the caller may add/remove/dismiss this recording's tags - the owner, or a room member holding
+  /// `EditOthersRecordings`. Absent/false renders the Tags popover read-only; treat it that way explicitly
+  /// (`?? false`) rather than assuming presence, the same fail-closed default the server uses.
+  canEditTags?: boolean;
 }
 
 /// A room a recording sits in, for the detail Overview. `isMain` = the recorder's personal (home) room -
