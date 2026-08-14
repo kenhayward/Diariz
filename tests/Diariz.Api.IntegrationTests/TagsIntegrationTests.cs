@@ -145,8 +145,14 @@ public class TagsIntegrationTests(ContainersFixture fx)
         }
     }
 
+    // Renamed from AddTag_PromotesACaseVariantSuggestion_WithoutViolatingTheUniqueIndex on review: a
+    // suggestion "Data Collection" and a request "data collection" differ in literal characters (space vs
+    // hyphen would result), not merely case, so there is only ever one matching row here - nothing here can
+    // put two rows' raw text at risk of the same lower(Tag). This proves promotion + the normalised-lookup,
+    // not index safety; see AddTag_ConvergesTwoNonAdoptedCaseVariants_WithoutATransientUniqueIndexViolation
+    // below for the test that actually exercises the index-collision-avoiding write order.
     [Fact]
-    public async Task AddTag_PromotesACaseVariantSuggestion_WithoutViolatingTheUniqueIndex()
+    public async Task AddTag_PromotesALegacySpacedSuggestion_RewritingItToTheNormalisedForm()
     {
         Guid userId, recId;
         await using (var db = fx.CreateDbContext())
@@ -176,7 +182,7 @@ public class TagsIntegrationTests(ContainersFixture fx)
 
         await using (var db = fx.CreateDbContext())
         {
-            // Exactly one row survives (no unique-index violation from a transient duplicate), it is
+            // Exactly one row survives (the suggestion was flipped in place, not duplicated), it is
             // Adopted, and its text is the normalised form of the REQUEST ("data collection" -> hyphenated,
             // case preserved as typed) - not the suggestion's original spaced, title-cased text. AddTag
             // always rewrites to the normalised request text on promotion (see its doc comment).
@@ -184,6 +190,59 @@ public class TagsIntegrationTests(ContainersFixture fx)
             Assert.Equal(RecordingTagStatus.Adopted, tag.Status);
             Assert.Equal("data-collection", tag.Tag);
             Assert.NotNull(tag.AdoptedAt);
+        }
+    }
+
+    // The genuinely Postgres-only case: TWO non-adopted rows on one recording that both normalise to the
+    // same tag but differ in literal text (one still spaced, one already hyphenated) - legal under the
+    // unique index because their raw lower(Tag) values differ. AddTag's "no adopted match" branch has to
+    // pick a winner, rewrite ITS text to the normalised form, and remove the other - and a prior fix
+    // deliberately persists the removal BEFORE the winner's text is rewritten, because within one
+    // SaveChangesAsync EF sends updates before deletes: writing the winner's text first would transiently
+    // give two rows the same lower(Tag) and trip the index even though the end state is fine. The in-memory
+    // provider has no such index, so this order only matters on real Postgres.
+    [Fact]
+    public async Task AddTag_ConvergesTwoNonAdoptedCaseVariants_WithoutATransientUniqueIndexViolation()
+    {
+        Guid userId, recId;
+        await using (var db = fx.CreateDbContext())
+        {
+            var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test", Email = "u3@x.test" };
+            var rec = new Recording { Id = Guid.NewGuid(), UserId = user.Id, BlobKey = $"k/{Guid.NewGuid()}" };
+            db.AddRange(user, rec,
+                // Still spaced (legacy shape) - whichever row AddTag treats as the "winner", rewriting THIS
+                // one to the normalised form is a genuine value change (space -> hyphen).
+                new RecordingTag
+                {
+                    Id = Guid.NewGuid(), RecordingId = rec.Id, Tag = "Data Collection", Weight = 0.8,
+                    Ordinal = 0, Status = RecordingTagStatus.Suggested,
+                },
+                // Already hyphenated and, case-folded, IS the exact text the request will normalise to -
+                // this is the row a buggy write-before-delete order would collide with.
+                new RecordingTag
+                {
+                    Id = Guid.NewGuid(), RecordingId = rec.Id, Tag = "data-collection", Weight = 0.4,
+                    Ordinal = 1, Status = RecordingTagStatus.Dismissed,
+                });
+            await db.SaveChangesAsync();
+            userId = user.Id;
+            recId = rec.Id;
+        }
+
+        await using (var db = fx.CreateDbContext())
+        {
+            var controller = Recordings.Build(db, userId);
+            // Correct order never throws, regardless of which row AddTag treats as the winner - see the
+            // report for the mutation check that proves this test fails if that order regresses.
+            var result = await controller.AddTag(recId, new SetRecordingTagRequest("Data Collection"));
+            Assert.IsType<NoContentResult>(result);
+        }
+
+        await using (var db = fx.CreateDbContext())
+        {
+            var tag = Assert.Single(await db.RecordingTags.Where(t => t.RecordingId == recId).ToListAsync());
+            Assert.Equal(RecordingTagStatus.Adopted, tag.Status);
+            Assert.Equal("Data-Collection", tag.Tag);
         }
     }
 }
