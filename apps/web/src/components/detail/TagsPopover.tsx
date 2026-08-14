@@ -42,10 +42,12 @@ function PlusIcon({ size, strokeWidth }: { size: number; strokeWidth: number }) 
   );
 }
 
-/// The hub's tag editor: type tags, remove tags, and pick or ignore the automatically suggested ones.
+/// The hub's tag editor: type tags, remove tags, and pick or ignore the automatically suggested ones - or,
+/// for a viewer who cannot edit this recording's tags, a read-only list of the tags it already carries.
 /// Presentational and callback-driven - the parent owns the data and the server round-trip, so this file
-/// can be tested without a query client. There is no Save button: each action is its own change, which is
-/// what the header's "saved as you type" promises.
+/// can be tested without a query client. There is no Save button: when editable, each action is its own
+/// change, which is what the header's "saved as you type" promises; in read-only mode there is nothing to
+/// save at all, which is what the header's "view only" note says instead.
 export default function TagsPopover({
   open,
   onClose,

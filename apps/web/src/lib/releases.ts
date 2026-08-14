@@ -62,6 +62,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.213.0",
+    date: "2026-08-14",
+    pr: 527,
+    headline: "Shared-room viewers can now read a recording's tags without an edit error",
+    summary:
+      "Manual tagging shipped last release gated on the room permission that lets you edit someone else's " +
+      "recording, but the Tags pill did not check it: a room member without that permission could still " +
+      "click through, and trying to add or remove a tag failed with an error banner. The popover now checks " +
+      "the same permission the server already enforces, and when you cannot edit a recording's tags it opens " +
+      "as a plain read-only list of the tags it carries - no entry field, no remove buttons, and no " +
+      "suggestions to act on - so you can still see how a shared recording is tagged, you just cannot change " +
+      "it from there.",
+    fixed: [
+      "A shared-room member without \"Edit or regenerate other people's recordings\" no longer hits a 403 " +
+        "error when opening the Tags pill on someone else's recording - the popover opens read-only instead.",
+    ],
+  },
+  {
     version: "0.212.0",
     date: "2026-08-14",
     pr: 526,
