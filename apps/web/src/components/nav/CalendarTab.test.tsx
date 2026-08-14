@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { useState } from "react";
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 import { SelectionProvider } from "../../lib/selection";
+import { dayKey } from "../../lib/calendar";
 import type { CalendarEvent, RecordingSummary } from "../../lib/types";
 
 // Only what this leaf reaches for - not the panel's whole mock wall. Follows the
@@ -53,10 +54,13 @@ function renderTab(recordings: RecordingSummary[] = [rec]) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   function Harness() {
     const [open, setOpen] = useState(true);
+    // Owned here because the real parent owns it: the panel holds the selection so its toolbar can read
+    // the day the quick sync should refresh.
+    const [selectedDay, setSelectedDay] = useState<string | null>(() => dayKey(new Date()));
     return (
       <>
         <button onClick={() => setOpen((o) => !o)}>toggle-tab</button>
-        {open && <CalendarTab recordings={recordings} isPersonalRoom />}
+        {open && <CalendarTab recordings={recordings} isPersonalRoom selectedDay={selectedDay} onSelectDay={setSelectedDay} />}
       </>
     );
   }
@@ -130,7 +134,7 @@ describe("CalendarTab", () => {
       <QueryClientProvider client={qc}>
         <SelectionProvider>
           <MemoryRouter initialEntries={["/"]}>
-            <CalendarTab recordings={[rec]} isPersonalRoom={isPersonalRoom} />
+            <CalendarTab recordings={[rec]} isPersonalRoom={isPersonalRoom} selectedDay={dayKey(new Date())} onSelectDay={() => {}} />
           </MemoryRouter>
         </SelectionProvider>
       </QueryClientProvider>,

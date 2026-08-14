@@ -22,6 +22,7 @@ function ListToolbar({
   recordings,
   listMode,
   calendarMode,
+  selectedDay,
   isPersonalRoom,
   allowFolders,
   sections,
@@ -31,6 +32,10 @@ function ListToolbar({
 }: {
   recordings: RecordingSummary[];
   listMode: boolean;
+  /// The day the Calendar tab is showing, as a `yyyy-MM-dd` key, or null when nothing is selected. The
+  /// quick sync reads this day - not today, which is what it used to read whatever the user was looking at.
+  /// Null falls back to today, matching the shell's own fallback.
+  selectedDay?: string | null;
   /// The Calendar tab is showing, so the two sync buttons apply.
   calendarMode: boolean;
   /// The event overlay is personal-only: a shared room shows its own recordings and nothing else, so there is
@@ -219,8 +224,8 @@ function ListToolbar({
           {calendarMode && isPersonalRoom && (
             <>
               <ToolbarButton
-                label={t("calSyncToday")}
-                onClick={() => sync("today")}
+                label={t("calSyncSelectedDay")}
+                onClick={() => sync("today", selectedDay ?? undefined)}
                 disabled={calendarBusy}
                 icon={<SyncTodayIcon />}
               />

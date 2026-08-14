@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { formatLongDate } from "./format";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 import { useStatus } from "./status";
@@ -30,7 +31,7 @@ const SHELL_TIMEOUT_MS = 150_000;
 export interface CalendarSyncDeps {
   /// Whether the desktop Outlook mirror is connected on this machine and should take part.
   outlook: boolean;
-  syncOutlookNow: (options: { scope: CalendarSyncScope }) => Promise<{ started: boolean; reason?: string }>;
+  syncOutlookNow: (options: { scope: CalendarSyncScope; date?: string }) => Promise<{ started: boolean; reason?: string }>;
   onOutlookState: (cb: (state: { phase: string }) => void) => () => void;
   /// Refresh the calendar overlay. This is what picks up Google and the `.ics` feeds.
   refetchEvents: () => Promise<unknown>;
@@ -53,7 +54,19 @@ export function elapsedSeconds(startedAt: number, now: number): number {
 /// buttons take very different amounts of time, and "still going" reads differently when you know which one
 /// you pressed.
 export function syncStatusKey(scope: CalendarSyncScope): string {
-  return scope === "today" ? "statusSyncingCalendarToday" : "statusSyncingCalendar";
+  return scope === "today" ? "statusSyncingCalendarDay" : "statusSyncingCalendar";
+}
+
+/// Local midnight of a `yyyy-MM-dd` calendar key as an ISO instant, or of today when the key is absent -
+/// which is exactly when the shell falls back to today, so the message and the sync agree.
+///
+/// Parsed from the parts rather than handed to `new Date(key)`: that reads a bare `yyyy-MM-dd` as UTC
+/// midnight, so the status bar would name the previous day for anyone west of Greenwich while the shell
+/// (which parses locally) read the right one.
+export function dayStartIso(dateKey?: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey ?? "");
+  if (!m) return new Date().toISOString();
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toISOString();
 }
 
 /// The message for a run that did not happen (workspace namespace), or null when there is nothing worth
@@ -93,11 +106,15 @@ export function syncErrorKey(reason: string | undefined): string | null {
 export async function runCalendarSync(
   scope: CalendarSyncScope,
   deps: CalendarSyncDeps,
+  /// The day to read, as a `yyyy-MM-dd` local calendar key. Only meaningful for the quick sync; the full
+  /// one reads the whole configured window by definition, so it is dropped there rather than sent and
+  /// ignored. Absent means "today", which is what the shell falls back to.
+  date?: string,
 ): Promise<CalendarSyncResult> {
   const result: CalendarSyncResult = {};
 
   if (deps.outlook) {
-    const reason = await syncOutlookAndWait(scope, deps);
+    const reason = await syncOutlookAndWait(scope, scope === "today" ? date : undefined, deps);
     if (reason) result.outlookReason = reason;
   }
 
@@ -114,7 +131,11 @@ export async function runCalendarSync(
 /// the ones already on screen and leaves the new one invisible until something else refetches.
 ///
 /// Resolves to a reason when the run did not happen (or never came back), else undefined.
-function syncOutlookAndWait(scope: CalendarSyncScope, deps: CalendarSyncDeps): Promise<string | undefined> {
+function syncOutlookAndWait(
+  scope: CalendarSyncScope,
+  date: string | undefined,
+  deps: CalendarSyncDeps,
+): Promise<string | undefined> {
   return new Promise((resolve) => {
     let settled = false;
     // Whether a run is known to be under way, and therefore whether an `idle` means "finished" rather than
@@ -138,7 +159,7 @@ function syncOutlookAndWait(scope: CalendarSyncScope, deps: CalendarSyncDeps): P
     const timer = setTimeout(() => finish("timeout"), deps.timeoutMs ?? SHELL_TIMEOUT_MS);
 
     void deps
-      .syncOutlookNow({ scope })
+      .syncOutlookNow({ scope, date })
       .then(({ started, reason }) => {
         if (started) return;
         // `busy` means a sync is ALREADY RUNNING - the one that fires on launch, or the tray's. It refreshes
@@ -175,13 +196,17 @@ export function useCalendarSync(): {
   busy: boolean;
   /// Start a run. Ignored while one is already going; the same two buttons work in a browser, where a sync is
   /// simply Google and the feeds with no shell to ask.
-  sync: (scope: CalendarSyncScope) => void;
+  ///
+  /// `date` is the day the quick sync should read, as a `yyyy-MM-dd` local calendar key - the day selected in
+  /// the calendar, not necessarily today. Ignored for the full sync.
+  sync: (scope: CalendarSyncScope, date?: string) => void;
 } {
-  const { t } = useTranslation("workspace");
+  const { t, i18n } = useTranslation("workspace");
   const qc = useQueryClient();
   const { setStatus } = useStatus();
   const [syncing, setSyncing] = useState<CalendarSyncScope | null>(null);
   const startedAt = useRef(0);
+  const syncingDate = useRef<string | undefined>(undefined);
 
   const { data: settings } = useQuery({ queryKey: ["user-settings"], queryFn: api.getUserSettings });
   const [shellReady, setShellReady] = useState(false);
@@ -258,7 +283,12 @@ export function useCalendarSync(): {
       // a message that explained nothing and then vanished.
       if (reported.current) return;
       setStatus(
-        t(syncStatusKey(syncing ?? "all"), { seconds: elapsedSeconds(startedAt.current, Date.now()) }),
+        t(syncStatusKey(syncing ?? "all"), {
+          seconds: elapsedSeconds(startedAt.current, Date.now()),
+          // Named even when it is today: a message that always states the day it is reading cannot be
+          // misread, where "today" was simply wrong on every other day the user had selected.
+          date: formatLongDate(dayStartIso(syncingDate.current), i18n.language),
+        }),
         "progress",
         { sticky: true },
       );
@@ -288,13 +318,16 @@ export function useCalendarSync(): {
   );
 
   const sync = useCallback(
-    (scope: CalendarSyncScope) => {
+    (scope: CalendarSyncScope, date?: string) => {
       // One at a time - the shell can only read one window anyway. `busy` rather than `syncing`, so a click
       // landing during the launch sync is ignored here instead of being sent to a shell that will refuse it.
       if (busy) return;
       startedAt.current = Date.now();
       reported.current = false; // a new run narrates again
       setSyncing(scope);
+      // Held for the ticking status line, which names the day being read. Kept in a ref rather than state
+      // because the ticker reads it every second and re-rendering the whole toolbar for that would be waste.
+      syncingDate.current = scope === "today" ? date : undefined;
 
       void runCalendarSync(scope, {
         outlook,
@@ -313,7 +346,7 @@ export function useCalendarSync(): {
           void qc.invalidateQueries({ queryKey: ["recordings"] });
           return qc.invalidateQueries({ queryKey: ["calendar-events"], refetchType: "all" });
         },
-      })
+      }, syncingDate.current)
         .then(({ outlookReason }) => {
           const failure = syncErrorKey(outlookReason);
           setStatus(failure ? t(failure) : null, failure ? "error" : "info");

@@ -1635,7 +1635,11 @@ into it with no URL or per-user setup at all.
     it shipped, a desktop Outlook mirror) a permanently empty Calendar tab. The endpoint already degrades to
     `[]`, so the gate bought nothing and cost those users the feature outright.
   - **The sync controls live in the panel toolbar** (`ListToolbar`, shown when the Calendar tab is up in a
-    personal room), not in the tab: **Sync calendar** and **Sync today**, two icons. They used to be *Sync
+    personal room), not in the tab: **Sync calendar** and **Sync selected day**, two icons. The quick one
+    reads the day selected in the Calendar tab, so the selection is owned by `RecordingsPanel` - the toolbar
+    is the tab's sibling and has to see it. The day travels to the shell as `{ scope: "today", date }`
+    alongside the scope rather than replacing it: web and desktop ship separately, and an older shell then
+    ignores the date and reads today (what it always did) instead of falling through to a full-window sync. They used to be *Sync
     Outlook* + *Refresh events* links under the month grid, which read as the calendar's own chrome and
     scrolled with it. `lib/calendarSync.ts` owns one run for every source - and there is deliberately **no
     per-provider fan-out**, because Google and `.ics` are read **live** by `/api/calendar/events` (which skips

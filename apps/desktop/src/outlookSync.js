@@ -41,10 +41,36 @@ function todayWindow(now) {
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
-/// The window a run of the given scope should read: `today` for the quick sync, the configured rolling window
+/// The local-midnight-to-next-local-midnight window for a `yyyy-MM-dd` calendar key, or null when the key is
+/// missing or not a real date.
+///
+/// Built from the parts, never from `new Date(key)`: that parses a bare `yyyy-MM-dd` as UTC midnight, which
+/// is the *previous* local day anywhere west of Greenwich - so an American user pressing the button on the
+/// 20th would have re-read the 19th. Same class of bug as the all-day-entry one localDateKey exists to avoid.
+///
+/// The round-trip check is what rejects "2026-13-45": the Date constructor rolls overflowing parts over
+/// silently, turning month 13 into January of the next year rather than failing.
+function dayWindow(dateKey) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateKey || ""));
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]) - 1;
+  const day = Number(m[3]);
+  const start = new Date(year, month, day);
+  if (start.getFullYear() !== year || start.getMonth() !== month || start.getDate() !== day) return null;
+  // Day + 1 rather than +24h, so a day containing a DST change stays one whole local day.
+  return { start: start.toISOString(), end: new Date(year, month, day + 1).toISOString() };
+}
+
+/// The window a run of the given scope should read: one day for the quick sync, the configured rolling window
 /// for everything else.
-function windowForScope(now, options = {}, scope = "all") {
-  return scope === "today" ? todayWindow(now) : windowFor(now, options);
+///
+/// The quick sync reads `date` (the day the user has selected in the calendar) and falls back to today when it
+/// is absent or unusable. The fallback is not just defensive: web and desktop ship separately, so an older web
+/// build sends no date at all, and syncing today is exactly what it used to ask for.
+function windowForScope(now, options = {}, scope = "all", date = undefined) {
+  if (scope !== "today") return windowFor(now, options);
+  return dayWindow(date) || todayWindow(now);
 }
 
 /// The local calendar date of a `{ year, month, day }` parts object, as `yyyy-MM-dd`.
@@ -244,6 +270,7 @@ module.exports = {
   windowFor,
   todayWindow,
   windowForScope,
+  dayWindow,
   isStickyUnavailable,
   localDateKey,
   readDateParts,

@@ -504,9 +504,11 @@ opens its invite — and a block too short for two lines puts its title and time
 came from is shown in the block's tooltip.
 - **Two calendar syncs, in the panel toolbar**: **Sync calendar** refreshes every source you have connected in
 one go — Google, subscribed `.ics` feeds and a mirrored desktop Outlook calendar — touching only the ones you
-actually have, and **Sync today** does the same for the current day alone. The quick one exists because a full
-Outlook read is tens of seconds on a busy mailbox where a single day is a couple: it is what you press when a
-meeting you have just accepted is not on the calendar yet. While either runs, the **status bar counts the
+actually have, and **Sync selected day** does the same for a single day - whichever day you have picked in
+the calendar, so looking at next Tuesday and pressing it refreshes next Tuesday rather than today. The status
+bar names the day it is reading. The quick one exists because a full Outlook read is tens of seconds on a busy
+mailbox where a single day is a couple: it is what you press when a meeting you have just accepted is not on
+the calendar yet. While either runs, the **status bar counts the
 seconds** and names which sync is going, so a long one cannot be mistaken for a button that did nothing. Both
 work in a plain browser, where a sync is simply a re-read of Google and your feeds. Either also re-reads the
 **recordings** drawn alongside the meetings, so one button refreshes everything the day view shows - which is
@@ -529,7 +531,7 @@ rename it, hide it without disconnecting, set how many days back and ahead it re
 (on by default), and exclude invite text. **Disconnecting a machine deletes the meetings copied from it, and
 turning the opt-in off clears every machine** — both confirm first. Managing it works from any browser; the
 syncing itself runs from the Windows desktop app, which reads the calendar **on launch**, from its **tray
-menu**, from the Calendar's **Sync calendar / Sync today** buttons, or from **Sync now** in Preferences.
+menu**, from the Calendar's **Sync calendar / Sync selected day** buttons, or from **Sync now** in Preferences.
 Reading happens in a small bundled helper program rather than inside the app, so a slow or failing calendar
 read cannot freeze recording, the tray or the screenshot hotkey; Diariz never closes an Outlook you had open,
 though COM will start Outlook if it is not running. Each failure is named specifically — Outlook not installed,

@@ -512,7 +512,7 @@ function setOutlookPhase(phase) {
 ///
 /// Resolves to a reason when it did not start, so a caller (the tray, or the button in the web app) can say
 /// why rather than appearing to do nothing.
-async function syncOutlook({ scope = "all" } = {}) {
+async function syncOutlook({ scope = "all", date = undefined } = {}) {
   if (process.platform !== "win32") return { started: false, reason: "not-windows" };
   if (!(await outlookAvailability())) return { started: false, reason: "unavailable" };
   if (!outlook.enabled) return { started: false, reason: "disabled" };
@@ -522,7 +522,9 @@ async function syncOutlook({ scope = "all" } = {}) {
   outlook.inFlight = true;
   setOutlookPhase("reading");
   try {
-    const { start, end } = windowForScope(new Date(), outlook.cfg, scope);
+    // `date` is the day the user has selected in the calendar, for the quick sync. Absent (an older web
+    // build, or nothing selected) falls back to today inside windowForScope, which is what it always read.
+    const { start, end } = windowForScope(new Date(), outlook.cfg, scope, date);
     const result = await outlookHost.read({
       start,
       end,
