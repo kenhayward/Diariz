@@ -1179,11 +1179,27 @@ public class RecordingsController : ControllerBase
         return Accepted();
     }
 
+    /// <summary>The write gate shared by the three tag endpoints: the recording's owner, or a room member
+    /// holding <see cref="RoomPermission.EditOthersRecordings"/> in a room it is placed in. Returns null when
+    /// the caller may proceed, else the result to return - 404 for someone who cannot see the recording at all
+    /// (its existence stays private), 403 for a member who can see it but was not granted that permission.
+    ///
+    /// Tagging is a write on SOMEONE ELSE'S recording, so it is not open to bare membership: a room member
+    /// granted <c>RoomPermission.None</c> could otherwise delete every tag on a colleague's meeting. Note that
+    /// a member's tag does NOT land in their own tag cloud - <see cref="TagsController.List"/> scopes the
+    /// unfiltered cloud by <c>Recording.UserId</c>, so tagging a shared recording feeds the OWNER's personal
+    /// cloud, plus the room-scoped cloud (<c>?roomId=</c>) of any room the recording sits in.</summary>
+    private async Task<IActionResult?> GateTagWriteAsync(Guid id) =>
+        await _rooms.AuthorizeRecordingPermissionAsync(UserId, id, RoomPermission.EditOthersRecordings) switch
+        {
+            RoomAccessError.NotFound => NotFound(),
+            RoomAccessError.Forbidden => Forbid(),
+            _ => null,
+        };
+
     /// <summary>Adopt a tag on a recording - either typed by hand or promoted from a suggestion. Idempotent.
-    /// Unlike the other writes here this is open to ANYONE WHO CAN READ the recording (a room member, not
-    /// just the owner), because the tag cloud is room-scoped and a shared room shares its organising layer.
-    /// It is the only write on a recording with that gate - do not copy it onto a neighbouring endpoint
-    /// without meaning to.</summary>
+    /// Gated by <see cref="GateTagWriteAsync"/>: the owner, or a member with
+    /// <see cref="RoomPermission.EditOthersRecordings"/>.</summary>
     [HttpPost("{id:guid}/tags")]
     [EndpointSummary("Add a tag to a recording")]
     [EndpointDescription(
@@ -1191,11 +1207,12 @@ public class RecordingsController : ControllerBase
         "and starts counting towards your tag cloud. Promoting a suggestion is the same call - pass its text " +
         "and it is stored in its normalised form, not kept verbatim. Whitespace inside the tag becomes " +
         "hyphens (`budget planning` -> `budget-planning`), matching is case-insensitive, and adding a tag " +
-        "you already have does nothing. Anyone who can see the recording can tag it; 400 for blank text, " +
-        "404 if you cannot see it.")]
+        "you already have does nothing. You can always tag your own recording; tagging someone else's needs " +
+        "the `EditOthersRecordings` permission in a room it is shared into. 400 for blank text, 404 if you " +
+        "cannot see the recording, 403 if you can see it but lack that permission.")]
     public async Task<IActionResult> AddTag(Guid id, SetRecordingTagRequest req)
     {
-        if (!await _rooms.CanReadRecordingAsync(UserId, id)) return NotFound();
+        if (await GateTagWriteAsync(id) is { } denied) return denied;
 
         var tag = TagText.Normalize(req.Tag);
         if (tag is null) return BadRequest("A tag needs some text.");
@@ -1273,17 +1290,17 @@ public class RecordingsController : ControllerBase
     }
 
     /// <summary>Remove an adopted tag. Deletes the row outright, so it does not reappear as a suggestion;
-    /// only a re-transcription can offer it again. Open to anyone who can read the recording (see
-    /// <see cref="AddTag"/>).</summary>
+    /// only a re-transcription can offer it again. Same gate as <see cref="AddTag"/>.</summary>
     [HttpDelete("{id:guid}/tags")]
     [EndpointSummary("Remove a tag from a recording")]
     [EndpointDescription(
         "Removes the tag from this recording, case-insensitively. It does not come back as a suggestion - only " +
         "a re-transcription can propose it again. Removing a tag that is not there succeeds (204), so a retry " +
-        "is safe. Anyone who can see the recording can do this; 404 if you cannot see it.")]
+        "is safe. Same permission as adding a tag: 404 if you cannot see the recording, 403 if you can but " +
+        "lack `EditOthersRecordings`.")]
     public async Task<IActionResult> RemoveTag(Guid id, [FromQuery] string tag)
     {
-        if (!await _rooms.CanReadRecordingAsync(UserId, id)) return NotFound();
+        if (await GateTagWriteAsync(id) is { } denied) return denied;
 
         var normalized = TagText.Normalize(tag);
         if (normalized is null) return NoContent();
@@ -1301,18 +1318,18 @@ public class RecordingsController : ControllerBase
     }
 
     /// <summary>Reject a suggested tag for this recording. The row is kept as a tombstone so a
-    /// re-transcription cannot suggest it here again. Open to anyone who can read the recording (see
-    /// <see cref="AddTag"/>).</summary>
+    /// re-transcription cannot suggest it here again. Same gate as <see cref="AddTag"/>.</summary>
     [HttpPost("{id:guid}/tags/dismiss")]
     [EndpointSummary("Dismiss a suggested tag")]
     [EndpointDescription(
         "Rejects one of the automatically suggested tags on this recording so it stops being offered here, " +
         "even after a re-transcription. The dismissal is per recording - the same word can still be suggested " +
         "on other meetings. 404 when there is no such suggestion (including when you already accepted it). " +
-        "Anyone who can see the recording can do this.")]
+        "Same permission as adding a tag: 404 if you cannot see the recording, 403 if you can but lack " +
+        "`EditOthersRecordings`.")]
     public async Task<IActionResult> DismissTag(Guid id, SetRecordingTagRequest req)
     {
-        if (!await _rooms.CanReadRecordingAsync(UserId, id)) return NotFound();
+        if (await GateTagWriteAsync(id) is { } denied) return denied;
 
         var tag = TagText.Normalize(req.Tag);
         if (tag is null) return BadRequest("A tag needs some text.");

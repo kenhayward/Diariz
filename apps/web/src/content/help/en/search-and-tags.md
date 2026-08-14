@@ -45,5 +45,9 @@ in a large modal, where picking a tag also filters the panel and picking a meeti
 
 Re-transcribing a meeting refreshes its suggestions, but never touches a tag you have already adopted or
 dismissed. Existing libraries get fresh suggestions automatically when a server-wide AI model is
-configured - each one still needs to be adopted before it joins the cloud. Anyone who can see a shared
-recording can tag it, not only its owner.
+configured - each one still needs to be adopted before it joins the cloud.
+
+You can always tag your own meetings. In a shared room, tagging someone else's meeting needs the room's
+**Edit or regenerate other people's recordings** permission, which new members are given by default; without
+it you can still see its tags but not change them. Your tags on someone else's meeting count toward that
+room's cloud and the owner's, not toward your own personal cloud.

@@ -7,8 +7,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Diariz.Api.Tests;
 
-/// <summary>The hub's manual tagging: adopt (typed or promoted), remove, dismiss. Unlike every other write
-/// on a recording these are open to anyone who can READ it, so the room cases below are load-bearing.</summary>
+/// <summary>The hub's manual tagging: adopt (typed or promoted), remove, dismiss. The write gate is
+/// owner-or-<see cref="RoomPermission.EditOthersRecordings"/>, so the room cases below are load-bearing:
+/// a member without that flag can read the recording but must not touch its tags.</summary>
 public class RecordingTagEndpointsTests
 {
     private static Recording AddRecording(DiarizDbContext db, Guid ownerId)
@@ -236,27 +237,86 @@ public class RecordingTagEndpointsTests
         Assert.Equal(RecordingTagStatus.Adopted, Assert.Single(db.RecordingTags.ToList()).Status);
     }
 
+    /// <summary>Shares <paramref name="rec"/> into a new shared room and puts <paramref name="member"/> in it
+    /// with exactly <paramref name="permissions"/>. The recording keeps its main placement in the owner's
+    /// personal room, as a real shared recording does.</summary>
+    private static async Task ShareWith(
+        DiarizDbContext db, Recording rec, Guid owner, Guid member, RoomPermission permissions)
+    {
+        var scope = new Diariz.Api.Services.RoomScope(db);
+        await scope.PlaceInMainRoomAsync(rec.Id, owner, sectionId: null);
+        var roomId = await scope.CreateSharedRoomAsync("Eng", null, null, null);
+        await scope.SetMemberAsync(roomId, RoomPrincipalType.User, member, permissions);
+        await scope.ShareIntoRoomAsync(rec.Id, roomId, owner, sectionId: null);
+    }
+
     [Fact]
-    public async Task ARoomMemberWhoIsNotTheOwner_CanAddRemoveAndDismiss()
+    public async Task ARoomMemberWithEditOthersRecordings_CanAddRemoveAndDismiss()
     {
         using var db = TestDb.Create();
         var owner = Guid.NewGuid();
         var member = Guid.NewGuid();
         Users.Ensure(db, owner);
         Users.Ensure(db, member);
-        var scope = new Diariz.Api.Services.RoomScope(db);
         var rec = AddRecording(db, owner);
         Tag(db, rec.Id, "suggested-word", 0.5, RecordingTagStatus.Suggested);
         await db.SaveChangesAsync();
-        await scope.PlaceInMainRoomAsync(rec.Id, owner, sectionId: null);
-        var roomId = await scope.CreateSharedRoomAsync("Eng", null, null, null);
-        await scope.SetMemberAsync(roomId, RoomPrincipalType.User, member, RoomPermission.CreateRecording);
-        await scope.ShareIntoRoomAsync(rec.Id, roomId, owner, sectionId: null);
+        await ShareWith(db, rec, owner, member,
+            RoomPermission.CreateRecording | RoomPermission.EditOthersRecordings);
 
         var ctl = Recordings.Build(db, member);
         Assert.IsType<NoContentResult>(await ctl.AddTag(rec.Id, new SetRecordingTagRequest("theirs")));
         Assert.IsType<NoContentResult>(await ctl.DismissTag(rec.Id, new SetRecordingTagRequest("suggested-word")));
         Assert.IsType<NoContentResult>(await ctl.RemoveTag(rec.Id, "theirs"));
+    }
+
+    [Fact]
+    public async Task ARoomMemberWithoutEditOthersRecordings_IsForbiddenFromAllThree()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var member = Guid.NewGuid();
+        Users.Ensure(db, owner);
+        Users.Ensure(db, member);
+        var rec = AddRecording(db, owner);
+        Tag(db, rec.Id, "theirs", 1.0, RecordingTagStatus.Adopted);
+        Tag(db, rec.Id, "suggested-word", 0.5, RecordingTagStatus.Suggested, ordinal: 1);
+        await db.SaveChangesAsync();
+        // Every permission EXCEPT EditOthersRecordings: this is about that one flag, not about membership.
+        await ShareWith(db, rec, owner, member,
+            RoomPermission.ManageRoom | RoomPermission.CreateRecording | RoomPermission.RemoveOthersRecordings |
+            RoomPermission.ShareOut | RoomPermission.ManageContents);
+
+        var ctl = Recordings.Build(db, member);
+        // 403, not 404: they can already see the recording, so hiding it would be a lie.
+        Assert.IsType<ForbidResult>(await ctl.AddTag(rec.Id, new SetRecordingTagRequest("mine")));
+        Assert.IsType<ForbidResult>(await ctl.RemoveTag(rec.Id, "theirs"));
+        Assert.IsType<ForbidResult>(await ctl.DismissTag(rec.Id, new SetRecordingTagRequest("suggested-word")));
+
+        var rows = db.RecordingTags.ToList();
+        Assert.Equal(2, rows.Count);   // nothing added, nothing removed
+        Assert.Equal(RecordingTagStatus.Adopted, rows.Single(t => t.Tag == "theirs").Status);
+        Assert.Equal(RecordingTagStatus.Suggested, rows.Single(t => t.Tag == "suggested-word").Status);
+    }
+
+    [Fact]
+    public async Task TheOwner_CanAlwaysTag_EvenWithTheRecordingInNoRoomAtAll()
+    {
+        // Ownership is its own grant, not something inferred from a room walk - the permission check only
+        // ever gates a NON-owner. A recording with no placement yet (mid-upload, or a fixture like the ones
+        // above) must still be taggable by whoever recorded it.
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        Users.Ensure(db, me);
+        var rec = AddRecording(db, me);
+        Tag(db, rec.Id, "suggested-word", 0.5, RecordingTagStatus.Suggested);
+        await db.SaveChangesAsync();
+        Assert.Empty(db.RoomRecordings.ToList());
+
+        var ctl = Recordings.Build(db, me);
+        Assert.IsType<NoContentResult>(await ctl.AddTag(rec.Id, new SetRecordingTagRequest("mine")));
+        Assert.IsType<NoContentResult>(await ctl.DismissTag(rec.Id, new SetRecordingTagRequest("suggested-word")));
+        Assert.IsType<NoContentResult>(await ctl.RemoveTag(rec.Id, "mine"));
     }
 
     [Fact]
@@ -276,5 +336,20 @@ public class RecordingTagEndpointsTests
         Assert.IsType<NotFoundResult>(await ctl.RemoveTag(rec.Id, "theirs"));
         Assert.IsType<NotFoundResult>(await ctl.DismissTag(rec.Id, new SetRecordingTagRequest("theirs")));
         Assert.Equal(RecordingTagStatus.Suggested, Assert.Single(db.RecordingTags.ToList()).Status);
+    }
+
+    [Fact]
+    public async Task ARecordingThatDoesNotExist_Gets404FromAllThree()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        Users.Ensure(db, me);
+        await db.SaveChangesAsync();
+        var absent = Guid.NewGuid();
+
+        var ctl = Recordings.Build(db, me);
+        Assert.IsType<NotFoundResult>(await ctl.AddTag(absent, new SetRecordingTagRequest("mine")));
+        Assert.IsType<NotFoundResult>(await ctl.RemoveTag(absent, "mine"));
+        Assert.IsType<NotFoundResult>(await ctl.DismissTag(absent, new SetRecordingTagRequest("mine")));
     }
 }

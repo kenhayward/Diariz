@@ -448,8 +448,8 @@ there filters the panel too; picking a meeting opens it). Re-transcribing refres
 only - tags you already adopted or dismissed are left alone. Existing libraries are **backfilled** with fresh
 suggestions automatically at startup (when a server-wide LLM is configured), and a Platform Administrator can
 trigger the backfill from **Settings → Maintenance** (e.g. for per-user-only LLM configs); a suggestion still
-has to be adopted before it joins the cloud. Anyone who can see a shared recording can tag it, not only its
-owner.
+has to be adopted before it joins the cloud. You can always tag your own meeting; tagging someone else's in a
+shared room needs the room's **Edit or regenerate other people's recordings** permission.
 - **Attach supporting documents** to a transcript — or **directly to a folder** — upload files (PDFs, Office
 docs, emails, calendar invites, images, …) or add URLs, then rename, open, and remove them from an
 "Attachments (N)" button (or drag files onto the page). Files are stored in object storage and count toward

@@ -476,9 +476,17 @@ large folders silently rolled up only their first ~18 meetings. The old per-work
   `POST /api/recordings/{id}/tags/dismiss` (reject a suggestion; the row becomes a `Dismissed` tombstone so
   the same word is not re-suggested on that recording; 404 when there is no such suggestion). An adopted tag
   always carries `Weight = 1.0`, so the cloud's summed weight equals a plain count of recordings carrying it.
-  **These three are gated by `IRoomScope.CanReadRecordingAsync`, not ownership** - the first mutating
-  endpoints in the codebase open to any room member who can merely read the recording, not just its owner;
-  every other write on a recording stays owner-only. The web reads **`GET /api/tags`**: owner-scoped,
+  **These three are gated by `IRoomScope.AuthorizeRecordingPermissionAsync(..., RoomPermission.EditOthersRecordings)`**
+  - the recording's owner may always tag it (ownership is its own grant, so a recording with no placement yet
+  is still taggable by its recorder), and a non-owner needs `EditOthersRecordings` in a room the recording is
+  placed in. Bare membership is deliberately NOT enough: these are writes on someone else's recording, and a
+  member granted `RoomPermission.None` could otherwise delete every adopted tag on a colleague's meeting.
+  Status codes follow the folder gates' NotFound-before-Forbidden order - 404 for someone who cannot see the
+  recording at all, 403 for a member who can see it but lacks the flag. These are the first endpoints to
+  enforce `EditOthersRecordings`, which until now was granted by default to new shared-room members and read
+  by nothing. Note that a member's tag does not land in THEIR cloud: `GET /api/tags` with no `roomId` scopes by
+  `Recording.UserId`, so tagging a shared recording feeds the owner's personal cloud plus the room-scoped
+  cloud (`?roomId=`) of any room it sits in. The web reads **`GET /api/tags`**: owner-scoped,
   case-insensitive aggregation over **`Adopted`** rows only (count + summed weight + carrying recording ids) -
   suggestions and dismissals never reach the cloud or search - that the left panel's **Tags tab** renders as a
   flat weighted cloud (log-scaled font sizes, single-select filter, an expanded 80% modal sharing the same

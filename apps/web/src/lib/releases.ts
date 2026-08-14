@@ -75,11 +75,12 @@ export const RELEASES: Release[] = [
       "**This release demotes every tag you already have to a suggestion** - none of them carry over " +
       "as adopted, so the tag cloud and tag search start empty on your existing library and rebuild " +
       "only as you adopt tags going forward. Re-transcribing a meeting still refreshes its automatic " +
-      "suggestions, but never touches a tag you have already adopted or dismissed. On a shared " +
-      "recording, anyone who can see it can tag it, not only its owner.",
+      "suggestions, but never touches a tag you have already adopted or dismissed. You can always tag " +
+      "your own meeting; tagging someone else's in a shared room needs that room's \"Edit or regenerate " +
+      "other people's recordings\" permission, which new members are given by default.",
     added: [
       "A Tags pill on a meeting's summary card - type your own tags, and accept or dismiss the automatically suggested ones.",
-      "Tagging a shared recording no longer requires ownership - any room member who can see it can add, remove, or dismiss its tags.",
+      "Tagging a shared recording no longer requires ownership - a room member with the \"Edit or regenerate other people's recordings\" permission can add, remove, or dismiss its tags too.",
     ],
     changed: [
       "Every previously auto-applied tag is demoted to a suggestion; the tag cloud and tag search start empty and fill in only as tags are adopted.",
