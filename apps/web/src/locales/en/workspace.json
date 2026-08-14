@@ -513,6 +513,7 @@
   "tagsSuggestedAdd": "Add this tag",
   "tagsSuggestedDismiss": "Never suggest this",
   "tagsSuggestedDone": "All suggestions dealt with.",
+  "errSaveTag": "Could not save the tag change.",
   "selectActions": "Select actions",
   "markComplete": "Mark complete",
   "markIncomplete": "Mark incomplete",

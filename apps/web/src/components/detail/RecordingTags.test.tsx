@@ -11,6 +11,9 @@ vi.mock("../../lib/api", () => ({
     removeRecordingTag: vi.fn().mockResolvedValue(undefined),
     dismissRecordingTag: vi.fn().mockResolvedValue(undefined),
   },
+  // A rejected mutation reports through this - the container calls apiErrorMessage(e, fallback) and pushes
+  // the result to the shared status bar. The fallback is all this suite needs back.
+  apiErrorMessage: (_e: unknown, fallback: string) => fallback,
 }));
 
 import { api } from "../../lib/api";
@@ -96,5 +99,39 @@ describe("RecordingTags", () => {
     await waitFor(() =>
       expect(invalidate).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["tags"] })),
     );
+  });
+
+  it("clears the optimistic chip when the add request fails, rather than leaving it stuck", async () => {
+    vi.mocked(api.addRecordingTag).mockRejectedValueOnce(new Error("boom"));
+    renderTags({ tags: [] });
+    await userEvent.click(screen.getByRole("button", { name: "Tags" }));
+
+    await userEvent.type(screen.getByLabelText("Add a tag"), "licensing ");
+
+    // The server never applied it, so nothing about `tags`/`suggested` ever changes - only the mutation's
+    // own failure can clear the overlay. Without that, this never resolves and the test times out.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Tags" }).textContent).toContain("0"));
+  });
+
+  it("lets fresh server tags win over the optimistic overlay once they actually differ", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { rerender } = render(
+      <QueryClientProvider client={qc}>
+        <RecordingTags recordingId="rec-1" tags={[]} suggested={[]} />
+      </QueryClientProvider>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Tags" }));
+    await userEvent.type(screen.getByLabelText("Add a tag"), "licensing ");
+    expect(screen.getByRole("button", { name: "Tags" }).textContent).toContain("1");
+
+    // Simulates the detail query actually refetching with the server's own (now-updated) lists - the
+    // overlay must defer to this, not keep showing its own guess forever.
+    rerender(
+      <QueryClientProvider client={qc}>
+        <RecordingTags recordingId="rec-1" tags={["licensing", "extra"]} suggested={[]} />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Tags" }).textContent).toContain("2"));
   });
 });

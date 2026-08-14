@@ -513,6 +513,7 @@
   "tagsSuggestedAdd": "Añadir esta etiqueta",
   "tagsSuggestedDismiss": "No volver a sugerir esto",
   "tagsSuggestedDone": "Todas las sugerencias resueltas.",
+  "errSaveTag": "No se pudo guardar el cambio de etiqueta.",
   "selectActions": "Seleccionar acciones",
   "markComplete": "Marcar completada",
   "markIncomplete": "Marcar pendiente",

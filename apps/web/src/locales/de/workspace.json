@@ -513,6 +513,7 @@
   "tagsSuggestedAdd": "Diesen Tag hinzufügen",
   "tagsSuggestedDismiss": "Nie vorschlagen",
   "tagsSuggestedDone": "Alle Vorschläge bearbeitet.",
+  "errSaveTag": "Die Tag-Änderung konnte nicht gespeichert werden.",
   "selectActions": "Aktionen auswählen",
   "markComplete": "Als erledigt markieren",
   "markIncomplete": "Als offen markieren",

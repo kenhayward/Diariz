@@ -513,6 +513,7 @@
   "tagsSuggestedAdd": "Ajouter ce tag",
   "tagsSuggestedDismiss": "Ne plus jamais suggérer",
   "tagsSuggestedDone": "Toutes les suggestions ont été traitées.",
+  "errSaveTag": "Impossible d'enregistrer la modification du tag.",
   "selectActions": "Sélectionner des actions",
   "markComplete": "Marquer terminée",
   "markIncomplete": "Marquer à faire",

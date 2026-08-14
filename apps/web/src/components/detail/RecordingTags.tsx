@@ -1,6 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { api } from "../../lib/api";
+import { useTranslation } from "react-i18next";
+import { api, apiErrorMessage } from "../../lib/api";
+import { useStatus } from "../../lib/status";
 import TagsPill from "./TagsPill";
 import TagsPopover from "./TagsPopover";
 
@@ -20,19 +22,23 @@ export default function RecordingTags({
   tags: string[];
   suggested: string[];
 }) {
+  const { t } = useTranslation(["workspace"]);
   const qc = useQueryClient();
+  const { setStatus } = useStatus();
   const [open, setOpen] = useState(false);
   /// Optimistic overlay, cleared whenever fresh props arrive.
   const [pending, setPending] = useState<{ tags: string[]; suggested: string[] } | null>(null);
 
-  /// The overlay clears when the parent hands back genuinely new `tags`/`suggested` content (i.e. the
+  /// The overlay clears once the parent hands back genuinely new `tags`/`suggested` content (i.e. the
   /// detail query actually refetched) - not merely once a mutation's promise settles, and not merely on a
-  /// new array reference. A mutation can settle (success or failure) well before the invalidated query
-  /// refetches, and clearing on settle alone would flash an added chip back out, or - on a failed request -
-  /// leave a stale one in place until some later, unrelated refetch happened to correct it. Comparing by
-  /// content rather than reference matters too: `HeroSummaryCard` passes `rec.tags ?? []`, and that `?? []`
-  /// mints a fresh array on every one of its re-renders whenever a recording has no tags yet - a
-  /// reference-based dependency would clear the overlay on any unrelated re-render.
+  /// new array reference. A mutation can settle (success) well before the invalidated query refetches, and
+  /// clearing on settle alone would flash an added chip back out. Comparing by content rather than
+  /// reference matters too: `HeroSummaryCard` passes `rec.tags ?? []`, and that `?? []` mints a fresh array
+  /// on every one of its re-renders whenever a recording has no tags yet - a reference-based dependency
+  /// would clear the overlay on any unrelated re-render.
+  ///
+  /// This only handles the success path. A rejected mutation never changes the server's lists (nothing was
+  /// applied), so this effect alone would never fire for a failure - see `onFail` below for that half.
   const tagsKey = tags.join("|");
   const suggestedKey = suggested.join("|");
   useEffect(() => {
@@ -52,17 +58,30 @@ export default function RecordingTags({
     ]);
   }
 
+  /// The failure half of clearing the overlay. A rejected request leaves the server's `tags`/`suggested`
+  /// exactly as they were, so the content-keyed effect above never sees a change and would otherwise leave
+  /// the optimistic chip stuck for the rest of the session. Clear it directly here, and surface the failure
+  /// the same way other components with no dedicated error UI of their own report a failed mutation
+  /// (`Recorder.tsx`, `lib/calendarSync.ts`): push it to the shared status bar via `apiErrorMessage`.
+  function onFail(e: unknown, fallback: string) {
+    setPending(null);
+    setStatus(apiErrorMessage(e, fallback), "error");
+  }
+
   const add = useMutation({
     mutationFn: (tag: string) => api.addRecordingTag(recordingId, tag),
     onSettled: refresh,
+    onError: (e) => onFail(e, t("workspace:errSaveTag")),
   });
   const remove = useMutation({
     mutationFn: (tag: string) => api.removeRecordingTag(recordingId, tag),
     onSettled: refresh,
+    onError: (e) => onFail(e, t("workspace:errSaveTag")),
   });
   const dismiss = useMutation({
     mutationFn: (tag: string) => api.dismissRecordingTag(recordingId, tag),
     onSettled: refresh,
+    onError: (e) => onFail(e, t("workspace:errSaveTag")),
   });
 
   const lower = (t: string) => t.toLowerCase();
