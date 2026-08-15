@@ -613,7 +613,12 @@ public record UserSettingsDto(
     /// <summary>Minutes to keep recording past the invite's end time.</summary>
     int CalendarAutoStopAfterMinutes = UserSettings.DefaultCalendarAutoStopAfterMinutes,
     /// <summary>Seconds of continuous silence that also ends such a recording.</summary>
-    int CalendarSilenceStopSeconds = UserSettings.DefaultCalendarSilenceStopSeconds);
+    int CalendarSilenceStopSeconds = UserSettings.DefaultCalendarSilenceStopSeconds,
+    /// <summary>The user's own per-request LLM timeout in seconds, or null when they inherit.</summary>
+    int? LlmTimeoutSeconds = null,
+    /// <summary>What applies when they have no override: the platform-wide admin setting, else the server
+    /// option. Shown as the field's placeholder.</summary>
+    int DefaultLlmTimeoutSeconds = PlatformSettings.DefaultLlmTimeoutSeconds);
 
 /// <summary>A chat tool's state for the settings panel: whether it is on for this user
 /// (<paramref name="Enabled"/>) and its server-side default.</summary>
@@ -627,7 +632,9 @@ public record ChatToolDto(string Name, string Title, string Description, bool En
 /// ToolsEnabled: null leaves the master switch unchanged; a value sets the per-user override.
 /// ToolOverrides: null leaves the per-tool overrides unchanged; a map (possibly empty) replaces them.
 /// ReasoningEnabled: null leaves the override unchanged; a value sets it.
-/// PlacementMode: null leaves the placement unchanged; a value sets it.</summary>
+/// PlacementMode: null leaves the placement unchanged; a value sets it.
+/// LlmTimeoutSeconds: null leaves it unchanged; 0 clears the override; a value of 5 or more sets it; 1-4 is
+/// rejected rather than coerced.</summary>
 public record UpdateUserSettingsRequest(
     string? ApiBase, string? Model, string? ApiKey, int? ContextWindow = null,
     bool? ToolsEnabled = null, IReadOnlyDictionary<string, bool>? ToolOverrides = null,
@@ -646,7 +653,10 @@ public record UpdateUserSettingsRequest(
     int? CalendarAutoStopAfterMinutes = null,
     /// <summary>Seconds of continuous silence that ends such a recording. Null leaves it unchanged; a
     /// non-positive value resets to the default.</summary>
-    int? CalendarSilenceStopSeconds = null);
+    int? CalendarSilenceStopSeconds = null,
+    /// <summary>Per-request LLM timeout in seconds. Null leaves it unchanged; 0 clears the override;
+    /// a value of 5 or more sets it. 1-4 is rejected rather than coerced.</summary>
+    int? LlmTimeoutSeconds = null);
 
 // ---- MCP access tokens ----
 /// <summary>A stored MCP token, listed in Preferences. The secret is never returned — only a short display

@@ -129,4 +129,21 @@ public class UserSettingsIntegrationTests(ContainersFixture fx)
             Assert.Null(stored.RecordingPlacementSectionId);
         }
     }
+
+    /// <summary>A freshly-inserted row (raw SQL bypasses the model default) has no timeout override - the
+    /// column default is NULL, so the user inherits the platform/server value. The in-memory provider can't
+    /// prove a real column default, hence real Postgres here.</summary>
+    [Fact]
+    public async Task LlmTimeoutSeconds_DefaultsToNull_OnAFreshRow()
+    {
+        var userId = await SeedUser();
+
+        await using var db = fx.CreateDbContext();
+        await db.Database.ExecuteSqlRawAsync(
+            """INSERT INTO "UserSettings" ("UserId") VALUES ({0})""", userId);
+        db.ChangeTracker.Clear();
+
+        var stored = await db.UserSettings.SingleAsync(s => s.UserId == userId);
+        Assert.Null(stored.LlmTimeoutSeconds);
+    }
 }

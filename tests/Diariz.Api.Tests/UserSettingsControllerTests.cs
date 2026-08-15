@@ -4,6 +4,7 @@ using Diariz.Api.Controllers;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
+using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -444,5 +445,55 @@ public class UserSettingsControllerTests
         var dto = await Build(db, userId).Get();
         Assert.Equal(3, dto.CalendarAutoStopAfterMinutes);
         Assert.Equal(30, dto.CalendarSilenceStopSeconds);
+    }
+
+    // ---- LLM timeout override ----
+
+    [Fact]
+    public async Task Get_ReturnsTimeoutOverrideAndTheInheritedDefault()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        db.UserSettings.Add(new UserSettings { UserId = userId, LlmTimeoutSeconds = 600 });
+        db.PlatformSettings.Add(new PlatformSettings { Id = PlatformSettings.SingletonId, LlmTimeoutSeconds = 300 });
+        await db.SaveChangesAsync();
+
+        var dto = await Build(db, userId).Get();
+
+        Assert.Equal(600, dto.LlmTimeoutSeconds);
+        // The companion is what applies when the user clears their own - the dialog shows it as a placeholder.
+        Assert.Equal(300, dto.DefaultLlmTimeoutSeconds);
+    }
+
+    [Fact]
+    public async Task Put_SetsClearsAndLeavesTheTimeoutUnchanged()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var c = Build(db, userId);
+
+        await c.Update(new UpdateUserSettingsRequest(null, null, null, LlmTimeoutSeconds: 600));
+        Assert.Equal(600, (await db.UserSettings.FindAsync(userId))!.LlmTimeoutSeconds);
+
+        // Absent means "another tab is saving, do not touch my field".
+        await c.Update(new UpdateUserSettingsRequest(null, null, null));
+        Assert.Equal(600, (await db.UserSettings.FindAsync(userId))!.LlmTimeoutSeconds);
+
+        // 0 clears the override, falling back to the platform/server value.
+        await c.Update(new UpdateUserSettingsRequest(null, null, null, LlmTimeoutSeconds: 0));
+        Assert.Null((await db.UserSettings.FindAsync(userId))!.LlmTimeoutSeconds);
+    }
+
+    [Fact]
+    public async Task Put_RejectsATimeoutBelowTheFloor()
+    {
+        using var db = TestDb.Create();
+        var c = Build(db, Guid.NewGuid());
+
+        // Mirrors the admin field's floor (PlatformSettingsController): 1-4s is not a working timeout,
+        // and silently coercing it would hide the mistake.
+        var result = await c.Update(new UpdateUserSettingsRequest(null, null, null, LlmTimeoutSeconds: 3));
+
+        Assert.IsType<BadRequestObjectResult>(result);
     }
 }
