@@ -165,13 +165,32 @@ public class ChatStreamClient : IChatStreamClient
         if (!string.IsNullOrEmpty(config.ApiKey))
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", config.ApiKey);
 
+        // The same allowance covers the request/header phase - DNS, connect, TLS, sending the request and
+        // waiting for the first response header - so "time until we hear anything" and "time between
+        // chunks" are governed by one setting. Nothing else bounds it: HttpClient.Timeout is Infinite on
+        // every LLM client (see Program.cs) and SocketsHttpHandler.ConnectTimeout defaults to Infinite, so
+        // without this an upstream that accepts the connection and never answers hangs until the caller's
+        // token trips - only RequestAborted for browser chat and title generation. Disposing the source on
+        // the way out stops the timer, so the streaming phase that follows is left to the read loop's own
+        // per-line allowance rather than inheriting a deadline for the whole call.
+        using var headers = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        headers.CancelAfter(TimeSpan.FromSeconds(config.TimeoutSeconds));
+
         try
         {
-            return await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+            return await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, headers.Token);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             throw;
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // Our own allowance, not the caller's Stop (which the clause above rethrows bare). Without this
+            // clause the catch below would surface the framework's "A task was canceled.", which tells the
+            // user nothing about which setting to raise.
+            throw new ChatStreamException(
+                $"The model did not respond within {config.TimeoutSeconds}s, so the request was stopped.");
         }
         catch (Exception ex)
         {

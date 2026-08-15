@@ -45,11 +45,13 @@ public class StreamReclaimerTests
     public void Idle_threshold_clears_the_longest_job_the_api_can_legitimately_run()
     {
         // An in-flight job's message looks idle for as long as it takes. If the threshold were shorter
-        // than a legitimate run, a healthy worker's job would be stolen and duplicated. The API's LLM
-        // calls are capped by PlatformSettings.LlmTimeoutSeconds (default 120s), so 10 minutes is a wide
-        // margin. (The Python worker cannot rely on a margin - transcription runs for tens of minutes -
-        // so it refreshes its claim while working instead.)
-        Assert.True(StreamReclaimer.DefaultMinIdle >= TimeSpan.FromMinutes(5));
+        // than a legitimate run, a healthy worker's job would be stolen and duplicated. The length of a
+        // legitimate run is set by the LLM timeout, which is per-user (UserSettings.LlmTimeoutSeconds ??
+        // PlatformSettings.LlmTimeoutSeconds ?? the server option) - so it is NOT bounded by the platform
+        // default, and the floor here has to clear a slow-local-model override (900s is the case the
+        // setting exists for), not the 120s default. (The Python worker cannot rely on a margin -
+        // transcription runs for tens of minutes - so it refreshes its claim while working instead.)
+        Assert.True(StreamReclaimer.DefaultMinIdle >= TimeSpan.FromMinutes(15));
         Assert.Equal(StreamReclaimer.DefaultMinIdle, new StreamReclaimer().MinIdle);
     }
 }

@@ -177,6 +177,65 @@ public class ChatStreamClientTests
         Assert.Equal(5, seen);
     }
 
+    // ---- Request/header timeout ----
+    // The same allowance also has to cover "time until we hear anything at all". HttpClient's own 100s cap
+    // is gone and SocketsHttpHandler.ConnectTimeout is Infinite, so without this an upstream that accepts
+    // the connection and never answers hangs the call until the caller's token trips - which for browser
+    // chat and title generation is only RequestAborted.
+
+    [Fact]
+    public async Task StreamChunks_Throws_WhenTheUpstreamNeverSendsHeaders()
+    {
+        var client = new ChatStreamClient(new HttpClient(new StalledHeadersHttpMessageHandler())
+        {
+            Timeout = System.Threading.Timeout.InfiniteTimeSpan,
+        });
+
+        var ex = await Assert.ThrowsAsync<ChatStreamException>(async () =>
+        {
+            await foreach (var _ in client.StreamChunksAsync(Config(1), [], null)) { }
+        });
+
+        // Pinned whole, like the inactivity messages: a substring check would not hold the seconds to the
+        // configured value, and the generic transport catch would otherwise surface "A task was canceled."
+        Assert.Equal("The model did not respond within 1s, so the request was stopped.", ex.Message);
+    }
+
+    [Fact]
+    public async Task Stream_Throws_WhenTheUpstreamNeverSendsHeaders()
+    {
+        // A different value from the StreamChunksAsync test above, so a hardcoded number in the message
+        // cannot pass both.
+        var client = new ChatStreamClient(new HttpClient(new StalledHeadersHttpMessageHandler())
+        {
+            Timeout = System.Threading.Timeout.InfiniteTimeSpan,
+        });
+
+        var ex = await Assert.ThrowsAsync<ChatStreamException>(async () =>
+        {
+            await foreach (var _ in client.StreamAsync(Config(2), [new ChatMessage("user", "hi")])) { }
+        });
+
+        Assert.Equal("The model did not respond within 2s, so the request was stopped.", ex.Message);
+    }
+
+    [Fact]
+    public async Task StreamChunks_StaysQuiet_WhenTheCallerCancelsBeforeHeaders()
+    {
+        // Same rule as the read loop: the caller's own Stop must stay a bare cancellation, not become a
+        // spurious timeout error. Guards the `when (!ct.IsCancellationRequested)` filter on the new clause.
+        var client = new ChatStreamClient(new HttpClient(new StalledHeadersHttpMessageHandler())
+        {
+            Timeout = System.Threading.Timeout.InfiniteTimeSpan,
+        });
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var _ in client.StreamChunksAsync(Config(60), [], null, cts.Token)) { }
+        });
+    }
+
     [Fact]
     public async Task StreamChunks_StaysQuiet_WhenTheCallerCancels()
     {

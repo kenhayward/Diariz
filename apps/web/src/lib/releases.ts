@@ -75,6 +75,7 @@ export const RELEASES: Release[] = [
       "Chat replies, chat tool calls and Formula runs were capped at 100 seconds regardless of the configured LLM timeout.",
       "Chat streaming had no timeout of its own, so a model that went silent left the reply hanging.",
       "The bundled web server cut any API request at 60 seconds, below the app's own timeout.",
+      "An endpoint that accepted the connection and then never answered could leave a chat reply waiting indefinitely. The wait for a first response is now covered by the same timeout as the gaps within a reply.",
     ],
   },
   {

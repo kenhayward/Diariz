@@ -48,6 +48,10 @@ It is not a cap on how long a whole reply is allowed to take. It is an idle allo
 each piece of a reply as it streams in - as long as the model keeps producing output, however slowly,
 the reply keeps going. Only a gap with nothing at all coming through trips it.
 
+Very large values have a limit outside Diariz: if a reverse proxy sits in front of the server, its own read
+timeout still applies (the bundled one allows an hour), so a request can be cut off there no matter what you
+set here - raise the proxy's read timeout to match if you need longer.
+
 One consequence of that: the allowance also has to cover the time before the model produces its first
 piece of output at all, including a cold model that has to load before it can answer. If your timeout is
 shorter than your model's worst-case load time, a cold start will look exactly like a stuck reply and get

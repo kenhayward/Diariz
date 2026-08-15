@@ -122,6 +122,27 @@ public sealed class SlowSseHttpMessageHandler(IEnumerable<(TimeSpan Delay, strin
     }
 }
 
+/// <summary>An upstream that accepts the request and then never answers: it stalls before returning the
+/// response at all, so nothing of the SSE body ever exists. Models the failure the read loop's per-line
+/// allowance cannot see - the request/header phase (connect, TLS, request send, time-to-first-header) -
+/// which is why it needs its own handler rather than a <see cref="SlowSseHttpMessageHandler"/> script.
+/// Honours the send's CancellationToken, which is what the client's header allowance flows into.</summary>
+public sealed class StalledHeadersHttpMessageHandler(TimeSpan? stall = null) : HttpMessageHandler
+{
+    /// <summary>Long enough that a working allowance of a second or two always trips first, short enough
+/// that the test still finishes if it does not.</summary>
+    private readonly TimeSpan _stall = stall ?? TimeSpan.FromSeconds(20);
+
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+    {
+        await Task.Delay(_stall, ct);
+        return new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("data: [DONE]\n", Encoding.UTF8, "text/event-stream"),
+        };
+    }
+}
+
 /// <summary>Test double for <see cref="IPlatformSettingsService"/> that returns the seeded singleton
 /// <see cref="PlatformSettings"/> row from the given <see cref="DiarizDbContext"/>, rather than lazily
 /// creating one - lets a test control <c>ApiAccessEnabled</c> (and other flags) up front.</summary>

@@ -285,9 +285,11 @@ builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<ISpeakerIdentifier, SpeakerIdentifier>();
 
 // ---- Summarisation (OpenAI-compatible endpoint + background consumer) ----
-// Every LLM client disables HttpClient's own 100s timeout so the per-request timeout (the admin-set
-// PlatformSettings.LlmTimeoutSeconds, applied via a linked CTS in each client) is the single authority -
-// otherwise a configured timeout above 100s was silently capped and slow local models timed out.
+// Every LLM client disables HttpClient's own 100s timeout so the per-request timeout is the authority -
+// otherwise a configured timeout above 100s was silently capped and slow local models timed out. That
+// timeout is resolved per call (UserSettings.LlmTimeoutSeconds ?? PlatformSettings.LlmTimeoutSeconds ??
+// the server option) and applied via a linked CTS in each client, so a user's override really does govern
+// the call. Above the app, the proxy must allow at least as long - see apps/web/nginx.conf.
 static void NoHttpTimeout(HttpClient c) => c.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
 
 // Every LLM client goes through AddLlmClient below rather than AddHttpClient directly, so LlmTelemetryHandler

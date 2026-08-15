@@ -168,7 +168,7 @@ docker compose exec redis redis-cli XPENDING embedding-jobs embedders
 ```
 
 A non-zero count is a job in flight. Since 0.174.0 that is a **delay, not a loss** - it is reclaimed once
-its message has been idle ten minutes - so it is a reason to pause, not a reason not to deploy.
+its message has been idle half an hour - so it is a reason to pause, not a reason not to deploy.
 
 Treat `postgres`, `redis` and `minio` as maintenance-window work.
 
@@ -177,10 +177,14 @@ Treat `postgres`, `redis` and `minio` as maintenance-window work.
 Every stream consumer acks in a `finally`, which handles a job that *throws* but not one whose process is
 *killed*. The reclaim closes that, and the interesting part is the threshold:
 
-- **API workers** use `StreamReclaimer` with a **10-minute** idle threshold, checked at most once a
-  minute per stream. Ten minutes clears the longest legitimate run, since LLM calls are bounded by
-  `PlatformSettings.LlmTimeoutSeconds` (default 120s). A shorter threshold would let one instance steal a
-  job another was still working on and run it twice.
+- **API workers** use `StreamReclaimer` with a **30-minute** idle threshold, checked at most once a
+  minute per stream. It has to clear the longest legitimate run or one instance would steal a job another
+  was still working on and run it twice (a duplicated LLM call and charge). That length is set by the LLM
+  timeout, which is resolved per call as `UserSettings.LlmTimeoutSeconds` ?? `PlatformSettings.LlmTimeoutSeconds`
+  ?? the server option - so it is **not** capped by the platform default, and any user can raise their own.
+  Half an hour clears the slow-local-model values that setting exists for (900s and the like) with margin;
+  a user who sets a timeout beyond it can still see a duplicate delivery, bounded by the redelivery cap
+  below. The threshold is a compile-time constant (the constructor's overrides are for tests only).
 - **The Python worker cannot rely on a margin** - a long transcription legitimately runs for tens of
   minutes, during which its message looks idle. It therefore **refreshes its own claim** every 60s while
   working (`worker.claim_keepalive`), so "idle" genuinely means "nobody is on it", and a 10-minute
@@ -375,10 +379,16 @@ streaming chat client (`ChatStreamClient`) now applies the resolved timeout itse
 allowance rather than a cap on the whole call: a linked `CancellationTokenSource` is reset with
 `CancelAfter(TimeoutSeconds)` after every line read from the SSE stream, so a reply that keeps producing
 output can run indefinitely, and only a gap with no output at all trips it - throwing `ChatStreamException` so
-`ChatController` surfaces a visible error frame instead of the stream just dying silently. Because the allowance
-starts before the first token, it also covers **time-to-first-token**: a cold model that has to load first
+`ChatController` surfaces a visible error frame instead of the stream just dying silently. The **request/header
+phase** (DNS, connect, TLS, sending the request, waiting for the first response header) gets the same allowance
+from its own linked CTS in `SendRawAsync`, because nothing else bounds it once `HttpClient.Timeout` is infinite
+(`SocketsHttpHandler.ConnectTimeout` defaults to `Infinite`): an upstream that accepts the connection and never
+answers would otherwise hang until the caller's token trips, which for browser chat and title generation is only
+`RequestAborted`. So the allowance also covers **time-to-first-token**: a cold model that has to load first
 produces nothing until it's ready, so the configured value must exceed the model's worst-case load time or a
-cold start reads as a timeout.
+cold start reads as a timeout. **A proxy in front still caps it**: the bundled nginx allows `1h` on `/api/`
+(`proxy_read_timeout`), so a resolved timeout above 3600s is cut there, and an outer proxy needs the same
+treatment.
 
 **One context budget for every LLM call.** The resolved config also carries **`ContextCharBudget`** - the single
 upper bound on injected context shared by *every* call site (recording summary, actions, tags, minutes, the folder
