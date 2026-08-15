@@ -65,7 +65,26 @@ public class ChatStreamClient : IChatStreamClient
             using var reader = new StreamReader(stream, Encoding.UTF8);
             while (true)
             {
-                var line = await reader.ReadLineAsync(ct);
+                // The timeout is an INACTIVITY allowance, reset per line, not a cap on the whole call: a
+                // slow local model streaming a long answer legitimately runs for minutes. Keep-alive
+                // comments and blank separators count as activity - they are proof the upstream is alive.
+                string? line;
+                try
+                {
+                    using var idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    idle.CancelAfter(TimeSpan.FromSeconds(config.TimeoutSeconds));
+                    line = await reader.ReadLineAsync(idle.Token);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    // Must be a ChatStreamException, not the bare cancellation: ChatController catches
+                    // OperationCanceledException unconditionally (the Stop button), so a bare one would end
+                    // the stream with no `done` and no `error` frame - a silent truncation the browser
+                    // renders as a successful short answer. ChatStreamException is the only exception it
+                    // turns into a visible error frame.
+                    throw new ChatStreamException(
+                        $"The model sent nothing for {config.TimeoutSeconds}s, so the response was stopped.");
+                }
                 if (line is null) break;
                 var token = ParseStreamLine(line, out var done);
                 if (done) yield break;
@@ -101,7 +120,19 @@ public class ChatStreamClient : IChatStreamClient
             using var reader = new StreamReader(stream, Encoding.UTF8);
             while (true)
             {
-                var line = await reader.ReadLineAsync(ct);
+                // Inactivity allowance, reset per line - see the matching loop in StreamAsync.
+                string? line;
+                try
+                {
+                    using var idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    idle.CancelAfter(TimeSpan.FromSeconds(config.TimeoutSeconds));
+                    line = await reader.ReadLineAsync(idle.Token);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    throw new ChatStreamException(
+                        $"The model sent nothing for {config.TimeoutSeconds}s, so the response was stopped.");
+                }
                 if (line is null) break;
                 var delta = ParseStreamChunk(line, out var done);
                 if (done) yield break;

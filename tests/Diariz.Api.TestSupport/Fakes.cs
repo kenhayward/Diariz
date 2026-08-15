@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
@@ -56,6 +57,68 @@ public sealed class QueuedHttpMessageHandler : HttpMessageHandler
         Requests.Add(request.Content is null ? "" : await request.Content.ReadAsStringAsync(ct));
         if (_responses.Count > 0) _last = _responses.Dequeue();
         return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(_last) };
+    }
+}
+
+/// <summary>An SSE response whose lines arrive on a script of delays, so a test can exercise the read loop's
+/// <i>inactivity</i> timeout: the gap between lines is what matters, not the total duration. A line whose
+/// delay never elapses (<see cref="TimeSpan.MaxValue"/>) models an upstream that has gone silent without
+/// disconnecting.</summary>
+public sealed class SlowSseHttpMessageHandler(IEnumerable<(TimeSpan Delay, string Line)> script)
+    : HttpMessageHandler
+{
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+        Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StreamContent(new ScriptedStream(script.GetEnumerator()))
+            {
+                Headers = { ContentType = new MediaTypeHeaderValue("text/event-stream") },
+            },
+        });
+
+    /// <summary>Yields each scripted line after its delay. Honours the read's CancellationToken, which is
+    /// what the client's per-line idle token flows into.</summary>
+    private sealed class ScriptedStream(IEnumerator<(TimeSpan Delay, string Line)> script) : Stream
+    {
+        private byte[] _pending = [];
+        private int _offset;
+
+        public override async ValueTask<int> ReadAsync(
+            Memory<byte> buffer, CancellationToken ct = default)
+        {
+            if (_offset >= _pending.Length)
+            {
+                if (!script.MoveNext()) return 0; // end of stream
+                var (delay, line) = script.Current;
+                await Task.Delay(delay, ct);
+                _pending = Encoding.UTF8.GetBytes(line + "\n");
+                _offset = 0;
+            }
+            var n = Math.Min(buffer.Length, _pending.Length - _offset);
+            _pending.AsSpan(_offset, n).CopyTo(buffer.Span);
+            _offset += n;
+            return n;
+        }
+
+        /// <summary>The base implementation of this overload falls back to the synchronous <see cref="Read"/>
+        /// on a thread-pool thread and drops the token, so a stalled read would block for the full scripted
+        /// delay instead of cancelling. Delegate to the <see cref="Memory{T}"/> overload to keep the idle
+        /// token effective whichever overload the reader picks.</summary>
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken ct) =>
+            ReadAsync(buffer.AsMemory(offset, count), ct).AsTask();
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            ReadAsync(buffer.AsMemory(offset, count)).AsTask().GetAwaiter().GetResult();
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }
 

@@ -98,4 +98,73 @@ public class ChatStreamClientTests
             await foreach (var _ in client.StreamAsync(cfg, [new ChatMessage("user", "hi")], default)) { }
         });
     }
+
+    // ---- Inactivity timeout ----
+    // The allowance is the gap BETWEEN chunks, not the total call. A slow local model streaming a long
+    // answer legitimately runs for minutes; a total-duration cap would abort exactly the case the
+    // configured timeout exists to support.
+
+    private static SummarizationRequestConfig Config(int timeoutSeconds) =>
+        new("http://llm.test/v1", "sk-x", "m", timeoutSeconds);
+
+    [Fact]
+    public async Task StreamChunks_Throws_WhenTheUpstreamGoesSilent()
+    {
+        var script = new[]
+        {
+            (TimeSpan.Zero, "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}"),
+            (TimeSpan.FromSeconds(30), "data: [DONE]"), // never arrives within the 1s allowance
+        };
+        var client = new ChatStreamClient(new HttpClient(new SlowSseHttpMessageHandler(script))
+        {
+            Timeout = System.Threading.Timeout.InfiniteTimeSpan,
+        });
+
+        var ex = await Assert.ThrowsAsync<ChatStreamException>(async () =>
+        {
+            await foreach (var _ in client.StreamChunksAsync(Config(1), [], null)) { }
+        });
+
+        Assert.Contains("1", ex.Message);
+    }
+
+    [Fact]
+    public async Task StreamChunks_Completes_WhenChunksAreSlowButKeepArriving()
+    {
+        // Six 200ms gaps = 1.2s total, longer than the 1s timeout, but no single gap reaches it.
+        // This is the test that fails if the idle timer is ever "simplified" into a total-duration cap.
+        var script = Enumerable.Range(0, 5)
+            .Select(i => (TimeSpan.FromMilliseconds(200),
+                $"data: {{\"choices\":[{{\"delta\":{{\"content\":\"{i}\"}}}}]}}"))
+            .Append((TimeSpan.FromMilliseconds(200), "data: [DONE]"))
+            .ToArray();
+        var client = new ChatStreamClient(new HttpClient(new SlowSseHttpMessageHandler(script))
+        {
+            Timeout = System.Threading.Timeout.InfiniteTimeSpan,
+        });
+
+        var seen = 0;
+        await foreach (var _ in client.StreamChunksAsync(Config(1), [], null)) seen++;
+
+        Assert.Equal(5, seen);
+    }
+
+    [Fact]
+    public async Task StreamChunks_StaysQuiet_WhenTheCallerCancels()
+    {
+        // A user pressing Stop must not be reported as a timeout: ChatController catches
+        // OperationCanceledException silently, and turning it into a ChatStreamException would show
+        // the user a spurious error for their own action.
+        var script = new[] { (TimeSpan.FromSeconds(30), "data: [DONE]") };
+        var client = new ChatStreamClient(new HttpClient(new SlowSseHttpMessageHandler(script))
+        {
+            Timeout = System.Threading.Timeout.InfiniteTimeSpan,
+        });
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var _ in client.StreamChunksAsync(Config(60), [], null, cts.Token)) { }
+        });
+    }
 }
