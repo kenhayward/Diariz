@@ -15,7 +15,7 @@ matching words in context and the folder the meeting lives in. Clicking a hit op
 **at that moment**. Folders whose names match appear too and take you straight there.
 
 **Search everywhere**, next to the result count, widens the search to every room you can see. The chip
-switches to *Everywhere*, results are grouped under the folder each meeting lives in, and **Section**,
+switches to *Everywhere*, results are grouped under the folder each meeting lives in, and **Folder**,
 **Date**, and **Speaker** chips narrow them further. Those chip options are built from the results you
 actually got, so none of them lead to an empty list.
 

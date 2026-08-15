@@ -9,9 +9,9 @@ order: 15
 
 Folders nest up to 8 levels deep, so you can go as narrow as Customers, then a customer name, then a
 project underneath it. A recording can be filed into a folder at any of those levels from its
-**Move to section** action, not just the bottom one.
+**Move to folder** action, not just the bottom one.
 
-**Move to section** opens a picker rather than a plain list: type a folder's name into the filter box
+**Move to folder** opens a picker rather than a plain list: type a folder's name into the filter box
 to jump straight to it from anywhere in the tree, with its full path shown so you can tell two
 same-named folders apart, or leave the filter empty to browse one level at a time the same way the
 folder list does. **Ungrouped** is offered as a choice at every level, so you never have to back out to
@@ -39,7 +39,7 @@ into it; the path at the top of the list shows where you are, anchored to the ro
 
 - Click any part of that path, other than the folder you are already in, to jump straight to that level.
 - When the path is too long to fit, the middle collapses behind an ellipsis, but the menu at the end
-  still lists the whole hierarchy, including **Open section page** for that folder's own page.
+  still lists the whole hierarchy. Next to that menu, a page button opens the folder's own page.
 - Drag a recording onto any part of the path to move it up to that folder in one step.
 - If you have ticked several recordings, dragging any one of them moves the whole set - they land in the
   order the rows are shown, not the order you ticked them. Dragging a recording you have not ticked moves
