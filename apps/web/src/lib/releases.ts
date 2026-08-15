@@ -62,6 +62,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.215.0",
+    date: "2026-08-15",
+    pr: 529,
+    headline: "Set your own model timeout, and three ceilings that ignored it",
+    summary:
+      "If you run a large local model, generations could be cut off partway with no way to give them more room. There is now a Response timeout on the Change model dialog, so you can set your own allowance for the model you actually run, and it beats the platform default. Fixing it turned up three separate ceilings underneath: chat replies and Formula runs were capped at 100 seconds whatever the platform timeout said, chat streaming had no timeout of its own at all, and the bundled web server cut any API request at 60 seconds. The chat timeout is now an idle timeout - it measures the gap between pieces of a reply rather than the whole reply, so a long answer from a slow model is no longer mistaken for a stuck one. One thing to know if you raise it: because the gap is measured before the first piece arrives too, the timeout also has to cover a cold model's load time, not just its talking time - set it above your model's worst-case startup, or a cold start will look like a timeout.",
+    added: [
+      "A Response timeout field on Preferences > Assistant > Change model, overriding the platform default for your account. Leave it blank to inherit.",
+    ],
+    fixed: [
+      "Chat replies, chat tool calls and Formula runs were capped at 100 seconds regardless of the configured LLM timeout.",
+      "Chat streaming had no timeout of its own, so a model that went silent left the reply hanging.",
+      "The bundled web server cut any API request at 60 seconds, below the app's own timeout.",
+    ],
+  },
+  {
     version: "0.214.0",
     date: "2026-08-15",
     pr: 528,

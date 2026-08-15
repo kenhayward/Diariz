@@ -362,12 +362,23 @@ Protection, keyring on the `DataProtection:KeysPath` volume) and is **write-only
 only `hasApiKey`). The resolved config also carries an optional **`reasoning_effort`** (`UserSettings.ReasoningEnabled`/
 `ReasoningEffort` ?? server `Summarization:ReasoningEnabled`/`ReasoningEffort`); when reasoning is on, every LLM
 client (summarise / actions / translation / chat) adds the field to its `/chat/completions` body, and when off the
-field is **omitted entirely** so non-reasoning endpoints aren't broken. The **per-request timeout** is a single
-platform-wide value (`PlatformSettings.LlmTimeoutSeconds`, default 120, Platform-Admin-editable on Settings → Model
-Settings), applied by the resolvers and enforced via a linked `CancellationTokenSource` in each client; the typed
-`HttpClient`s themselves are registered with `Timeout = InfiniteTimeSpan` so that per-request value is the **only**
-cap (otherwise `HttpClient`'s default 100 s silently capped anything longer). The streaming chat client keeps the
-default timeout for its header phase and relies on client-disconnect for cancellation.
+field is **omitted entirely** so non-reasoning endpoints aren't broken. The **per-request timeout** resolves in three
+steps - **`UserSettings.LlmTimeoutSeconds` ?? `PlatformSettings.LlmTimeoutSeconds` (default 120,
+Platform-Admin-editable on Settings → Model Settings) ?? the server option** - via the same resolver
+(`SummarizationSettingsResolver`; `EmbeddingSettingsResolver` mirrors the chain for the separate embeddings
+config), and is enforced via a linked `CancellationTokenSource` in each client. Every LLM `HttpClient`
+(`AddLlmClient` in `Program.cs`) is registered with `Timeout = InfiniteTimeSpan`, so the resolved value is the
+**single authority** for every LLM call - chat replies, chat tool rounds, chat title generation, and Formula
+runs included; without that, `HttpClient`'s own 100 s default silently capped them regardless of the configured
+timeout, which is what happened before `IChatStreamClient` was added to `AddLlmClient` in `Program.cs`. The
+streaming chat client (`ChatStreamClient`) now applies the resolved timeout itself, but as an **inactivity**
+allowance rather than a cap on the whole call: a linked `CancellationTokenSource` is reset with
+`CancelAfter(TimeoutSeconds)` after every line read from the SSE stream, so a reply that keeps producing
+output can run indefinitely, and only a gap with no output at all trips it - throwing `ChatStreamException` so
+`ChatController` surfaces a visible error frame instead of the stream just dying silently. Because the allowance
+starts before the first token, it also covers **time-to-first-token**: a cold model that has to load first
+produces nothing until it's ready, so the configured value must exceed the model's worst-case load time or a
+cold start reads as a timeout.
 
 **One context budget for every LLM call.** The resolved config also carries **`ContextCharBudget`** - the single
 upper bound on injected context shared by *every* call site (recording summary, actions, tags, minutes, the folder
@@ -942,7 +953,10 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
 > nginx (`apps/web/nginx.conf`) proxies it with **`proxy_buffering off`** (Streamable HTTP streams responses as
 > `text/event-stream`, so buffering would stall the stream) and a long read timeout. **Any outer reverse proxy
 > in front of the web container must also forward `/mcp` with response buffering disabled** — otherwise the SPA
-> is served for `/mcp` (or a POST returns 405) and clients report "cannot load the MCP server". The OAuth server
+> is served for `/mcp` (or a POST returns 405) and clients report "cannot load the MCP server". **It must also
+> allow a read timeout at least as long as the configured LLM timeout** (`PlatformSettings.LlmTimeoutSeconds`,
+> now overridable per user) - a run_formula/chat-shaped tool call that outlives the outer proxy's own read
+> timeout dies there regardless of what the app is configured to allow. The OAuth server
 > adds the same requirement for **`/connect/`** (authorize/token/register) and **`/.well-known/`** (discovery +
 > protected-resource metadata): both nginx and any outer proxy must forward them to the API, or an OAuth client
 > gets the SPA index.html instead of the metadata and the claude.ai connection never starts. (`/oauth/consent`
