@@ -302,7 +302,7 @@ describe("SearchBar - search everywhere", () => {
     fireEvent.click(await screen.findByRole("button", { name: /search everywhere/i }));
     expect(await screen.findByText("Label spec")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: /^section$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^folder$/i }));
     fireEvent.click(await screen.findByRole("menuitem", { name: /customers/i }));
 
     expect(screen.getByText("Renewal call")).toBeTruthy();
@@ -333,7 +333,7 @@ describe("SearchBar - search everywhere", () => {
     renderBar({ sectionId: "customers" });
     type("budget");
     await waitFor(() => expect(api.search).toHaveBeenCalled());
-    expect(screen.queryByRole("button", { name: /^section$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^folder$/i })).toBeNull();
   });
 });
 

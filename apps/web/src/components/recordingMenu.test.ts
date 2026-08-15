@@ -23,7 +23,7 @@ describe("recordingMenu", () => {
       "Copy link",
       "Re-transcribe",
       "Summarise",
-      "Move to section…",
+      "Move to folder…",
       "Play",
       "Download transcript",
       "Download audio",

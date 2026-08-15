@@ -36,6 +36,8 @@ describe("DrillBreadcrumb", () => {
       </MemoryRouter>,
     );
     expect(container.innerHTML).toBe("");
+    // The dropdown does not exist at the root, so neither may the button.
+    expect(screen.queryByRole("link", { name: "View folder page" })).toBeNull();
   });
 
   it("shows the current folder along with its parent", () => {
@@ -100,9 +102,9 @@ describe("DrillBreadcrumb", () => {
     expect(onDrill).toHaveBeenCalledWith(null);
   });
 
-  // The design's two distinct targets: a crumb browses deeper, this menu item opens the page. It now
-  // lives inside the FolderPath menu rather than as its own link.
-  it("opens the folder's page from the menu, not a drill", async () => {
+  // The design's two distinct targets: a crumb browses deeper, this button opens the page. It is a
+  // button in the row now, not an entry buried in the menu.
+  it("opens the folder's page from the button, not a drill", async () => {
     const onDrill = vi.fn();
     let location = { pathname: "", search: "" };
     render(
@@ -112,8 +114,7 @@ describe("DrillBreadcrumb", () => {
       </MemoryRouter>,
     );
 
-    await userEvent.click(screen.getByLabelText("Show full folder path"));
-    await userEvent.click(screen.getByRole("menuitem", { name: /open section page/i }));
+    await userEvent.click(screen.getByRole("link", { name: "View folder page" }));
 
     expect(location.pathname).toBe("/sections/ambu");
     expect(onDrill).not.toHaveBeenCalled();
@@ -131,30 +132,37 @@ describe("DrillBreadcrumb", () => {
       </MemoryRouter>,
     );
 
-    await userEvent.click(screen.getByLabelText("Show full folder path"));
-    await userEvent.click(screen.getByRole("menuitem", { name: /open section page/i }));
+    await userEvent.click(screen.getByRole("link", { name: "View folder page" }));
 
     expect(location.pathname + location.search).toBe("/sections/ambu?in=ambu");
   });
 
-  it("keeps the room prefix on the section page link in a shared room", async () => {
-    let location = { pathname: "", search: "" };
+  it("keeps the room prefix on the folder page button in a shared room", () => {
     render(
       <MemoryRouter initialEntries={["/?in=ambu"]}>
-        <LocationSpy onChange={(loc) => (location = loc)} />
         <DrillBreadcrumb sections={sections} sectionId="ambu" basePath="/rooms/r1" onDrill={vi.fn()} />
       </MemoryRouter>,
     );
 
-    await userEvent.click(screen.getByLabelText("Show full folder path"));
-    await userEvent.click(screen.getByRole("menuitem", { name: /open section page/i }));
+    const link = screen.getByRole("link", { name: "View folder page" });
+    expect(link.getAttribute("href")).toBe("/rooms/r1/sections/ambu?in=ambu");
+  });
 
-    expect(location.pathname).toBe("/rooms/r1/sections/ambu");
+  // Promoting the button out of the menu means taking it OUT of the menu - one action, one control.
+  it("leaves the menu as nothing but the ancestor chain", async () => {
+    renderCrumb("ambu");
+
+    await userEvent.click(screen.getByLabelText("Show full folder path"));
+
+    const items = screen.getAllByRole("menuitem").map((el) => el.textContent);
+    expect(items).toEqual(["Customers", "Ambu"]);
   });
 
   // Drilled into a folder that was deleted underneath us: don't crash, offer a way back out.
   it("still offers a way out for an unknown folder", () => {
     const onDrill = renderCrumb("gone");
+    // The folder was deleted underneath us - offer the way out, not a link to a page that is gone.
+    expect(screen.queryByRole("link", { name: "View folder page" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /back/i }));
     expect(onDrill).toHaveBeenCalledWith(null);
   });

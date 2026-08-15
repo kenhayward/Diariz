@@ -69,7 +69,7 @@ export function buildRecordingTree(recordings: RecordingSummary[], sections: Sec
   // Recordings pointing at a section we don't know yet → synthetic top-level groups (load-order safety).
   for (const [sectionId, items] of recsBySection) {
     if (!known.has(sectionId)) {
-      sectionNodes.push({ id: sectionId, name: items[0]?.sectionName ?? "Section", items, children: [] });
+      sectionNodes.push({ id: sectionId, name: items[0]?.sectionName ?? "Folder", items, children: [] });
     }
   }
 

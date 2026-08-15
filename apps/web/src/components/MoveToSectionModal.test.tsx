@@ -93,7 +93,7 @@ describe("MoveToSectionModal", () => {
   it("creates a new section and moves into it", async () => {
     renderModal(null);
     await screen.findByLabelText("Filter folders");
-    fireEvent.change(screen.getByLabelText(/new section name/i), { target: { value: "Ideas" } });
+    fireEvent.change(screen.getByLabelText(/new folder name/i), { target: { value: "Ideas" } });
     fireEvent.click(screen.getByRole("button", { name: /create.*move/i }));
 
     await waitFor(() => expect(api.createSection).toHaveBeenCalledWith("Ideas", null, undefined));
@@ -115,7 +115,7 @@ describe("MoveToSectionModal", () => {
       renderModal(null);
       fireEvent.click(await screen.findByLabelText("Open Work"));
 
-      fireEvent.change(screen.getByLabelText(/new sub-section in work/i), { target: { value: "Falcon" } });
+      fireEvent.change(screen.getByLabelText(/new sub-folder in work/i), { target: { value: "Falcon" } });
       fireEvent.click(screen.getByRole("button", { name: /create.*move/i }));
 
       await waitFor(() => expect(api.createSection).toHaveBeenCalledWith("Falcon", "sec-1", undefined));
@@ -125,7 +125,7 @@ describe("MoveToSectionModal", () => {
     it("still creates at the top level (null parent) when not drilled into anything", async () => {
       renderModal(null);
       await screen.findByLabelText("Filter folders");
-      fireEvent.change(screen.getByLabelText(/new section name/i), { target: { value: "Ideas" } });
+      fireEvent.change(screen.getByLabelText(/new folder name/i), { target: { value: "Ideas" } });
       fireEvent.click(screen.getByRole("button", { name: /create.*move/i }));
 
       await waitFor(() => expect(api.createSection).toHaveBeenCalledWith("Ideas", null, undefined));
@@ -134,10 +134,10 @@ describe("MoveToSectionModal", () => {
     it("shows where the folder will be created, and updates the placeholder as the drill changes", async () => {
       renderModal(null);
       expect(await screen.findByLabelText("Open Work")).toBeTruthy(); // waits for the fetched sections
-      expect(screen.getByLabelText("New section name")).toBeTruthy();
+      expect(screen.getByLabelText("New folder name")).toBeTruthy();
 
       fireEvent.click(screen.getByLabelText("Open Work"));
-      expect(await screen.findByLabelText("New sub-section in Work")).toBeTruthy();
+      expect(await screen.findByLabelText("New sub-folder in Work")).toBeTruthy();
     });
 
     it("disables the create form at the folder depth cap, with the existing nest-capped message, and makes no request", async () => {
@@ -173,7 +173,7 @@ describe("MoveToSectionModal", () => {
     renderModal(null, onClose);
     fireEvent.click(await screen.findByLabelText("Select Work"));
     expect(await screen.findByText(/boom/)).toBeTruthy();
-    expect(screen.getByRole("dialog", { name: /move to section/i })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: /move to folder/i })).toBeTruthy();
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -218,7 +218,7 @@ describe("MoveToSectionModal", () => {
     it("invalidates the recording's detail query after create-and-move", async () => {
       const { invalidatedKeys } = renderModalWithClient(null);
       await screen.findByLabelText("Filter folders");
-      fireEvent.change(screen.getByLabelText(/new section name/i), { target: { value: "Ideas" } });
+      fireEvent.change(screen.getByLabelText(/new folder name/i), { target: { value: "Ideas" } });
       fireEvent.click(screen.getByRole("button", { name: /create.*move/i }));
 
       await waitFor(() => expect(api.createSection).toHaveBeenCalled());

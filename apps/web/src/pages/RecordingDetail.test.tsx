@@ -1446,7 +1446,7 @@ describe("RecordingDetail folder chips", () => {
     async function openPicker() {
       await screen.findByRole("navigation", { name: /folder/i });
       fireEvent.click(screen.getByRole("button", { name: "More actions" }));
-      fireEvent.click(await screen.findByRole("menuitem", { name: /move to section/i }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: /move to folder/i }));
     }
 
     it("marks a top-level folder as current", async () => {
@@ -1490,7 +1490,7 @@ describe("RecordingDetail folder chips", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /change folder/i }));
 
-    expect(await screen.findByRole("dialog", { name: /move to section/i })).toBeTruthy();
+    expect(await screen.findByRole("dialog", { name: /move to folder/i })).toBeTruthy();
   });
 
   /// It is an action on the chips, not one of them. The chip row is a navigation landmark whose every

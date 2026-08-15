@@ -10,7 +10,7 @@
   },
   "recordings": {
     "title": "Your recordings",
-    "body": "Recordings appear here as they finish. Organise them into sections, drag to reorder, and drop audio files anywhere on this panel to upload."
+    "body": "Recordings appear here as they finish. Organise them into folders, drag to reorder, and drop audio files anywhere on this panel to upload."
   },
   "detail": {
     "title": "Transcript & speakers",

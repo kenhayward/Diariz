@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
 import { collapsePath, type PathCrumb } from "../../lib/folderPath";
 import { ChevronDownIcon, ChevronRightIcon } from "../icons";
 
@@ -15,12 +14,13 @@ import { ChevronDownIcon, ChevronRightIcon } from "../icons";
 ///
 /// The **trailing chevron** is the menu trigger and is always present, so the full hierarchy is one click
 /// away whether or not the path is collapsed. The collapsed `…` is a plain indicator, not a second trigger:
-/// two controls opening the same menu is not affordable in a strip this narrow.
+/// two controls opening the same menu is not affordable in a strip this narrow. Anything a caller wants
+/// beside the trigger goes in `trailingAction`, which sits between the path and the chevron.
 export default function FolderPath({
   crumbs,
   maxVisible = 3,
   onSelect,
-  extraItems = [],
+  trailingAction,
   onCrumbDrop,
   label,
   menuLabel,
@@ -30,10 +30,10 @@ export default function FolderPath({
   maxVisible?: number;
   /// Clicking a crumb or a menu entry. Omit to render the path as static text.
   onSelect?: (id: string) => void;
-  /// Menu entries shown above the ancestor chain (the nav puts "Open section page" here). An entry with
-  /// `to` renders as a router `Link` (so ctrl/middle-click and "open in new tab" keep working for a
-  /// navigation target); one with `onClick` renders as a plain button.
-  extraItems?: { label: string; onClick?: () => void; to?: { pathname: string; search?: string } }[];
+  /// A control rendered between the path and the menu trigger - the nav puts the folder-page button
+  /// here. Kept as an opaque node so this component stays presentational: it places the control, and
+  /// knows nothing about where it goes.
+  trailingAction?: ReactNode;
   /// A recording dropped onto a crumb - the cheap way to move something up a level.
   onCrumbDrop?: (crumbId: string, recordingId: string) => void;
   /// Overrides the nav landmark's accessible name. Two instances of this component can be on screen at
@@ -126,6 +126,8 @@ export default function FolderPath({
         })}
       </nav>
 
+      {trailingAction}
+
       <button
         type="button"
         aria-label={menuLabel ?? t("folderPathMenu")}
@@ -142,33 +144,6 @@ export default function FolderPath({
           role="menu"
           className="absolute right-0 top-full z-20 mt-1 min-w-[12rem] rounded border bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-900"
         >
-          {extraItems.map((item) =>
-            item.to ? (
-              <Link
-                key={item.label}
-                role="menuitem"
-                to={item.to}
-                onClick={() => setOpen(false)}
-                className="block w-full px-3 py-1 text-left text-xs text-blue-600 hover:bg-gray-50 dark:text-blue-400 dark:hover:bg-gray-800"
-              >
-                {item.label}
-              </Link>
-            ) : (
-              <button
-                key={item.label}
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setOpen(false);
-                  item.onClick?.();
-                }}
-                className="block w-full px-3 py-1 text-left text-xs text-blue-600 hover:bg-gray-50 dark:text-blue-400 dark:hover:bg-gray-800"
-              >
-                {item.label}
-              </button>
-            ),
-          )}
-          {extraItems.length > 0 && <div className="my-1 border-t dark:border-gray-700" />}
           {/* The FULL chain, not the collapsed one - the menu is how a hidden ancestor stays reachable.
               Indented by depth so the shape of the path is legible without repeating parent names. */}
           {crumbs.map((c, depth) => (

@@ -76,7 +76,7 @@ public class SectionsController : ControllerBase
     public async Task<ActionResult<SectionDto>> Create(CreateSectionRequest req, CancellationToken ct = default)
     {
         var name = req.Name?.Trim();
-        if (string.IsNullOrEmpty(name)) return BadRequest("Section name is required.");
+        if (string.IsNullOrEmpty(name)) return BadRequest("Folder name is required.");
 
         var (roomId, error) = await AuthorizeManage(req.RoomId, ct);
         if (error is not null) return error;
@@ -126,7 +126,7 @@ public class SectionsController : ControllerBase
 
         if (req.ParentId is { } parentId)
         {
-            if (ids.Contains(parentId)) return BadRequest("A section cannot be its own parent.");
+            if (ids.Contains(parentId)) return BadRequest("A folder cannot be its own parent.");
             var parent = await _db.Sections.FirstOrDefaultAsync(s => s.Id == parentId && s.RoomId == roomId);
             if (parent is null) return NotFound();
         }
@@ -173,7 +173,7 @@ public class SectionsController : ControllerBase
     public async Task<IActionResult> Rename(Guid id, RenameSectionRequest req, CancellationToken ct = default)
     {
         var name = req.Name?.Trim();
-        if (string.IsNullOrEmpty(name)) return BadRequest("Section name is required.");
+        if (string.IsNullOrEmpty(name)) return BadRequest("Folder name is required.");
 
         var section = await _db.Sections.FirstOrDefaultAsync(s => s.Id == id, ct);
         if (section is null) return NotFound();

@@ -58,7 +58,7 @@ function renderRow(
 }
 
 function openKebab() {
-  fireEvent.click(screen.getByRole("button", { name: /section actions/i }));
+  fireEvent.click(screen.getByRole("button", { name: /folder actions/i }));
 }
 
 describe("SectionRow", () => {

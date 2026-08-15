@@ -10,7 +10,7 @@
   },
   "recordings": {
     "title": "Vos enregistrements",
-    "body": "Les enregistrements apparaissent ici une fois terminés. Organisez-les en sections, glissez-les pour les réordonner, et déposez des fichiers audio n'importe où sur ce panneau pour les importer."
+    "body": "Les enregistrements apparaissent ici une fois terminés. Organisez-les en dossiers, glissez-les pour les réordonner, et déposez des fichiers audio n'importe où sur ce panneau pour les importer."
   },
   "detail": {
     "title": "Transcription et intervenants",
