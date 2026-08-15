@@ -20,6 +20,11 @@ public class UserSettings
     /// to the server default (<c>Chat:ContextLength</c>).</summary>
     public int? ChatContextWindow { get; set; }
 
+    /// <summary>Per-request LLM timeout in seconds, overriding the platform-wide admin setting. Null
+    /// inherits (PlatformSettings.LlmTimeoutSeconds, then the server option). A user points at their own
+    /// endpoint and model, so a slow local model is theirs to accommodate - the value is uncapped.</summary>
+    public int? LlmTimeoutSeconds { get; set; }
+
     /// <summary>Master switch for chat tool calling. Null falls back to the server default
     /// (<c>Chat:ToolsEnabled</c>).</summary>
     public bool? ChatToolsEnabled { get; set; }

@@ -48,6 +48,9 @@ public class EmbeddingSettingsResolver : IEmbeddingSettingsResolver
 
     public async Task<EmbeddingRequestConfig> ResolveAsync(Guid userId, CancellationToken ct = default)
     {
+        // Needed for the timeout chain regardless of which branch resolves the transport below.
+        var s = await _db.UserSettings.FindAsync([userId], ct);
+
         // The model + dimension are always the server's (the vector column is dimension-pinned). Only the
         // transport (endpoint + key) can come from elsewhere.
         string apiBase, apiKey;
@@ -60,13 +63,12 @@ public class EmbeddingSettingsResolver : IEmbeddingSettingsResolver
         else
         {
             // Reuse the owner's summarisation endpoint (their own value, else the server default).
-            var s = await _db.UserSettings.FindAsync([userId], ct);
             apiBase = Coalesce(s?.SummaryApiBase, _summary.ApiBase);
             apiKey = Coalesce(_protector.Unprotect(s?.SummaryApiKeyEncrypted), _summary.ApiKey);
         }
 
-        // The request timeout is the platform-wide admin setting (the single authority), falling back to the
-        // embedding option when no settings row exists yet.
+        // The request timeout is the user's override ?? the platform-wide admin setting ?? the embedding
+        // option. One chain, shared with summarisation, so embeddings never silently disagree.
         var ps = await _db.PlatformSettings
             .FirstOrDefaultAsync(p => p.Id == PlatformSettings.SingletonId, ct);
 
@@ -75,7 +77,7 @@ public class EmbeddingSettingsResolver : IEmbeddingSettingsResolver
             ApiKey: apiKey,
             Model: _emb.Model,
             Dimension: _emb.Dimension,
-            TimeoutSeconds: ps?.LlmTimeoutSeconds ?? _emb.TimeoutSeconds,
+            TimeoutSeconds: s?.LlmTimeoutSeconds ?? ps?.LlmTimeoutSeconds ?? _emb.TimeoutSeconds,
             BatchSize: Math.Max(1, _emb.BatchSize))
         {
             QueryPrefix = _emb.QueryPrefix ?? "",

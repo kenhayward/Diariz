@@ -56,8 +56,8 @@ public class SummarizationSettingsResolver : ISummarizationSettingsResolver
         var reasoningOn = s?.ReasoningEnabled ?? _opts.ReasoningEnabled;
         var effort = reasoningOn ? Coalesce(s?.ReasoningEffort, _opts.ReasoningEffort) : null;
 
-        // The request timeout is the platform-wide admin setting (the single authority - the HTTP clients
-        // themselves have no cap), falling back to the server option when no settings row exists yet.
+        // The request timeout is the user's override ?? the platform-wide admin setting ?? the server
+        // option. The HTTP clients themselves have no cap, so this is the single authority.
         var ps = await _db.PlatformSettings
             .FirstOrDefaultAsync(p => p.Id == PlatformSettings.SingletonId, ct);
 
@@ -65,7 +65,7 @@ public class SummarizationSettingsResolver : ISummarizationSettingsResolver
             ApiBase: Coalesce(s?.SummaryApiBase, _opts.ApiBase),
             ApiKey: Coalesce(_protector.Unprotect(s?.SummaryApiKeyEncrypted), _opts.ApiKey),
             Model: Coalesce(s?.SummaryModel, _opts.Model),
-            TimeoutSeconds: ps?.LlmTimeoutSeconds ?? _opts.TimeoutSeconds)
+            TimeoutSeconds: s?.LlmTimeoutSeconds ?? ps?.LlmTimeoutSeconds ?? _opts.TimeoutSeconds)
         {
             ReasoningEffort = effort,
             // One budget for every LLM call, sized off the model window the user actually points at. The
