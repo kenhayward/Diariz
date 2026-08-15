@@ -278,7 +278,7 @@ chip tells you which), and each hit shows the matching words in context, the fol
 it opens the transcript **at that moment**. Folders whose name matches appear too, and take you straight there.
 **Search everywhere** (next to the result count) widens the search to **every room you can see**: the chip
 switches to *Everywhere*, results are **grouped under the folder** each meeting lives in (coloured to match,
-with a count), and **Section / Date / Speaker** chips narrow them. The chip options are built from the results
+with a count), and **Folder / Date / Speaker** chips narrow them. The chip options are built from the results
 you actually got, so none of them lead to an empty list. Scope and filters last only as long as the search -
 clearing the box returns you to your folder.
 - **Semantic (RAG) search** (opt-in): configure an embeddings endpoint and transcripts are embedded into a
@@ -329,7 +329,7 @@ one block, so nothing has to be more complicated than it needs to be. Formulas c
 (Follow-up email, Meeting recap, Decisions & risks, Tone & sentiment read), **Platform-wide** formulas shared
 with everyone, and your own **Personal** formulas — create and edit these in **Preferences → Formulas**. A
 recording-level **Formulas tab** lists every formula you can use, and a matching **Formulas tab on any folder
-(section) page** runs the same formula over **every meeting in that folder and its sub-sections** (a map-reduce:
+page** runs the same formula over **every meeting in that folder and its sub-sections** (a map-reduce:
 the formula runs on each transcript, then over the combined results). Runs happen **in the background** - the
 result appears right away as "Generating..." and fills in when ready (or shows a clear error), so you can run
 several at once without waiting. **Re-running a formula replaces its previous document** rather than piling up
@@ -371,7 +371,7 @@ order you ticked them; dragging an unticked row moves only that row. The list **
 one folder at a time** rather than showing every folder expanded: a folder row shows its colour, the count
 of everything inside, and takes you in; the header above the list is a **breadcrumb showing the whole path**,
 collapsing the middle when it does not fit, with every part clickable and a trailing menu for the full
-ancestor chain plus **Open section page** - browsing deeper and opening the page stay separate targets, and
+ancestor chain, with a page button beside the menu opening the folder's own page - browsing deeper and opening the page stay separate targets, and
 crumbs accept a dropped recording to move it up (appending it, the same as dropping onto a folder row).
 Folder pages carry the same path. An **open recording shows where it is filed** as a row of chips under its
 name - the room, then each folder down to the one it sits in - and clicking any chip takes the list straight
@@ -407,7 +407,7 @@ confirm. The room lives in the URL (`/rooms/:roomId`), so switching keeps a clea
 **remembers the room you were last in**, returning you to it when you come back (the URL still wins whenever it
 names one) - and **browses that room**: picking a Shared Room shows the recordings
 shared into it. A Shared Room has its **own folder structure**: members with **manage-contents** can create
-folders in it, nested up to 8 levels, file recordings into them (via the recording's Move to section action or by
+folders in it, nested up to 8 levels, file recordings into them (via the recording's Move to folder action or by
 **drag-and-drop**), and **drag to reorder** recordings within a section - each room keeps its own order, separate
 from your Personal Room. **Your Google Calendar stays personal**: a Shared Room's Calendar tab shows only its
 recordings (no personal-event overlay), and a recording opened inside a Shared Room hides its linked meeting and
@@ -426,7 +426,7 @@ than destroying its history. Voiceprints, saved chats and meeting-type templates
 your Personal Room: **Ungrouped**, the **folder you currently have open** (the default), or a **specific
 folder** you pick. When you press Record, the take is filed accordingly the moment it finishes uploading -
 no manual move needed.
-- **Folder pages.** Open any folder (section) as a **first-class page** - the same layout as a recording
+- **Folder pages.** Open any folder as a **first-class page** - the same layout as a recording
 (heading, subheading, toolbar, tabs). The disclosure triangle (enlarged) still collapses/expands; clicking the
 folder **name** opens its page and highlights the folder. **Overview** shows folder stats (transcript count,
 total duration, first/last date), a **roll-up LLM summary** of all the folder's recordings (and its
