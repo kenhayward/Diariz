@@ -21,6 +21,8 @@ export default function ModelDialog({ data, onClose }: { data: UserSettings; onC
   const [apiKey, setApiKey] = useState<string | null>(null); // null = untouched, "" = clear, value = set
   const [reasoningEnabled, setReasoningEnabled] = useState(data.reasoningEnabled);
   const [reasoningEffort, setReasoningEffort] = useState(data.reasoningEffort || "medium");
+  // Held as a string so the box can be emptied while typing; "" means "inherit" and saves as 0.
+  const [timeoutValue, setTimeoutValue] = useState(data.llmTimeoutSeconds?.toString() ?? "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -41,6 +43,7 @@ export default function ModelDialog({ data, onClose }: { data: UserSettings; onC
         apiKey, // null leaves it unchanged; "" clears; a value sets it
         reasoningEnabled,
         reasoningEffort,
+        llmTimeoutSeconds: timeoutValue.trim() === "" ? 0 : Number(timeoutValue),
       });
       qc.invalidateQueries({ queryKey: ["user-settings"] });
       onClose();
@@ -182,6 +185,19 @@ export default function ModelDialog({ data, onClose }: { data: UserSettings; onC
                 </div>
               </div>
             )}
+            <label className="mt-3 block text-sm">
+              <span className="font-medium text-gray-700 dark:text-gray-200">{t("timeoutLabel")}</span>
+              <input
+                type="number"
+                min={5}
+                step={1}
+                value={timeoutValue}
+                placeholder={data.defaultLlmTimeoutSeconds.toString()}
+                onChange={(e) => setTimeoutValue(e.target.value)}
+                className={field}
+              />
+              <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{t("timeoutHint")}</p>
+            </label>
           </div>
         </div>
 

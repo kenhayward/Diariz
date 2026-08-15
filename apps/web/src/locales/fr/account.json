@@ -304,6 +304,8 @@
   "reasoningLow": "Faible",
   "reasoningMedium": "Moyen",
   "reasoningHigh": "Élevé",
+  "timeoutLabel": "Délai de réponse (secondes)",
+  "timeoutHint": "Combien de temps attendre le modèle entre deux fragments d'une réponse. Laissez vide pour utiliser la valeur de la plateforme. Augmentez-le pour un grand modèle local.",
   "quotasIntro": "Les nouveaux utilisateurs démarrent avec le quota initial ; les administrateurs peuvent l'augmenter jusqu'au maximum.",
   "starterQuota": "Quota initial (Go)",
   "maxQuota": "Quota maximum (Go)",

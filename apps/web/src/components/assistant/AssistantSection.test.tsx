@@ -22,6 +22,7 @@ const settings = (over: Record<string, unknown> = {}) => ({
   ],
   reasoningEnabled: false, reasoningEffort: "medium", defaultReasoningEnabled: false, defaultReasoningEffort: "medium",
   placementMode: "SelectedFolder", placementSectionId: null,
+  llmTimeoutSeconds: null, defaultLlmTimeoutSeconds: 120,
   ...over,
 });
 
