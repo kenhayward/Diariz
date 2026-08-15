@@ -30,7 +30,8 @@ const settings = {
   placementMode: "SelectedFolder",
   placementSectionId: null,
   llmTimeoutSeconds: null,
-  defaultLlmTimeoutSeconds: 120,
+  // Deliberately not the real platform default (120) - a hardcoded placeholder would pass otherwise.
+  defaultLlmTimeoutSeconds: 99,
 };
 
 const onClose = vi.fn();
@@ -133,7 +134,7 @@ describe("ModelDialog", () => {
 
     const field = screen.getByRole("spinbutton", { name: /timeout/i });
     expect((field as HTMLInputElement).value).toBe("");
-    expect(field.getAttribute("placeholder")).toBe("120");
+    expect(field.getAttribute("placeholder")).toBe("99");
   });
 
   it("sends the timeout on save", async () => {
