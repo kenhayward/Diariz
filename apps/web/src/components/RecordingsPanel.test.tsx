@@ -340,13 +340,12 @@ describe("RecordingsPanel", () => {
       expect(screen.queryByText("Account review")).toBeNull();
     });
 
-    // The two targets the design insists stay distinct: the row browses, the menu item opens the page. It
+    // The two targets the design insists stay distinct: the row browses, the button opens the page. It
     // keeps `?in=` so opening the page leaves you where you were browsing.
-    it("opens the folder page from the breadcrumb menu, not by drilling", async () => {
+    it("opens the folder page from the breadcrumb button, not by drilling", async () => {
       let location = { pathname: "", search: "" };
       renderListWithLocationSpy("/?in=customers", (loc) => (location = loc));
-      fireEvent.click(await screen.findByLabelText(/show full folder path/i));
-      fireEvent.click(screen.getByRole("menuitem", { name: /open section page/i }));
+      fireEvent.click(await screen.findByRole("link", { name: "View folder page" }));
       expect(location.pathname).toBe("/sections/customers");
       expect(location.search).toBe("?in=customers");
     });

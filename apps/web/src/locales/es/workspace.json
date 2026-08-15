@@ -445,7 +445,7 @@
   "clear": "Limpiar",
   "ungrouped": "Sin agrupar",
   "drillBack": "Atrás",
-  "drillOpenSectionPage": "Abrir página de la sección ›",
+  "drillOpenFolderPage": "Ver página de la carpeta",
   "drillDirectlyIn": "Directamente en {{name}}",
   "drillOpenFolder": "Abrir {{name}}",
   "drillEmpty": "Esta carpeta está vacía.",

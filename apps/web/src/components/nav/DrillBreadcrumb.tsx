@@ -1,17 +1,18 @@
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 import { breadcrumbOf } from "../../lib/drillView";
 import { useDrillSearch } from "../../lib/drillRoute";
 import { sectionColor } from "../../lib/sectionColors";
-import { ArrowLeftIcon, FolderIcon } from "../icons";
+import { ArrowLeftIcon, FileTextIcon, FolderIcon } from "../icons";
 import FolderPath from "./FolderPath";
 import type { SectionDto } from "../../lib/types";
 
-/// The drill-in list's header row: a back button, the folder path, and a menu carrying the full ancestor
-/// chain plus a link to the folder's own page.
+/// The drill-in list's header row: a back button, the folder path, a button opening the folder's own page,
+/// and a menu carrying the full ancestor chain.
 ///
-/// Clicking a crumb and "Open section page" are deliberately **distinct targets** and must stay that way: a
-/// crumb browses to that level (`onDrill`), while "Open section page" navigates the middle panel to the
-/// folder itself. Collapsing them would make it impossible to reach a folder's page once you had drilled in.
+/// Clicking a crumb and the folder-page button are deliberately **distinct targets** and must stay that way:
+/// a crumb browses to that level (`onDrill`), while the button navigates the middle panel to the folder
+/// itself. Collapsing them would make it impossible to reach a folder's page once you had drilled in.
 ///
 /// Renders nothing at the room's top level - there is nowhere to go back to, and no page to open.
 export default function DrillBreadcrumb({
@@ -57,23 +58,26 @@ export default function DrillBreadcrumb({
         <FolderIcon size={14} />
       </span>
 
-      {/* Clicking a crumb DRILLS to that level; "Open section page" (in the menu) navigates the middle
-          panel. Those stay distinct targets - collapsing them would make a folder's page unreachable once
-          you had drilled into it. The page link carries `?in=` so opening it does not pop the list home. */}
+      {/* Clicking a crumb DRILLS to that level; the trailing button navigates the middle panel to the
+          folder's own page. Those stay distinct targets - collapsing them would make a folder's page
+          unreachable once you had drilled into it. The page link carries `?in=` so opening it does not
+          pop the list home. */}
       <FolderPath
         crumbs={chain.map((s) => ({ id: s.id, name: s.name }))}
         maxVisible={2}
         onSelect={(id) => onDrill(id)}
         onCrumbDrop={onRecordingDrop}
-        extraItems={
-          current
-            ? [
-                {
-                  label: t("drillOpenSectionPage"),
-                  to: { pathname: `${basePath}/sections/${current.id}`, search: drillSearch },
-                },
-              ]
-            : []
+        trailingAction={
+          current ? (
+            <Link
+              to={{ pathname: `${basePath}/sections/${current.id}`, search: drillSearch }}
+              title={t("drillOpenFolderPage")}
+              aria-label={t("drillOpenFolderPage")}
+              className="shrink-0 rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+            >
+              <FileTextIcon size={14} />
+            </Link>
+          ) : undefined
         }
       />
     </div>

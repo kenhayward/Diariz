@@ -445,7 +445,7 @@
   "clear": "Effacer",
   "ungrouped": "Sans section",
   "drillBack": "Retour",
-  "drillOpenSectionPage": "Ouvrir la page de la section ›",
+  "drillOpenFolderPage": "Voir la page du dossier",
   "drillDirectlyIn": "Directement dans {{name}}",
   "drillOpenFolder": "Ouvrir {{name}}",
   "drillEmpty": "Ce dossier est vide.",

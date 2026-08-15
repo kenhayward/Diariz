@@ -445,7 +445,7 @@
   "clear": "Clear",
   "ungrouped": "Ungrouped",
   "drillBack": "Back",
-  "drillOpenSectionPage": "Open section page ›",
+  "drillOpenFolderPage": "View folder page",
   "drillDirectlyIn": "Directly in {{name}}",
   "drillOpenFolder": "Open {{name}}",
   "drillEmpty": "This folder is empty.",

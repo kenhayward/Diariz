@@ -445,7 +445,7 @@
   "clear": "Leeren",
   "ungrouped": "Ohne Abschnitt",
   "drillBack": "Zurück",
-  "drillOpenSectionPage": "Abschnittsseite öffnen ›",
+  "drillOpenFolderPage": "Ordnerseite anzeigen",
   "drillDirectlyIn": "Direkt in {{name}}",
   "drillOpenFolder": "{{name}} öffnen",
   "drillEmpty": "Dieser Ordner ist leer.",

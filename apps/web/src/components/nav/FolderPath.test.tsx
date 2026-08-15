@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
 import FolderPath from "./FolderPath";
 import type { PathCrumb } from "../../lib/folderPath";
 
@@ -59,14 +58,24 @@ describe("FolderPath", () => {
     expect(onSelect).toHaveBeenCalledWith("acme");
   });
 
-  it("puts extra items at the top of the menu", async () => {
-    const onClick = vi.fn();
-    render(<FolderPath crumbs={crumbs} extraItems={[{ label: "Open section page", onClick }]} />);
+  // The slot exists so a caller can put a control immediately left of the menu trigger. Order is the
+  // whole point of the prop, so it is asserted as DOM order, not merely presence.
+  it("renders trailingAction between the path and the menu trigger", () => {
+    const { container } = render(
+      <FolderPath crumbs={crumbs} trailingAction={<button type="button">Page</button>} />,
+    );
 
-    await userEvent.click(screen.getByLabelText("Show full folder path"));
-    await userEvent.click(screen.getByRole("menuitem", { name: "Open section page" }));
+    const children = Array.from(container.firstElementChild!.children);
+    expect(children.indexOf(screen.getByRole("navigation"))).toBe(0);
+    expect(children.indexOf(screen.getByRole("button", { name: "Page" }))).toBe(1);
+    expect(children.indexOf(screen.getByLabelText("Show full folder path"))).toBe(2);
+  });
 
-    expect(onClick).toHaveBeenCalled();
+  it("renders no trailing slot when no action is given", () => {
+    const { container } = render(<FolderPath crumbs={crumbs} />);
+
+    // Just the nav and the menu trigger - an empty slot must not leave a stray element behind.
+    expect(container.firstElementChild!.children.length).toBe(2);
   });
 
   it("calls onCrumbDrop with the crumb id and the dropped recording id", () => {
@@ -86,22 +95,5 @@ describe("FolderPath", () => {
     expect(screen.getByLabelText("Show full path for this folder")).toBeTruthy();
     // The generic defaults must not also be present - two instances on one screen must not collide.
     expect(screen.queryByRole("navigation", { name: "Folder path" })).toBeNull();
-  });
-
-  it("renders an extra item carrying `to` as a link rather than a button", async () => {
-    render(
-      <MemoryRouter>
-        <FolderPath
-          crumbs={crumbs}
-          extraItems={[{ label: "Open section page", to: { pathname: "/sections/acme", search: "?in=acme" } }]}
-        />
-      </MemoryRouter>,
-    );
-
-    await userEvent.click(screen.getByLabelText("Show full folder path"));
-    const link = screen.getByRole("menuitem", { name: "Open section page" });
-
-    expect(link.tagName).toBe("A");
-    expect(link.getAttribute("href")).toBe("/sections/acme?in=acme");
   });
 });
