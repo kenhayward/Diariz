@@ -304,6 +304,8 @@
   "reasoningLow": "Niedrig",
   "reasoningMedium": "Mittel",
   "reasoningHigh": "Hoch",
+  "timeoutLabel": "Antwort-Zeitlimit (Sekunden)",
+  "timeoutHint": "Wie lange zwischen zwei Teilen einer Antwort auf das Modell gewartet wird. Leer lassen, um den Plattformwert zu verwenden. Für ein großes lokales Modell erhöhen.",
   "quotasIntro": "Neue Benutzer starten mit dem Startkontingent; Administratoren können es bis zum Maximum erhöhen.",
   "starterQuota": "Startkontingent (GB)",
   "maxQuota": "Maximales Kontingent (GB)",

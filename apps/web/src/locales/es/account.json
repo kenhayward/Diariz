@@ -304,6 +304,8 @@
   "reasoningLow": "Bajo",
   "reasoningMedium": "Medio",
   "reasoningHigh": "Alto",
+  "timeoutLabel": "Tiempo de espera de respuesta (segundos)",
+  "timeoutHint": "Cuánto esperar al modelo entre fragmentos de una respuesta. Déjalo en blanco para usar el valor de la plataforma. Auméntalo para un modelo local grande.",
   "quotasIntro": "Los nuevos usuarios empiezan con la cuota inicial; los administradores pueden aumentarla hasta el máximo.",
   "starterQuota": "Cuota inicial (GB)",
   "maxQuota": "Cuota máxima (GB)",

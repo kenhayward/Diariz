@@ -99,16 +99,31 @@ public class SummarizationSettingsResolverTests
         Assert.False((await resolver.ResolveAsync(Guid.NewGuid())).Enabled);
     }
 
-    // ---- Timeout (platform-wide, admin-set; falls back to the server option) ----
+    // ---- Timeout: user override ?? platform-wide admin setting ?? server option ----
 
     [Fact]
-    public async Task Timeout_UsesPlatformSetting_WhenPresent()
+    public async Task Timeout_UsesUserOverride_WhenSet()
     {
         using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
         db.PlatformSettings.Add(new PlatformSettings { Id = PlatformSettings.SingletonId, LlmTimeoutSeconds = 300 });
+        db.UserSettings.Add(new UserSettings { UserId = userId, LlmTimeoutSeconds = 600 });
         await db.SaveChangesAsync();
 
-        Assert.Equal(300, (await Build(db).ResolveAsync(Guid.NewGuid())).TimeoutSeconds);
+        // The user's own number wins over the admin's: they point at their own endpoint and model.
+        Assert.Equal(600, (await Build(db).ResolveAsync(userId)).TimeoutSeconds);
+    }
+
+    [Fact]
+    public async Task Timeout_UsesPlatformSetting_WhenUserHasNoOverride()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        db.PlatformSettings.Add(new PlatformSettings { Id = PlatformSettings.SingletonId, LlmTimeoutSeconds = 300 });
+        db.UserSettings.Add(new UserSettings { UserId = userId, LlmTimeoutSeconds = null });
+        await db.SaveChangesAsync();
+
+        Assert.Equal(300, (await Build(db).ResolveAsync(userId)).TimeoutSeconds);
     }
 
     [Fact]

@@ -17,11 +17,25 @@ public sealed class StreamReclaimer
     ///
     /// <para>An in-flight job's message looks idle for as long as the job takes, so this has to clear the
     /// longest run the API can legitimately produce or a reclaim would steal work from a healthy instance
-    /// and duplicate it. The API's LLM calls are bounded by <c>PlatformSettings.LlmTimeoutSeconds</c>
-    /// (default 120s), so ten minutes is a wide margin. The Python transcription worker has no such
-    /// margin available - a long recording runs for tens of minutes - which is why it refreshes its own
-    /// claim while working instead of relying on a threshold.</para></summary>
-    public static readonly TimeSpan DefaultMinIdle = TimeSpan.FromMinutes(10);
+    /// and duplicate it. That length is set by the LLM timeout, which is <em>not</em> a platform-wide
+    /// constant: it resolves per call as the recording owner's <c>UserSettings.LlmTimeoutSeconds</c> ??
+    /// <c>PlatformSettings.LlmTimeoutSeconds</c> ?? the server option, so any user can put their own jobs
+    /// past the platform default - and because the timeout is an inactivity allowance reset per streamed
+    /// chunk, not a cap on the whole call, even that value is a floor rather than a ceiling on the run.</para>
+    ///
+    /// <para>Half an hour therefore replaces the old ten minutes: it clears the slow-local-model timeouts
+    /// this is really about (a user who sets 900s to let a large local model answer) with a wide margin. It
+    /// is still only a margin. If a user's timeout exceeds it, their message can be reclaimed while the call
+    /// is genuinely in flight and the LLM call runs a second time - duplicated work and a duplicated charge,
+    /// bounded by <see cref="MaxDeliveries"/> and then abandoned. Deliberately not wired to the per-user
+    /// setting: that would couple queue hygiene to user preferences to shave a rare duplicate. Note there is
+    /// no operator escape hatch either - every worker constructs <c>new StreamReclaimer()</c>, and the
+    /// constructor's thresholds exist only for tests - so changing this constant is the only lever.</para>
+    ///
+    /// <para>The Python transcription worker has no such margin available - a long recording runs for tens
+    /// of minutes - which is why it refreshes its own claim while working instead of relying on a
+    /// threshold.</para></summary>
+    public static readonly TimeSpan DefaultMinIdle = TimeSpan.FromMinutes(30);
 
     /// <summary>How often a worker bothers to look. The idle branch runs about once a second per worker
     /// across eight workers, and checking every time would add a constant XPENDING drumbeat to a

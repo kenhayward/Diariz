@@ -34,6 +34,30 @@ server's endpoint and key.
 If neither you nor the server has an endpoint configured, the AI features return a clear error rather
 than failing silently.
 
+## Response timeout
+
+The **Change model** dialog also has a **Response timeout** field, in seconds. Leave it blank to use
+the platform default (shown as the field's placeholder) - set a number to override it for your own
+account, the same way the API base, model name, and key can be overridden. A value must be at least 5
+seconds; anything from 1 to 4 is rejected.
+
+Raise this if a large local model is getting cut off partway through a reply. That is what the field is
+for.
+
+It is not a cap on how long a whole reply is allowed to take. It is an idle allowance, measured between
+each piece of a reply as it streams in - as long as the model keeps producing output, however slowly,
+the reply keeps going. Only a gap with nothing at all coming through trips it.
+
+Very large values have a limit outside Diariz: if a reverse proxy sits in front of the server, its own read
+timeout still applies (the bundled one allows an hour), so a request can be cut off there no matter what you
+set here - raise the proxy's read timeout to match if you need longer.
+
+One consequence of that: the allowance also has to cover the time before the model produces its first
+piece of output at all, including a cold model that has to load before it can answer. If your timeout is
+shorter than your model's worst-case load time, a cold start will look exactly like a stuck reply and get
+cut off - so set the value above that worst case, not just above how long a typical reply takes once the
+model is already warm.
+
 ## The context window
 
 Diariz sends your meeting content to the model in one request, and every model has a limit on how much
@@ -57,6 +81,7 @@ name must match the endpoint's exact identifier, and the base URL usually ends i
 
 ## Administrator settings
 
-A Platform Administrator can also set a **global AI timeout**, choose whether minutes generate with one
+A Platform Administrator can also set a **global AI timeout** (see Response timeout above for the
+per-user override), choose whether minutes generate with one
 call per section (better structure) or a single call (fewer tokens), and switch API access, Claude/MCP,
 and Automations on or off independently.

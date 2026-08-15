@@ -68,7 +68,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddApiAccessTokens` | `ApiAccessTokens` (per-user personal REST-API tokens; SHA-256 hash only, **unique** on `TokenHash`, cascade on user delete) + `PlatformSettings.ApiAccessEnabled` (bool, default false) — user API access, off until a Platform Admin enables it |
 | `AddMeetingNotes` | `MeetingNotes` (the user's own note lines; anchored to a recording **or** a calendar event, adopted onto the recording when the calendar link forms; cascades from both user and recording) |
 | `AddRecordingTags` | `RecordingTags` (LLM-extracted weighted tag-cloud tags, machine-only; cascade on `Recording`, index `(RecordingId, Ordinal)`) + `Recordings.TagsExtractedAt` (timestamptz null) — the tag-backfill "done" marker |
-| `AddLlmTimeout` | `PlatformSettings.LlmTimeoutSeconds` (int, NOT NULL, default 120) — the platform-wide per-request timeout applied to every LLM call (the single authority; the HTTP clients have no cap) |
+| `AddLlmTimeout` | `PlatformSettings.LlmTimeoutSeconds` (int, NOT NULL, default 120) — the platform-wide default per-request timeout applied to every LLM call; the HTTP clients have no cap of their own. Superseded as the sole authority by `AddUserLlmTimeout` below, which adds a per-user override on top |
 | `AddSectionSummaryAndMinutes` | `SectionSummaries` + `SectionMinutes` (1:1 with `Section`, cascade) — the folder-level roll-up LLM summary/minutes; `SectionMinutes.MeetingTypeId` (FK, `ON DELETE SET NULL`) is the folder's chosen template |
 | `AddSectionAttachments` | `SectionAttachments` (file/URL supporting documents filed directly on a `Section`, cascade, index `(SectionId, Ordinal)`) — folder-direct attachments, independent of any recording |
 | `AddUserGroups` | `UserGroups` (named permission holders; unique `Name`; `Permissions` int **[Flags]**; `IsSystem`) + `UserGroupMembers` (composite PK `(GroupId, UserId)`, cascade from both) — platform authority via group membership. The migration also **seeds** the two groups and performs a **one-time** move of Identity role holders into them (`RoleToGroupBackfill`); it is deliberately not repeated on boot |
@@ -103,6 +103,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddCalendarSeriesId` | `RecordingCalendarLinks.SeriesId` (varchar(1024) null) - which recurring series a linked event belongs to, so a recording's earlier occurrences of the same meeting can be listed. **Backfills** existing Google/`.ics` links by stripping the `_{yyyyMMddTHHmmssZ}` occurrence suffix off `EventId`, and existing Outlook links (`EventId` = `outlook:{id}`) by joining `OutlookCalendarEvents` on that id and taking the `#`-prefix of its `Uid`; links the backfill cannot resolve are left null. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `OutlookNarrowSyncStamp` | `OutlookCalendarSources.LastNarrowSyncedAt` (timestamptz null) - when this device last completed a narrow (<= 2 day) push, so the desktop's "Sync today" has its own 10s cooldown instead of sharing the full run's 60s one and being refused in the moment it exists for. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddRecordingTagStatus` | `RecordingTags.Status` (int, NOT NULL, **default 0** = `Suggested`) + `RecordingTags.AdoptedAt` (timestamptz null) - tags become manual: the default demotes every existing tag to a suggestion, so the tag cloud and tag search start empty and rebuild only as users adopt tags. Also creates the Postgres-only unique index `IX_RecordingTags_RecordingId_TagLower` on `(RecordingId, lower("Tag"))`, first deleting legacy case-variant duplicates so the index can be created. Additive and forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) - an older backup's tags simply arrive as suggestions |
+| `AddUserLlmTimeout` | `UserSettings.LlmTimeoutSeconds` (int, nullable, no default = null) - a per-user override of the platform LLM timeout; null means inherit `PlatformSettings.LlmTimeoutSeconds`, which in turn falls back to the server option. Additive and nullable, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 
 ### Entity-relationship overview
 
@@ -748,6 +749,7 @@ Per-user preferences (1:1 with the user via a **shared primary key** = `UserId`)
 | `ChatToolOverridesJson` | jsonb null | explicit per-tool on/off map `{ "tool_name": bool }`; a tool absent follows the server default |
 | `ReasoningEnabled` | bool null | send `reasoning_effort` on LLM requests; null → server `Summarization:ReasoningEnabled` |
 | `ReasoningEffort` | text null | reasoning level (`low`/`medium`/`high`) when enabled; null → server `Summarization:ReasoningEffort` |
+| `LlmTimeoutSeconds` | int null | per-request LLM timeout override (seconds); null → `PlatformSettings.LlmTimeoutSeconds`, which itself falls back to the server option |
 | `NativeLanguage` | text null | the user's native language (BCP-47); default target when translating transcripts |
 | `UiLanguage` | text null | the language the app UI is shown in (BCP-47); null → follow the browser |
 | `GoogleRefreshTokenEncrypted` | text null | Google OAuth refresh token (offline Calendar access), **encrypted at rest** (Data Protection); never returned to clients |
@@ -779,7 +781,7 @@ Single seeded row (`Id = 1`), edited by the Platform Administrator.
 | `AudioRetentionDays` | int | audio older than this many days (by `Recording.CreatedAt`) is eligible for auto-deletion (default 30) |
 | `AudioDeletionTimeOfDay` | time | server-local time of day the nightly retention job runs (default 03:00) |
 | `ApiAccessEnabled` | bool | master switch for user API access (personal `dz_api_` tokens); default false = off |
-| `LlmTimeoutSeconds` | int | platform-wide per-request timeout (seconds) for every LLM call - the single authority (the HTTP clients have no cap); default 120 |
+| `LlmTimeoutSeconds` | int | platform-wide default per-request timeout (seconds) for every LLM call; default 120. A user can override it via `UserSettings.LlmTimeoutSeconds`; the resolved value (user ?? platform ?? server option) is the single authority - the HTTP clients themselves have no cap |
 | `McpAccessEnabled` | bool | master switch for the `/mcp` server and personal `dz_mcp_` tokens; default **true** (seeded true in its migration so shipping this toggle never disables an already-connected MCP client) |
 | `WebhooksEnabled` | bool | master switch for outbound webhooks / user Automations; default false = off (enforced starting with the Phase 2 webhooks core) |
 

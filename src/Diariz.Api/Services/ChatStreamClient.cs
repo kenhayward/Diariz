@@ -65,7 +65,26 @@ public class ChatStreamClient : IChatStreamClient
             using var reader = new StreamReader(stream, Encoding.UTF8);
             while (true)
             {
-                var line = await reader.ReadLineAsync(ct);
+                // The timeout is an INACTIVITY allowance, reset per line, not a cap on the whole call: a
+                // slow local model streaming a long answer legitimately runs for minutes. Keep-alive
+                // comments and blank separators count as activity - they are proof the upstream is alive.
+                string? line;
+                try
+                {
+                    using var idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    idle.CancelAfter(TimeSpan.FromSeconds(config.TimeoutSeconds));
+                    line = await reader.ReadLineAsync(idle.Token);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    // Must be a ChatStreamException, not the bare cancellation: ChatController catches
+                    // OperationCanceledException unconditionally (the Stop button), so a bare one would end
+                    // the stream with no `done` and no `error` frame - a silent truncation the browser
+                    // renders as a successful short answer. ChatStreamException is the only exception it
+                    // turns into a visible error frame.
+                    throw new ChatStreamException(
+                        $"The model sent nothing for {config.TimeoutSeconds}s, so the response was stopped.");
+                }
                 if (line is null) break;
                 var token = ParseStreamLine(line, out var done);
                 if (done) yield break;
@@ -101,7 +120,19 @@ public class ChatStreamClient : IChatStreamClient
             using var reader = new StreamReader(stream, Encoding.UTF8);
             while (true)
             {
-                var line = await reader.ReadLineAsync(ct);
+                // Inactivity allowance, reset per line - see the matching loop in StreamAsync.
+                string? line;
+                try
+                {
+                    using var idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    idle.CancelAfter(TimeSpan.FromSeconds(config.TimeoutSeconds));
+                    line = await reader.ReadLineAsync(idle.Token);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    throw new ChatStreamException(
+                        $"The model sent nothing for {config.TimeoutSeconds}s, so the response was stopped.");
+                }
                 if (line is null) break;
                 var delta = ParseStreamChunk(line, out var done);
                 if (done) yield break;
@@ -134,13 +165,32 @@ public class ChatStreamClient : IChatStreamClient
         if (!string.IsNullOrEmpty(config.ApiKey))
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", config.ApiKey);
 
+        // The same allowance covers the request/header phase - DNS, connect, TLS, sending the request and
+        // waiting for the first response header - so "time until we hear anything" and "time between
+        // chunks" are governed by one setting. Nothing else bounds it: HttpClient.Timeout is Infinite on
+        // every LLM client (see Program.cs) and SocketsHttpHandler.ConnectTimeout defaults to Infinite, so
+        // without this an upstream that accepts the connection and never answers hangs until the caller's
+        // token trips - only RequestAborted for browser chat and title generation. Disposing the source on
+        // the way out stops the timer, so the streaming phase that follows is left to the read loop's own
+        // per-line allowance rather than inheriting a deadline for the whole call.
+        using var headers = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        headers.CancelAfter(TimeSpan.FromSeconds(config.TimeoutSeconds));
+
         try
         {
-            return await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+            return await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, headers.Token);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             throw;
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // Our own allowance, not the caller's Stop (which the clause above rethrows bare). Without this
+            // clause the catch below would surface the framework's "A task was canceled.", which tells the
+            // user nothing about which setting to raise.
+            throw new ChatStreamException(
+                $"The model did not respond within {config.TimeoutSeconds}s, so the request was stopped.");
         }
         catch (Exception ex)
         {

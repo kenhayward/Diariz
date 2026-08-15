@@ -4,6 +4,7 @@ using Diariz.Api.Controllers;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
+using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -444,5 +445,74 @@ public class UserSettingsControllerTests
         var dto = await Build(db, userId).Get();
         Assert.Equal(3, dto.CalendarAutoStopAfterMinutes);
         Assert.Equal(30, dto.CalendarSilenceStopSeconds);
+    }
+
+    // ---- LLM timeout override ----
+
+    [Fact]
+    public async Task Get_ReturnsTimeoutOverrideAndTheInheritedDefault()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        db.UserSettings.Add(new UserSettings { UserId = userId, LlmTimeoutSeconds = 600 });
+        db.PlatformSettings.Add(new PlatformSettings { Id = PlatformSettings.SingletonId, LlmTimeoutSeconds = 300 });
+        await db.SaveChangesAsync();
+
+        var dto = await Build(db, userId).Get();
+
+        Assert.Equal(600, dto.LlmTimeoutSeconds);
+        // The companion is what applies when the user clears their own - the dialog shows it as a placeholder.
+        Assert.Equal(300, dto.DefaultLlmTimeoutSeconds);
+    }
+
+    [Fact]
+    public async Task Put_SetsClearsAndLeavesTheTimeoutUnchanged()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var c = Build(db, userId);
+
+        await c.Update(new UpdateUserSettingsRequest(null, null, null, LlmTimeoutSeconds: 600));
+        Assert.Equal(600, (await db.UserSettings.FindAsync(userId))!.LlmTimeoutSeconds);
+
+        // Absent means "another tab is saving, do not touch my field".
+        await c.Update(new UpdateUserSettingsRequest(null, null, null));
+        Assert.Equal(600, (await db.UserSettings.FindAsync(userId))!.LlmTimeoutSeconds);
+
+        // 0 clears the override, falling back to the platform/server value.
+        await c.Update(new UpdateUserSettingsRequest(null, null, null, LlmTimeoutSeconds: 0));
+        Assert.Null((await db.UserSettings.FindAsync(userId))!.LlmTimeoutSeconds);
+    }
+
+    [Fact]
+    public async Task Put_RejectsATimeoutBelowTheFloor()
+    {
+        using var db = TestDb.Create();
+        var c = Build(db, Guid.NewGuid());
+
+        // Mirrors the admin field's floor (PlatformSettingsController): 1-4s is not a working timeout,
+        // and silently coercing it would hide the mistake.
+        var result = await c.Update(new UpdateUserSettingsRequest(null, null, null, LlmTimeoutSeconds: 3));
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    /// <summary>Pins the validation's placement, not just its outcome: a single request that carries both an
+    /// invalid timeout and another field's change must reject the whole request and write nothing at all - not
+    /// silently ignore the bad timeout while applying the rest. This would still pass if the floor check moved
+    /// below the field-assignment blocks and only skipped assigning the timeout itself; asserting that no
+    /// UserSettings row (and no sibling field) was written is what catches that regression.</summary>
+    [Fact]
+    public async Task Put_RejectsATimeoutBelowTheFloor_AndWritesNothingElseFromTheSameRequest()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+
+        var result = await Build(db, userId).Update(
+            new UpdateUserSettingsRequest(null, "should-not-be-saved", null, LlmTimeoutSeconds: 3));
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        // No row was created at all - the sibling Model change never landed either.
+        Assert.Null(await db.UserSettings.FindAsync(userId));
     }
 }

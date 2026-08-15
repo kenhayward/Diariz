@@ -168,7 +168,7 @@ docker compose exec redis redis-cli XPENDING embedding-jobs embedders
 ```
 
 A non-zero count is a job in flight. Since 0.174.0 that is a **delay, not a loss** - it is reclaimed once
-its message has been idle ten minutes - so it is a reason to pause, not a reason not to deploy.
+its message has been idle half an hour - so it is a reason to pause, not a reason not to deploy.
 
 Treat `postgres`, `redis` and `minio` as maintenance-window work.
 
@@ -177,10 +177,14 @@ Treat `postgres`, `redis` and `minio` as maintenance-window work.
 Every stream consumer acks in a `finally`, which handles a job that *throws* but not one whose process is
 *killed*. The reclaim closes that, and the interesting part is the threshold:
 
-- **API workers** use `StreamReclaimer` with a **10-minute** idle threshold, checked at most once a
-  minute per stream. Ten minutes clears the longest legitimate run, since LLM calls are bounded by
-  `PlatformSettings.LlmTimeoutSeconds` (default 120s). A shorter threshold would let one instance steal a
-  job another was still working on and run it twice.
+- **API workers** use `StreamReclaimer` with a **30-minute** idle threshold, checked at most once a
+  minute per stream. It has to clear the longest legitimate run or one instance would steal a job another
+  was still working on and run it twice (a duplicated LLM call and charge). That length is set by the LLM
+  timeout, which is resolved per call as `UserSettings.LlmTimeoutSeconds` ?? `PlatformSettings.LlmTimeoutSeconds`
+  ?? the server option - so it is **not** capped by the platform default, and any user can raise their own.
+  Half an hour clears the slow-local-model values that setting exists for (900s and the like) with margin;
+  a user who sets a timeout beyond it can still see a duplicate delivery, bounded by the redelivery cap
+  below. The threshold is a compile-time constant (the constructor's overrides are for tests only).
 - **The Python worker cannot rely on a margin** - a long transcription legitimately runs for tens of
   minutes, during which its message looks idle. It therefore **refreshes its own claim** every 60s while
   working (`worker.claim_keepalive`), so "idle" genuinely means "nobody is on it", and a 10-minute
@@ -362,12 +366,29 @@ Protection, keyring on the `DataProtection:KeysPath` volume) and is **write-only
 only `hasApiKey`). The resolved config also carries an optional **`reasoning_effort`** (`UserSettings.ReasoningEnabled`/
 `ReasoningEffort` ?? server `Summarization:ReasoningEnabled`/`ReasoningEffort`); when reasoning is on, every LLM
 client (summarise / actions / translation / chat) adds the field to its `/chat/completions` body, and when off the
-field is **omitted entirely** so non-reasoning endpoints aren't broken. The **per-request timeout** is a single
-platform-wide value (`PlatformSettings.LlmTimeoutSeconds`, default 120, Platform-Admin-editable on Settings → Model
-Settings), applied by the resolvers and enforced via a linked `CancellationTokenSource` in each client; the typed
-`HttpClient`s themselves are registered with `Timeout = InfiniteTimeSpan` so that per-request value is the **only**
-cap (otherwise `HttpClient`'s default 100 s silently capped anything longer). The streaming chat client keeps the
-default timeout for its header phase and relies on client-disconnect for cancellation.
+field is **omitted entirely** so non-reasoning endpoints aren't broken. The **per-request timeout** resolves in three
+steps - **`UserSettings.LlmTimeoutSeconds` ?? `PlatformSettings.LlmTimeoutSeconds` (default 120,
+Platform-Admin-editable on Settings → Model Settings) ?? the server option** - via the same resolver
+(`SummarizationSettingsResolver`; `EmbeddingSettingsResolver` mirrors the chain for the separate embeddings
+config), and is enforced via a linked `CancellationTokenSource` in each client. Every LLM `HttpClient`
+(`AddLlmClient` in `Program.cs`) is registered with `Timeout = InfiniteTimeSpan`, so the resolved value is the
+**single authority** for every LLM call - chat replies, chat tool rounds, chat title generation, and Formula
+runs included; without that, `HttpClient`'s own 100 s default silently capped them regardless of the configured
+timeout, which is what happened before `IChatStreamClient` was added to `AddLlmClient` in `Program.cs`. The
+streaming chat client (`ChatStreamClient`) now applies the resolved timeout itself, but as an **inactivity**
+allowance rather than a cap on the whole call: a linked `CancellationTokenSource` is reset with
+`CancelAfter(TimeoutSeconds)` after every line read from the SSE stream, so a reply that keeps producing
+output can run indefinitely, and only a gap with no output at all trips it - throwing `ChatStreamException` so
+`ChatController` surfaces a visible error frame instead of the stream just dying silently. The **request/header
+phase** (DNS, connect, TLS, sending the request, waiting for the first response header) gets the same allowance
+from its own linked CTS in `SendRawAsync`, because nothing else bounds it once `HttpClient.Timeout` is infinite
+(`SocketsHttpHandler.ConnectTimeout` defaults to `Infinite`): an upstream that accepts the connection and never
+answers would otherwise hang until the caller's token trips, which for browser chat and title generation is only
+`RequestAborted`. So the allowance also covers **time-to-first-token**: a cold model that has to load first
+produces nothing until it's ready, so the configured value must exceed the model's worst-case load time or a
+cold start reads as a timeout. **A proxy in front still caps it**: the bundled nginx allows `1h` on `/api/`
+(`proxy_read_timeout`), so a resolved timeout above 3600s is cut there, and an outer proxy needs the same
+treatment.
 
 **One context budget for every LLM call.** The resolved config also carries **`ContextCharBudget`** - the single
 upper bound on injected context shared by *every* call site (recording summary, actions, tags, minutes, the folder
@@ -942,7 +963,10 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
 > nginx (`apps/web/nginx.conf`) proxies it with **`proxy_buffering off`** (Streamable HTTP streams responses as
 > `text/event-stream`, so buffering would stall the stream) and a long read timeout. **Any outer reverse proxy
 > in front of the web container must also forward `/mcp` with response buffering disabled** — otherwise the SPA
-> is served for `/mcp` (or a POST returns 405) and clients report "cannot load the MCP server". The OAuth server
+> is served for `/mcp` (or a POST returns 405) and clients report "cannot load the MCP server". **It must also
+> allow a read timeout at least as long as the configured LLM timeout** (`PlatformSettings.LlmTimeoutSeconds`,
+> now overridable per user) - a run_formula/chat-shaped tool call that outlives the outer proxy's own read
+> timeout dies there regardless of what the app is configured to allow. The OAuth server
 > adds the same requirement for **`/connect/`** (authorize/token/register) and **`/.well-known/`** (discovery +
 > protected-resource metadata): both nginx and any outer proxy must forward them to the API, or an OAuth client
 > gets the SPA index.html instead of the metadata and the claude.ai connection never starts. (`/oauth/consent`

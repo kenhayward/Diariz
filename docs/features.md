@@ -549,9 +549,11 @@ install Outlook later, **Check again** on the Outlook card in Preferences is wha
 mirrored Outlook calendar - carries a **Repeats** badge, and both the event and a recording linked to it list
 your **earlier recordings of the same meeting** (up to 10, newest first), so you can jump straight back to the
 last one instead of hunting for it in the folder tree.
-- **Global AI timeout** (Platform Administrator, Settings → Model Settings): one platform-wide per-request
-timeout in seconds (default 120) applied to every AI call - summaries, minutes, actions, tags, and embeddings.
-Raise it for slow local models; the configured value is the single authority (no hidden HTTP cap).
+- **AI request timeout**: a platform default (Platform Administrator, Settings → Model Settings), in seconds
+(default 120), applied to every AI call - summaries, minutes, actions, tags, embeddings, chat, and Formula
+runs. Any user can override it for their own account (Preferences → Assistant → Change model); the resolved
+value - their override if they set one, else the platform default - is the single authority for that call,
+with no hidden HTTP cap underneath it. Raise it for a slow or large local model.
 - **Preferences**: a tabbed window with the everyday entries (Profile, Recordings, Formulas, Calendars) over an
 **Advanced** divider holding the exception settings (Integrations, Assistant).
 Each user can edit their **profile** — display name, job title, company, job/company descriptions, LinkedIn

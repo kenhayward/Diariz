@@ -304,6 +304,8 @@
   "reasoningLow": "Low",
   "reasoningMedium": "Medium",
   "reasoningHigh": "High",
+  "timeoutLabel": "Response timeout (seconds)",
+  "timeoutHint": "How long to wait for the model between chunks of a reply. Leave blank to use the platform default. Raise it for a large local model.",
   "quotasIntro": "New users start with the starter quota; administrators can raise a user up to the maximum.",
   "starterQuota": "Starter quota (GB)",
   "maxQuota": "Maximum quota (GB)",

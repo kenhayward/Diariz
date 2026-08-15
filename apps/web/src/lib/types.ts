@@ -530,6 +530,10 @@ export interface UserSettings {
   calendarAutoStopAfterMinutes: number;
   /// Seconds of continuous silence that also ends such a recording.
   calendarSilenceStopSeconds: number;
+  /// Per-user override for how long to wait for the LLM between chunks of a reply; null = inherit.
+  llmTimeoutSeconds: number | null;
+  /// What applies when the user has no override (user ?? platform ?? server default).
+  defaultLlmTimeoutSeconds: number;
 }
 
 /// Where a new recording lands in the user's Personal room. Mirrors the server enum names.
@@ -968,6 +972,8 @@ export interface UpdateUserSettings {
   calendarAutoStopAfterMinutes?: number;
   /// Seconds of silence that ends the recording; omit to leave unchanged. Non-positive resets to the default.
   calendarSilenceStopSeconds?: number;
+  /// Tri-state: omit = leave unchanged, 0 = clear the override, 5+ = set it (1-4 is rejected by the server).
+  llmTimeoutSeconds?: number;
 }
 
 // ---- Chat ----

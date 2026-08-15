@@ -92,16 +92,24 @@ public class EmbeddingSettingsResolverTests
     public async Task Resolve_UsesPlatformTimeout_WhenPresent_ElseEmbeddingOption()
     {
         using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
         var emb = new EmbeddingOptions { ApiBase = "http://emb.test/v1", TimeoutSeconds = 45 };
 
         // No platform row → the embedding option's timeout.
-        Assert.Equal(45, (await Build(db, emb, new SummarizationOptions()).ResolveAsync(Guid.NewGuid())).TimeoutSeconds);
+        Assert.Equal(45, (await Build(db, emb, new SummarizationOptions()).ResolveAsync(userId)).TimeoutSeconds);
 
         db.PlatformSettings.Add(new PlatformSettings { Id = PlatformSettings.SingletonId, LlmTimeoutSeconds = 300 });
         await db.SaveChangesAsync();
 
         // Platform row present → the admin-set global timeout wins.
-        Assert.Equal(300, (await Build(db, emb, new SummarizationOptions()).ResolveAsync(Guid.NewGuid())).TimeoutSeconds);
+        Assert.Equal(300, (await Build(db, emb, new SummarizationOptions()).ResolveAsync(userId)).TimeoutSeconds);
+
+        db.UserSettings.Add(new UserSettings { UserId = userId, LlmTimeoutSeconds = 600 });
+        await db.SaveChangesAsync();
+
+        // The user's override beats the admin's, here too: one chain, or embeddings quietly disagree
+        // with every other LLM call.
+        Assert.Equal(600, (await Build(db, emb, new SummarizationOptions()).ResolveAsync(userId)).TimeoutSeconds);
     }
 
     [Fact]

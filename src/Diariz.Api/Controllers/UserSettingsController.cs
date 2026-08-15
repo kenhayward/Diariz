@@ -48,11 +48,14 @@ public class UserSettingsController : ControllerBase
         "\"using the platform default\" instead of an empty box - your value is an override, not a " +
         "requirement.\n\n" +
         "Also included: how a recording started from a calendar event should end - whether it stops by " +
-        "itself, how long it keeps going past the invite's end time, and how much silence ends it early.\n\n" +
+        "itself, how long it keeps going past the invite's end time, and how much silence ends it early; " +
+        "and the per-request LLM timeout, alongside the platform/server default it falls back to.\n\n" +
         "**Your API key is never returned.** Only `hasApiKey` says whether one is stored.")]
     public async Task<UserSettingsDto> Get()
     {
         var s = await _db.UserSettings.FindAsync(UserId);
+        var ps = await _db.PlatformSettings
+            .FirstOrDefaultAsync(p => p.Id == PlatformSettings.SingletonId);
         var tools = await _toolSettings.ResolveAsync(UserId);
         return new UserSettingsDto(
             s?.SummaryApiBase, s?.SummaryModel, !string.IsNullOrEmpty(s?.SummaryApiKeyEncrypted),
@@ -79,7 +82,9 @@ public class UserSettingsController : ControllerBase
             CalendarAutoStopAfterMinutes:
                 s?.CalendarAutoStopAfterMinutes ?? UserSettings.DefaultCalendarAutoStopAfterMinutes,
             CalendarSilenceStopSeconds:
-                s?.CalendarSilenceStopSeconds ?? UserSettings.DefaultCalendarSilenceStopSeconds);
+                s?.CalendarSilenceStopSeconds ?? UserSettings.DefaultCalendarSilenceStopSeconds,
+            LlmTimeoutSeconds: s?.LlmTimeoutSeconds,
+            DefaultLlmTimeoutSeconds: ps?.LlmTimeoutSeconds ?? _serverDefaults.TimeoutSeconds);
     }
 
     private static string? NullIfBlank(string? v) => string.IsNullOrWhiteSpace(v) ? null : v;
@@ -102,9 +107,20 @@ public class UserSettingsController : ControllerBase
         "`outlookSyncEnabled` is the one field with a side effect. Setting it **false erases**: every connected " +
         "device is removed along with every meeting mirrored from it. It is a privacy switch, so it clears what " +
         "was gathered rather than only stopping future syncs - omit the field if you just want to leave it as " +
-        "it is.")]
+        "it is.\n\n" +
+        "`llmTimeoutSeconds` follows its own rule: null leaves it unchanged, 0 clears the override and falls " +
+        "back to the platform/server default, and a value of 5 or more sets it. A value of 1-4 seconds is " +
+        "rejected with a 400 rather than silently coerced, since that is not a working timeout.")]
     public async Task<IActionResult> Update(UpdateUserSettingsRequest req)
     {
+        // Validated first, before touching `s` or the change tracker at all: the method assigns fields as
+        // it goes (one of them, OutlookSyncEnabled: false, queues a RemoveRange) and only calls
+        // SaveChangesAsync once at the end, so returning BadRequest never persists a partial write either
+        // way - but validating up front keeps every branch below this point simple ("we already know the
+        // value is usable") instead of each one having to guard against a value it might still reject.
+        if (req.LlmTimeoutSeconds is > 0 and < 5)
+            return BadRequest("An LLM timeout must be at least 5 seconds.");
+
         var s = await _db.UserSettings.FindAsync(UserId);
         if (s is null)
         {
@@ -172,6 +188,12 @@ public class UserSettingsController : ControllerBase
         if (req.CalendarSilenceStopSeconds is { } silence)
             s.CalendarSilenceStopSeconds =
                 silence > 0 ? silence : UserSettings.DefaultCalendarSilenceStopSeconds;
+
+        // Timeout: null leaves it unchanged; 0 clears the override; >=5 sets it (validated at the top of the
+        // method - the floor mirrors the admin field, since 1-4s is not a working timeout and coercing it
+        // silently would hide the mistake).
+        if (req.LlmTimeoutSeconds is not null)
+            s.LlmTimeoutSeconds = req.LlmTimeoutSeconds > 0 ? req.LlmTimeoutSeconds : null;
 
         await _db.SaveChangesAsync();
         return NoContent();

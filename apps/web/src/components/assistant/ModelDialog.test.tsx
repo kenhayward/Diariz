@@ -29,15 +29,22 @@ const settings = {
   defaultReasoningEffort: "medium",
   placementMode: "SelectedFolder",
   placementSectionId: null,
+  llmTimeoutSeconds: null,
+  // Deliberately not the real platform default (120) - a hardcoded placeholder would pass otherwise.
+  defaultLlmTimeoutSeconds: 99,
 };
 
 const onClose = vi.fn();
 
 function renderSection() {
+  return renderWith(settings as unknown as UserSettings);
+}
+
+function renderWith(data: UserSettings) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <ModelDialog data={settings as unknown as UserSettings} onClose={onClose} />
+      <ModelDialog data={data} onClose={onClose} />
     </QueryClientProvider>,
   );
 }
@@ -73,6 +80,7 @@ describe("ModelDialog", () => {
       apiKey: null,
       reasoningEnabled: false,
       reasoningEffort: "medium",
+      llmTimeoutSeconds: 0,
     });
     // Independence: it must not touch the Chat Tools or Recordings preferences.
     expect(arg).not.toHaveProperty("toolsEnabled");
@@ -118,6 +126,37 @@ describe("ModelDialog", () => {
       expect(api.updateUserSettings).toHaveBeenCalledWith(
         expect.objectContaining({ reasoningEnabled: true, reasoningEffort: "high" }),
       ),
+    );
+  });
+
+  it("shows the inherited timeout as a placeholder when the user has no override", () => {
+    renderWith({ ...settings, llmTimeoutSeconds: null } as unknown as UserSettings);
+
+    const field = screen.getByRole("spinbutton", { name: /timeout/i });
+    expect((field as HTMLInputElement).value).toBe("");
+    expect(field.getAttribute("placeholder")).toBe("99");
+  });
+
+  it("sends the timeout on save", async () => {
+    renderWith(settings as unknown as UserSettings);
+
+    fireEvent.change(screen.getByRole("spinbutton", { name: /timeout/i }), { target: { value: "600" } });
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+
+    await waitFor(() =>
+      expect(vi.mocked(api.updateUserSettings).mock.calls[0][0].llmTimeoutSeconds).toBe(600),
+    );
+  });
+
+  it("sends 0 to clear the override when the field is emptied", async () => {
+    renderWith({ ...settings, llmTimeoutSeconds: 600 } as unknown as UserSettings);
+
+    fireEvent.change(screen.getByRole("spinbutton", { name: /timeout/i }), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+
+    // 0 is the API's "clear" signal - an empty box must not send NaN or leave the old value in place.
+    await waitFor(() =>
+      expect(vi.mocked(api.updateUserSettings).mock.calls[0][0].llmTimeoutSeconds).toBe(0),
     );
   });
 });

@@ -41,7 +41,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Automations (webhooks)** | When enabled, register outbound webhooks from Preferences - a list of what you have, with a composer for making or editing one - that fire when a recording is created, finishes or fails transcription, a summary / meeting minutes / action items / tags become ready (each carrying its output), or a formula finishes or fails. Every recording event also carries an **attendees** list - who spoke, the person they are, their title, company, and internal or external - with email addresses and phone numbers included only when that automation opts in. Signed deliveries with automatic retries (rate-limited per automation and 429-aware), a test-event button, auto-pause after repeated failures, and a Pause / Resume button that stops deliveries reversibly (deleting an automation discards its signing secret; pausing keeps it). Admins can also define named Workflow Signals and wire a platform automation to one, so a formula author just picks "When this finishes, trigger: ..." in the formula editor - no URL or per-user setup - and the formula's output is delivered inline to everyone routed through that signal. |
 | **n8n** | A published community node (\`n8n-nodes-diariz\`): a trigger that registers its own automation and verifies every signed delivery, with a Platform scope for administrators that adds events across every user including Feedback Received, plus an action node covering the whole REST API - with dropdowns listing your real recordings and formulas, files in and out, and a Run Formula step that waits for the document to finish. |
 | **Multi-user & groups** | A **Users & access** console: search and filter every account, and see on one panel what a person's groups actually let them do, alongside their quota, status and storage. Groups grant the five platform permissions - each explained in a sentence rather than a column heading - and carry a name, description and colour. Access requests are a tab with a waiting count, then an approval lifecycle. Per-user isolation and Light/Dark/Auto themes. |
-| **Admin controls** | Storage quotas, optional audio auto-deletion, a global AI request timeout, separate platform toggles for API access, Claude/MCP, and Automations (webhooks), and whole-platform backup & restore. |
+| **Admin controls** | Storage quotas, optional audio auto-deletion, a default AI request timeout that users can override for their own account, separate platform toggles for API access, Claude/MCP, and Automations (webhooks), and whole-platform backup & restore. |
 | **Provide Feedback** | Any signed-in user can describe something that looks or behaves wrong from the account menu; a scrubbed technical trail of recent app activity is attached automatically. Readable and deletable only by a Platform Administrator, in a Feedback tab in Settings, and can raise a \`feedback.submitted\` automation event - the submitter's words reach it only when that automation ticks Include What The Person Wrote. |
 | **Help & documentation** | A browsable help section at \`/help\` with a grouped article tree and instant search, plus contextual help throughout the app: a small \`?\` next to a feature opens a short explanation with a link straight to the full article. An **Advanced and admin** section covers configuring formulas, meeting types, Workflow Signals and webhooks, users and permissions, connecting Claude over MCP, building n8n and Zapier workflows, and the REST API. A **CRM integration** section covers wiring Diariz to any CRM through n8n or Zapier, with a worked EspoCRM example. |
 
@@ -61,6 +61,23 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.215.0",
+    date: "2026-08-15",
+    pr: 529,
+    headline: "Set your own model timeout, and three ceilings that ignored it",
+    summary:
+      "If you run a large local model, generations could be cut off partway with no way to give them more room. There is now a Response timeout on the Change model dialog, so you can set your own allowance for the model you actually run, and it beats the platform default. Fixing it turned up three separate ceilings underneath: chat replies and Formula runs were capped at 100 seconds whatever the platform timeout said, chat streaming had no timeout of its own at all, and the bundled web server cut any API request at 60 seconds. The chat timeout is now an idle timeout - it measures the gap between pieces of a reply rather than the whole reply, so a long answer from a slow model is no longer mistaken for a stuck one. One thing to know if you raise it: because the gap is measured before the first piece arrives too, the timeout also has to cover a cold model's load time, not just its talking time - set it above your model's worst-case startup, or a cold start will look like a timeout.",
+    added: [
+      "A Response timeout field on Preferences > Assistant > Change model, overriding the platform default for your account. Leave it blank to inherit.",
+    ],
+    fixed: [
+      "Chat replies, chat tool calls and Formula runs were capped at 100 seconds regardless of the configured LLM timeout.",
+      "Chat streaming had no timeout of its own, so a model that went silent left the reply hanging.",
+      "The bundled web server cut any API request at 60 seconds, below the app's own timeout.",
+      "An endpoint that accepted the connection and then never answered could leave a chat reply waiting indefinitely. The wait for a first response is now covered by the same timeout as the gaps within a reply.",
+    ],
+  },
   {
     version: "0.214.0",
     date: "2026-08-15",

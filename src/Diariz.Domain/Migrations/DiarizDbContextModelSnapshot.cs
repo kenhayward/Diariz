@@ -1873,6 +1873,9 @@ namespace Diariz.Domain.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<int?>("LlmTimeoutSeconds")
+                        .HasColumnType("integer");
+
                     b.Property<string>("NativeLanguage")
                         .HasColumnType("text");
 
