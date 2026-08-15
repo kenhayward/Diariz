@@ -125,7 +125,35 @@ public class ChatStreamClientTests
             await foreach (var _ in client.StreamChunksAsync(Config(1), [], null)) { }
         });
 
-        Assert.Contains("1", ex.Message);
+        // Pin the whole message, so the configured value is genuinely asserted. A substring check for "1"
+        // would also pass for 10, 12, 100 or 120 - including a hardcode of the 100s HttpClient cap this
+        // work removed - because the sentence carries no digits of its own.
+        Assert.Equal("The model sent nothing for 1s, so the response was stopped.", ex.Message);
+    }
+
+    [Fact]
+    public async Task Stream_Throws_WhenTheUpstreamGoesSilent()
+    {
+        // StreamAsync has its own copy of the read loop (FormulaRunProcessor streams through it, not through
+        // StreamChunksAsync), so it needs its own test: without this, that loop could be reverted to a bare
+        // ReadLineAsync(ct) and the whole suite would stay green. A different timeout value from the
+        // StreamChunksAsync test above also catches a hardcoded number in either message.
+        var script = new[]
+        {
+            (TimeSpan.Zero, "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}"),
+            (TimeSpan.FromSeconds(30), "data: [DONE]"), // never arrives within the 2s allowance
+        };
+        var client = new ChatStreamClient(new HttpClient(new SlowSseHttpMessageHandler(script))
+        {
+            Timeout = System.Threading.Timeout.InfiniteTimeSpan,
+        });
+
+        var ex = await Assert.ThrowsAsync<ChatStreamException>(async () =>
+        {
+            await foreach (var _ in client.StreamAsync(Config(2), [new ChatMessage("user", "hi")])) { }
+        });
+
+        Assert.Equal("The model sent nothing for 2s, so the response was stopped.", ex.Message);
     }
 
     [Fact]
