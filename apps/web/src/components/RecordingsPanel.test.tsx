@@ -245,21 +245,21 @@ describe("RecordingsPanel", () => {
     roomStub.currentRoom = { id: "eng-room", isPersonal: false };
     roomStub.canManageContents = true;
     const { unmount } = renderList();
-    expect(await screen.findByRole("button", { name: /new section/i })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: /new folder/i })).toBeTruthy();
     unmount();
 
     roomStub.canManageContents = false;
     renderList();
     await screen.findByText("Weekly Standup");
-    expect(screen.queryByRole("button", { name: /new section/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /new folder/i })).toBeNull();
   });
 
   it("creates a section scoped to the current shared room", async () => {
     roomStub.currentRoom = { id: "eng-room", isPersonal: false };
     renderList();
-    fireEvent.click(await screen.findByRole("button", { name: /new section/i }));
-    fireEvent.change(screen.getByPlaceholderText(/section name/i), { target: { value: "Topics" } });
-    fireEvent.submit(screen.getByPlaceholderText(/section name/i));
+    fireEvent.click(await screen.findByRole("button", { name: /new folder/i }));
+    fireEvent.change(screen.getByPlaceholderText(/folder name/i), { target: { value: "Topics" } });
+    fireEvent.submit(screen.getByPlaceholderText(/folder name/i));
     await waitFor(() => expect(api.createSection).toHaveBeenCalledWith("Topics", null, "eng-room"));
   });
 
@@ -425,9 +425,9 @@ describe("RecordingsPanel", () => {
     it("creates a sub-section of the folder being browsed", async () => {
       (api.createSection as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "new", name: "Acme" });
       renderList("/?in=customers");
-      fireEvent.click(await screen.findByRole("button", { name: /new sub-section/i }));
+      fireEvent.click(await screen.findByRole("button", { name: /new sub-folder/i }));
 
-      fireEvent.change(screen.getByPlaceholderText(/new sub-section in customers/i), {
+      fireEvent.change(screen.getByPlaceholderText(/new sub-folder in customers/i), {
         target: { value: "Acme" },
       });
       fireEvent.click(screen.getByRole("button", { name: /^create$/i }));
@@ -439,7 +439,7 @@ describe("RecordingsPanel", () => {
     // the folder button stays enabled and keeps offering "New sub-section".
     it("keeps the folder button enabled inside a sub-section, well short of the depth cap", async () => {
       renderList("/?in=ambu");
-      const btn = (await screen.findByRole("button", { name: /^new sub-section$/i })) as HTMLButtonElement;
+      const btn = (await screen.findByRole("button", { name: /^new sub-folder$/i })) as HTMLButtonElement;
       expect(btn.disabled).toBe(false);
     });
 
@@ -458,7 +458,7 @@ describe("RecordingsPanel", () => {
 
       const btn = (await screen.findByRole("button", { name: /nested 8 levels deep/i })) as HTMLButtonElement;
       expect(btn.disabled).toBe(true);
-      expect(screen.queryByRole("button", { name: /^new sub-section$/i })).toBeNull();
+      expect(screen.queryByRole("button", { name: /^new sub-folder$/i })).toBeNull();
     });
 
     it("keeps the New recordings prompt for an empty library", async () => {
@@ -489,7 +489,7 @@ describe("RecordingsPanel", () => {
       let cut: MoveClipboardCut | null = null;
       renderListWithClipboardSpy("/?in=customers", (c) => (cut = c));
       await screen.findByText("Ambu"); // the child folder row, rendered as a SectionRow at this level
-      fireEvent.click(screen.getByRole("button", { name: /section actions/i }));
+      fireEvent.click(screen.getByRole("button", { name: /folder actions/i }));
       fireEvent.click(screen.getByRole("menuitem", { name: /^cut$/i }));
       expect(cut).toEqual({ kind: "folders", ids: ["ambu"], sourceSectionId: "customers", sourceRoomId: null });
     });
@@ -553,7 +553,7 @@ describe("RecordingsPanel", () => {
       const before = screen.getByText("Ambu").closest("div")!;
       expect(before.className).not.toContain("opacity-50");
 
-      fireEvent.click(screen.getByRole("button", { name: /section actions/i }));
+      fireEvent.click(screen.getByRole("button", { name: /folder actions/i }));
       fireEvent.click(screen.getByRole("menuitem", { name: /^cut$/i }));
 
       const after = screen.getByText("Ambu").closest("div")!; // still rendered - not removed
@@ -634,7 +634,7 @@ describe("RecordingsPanel", () => {
       await screen.findByText("Customers");
 
       const customersRow = screen.getByText("Customers").closest("div")!;
-      fireEvent.click(within(customersRow).getByRole("button", { name: /section actions/i }));
+      fireEvent.click(within(customersRow).getByRole("button", { name: /folder actions/i }));
       fireEvent.click(screen.getByRole("menuitem", { name: /^cut$/i }));
       expect(cut).toEqual({ kind: "folders", ids: ["customers"], sourceSectionId: null, sourceRoomId: null });
 
@@ -905,8 +905,8 @@ describe("RecordingsPanel", () => {
     renderList();
     await screen.findByText("Weekly Standup");
 
-    fireEvent.click(screen.getByRole("button", { name: /new section/i }));
-    fireEvent.change(screen.getByPlaceholderText(/new section name/i), { target: { value: "Therapy" } });
+    fireEvent.click(screen.getByRole("button", { name: /new folder/i }));
+    fireEvent.change(screen.getByPlaceholderText(/new folder name/i), { target: { value: "Therapy" } });
     fireEvent.click(screen.getByRole("button", { name: /^create$/i }));
 
     await waitFor(() => expect(api.createSection).toHaveBeenCalledWith("Therapy", null, undefined));
@@ -935,7 +935,7 @@ describe("RecordingsPanel", () => {
     renderList();
     await screen.findByRole("button", { name: /open work/i });
 
-    fireEvent.click(screen.getByRole("button", { name: /section actions/i }));
+    fireEvent.click(screen.getByRole("button", { name: /folder actions/i }));
     fireEvent.click(screen.getByRole("menuitem", { name: /delete/i }));
 
     await waitFor(() => expect(api.deleteSection).toHaveBeenCalledWith("sec-1"));
@@ -948,7 +948,7 @@ describe("RecordingsPanel", () => {
 
     expect(screen.getByRole("menuitem", { name: /re-transcribe/i })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /summarise/i })).toBeTruthy();
-    expect(screen.getByRole("menuitem", { name: /move to section/i })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /move to folder/i })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /^download transcript$/i })).toBeTruthy();
     expect(screen.queryByRole("menuitem", { name: /\.srt/i })).toBeNull();
   });
@@ -1045,7 +1045,7 @@ describe("RecordingsPanel", () => {
   it("renders the top controls as icon buttons with hover text", async () => {
     renderList();
     await screen.findByText("Weekly Standup");
-    for (const name of ["New section", "Select recordings"]) {
+    for (const name of ["New folder", "Select recordings"]) {
       const btn = screen.getByRole("button", { name });
       expect(btn.getAttribute("title")).toBe(name);
       expect(btn.querySelector("svg")).toBeTruthy();
@@ -1114,15 +1114,15 @@ describe("RecordingsPanel", () => {
     // A top-level folder's menu offers New sub-section...
     const { unmount } = renderList();
     await screen.findByRole("button", { name: /open customers/i });
-    fireEvent.click(screen.getByRole("button", { name: /section actions/i }));
-    expect(screen.getByRole("menuitem", { name: /new sub-section/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /folder actions/i }));
+    expect(screen.getByRole("menuitem", { name: /new sub-folder/i })).toBeTruthy();
     unmount();
 
     // ...and so does a sub-folder's, since the cap is 8 levels deep, not 1.
     renderList("/?in=cust");
     await screen.findByRole("button", { name: /open acme/i });
-    fireEvent.click(screen.getByRole("button", { name: /section actions/i }));
-    expect(screen.getByRole("menuitem", { name: /new sub-section/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /folder actions/i }));
+    expect(screen.getByRole("menuitem", { name: /new sub-folder/i })).toBeTruthy();
   });
 
   // A folder row itself (not just the toolbar button) stops offering New sub-section once it sits at the
@@ -1139,8 +1139,8 @@ describe("RecordingsPanel", () => {
 
     renderList("/?in=d6"); // browsing the 7th level: its row, d7 (the 8th and deepest), is at the cap
     await screen.findByRole("button", { name: /open l7/i });
-    fireEvent.click(screen.getByRole("button", { name: /section actions/i }));
-    expect(screen.queryByRole("menuitem", { name: /new sub-section/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /folder actions/i }));
+    expect(screen.queryByRole("menuitem", { name: /new sub-folder/i })).toBeNull();
   });
 
   it("Merge transcripts is enabled only for 2+ and calls the API with the selection", async () => {
@@ -1178,7 +1178,7 @@ describe("RecordingsPanel", () => {
     // Today is selected by default, so its recording shows in the day list.
     expect(await screen.findByText("Today call")).toBeTruthy();
     // List-only toolbar actions are disabled in Calendar.
-    expect((screen.getByRole("button", { name: /new section/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /new folder/i }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: /select recordings/i }) as HTMLButtonElement).disabled).toBe(true);
     // The generic Refresh is not offered here at all: this tab has Sync today and Sync calendar, and a third
     // refresh control beside them read as a duplicate of the pair. A sync now re-reads the recordings the day

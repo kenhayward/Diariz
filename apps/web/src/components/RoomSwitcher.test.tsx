@@ -124,7 +124,7 @@ describe("RoomSwitcher", () => {
     renderSwitcher();
     fireEvent.click(screen.getByRole("button", { name: /switch room/i }));
     const menu = screen.getByRole("menu");
-    expect(within(menu).getByText(/3 sections . 34 recordings/i)).toBeTruthy();
+    expect(within(menu).getByText(/3 folders . 34 recordings/i)).toBeTruthy();
   });
 
   // "shared" is the one thing you cannot tell from a name, and it decides who else can read what is in there.
@@ -151,6 +151,6 @@ describe("RoomSwitcher", () => {
     };
     renderSwitcher();
     fireEvent.click(screen.getByRole("button", { name: /switch room/i }));
-    expect(within(screen.getByRole("menu")).getByText(/1 section . 1 recording/i)).toBeTruthy();
+    expect(within(screen.getByRole("menu")).getByText(/1 folder . 1 recording/i)).toBeTruthy();
   });
 });
