@@ -67,10 +67,10 @@ export const RELEASES: Release[] = [
     pr: 528,
     headline: "A button for a folder's own page, and Folders called Folders",
     summary:
-      "Opening a folder's own page used to mean opening the breadcrumb's dropdown and picking an entry off the top of a list otherwise made of parent folders. It is now a page button sitting right next to that dropdown, so it is one click and always visible; the dropdown goes back to being purely the list of parent folders. The app also calls them Folders consistently now - the New folder box, Move to folder, Folder actions, the Folder search chip and the room switcher's folder counts all said \"section\" in places, which is what the code calls them, not what you see.",
+      "Opening a folder's own page used to mean opening the breadcrumb's dropdown and picking an entry off the top of a list otherwise made of parent folders. It is now a page button sitting right next to that dropdown, so it is one click and always visible; the dropdown goes back to being just the folder path - the whole chain down to the folder you are in, not only its parents. The app also calls them Folders consistently now - the New folder box, Move to folder, Folder actions, the Folder search chip and the room switcher's folder counts all said \"section\" in places, which is what the code calls them, not what you see.",
     changed: [
       "The list view's breadcrumb has a page button opening the folder's own page, next to the dropdown - previously an entry inside it.",
-      "That dropdown is now purely the parent-folder chain.",
+      "That dropdown is now just the folder path again, the whole chain down to where you are.",
       "Folder wording is consistent across English, German, Spanish and French: New folder, Move to folder, Folder actions, Folder name, the Folder search chip, and \"12 folders\" in the room switcher.",
     ],
   },

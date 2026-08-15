@@ -329,7 +329,7 @@ one block, so nothing has to be more complicated than it needs to be. Formulas c
 (Follow-up email, Meeting recap, Decisions & risks, Tone & sentiment read), **Platform-wide** formulas shared
 with everyone, and your own **Personal** formulas — create and edit these in **Preferences → Formulas**. A
 recording-level **Formulas tab** lists every formula you can use, and a matching **Formulas tab on any folder
-page** runs the same formula over **every meeting in that folder and its sub-sections** (a map-reduce:
+page** runs the same formula over **every meeting in that folder and its sub-folders** (a map-reduce:
 the formula runs on each transcript, then over the combined results). Runs happen **in the background** - the
 result appears right away as "Generating..." and fills in when ready (or shows a clear error), so you can run
 several at once without waiting. **Re-running a formula replaces its previous document** rather than piling up
@@ -408,7 +408,7 @@ confirm. The room lives in the URL (`/rooms/:roomId`), so switching keeps a clea
 names one) - and **browses that room**: picking a Shared Room shows the recordings
 shared into it. A Shared Room has its **own folder structure**: members with **manage-contents** can create
 folders in it, nested up to 8 levels, file recordings into them (via the recording's Move to folder action or by
-**drag-and-drop**), and **drag to reorder** recordings within a section - each room keeps its own order, separate
+**drag-and-drop**), and **drag to reorder** recordings within a folder - each room keeps its own order, separate
 from your Personal Room. **Your Google Calendar stays personal**: a Shared Room's Calendar tab shows only its
 recordings (no personal-event overlay), and a recording opened inside a Shared Room hides its linked meeting and
 offers no calendar linking. The **List, Calendar, Actions

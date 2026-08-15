@@ -761,7 +761,7 @@ large folders silently rolled up only their first ~18 meetings. The old per-work
   subscribed shared formulas. The web **`SharedFormulasBrowser`** modal (opened from a "Find shared formulas"
   button in the run picker) lists them with the sharer's avatar, a read-only prompt preview, and Add/Remove.
 
-  **Folder (section) formulas.** The same formulas also run over a **folder and its sub-sections** to produce a
+  **Folder (section) formulas.** The same formulas also run over a **folder and its sub-folders** to produce a
   **`SectionFormulaResult`** (mirrors `FormulaResult`, section-scoped). The run is a **map-reduce**:
   `FormulaRunProcessor.RunOverSectionAsync` resolves the folder's recording set **room-aware, across the whole
   subtree** (the section + every folder beneath it, via `SectionTree.SubtreeIdsAsync` and the `RoomRecordings`
