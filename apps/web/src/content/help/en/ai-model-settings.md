@@ -38,7 +38,8 @@ than failing silently.
 
 The **Change model** dialog also has a **Response timeout** field, in seconds. Leave it blank to use
 the platform default (shown as the field's placeholder) - set a number to override it for your own
-account, the same way the API base, model name, and key can be overridden.
+account, the same way the API base, model name, and key can be overridden. A value must be at least 5
+seconds; anything from 1 to 4 is rejected.
 
 Raise this if a large local model is getting cut off partway through a reply. That is what the field is
 for.
