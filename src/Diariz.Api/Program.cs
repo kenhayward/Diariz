@@ -369,7 +369,7 @@ var exportLocalesRoot = Directory.Exists(Path.Combine(builder.Environment.Conten
 builder.Services.AddSingleton<IExportLocalizer>(_ => new JsonExportLocalizer(exportLocalesRoot));
 
 // ---- Chat (streaming, reuses the per-user summarisation LLM config) ----
-AddLlmClient<IChatStreamClient, ChatStreamClient>();
+AddLlmClient<IChatStreamClient, ChatStreamClient>(NoHttpTimeout);
 builder.Services.AddScoped<IChatContextResolver, ChatContextResolver>();
 builder.Services.AddSingleton<IAttachmentExtractor, AttachmentExtractor>();
 // URL-attachment fetcher: a named client with auto-redirect OFF so each hop is re-checked against the
