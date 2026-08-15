@@ -113,8 +113,11 @@ public class UserSettingsController : ControllerBase
         "rejected with a 400 rather than silently coerced, since that is not a working timeout.")]
     public async Task<IActionResult> Update(UpdateUserSettingsRequest req)
     {
-        // Validate before any mutation: the method assigns fields as it goes and saves once at the end,
-        // so a BadRequest returned partway through would half-apply the request.
+        // Validated first, before touching `s` or the change tracker at all: the method assigns fields as
+        // it goes (one of them, OutlookSyncEnabled: false, queues a RemoveRange) and only calls
+        // SaveChangesAsync once at the end, so returning BadRequest never persists a partial write either
+        // way - but validating up front keeps every branch below this point simple ("we already know the
+        // value is usable") instead of each one having to guard against a value it might still reject.
         if (req.LlmTimeoutSeconds is > 0 and < 5)
             return BadRequest("An LLM timeout must be at least 5 seconds.");
 

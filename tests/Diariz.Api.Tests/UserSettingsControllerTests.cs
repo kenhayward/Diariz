@@ -496,4 +496,23 @@ public class UserSettingsControllerTests
 
         Assert.IsType<BadRequestObjectResult>(result);
     }
+
+    /// <summary>Pins the validation's placement, not just its outcome: a single request that carries both an
+    /// invalid timeout and another field's change must reject the whole request and write nothing at all - not
+    /// silently ignore the bad timeout while applying the rest. This would still pass if the floor check moved
+    /// below the field-assignment blocks and only skipped assigning the timeout itself; asserting that no
+    /// UserSettings row (and no sibling field) was written is what catches that regression.</summary>
+    [Fact]
+    public async Task Put_RejectsATimeoutBelowTheFloor_AndWritesNothingElseFromTheSameRequest()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+
+        var result = await Build(db, userId).Update(
+            new UpdateUserSettingsRequest(null, "should-not-be-saved", null, LlmTimeoutSeconds: 3));
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        // No row was created at all - the sibling Model change never landed either.
+        Assert.Null(await db.UserSettings.FindAsync(userId));
+    }
 }
