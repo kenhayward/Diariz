@@ -1,3 +1,7 @@
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json;
+using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
 using Diariz.Api.IntegrationTests.Infrastructure;
@@ -7,6 +11,7 @@ using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Diariz.Api.IntegrationTests;
 
@@ -1381,5 +1386,82 @@ public class LlmUsageViewerIntegrationTests(ContainersFixture fx)
         Assert.DoesNotContain(result.Users, u => u.UserId == Guid.Empty);
         Assert.Contains(anonymousModel, result.Models);
         Assert.Contains(LlmCallKind.SectionSummary, result.Kinds);
+    }
+
+    // ---- Fix round 1 (Task 6 follow-up): `kinds` binds both the enum NAME and NUMERIC query-string
+    // forms, and both select the same rows ----
+    //
+    // Everything above in this file calls the controller action directly (Build(db).List(...)), which
+    // never runs ASP.NET Core's actual query-string model binder - a C# enum-array argument is passed
+    // in as-is, so it proves nothing about what a real "?kinds=Tags" or "?kinds=7" URL binds to. This is
+    // the one test in the file that goes through the real HTTP pipeline (DiarizWebAppFactory, the same
+    // harness FeedbackIntegrationTests/RbacIntegrationTests use), specifically to answer that question:
+    // the web client (Task 6) now types `kinds` as LlmCallKind[] end-to-end and sends the enum name,
+    // e.g. "?kinds=Tags", and the server binds it via [FromQuery] LlmCallKind[]? kinds - if ASP.NET Core
+    // did not accept enum names there, that would be the wrong recommendation to have shipped.
+
+    private DiarizWebAppFactory NewHttpFactory() => new(fx);
+
+    private static async Task<Guid> SeedHttpPlatformAdminAsync(DiarizWebAppFactory factory)
+    {
+        var id = Guid.NewGuid();
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<DiarizDbContext>();
+        Users.Ensure(db, id);
+        Perms.Grant(db, id, Perms.PlatformAdministrator);
+        return id;
+    }
+
+    private static HttpClient AuthenticatedHttpClient(DiarizWebAppFactory factory, string token)
+    {
+        var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
+    }
+
+    /// <summary>Deserializes an LlmUsage response the same way the real server serialized it: enums as
+    /// their NAME (JsonConfig.Apply adds the same JsonStringEnumConverter Program.cs wires up), not the
+    /// System.Net.Http.Json default (which would throw trying to parse "Tags" as a number).</summary>
+    private static readonly JsonSerializerOptions HttpJsonOptions = BuildHttpJsonOptions();
+
+    private static JsonSerializerOptions BuildHttpJsonOptions()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        JsonConfig.Apply(options);
+        return options;
+    }
+
+    [Fact]
+    public async Task List_FiltersByKind_TheNameFormAndTheNumericFormSelectTheSameRows()
+    {
+        using var factory = NewHttpFactory();
+        var adminId = await SeedHttpPlatformAdminAsync(factory);
+        var token = TestTokens.Issue(adminId);
+        using var client = AuthenticatedHttpClient(factory, token);
+
+        var marker = Guid.NewGuid();
+        await using (var db = fx.CreateDbContext())
+        {
+            db.LlmCalls.AddRange(
+                SummaryRow(marker, kind: LlmCallKind.Tags),
+                SummaryRow(marker, kind: LlmCallKind.ChatMessage));
+            await db.SaveChangesAsync();
+        }
+
+        // The NAME form - what the web client (Task 6) actually sends now that LlmUsageFilter.kinds is
+        // typed LlmCallKind[] end-to-end.
+        var byName = await client.GetFromJsonAsync<LlmUsagePage<LlmUsageCallRow>>(
+            $"/api/admin/llm-usage?mode=calls&models={marker}&kinds=Tags", HttpJsonOptions);
+        // The NUMERIC form - the old wire shape (int[]), which must keep working for any caller still
+        // sending it (see LlmCallKind.Tags == 7 in LlmCallKind.cs).
+        var byNumber = await client.GetFromJsonAsync<LlmUsagePage<LlmUsageCallRow>>(
+            $"/api/admin/llm-usage?mode=calls&models={marker}&kinds={(int)LlmCallKind.Tags}", HttpJsonOptions);
+
+        Assert.NotNull(byName);
+        Assert.NotNull(byNumber);
+        var byNameRow = Assert.Single(byName!.Rows);
+        var byNumberRow = Assert.Single(byNumber!.Rows);
+        Assert.Equal(LlmCallKind.Tags, byNameRow.Kind);
+        Assert.Equal(byNameRow.Id, byNumberRow.Id); // both forms select the exact same row
     }
 }

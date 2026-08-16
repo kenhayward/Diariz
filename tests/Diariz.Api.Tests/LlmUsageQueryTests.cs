@@ -62,7 +62,7 @@ public class LlmUsageQueryTests
         var wrongModel = Row(Now.AddDays(-1), LlmCallKind.ChatMessage, userId, "llama");
 
         var found = await QueryAsync(
-            new LlmUsageFilter(null, null, [userId], [(int)LlmCallKind.ChatMessage], ["qwen"], null, null, null),
+            new LlmUsageFilter(null, null, [userId], [LlmCallKind.ChatMessage], ["qwen"], null, null, null),
             wanted, wrongUser, wrongKind, wrongModel);
 
         Assert.Equal(wanted.Id, Assert.Single(found).Id);

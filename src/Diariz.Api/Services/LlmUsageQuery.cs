@@ -66,7 +66,7 @@ public static class LlmUsageQuery
             source = source.Where(c => c.UserId != null && userIds.Contains(c.UserId.Value));
 
         if (filter.Kinds is { Length: > 0 } kinds)
-            source = source.Where(c => kinds.Contains((int)c.Kind));
+            source = source.Where(c => kinds.Contains(c.Kind));
 
         if (filter.Models is { Length: > 0 } models)
             source = source.Where(c => models.Contains(c.Model));

@@ -1292,15 +1292,17 @@ export type LlmUsageSortKey =
 export type LlmUsageGroupDimension = "user" | "model" | "kind";
 
 /// Filter shared by every /api/admin/llm-usage endpoint. `userIds`/`kinds`/`models` missing or empty both
-/// mean "no filter on this dimension" - never send an empty array meaning "match nothing". `kinds` is the
-/// NUMERIC LlmCallKind value: the API binds it as `int[]` from the query string, independent of how a
-/// response row's `kind` field is serialized (see LlmCallKind above). `from`/`to` are ISO 8601 strings;
-/// omitting `from` defaults server-side to 30 days before now.
+/// mean "no filter on this dimension" - never send an empty array meaning "match nothing". `kinds` is
+/// typed `LlmCallKind[]` - the same string-name shape a response row's own `kind` field uses - and is
+/// sent as the enum NAME on the wire (e.g. `?kinds=Tags`); the API binds `[FromQuery] LlmCallKind[]?`,
+/// and ASP.NET Core's query-string enum binder accepts names directly, so no name-to-number translation
+/// is needed to feed a value from `getLlmUsageFilters()` back into this filter. `from`/`to` are ISO 8601
+/// strings; omitting `from` defaults server-side to 30 days before now.
 export interface LlmUsageFilter {
   from?: string | null;
   to?: string | null;
   userIds?: string[];
-  kinds?: number[];
+  kinds?: LlmCallKind[];
   models?: string[];
   outcome?: "ok" | "failed" | "all" | null;
   recordingId?: string | null;

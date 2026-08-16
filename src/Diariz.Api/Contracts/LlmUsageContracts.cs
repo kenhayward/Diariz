@@ -17,7 +17,7 @@ public record LlmUsageFilter(
     DateTimeOffset? From,
     DateTimeOffset? To,
     Guid[]? UserIds,
-    int[]? Kinds,
+    LlmCallKind[]? Kinds,
     string[]? Models,
     string? Outcome,
     Guid? RecordingId,
