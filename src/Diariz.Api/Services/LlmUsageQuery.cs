@@ -219,13 +219,25 @@ public static class LlmUsageQuery
     /// This is a single call - two chained <c>GroupBy</c>/<c>Select</c> stages, one <c>ToListAsync</c> at
     /// the end - translated by EF/Npgsql into one SQL statement (an inner GROUP BY subquery feeding an
     /// outer GROUP BY), verified against real Postgres. The result set materialized into memory is bounded
-    /// by the number of DISTINCT GROUPS the request can produce (at most #users x #models x #kinds for the
-    /// widest possible <c>groupBy</c>), never by the number of matching calls or operations - grouping by
-    /// user or kind alone is naturally small (bounded by how many distinct users/kinds exist on the
-    /// platform), and grouping by model is equally small in practice (a handful of configured model
-    /// names). Unlike <c>LlmUsageController.List</c>'s operations mode, nothing here hits the EF/Npgsql
-    /// compound-ORDER-BY translation limitation documented there - this method issues no ORDER BY at
-    /// all - so no <c>MaxOperationsPerRequest</c>-style pre-fetch guard is needed for this query shape.</summary>
+    /// by the number of DISTINCT GROUPS the request can produce, never by the number of matching calls
+    /// directly - see <c>LlmUsageController.Summary</c>'s <c>MaxOperationsPerRequest</c> guard (reusing
+    /// the same ceiling <c>List</c>'s operations mode uses, on the same quantity: a group can never exist
+    /// without at least one operation contributing to it, so the true group count for the widest
+    /// <c>groupBy</c> is bounded by the distinct-operation count the same way <c>List</c>'s operations
+    /// mode is). Unlike <c>List</c>'s operations mode, nothing here hits the EF/Npgsql compound-ORDER-BY
+    /// translation limitation documented there - this method issues no ORDER BY at all.
+    ///
+    /// <c>UserId</c> IS part of both grouping keys below; <c>UserEmail</c> deliberately is NOT, even
+    /// when <paramref name="dimensions"/> includes <see cref="LlmUsageGroupDimension.User"/>. Per
+    /// <see cref="LlmCall.UserEmail"/>'s own doc comment, it is an explicitly denormalised SNAPSHOT taken
+    /// at call time so a row stays readable after the user is deleted - not an identity field. Two calls
+    /// for the SAME <c>UserId</c> could in principle carry two different email snapshots (e.g. the user's
+    /// email changed between calls); keying on the pair would silently split one user's usage into two
+    /// rows, each looking authoritative - the same class of defect
+    /// <c>LlmUsageController.List</c>'s <c>OperationKey</c> comment documents for <c>Model</c>, which cost
+    /// two review rounds there. Instead <c>UserEmail</c> is carried as a non-key DISPLAY value via
+    /// <c>MAX(UserEmail)</c> at both aggregation levels - an arbitrary but deterministic choice when
+    /// snapshots within one group ever disagree, never a second key.</summary>
     public static async Task<IReadOnlyList<LlmUsageSummaryGroup>> SummaryAsync(
         IQueryable<LlmCall> filtered, LlmUsageGroupDimension[] dimensions, CancellationToken ct)
     {
@@ -237,7 +249,7 @@ public static class LlmUsageQuery
             .Select(c => new
             {
                 UserId = byUser ? c.UserId : (Guid?)null,
-                UserEmail = byUser ? c.UserEmail : null,
+                UserEmail = byUser ? c.UserEmail : null, // display only - NOT in either GroupBy key below
                 Model = byModel ? c.Model : null,
                 Kind = byKind ? (LlmCallKind?)c.Kind : null,
                 c.OperationId,
@@ -248,13 +260,13 @@ public static class LlmUsageQuery
                 c.DurationMs,
                 c.Success,
             })
-            .GroupBy(x => new { x.UserId, x.UserEmail, x.Model, x.Kind, x.OperationId })
+            .GroupBy(x => new { x.UserId, x.Model, x.Kind, x.OperationId })
             .Select(g => new
             {
                 g.Key.UserId,
-                g.Key.UserEmail,
                 g.Key.Model,
                 g.Key.Kind,
+                UserEmail = g.Max(x => x.UserEmail),
                 Turns = g.Count(),
                 PromptTokensSum = g.Sum(x => (long?)x.PromptTokens),
                 PromptTokensMeasured = g.Count(x => x.PromptTokens != null),
@@ -272,13 +284,13 @@ public static class LlmUsageQuery
             });
 
         var grouped = await perOperation
-            .GroupBy(x => new { x.UserId, x.UserEmail, x.Model, x.Kind })
+            .GroupBy(x => new { x.UserId, x.Model, x.Kind })
             .Select(g => new
             {
                 g.Key.UserId,
-                g.Key.UserEmail,
                 g.Key.Model,
                 g.Key.Kind,
+                UserEmail = g.Max(x => x.UserEmail),
                 Operations = g.Count(),
                 Calls = g.Sum(x => x.Turns),
                 AverageTurns = g.Average(x => (double)x.Turns),

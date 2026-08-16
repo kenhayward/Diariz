@@ -330,11 +330,14 @@ public class LlmUsageController : ControllerBase
     {
         // Silently ignoring an unrecognised (or missing) groupBy would show the administrator a report
         // grouped differently from what they asked for, which is worse than an error - same discipline
-        // as the unrecognised-sort/unrecognised-mode rejections in List above.
+        // as the unrecognised-sort/unrecognised-mode rejections in List above. Missing and unrecognised
+        // get distinct messages - "groupBy is required" reads oddly as "value ''" if folded into the
+        // same interpolated string as an actually-unrecognised token.
         if (!LlmUsageQuery.TryResolveGroupBy(groupBy, out var dimensions))
-            return BadRequest(
-                $"Unknown or missing groupBy value '{groupBy}'. Expected a comma-separated list of " +
-                "'user', 'model', and/or 'kind'.");
+            return BadRequest(string.IsNullOrWhiteSpace(groupBy)
+                ? "groupBy is required. Expected a comma-separated list of 'user', 'model', and/or 'kind'."
+                : $"Unknown groupBy value '{groupBy}'. Expected a comma-separated list of 'user', " +
+                  "'model', and/or 'kind'.");
 
         // Reuse LlmUsageQuery.Apply for the filter, exactly as List does above, so the summary and the
         // detail view can never silently disagree about what is "in scope" for the same query string.
@@ -342,6 +345,17 @@ public class LlmUsageController : ControllerBase
         var filtered = LlmUsageQuery.Apply(_db.LlmCalls.AsNoTracking(), filter, DateTimeOffset.UtcNow);
 
         var totals = await LlmUsageQuery.TotalsAsync(filtered, ct);
+
+        // Same guard, same quantity, as List's operations mode: a summary group can never exist without
+        // at least one operation contributing to it, so the true group count - for ANY groupBy, worst
+        // case the three-way combination - can never exceed totals.Operations (already computed above,
+        // no extra round trip). This can only under-trigger, never falsely reject: if the guard doesn't
+        // fire, the real group count is provably <= totals.Operations <= MaxOperationsPerRequest too.
+        if (totals.Operations > MaxOperationsPerRequest)
+            return BadRequest(
+                $"This filter matches too many operations to summarize ({totals.Operations:N0}+, over " +
+                $"the {MaxOperationsPerRequest:N0} limit). Narrow the date range or add more filters.");
+
         var groups = await LlmUsageQuery.SummaryAsync(filtered, dimensions, ct);
         return Ok(new LlmUsageSummary(groups, totals));
     }

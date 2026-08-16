@@ -867,4 +867,148 @@ public class LlmUsageViewerIntegrationTests(ContainersFixture fx)
         Assert.Equal(1, group.Calls);
         Assert.Equal(100, group.CompletionTokens);
     }
+
+    // ---- Fix round 1: Finding 1 (UserEmail must not be part of the user grouping key) ----
+
+    [Fact]
+    public async Task Summary_GroupsByUser_CollapsesToOneGroup_EvenWhenUserEmailSnapshotDiffers()
+    {
+        // UserEmail is an explicitly denormalised SNAPSHOT (see LlmCall.UserEmail's own doc comment) -
+        // its whole purpose is to survive the user being deleted. It must NOT be part of the grouping
+        // key: two calls for the SAME UserId with two DIFFERENT UserEmail snapshots (e.g. the user
+        // changed their email between the two calls) must still collapse into one group, the same way
+        // Task 3 had to stop treating Model as safe to fold into every identity assumption. If UserEmail
+        // is in the key, this silently splits one user's usage into two rows, each looking authoritative.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        db.Users.Add(new ApplicationUser { Id = userId, UserName = $"{userId}@x.test", Email = "new@x.test" });
+        db.LlmCalls.AddRange(
+            SummaryRow(marker, userId: userId, userEmail: "old@x.test", completionTokens: 100),
+            SummaryRow(marker, userId: userId, userEmail: "new@x.test", completionTokens: 200));
+        await db.SaveChangesAsync();
+
+        var result = OkValue<LlmUsageSummary>(
+            await Build(db).Summary(groupBy: "user", models: [marker.ToString()]));
+
+        var group = Assert.Single(result.Groups);
+        Assert.Equal(userId, group.UserId);
+        Assert.Equal(2, group.Calls);
+        Assert.Equal(300, group.CompletionTokens);
+    }
+
+    // ---- Fix round 1: Finding 2 (groupBy=user / groupBy=kind / the three-way combination were untested) ----
+
+    [Fact]
+    public async Task Summary_GroupsByUserAlone_ReportsOneRowPerDistinctUser()
+    {
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var userA = Guid.NewGuid();
+        var userB = Guid.NewGuid();
+        db.Users.AddRange(
+            new ApplicationUser { Id = userA, UserName = $"{userA}@x.test", Email = "a@x.test" },
+            new ApplicationUser { Id = userB, UserName = $"{userB}@x.test", Email = "b@x.test" });
+        db.LlmCalls.AddRange(
+            SummaryRow(marker, userId: userA, userEmail: "a@x.test", completionTokens: 10),
+            SummaryRow(marker, userId: userA, userEmail: "a@x.test", completionTokens: 20),
+            SummaryRow(marker, userId: userB, userEmail: "b@x.test", completionTokens: 5));
+        await db.SaveChangesAsync();
+
+        var result = OkValue<LlmUsageSummary>(
+            await Build(db).Summary(groupBy: "user", models: [marker.ToString()]));
+
+        Assert.Equal(2, result.Groups.Count);
+        var groupA = result.Groups.Single(g => g.UserId == userA);
+        Assert.Equal("a@x.test", groupA.UserEmail);
+        Assert.Equal(2, groupA.Calls);
+        Assert.Equal(30, groupA.CompletionTokens);
+
+        var groupB = result.Groups.Single(g => g.UserId == userB);
+        Assert.Equal("b@x.test", groupB.UserEmail);
+        Assert.Equal(1, groupB.Calls);
+
+        // The un-grouped dimensions collapse, as usual.
+        Assert.All(result.Groups, g => Assert.Null(g.Model));
+        Assert.All(result.Groups, g => Assert.Null(g.Kind));
+    }
+
+    [Fact]
+    public async Task Summary_GroupsByKindAlone_ReportsOneRowPerDistinctKind()
+    {
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        db.LlmCalls.AddRange(
+            SummaryRow(marker, kind: LlmCallKind.Tags, completionTokens: 10),
+            SummaryRow(marker, kind: LlmCallKind.Tags, completionTokens: 20),
+            SummaryRow(marker, kind: LlmCallKind.ChatMessage, completionTokens: 5));
+        await db.SaveChangesAsync();
+
+        var result = OkValue<LlmUsageSummary>(
+            await Build(db).Summary(groupBy: "kind", models: [marker.ToString()]));
+
+        Assert.Equal(2, result.Groups.Count);
+        var tags = result.Groups.Single(g => g.Kind == LlmCallKind.Tags);
+        Assert.Equal(2, tags.Calls);
+        Assert.Equal(30, tags.CompletionTokens);
+
+        var chat = result.Groups.Single(g => g.Kind == LlmCallKind.ChatMessage);
+        Assert.Equal(1, chat.Calls);
+    }
+
+    [Fact]
+    public async Task Summary_GroupsByUserModelKindCombined_DimensionsGenuinelyMultiplyOut()
+    {
+        // Proves the three requested dimensions combine (a cartesian-style split), not merely that
+        // grouping by three things doesn't crash. Same user + same model but a different kind must be a
+        // DIFFERENT group from the same user + model + the first kind - if the implementation silently
+        // collapsed on a subset of the requested dimensions, this would show fewer than 4 groups.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var userA = Guid.NewGuid();
+        var userB = Guid.NewGuid();
+        var modelA = $"{marker}-a";
+        var modelB = $"{marker}-b";
+        db.Users.AddRange(
+            new ApplicationUser { Id = userA, UserName = $"{userA}@x.test", Email = "a@x.test" },
+            new ApplicationUser { Id = userB, UserName = $"{userB}@x.test", Email = "b@x.test" });
+        db.LlmCalls.AddRange(
+            SummaryRow(marker, userId: userA, userEmail: "a@x.test", model: modelA, kind: LlmCallKind.Tags),
+            SummaryRow(marker, userId: userA, userEmail: "a@x.test", model: modelA, kind: LlmCallKind.ChatMessage),
+            SummaryRow(marker, userId: userA, userEmail: "a@x.test", model: modelB, kind: LlmCallKind.Tags),
+            SummaryRow(marker, userId: userB, userEmail: "b@x.test", model: modelA, kind: LlmCallKind.Tags));
+        await db.SaveChangesAsync();
+
+        var result = OkValue<LlmUsageSummary>(
+            await Build(db).Summary(groupBy: "user,model,kind", models: [modelA, modelB]));
+
+        Assert.Equal(4, result.Groups.Count);
+        Assert.Contains(result.Groups, g => g.UserId == userA && g.Model == modelA && g.Kind == LlmCallKind.Tags);
+        Assert.Contains(result.Groups, g => g.UserId == userA && g.Model == modelA && g.Kind == LlmCallKind.ChatMessage);
+        Assert.Contains(result.Groups, g => g.UserId == userA && g.Model == modelB && g.Kind == LlmCallKind.Tags);
+        Assert.Contains(result.Groups, g => g.UserId == userB && g.Model == modelA && g.Kind == LlmCallKind.Tags);
+        Assert.All(result.Groups, g => Assert.Equal(1, g.Calls));
+    }
+
+    // ---- Fix round 1: Finding 3 (Summary needs the same operation-count ceiling as List) ----
+
+    [Fact]
+    public async Task Summary_ExceedingTheOperationCeiling_Returns400_NotUnboundedMaterialization()
+    {
+        // Mirrors List's OperationsMode_ExceedingTheOperationCeiling_Returns400_NotATruncatedPage:
+        // group count can never exceed the number of distinct operations (a group only exists if at
+        // least one operation's calls fall into it), so totals.Operations - already computed before this
+        // guard runs - is a safe, cost-free bound to check. Seeds one call more than the ceiling, each
+        // its own operation, grouped by the widest combination (worst case for group count).
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        const int overCeiling = LlmUsageController.MaxOperationsPerRequest + 1;
+        db.LlmCalls.AddRange(
+            Enumerable.Range(0, overCeiling).Select(_ => SummaryRow(marker, operationId: Guid.NewGuid())));
+        await db.SaveChangesAsync();
+
+        var result = await Build(db).Summary(groupBy: "user,model,kind", models: [marker.ToString()]);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
 }
