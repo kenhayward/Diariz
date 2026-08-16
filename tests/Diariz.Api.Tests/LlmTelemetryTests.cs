@@ -828,6 +828,76 @@ public class LlmTelemetryStreamingTests
         Assert.Equal("IOException", call.ErrorKind);
     }
 
+    /// <summary>Serves one legitimate chunk, then throws <see cref="OperationCanceledException"/> on every
+    /// subsequent read - modelling what a closed browser tab or a Stop button actually does today: the
+    /// request's <c>CancellationToken</c> (bound to <c>HttpContext.RequestAborted</c>) is handed all the way
+    /// down to this read, and cancelling it mid-stream faults the read exactly like a dropped connection
+    /// does. There is no separate "reader politely walked away" signal at this layer - see
+    /// RecordsFailure_ButNotIndistinguishableFromATimeout_WhenTheReadIsCancelled below.</summary>
+    private sealed class CancelledAfterFirstChunkStream : Stream
+    {
+        private readonly byte[] _first;
+        private int _reads;
+        public CancelledAfterFirstChunkStream(string first) => _first = Encoding.UTF8.GetBytes(first);
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => 0; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
+        {
+            _reads++;
+            if (_reads == 1)
+            {
+                _first.CopyTo(buffer);
+                return ValueTask.FromResult(_first.Length);
+            }
+            throw new OperationCanceledException("caller cancelled - e.g. a closed tab or a Stop button");
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    [Fact]
+    public async Task RecordsFailure_ButNotIndistinguishableFromATimeout_WhenTheReadIsCancelled()
+    {
+        // Pins TODAY's behaviour so a future change to it is deliberate, not accidental. The most common
+        // real "abandonment" - a closed tab or a Stop button - cancels the in-flight read via the same
+        // CancellationToken a genuine inactivity timeout would fire on (ChatController.Stream's ct binds to
+        // HttpContext.RequestAborted and flows into the read). ObservingStream.ReadAsync's catch fires
+        // Complete(ex) for ANY exception, including OperationCanceledException, and ErrorKindOf maps it to
+        // "Timeout" - the same label a genuine per-call timeout gets. The two are not distinguishable at
+        // this layer (every client passes a linked CTS composite), and separating them is deliberately out
+        // of scope - see the PR 2 self-review. This is NOT the clean-dispose path
+        // (RecordsTheCall_EvenWhenTheReaderAbandonsTheStream above): that only covers a caller that stops
+        // reading and disposes with no fault, which is the normally-completed [DONE] case, not this one.
+        var sink = new FakeLlmUsageSink();
+        using var _ = LlmCallScope.Push(LlmCallKind.ChatMessage);
+        var cancelledStream = new CancelledAfterFirstChunkStream(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n");
+        var content = new StreamContent(cancelledStream)
+        {
+            Headers = { ContentType = new MediaTypeHeaderValue("text/event-stream") },
+        };
+        var http = Client(
+            new LlmTelemetryHandler(new FakeLlmTrace(), sink),
+            new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = content });
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions") { Content = new StringContent("{}") };
+        var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
+        await Record.ExceptionAsync(() => resp.Content.ReadAsStringAsync());
+
+        var call = Assert.Single(sink.Calls);
+        Assert.False(call.Success);
+        Assert.Equal("Timeout", call.ErrorKind);
+    }
+
     [Fact]
     public async Task RecordsSuccess_ForACleanStream_DespiteTheFaultHandling()
     {

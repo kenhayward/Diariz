@@ -833,10 +833,14 @@ already enforces for Sentry/GlitchTip spans.
    to the real caller (`ChatStreamClient` et al.) unbuffered - it never delays or reorders a chunk, so the
    reply keeps streaming to the browser exactly as before - while feeding a copy of each chunk to an
    **`SseUsageScanner`** (`Services/SseUsageScanner.cs`) looking for the trailing `usage` event. The
-   `LlmCall` row is completed only when the stream actually ends: cleanly at end-of-stream, when the caller
-   disposes it (a closed tab, a client that stops reading at `[DONE]` - not itself evidence of failure), or
-   when a read faults mid-stream (a dropped connection), which **is** recorded as a failure even though the
-   response started with a 200. The wrapper also stamps **time to first token** - the elapsed time from
+   `LlmCall` row is completed only when the stream actually ends: cleanly at end-of-stream, or when a read
+   faults - including a cancelled read - mid-stream, which **is** recorded as a failure even though the
+   response started with a 200. A client that stops reading at `[DONE]` and disposes cleanly, with no fault,
+   is not counted as a failure - but that is the normally-completed case, not an abandoned one: a closed tab
+   or a Stop button cancels the in-flight read, which surfaces as an `OperationCanceledException` and is
+   attributed as a fault. Cancellation and a per-call inactivity timeout share the same `CancellationToken`
+   and are not distinguishable at this layer, so both classify as `ErrorKind = "Timeout"`. The wrapper also
+   stamps **time to first token** - the elapsed time from
    `SendAsync` to the first byte observed on the stream - alongside the true end-to-end duration, both far
    more meaningful for a streamed call than the old time-to-headers figure. Because the handler already
    wrapped every client, a new LLM client added later is logged automatically with no call-site change. A
