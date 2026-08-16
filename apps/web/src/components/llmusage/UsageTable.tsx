@@ -92,9 +92,6 @@ export default function UsageTable({
               {header("totalTokens", "llmUsageColTotalTokens")}
               {plainHeader("llmUsageColOutcome")}
             </tr>
-            {/* Pinned right under the header row - see TotalsRow for why it must render `page.totals`
-                rather than folding over `page.rows`. */}
-            <TotalsRow totals={page.totals} />
           </thead>
           <tbody>
             {isLoading ? (
@@ -115,6 +112,14 @@ export default function UsageTable({
               ))
             )}
           </tbody>
+          {/* Pinned to the BOTTOM of the scroll container, not offset from the header - see TotalsRow's
+              doc comment for why (a pixel offset guessed from the header's rendered height drifts the
+              moment font size, padding, line height, or locale-driven text wrapping changes it - verified
+              live in the browser to actually happen, see task-7-report.md's fix-round-2 section). A
+              <tfoot> row pins to the bottom of its scrolling ancestor with `position: sticky; bottom: 0`
+              regardless of header height, and totals beneath the data is the more conventional reading
+              order for a table besides. */}
+          <TotalsRow totals={page.totals} />
         </table>
       </div>
       <PaginationBar page={pageNumber} pageSize={pageSize} total={page.total} onPageChange={onPageChange} />
@@ -125,27 +130,39 @@ export default function UsageTable({
 /// The aggregate row over the WHOLE filtered set, not the page on screen - `page.totals` comes straight
 /// from the API's own aggregate query (see `LlmUsageTotals`'s doc comment), so it stays correct the moment
 /// there is a second page. Never compute this by summing `page.rows`.
+///
+/// Rendered as a `<tfoot>`, sticky to the BOTTOM of the scrolling container (`bottom-0`) - deliberately NOT
+/// offset from the header by a pixel figure. An earlier version pinned it under `<thead>` with a hand-typed
+/// `top-[26px]`, which looked right in isolation but was verified live in the browser to be wrong: the real
+/// rendered header is about 40px tall, so roughly 14px (~22%) of the totals row sat hidden underneath it
+/// once the table was actually scrolled - see task-7-report.md's fix-round-2 section for the measured
+/// numbers. A `<tfoot>` pinned to the bottom has no dependency on the header's height at all, so it cannot
+/// drift the same way if the header's font size, padding, line height, or locale-driven text wrapping ever
+/// changes - and totals beneath the data is the more conventional reading order for a table besides.
 function TotalsRow({ totals }: { totals: LlmUsageTotals }) {
   const { t } = useTranslation("account");
   return (
-    <tr
-      data-testid="llm-usage-totals-row"
-      className="sticky top-[26px] z-10 border-b bg-gray-50 font-medium text-gray-700 dark:border-gray-800 dark:bg-gray-800 dark:text-gray-200"
-    >
-      <td colSpan={6} className="px-2 py-1">
-        {t("llmUsageTotalsLabel", { calls: totals.calls, operations: totals.operations })}
-      </td>
-      <td className="px-2 py-1 text-right">{formatDuration(totals.durationMs)}</td>
-      {/* Each cell uses that column's OWN measured count (promptTokensMeasured, etc.), never the coarser
-          any-column tokenMeasuredCalls - see LlmUsageTotals's doc comment for why reusing one shared
-          figure across four independently-nullable columns states something false about at least three
-          of them whenever they differ (which, for reasoning tokens especially, is the common case). */}
-      <TokenTotalCell value={totals.promptTokens} measured={totals.promptTokensMeasured} total={totals.calls} />
-      <TokenTotalCell value={totals.completionTokens} measured={totals.completionTokensMeasured} total={totals.calls} />
-      <TokenTotalCell value={totals.reasoningTokens} measured={totals.reasoningTokensMeasured} total={totals.calls} />
-      <TokenTotalCell value={totals.totalTokens} measured={totals.totalTokensMeasured} total={totals.calls} />
-      <td className="px-2 py-1">{t("llmUsageTotalsFailed", { count: totals.failedCalls })}</td>
-    </tr>
+    <tfoot>
+      <tr
+        data-testid="llm-usage-totals-row"
+        className="sticky bottom-0 z-10 border-t bg-gray-50 font-medium text-gray-700 dark:border-gray-800 dark:bg-gray-800 dark:text-gray-200"
+      >
+        <td colSpan={6} className="px-2 py-1">
+          {t("llmUsageTotalsLabel", { calls: totals.calls, operations: totals.operations })}
+        </td>
+        <td className="px-2 py-1 text-right">{formatDuration(totals.durationMs)}</td>
+        {/* Each cell uses that column's OWN measured count (promptTokensMeasured, etc.), never the
+            coarser any-column tokenMeasuredCalls - see LlmUsageTotals's doc comment for why reusing one
+            shared figure across four independently-nullable columns states something false about at
+            least three of them whenever they differ (which, for reasoning tokens especially, is the
+            common case). */}
+        <TokenTotalCell value={totals.promptTokens} measured={totals.promptTokensMeasured} total={totals.calls} />
+        <TokenTotalCell value={totals.completionTokens} measured={totals.completionTokensMeasured} total={totals.calls} />
+        <TokenTotalCell value={totals.reasoningTokens} measured={totals.reasoningTokensMeasured} total={totals.calls} />
+        <TokenTotalCell value={totals.totalTokens} measured={totals.totalTokensMeasured} total={totals.calls} />
+        <td className="px-2 py-1">{t("llmUsageTotalsFailed", { count: totals.failedCalls })}</td>
+      </tr>
+    </tfoot>
   );
 }
 
