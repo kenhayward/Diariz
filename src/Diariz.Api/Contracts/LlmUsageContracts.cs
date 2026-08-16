@@ -20,3 +20,30 @@ public record LlmUsageFilter(
     string? Outcome,
     Guid? RecordingId,
     Guid? SectionId);
+
+/// <summary>Aggregate totals over a filtered <c>LlmCalls</c> query, computed by
+/// <c>LlmUsageQuery.TotalsAsync</c> in a single grouped aggregate query (never a per-row fold in
+/// .NET - <c>LlmCalls</c> is the largest table in the database).
+///
+/// <paramref name="Operations"/> is <c>COUNT(DISTINCT OperationId)</c>, not <c>COUNT(*)</c> - a
+/// multi-round-trip operation (e.g. a chat turn) must count once. The token sums are all
+/// <c>long?</c> because <c>SUM</c> over an all-null/empty set is SQL NULL, never 0 - a model that
+/// reports no usage must not silently read as "emitted zero tokens".
+/// <paramref name="TokenMeasuredCalls"/> is how many calls in the set had a non-null
+/// <see cref="Diariz.Domain.Entities.LlmCall.CompletionTokens"/>, so the UI can say "measured on N of
+/// M calls" instead of implying every call was measured.
+/// <paramref name="TokensPerSecond"/> is <c>SUM(CompletionTokens) / SUM(DurationMs)</c> across the
+/// whole set - never an average of each row's own rate, which lets one tiny fast call outweigh one
+/// huge slow one. It is null (never NaN/Infinity, which are not valid JSON) when no completion
+/// tokens were measured or the summed duration is zero.</summary>
+public record LlmUsageTotals(
+    int Calls,
+    int Operations,
+    long DurationMs,
+    long? PromptTokens,
+    long? CompletionTokens,
+    long? ReasoningTokens,
+    long? TotalTokens,
+    int TokenMeasuredCalls,
+    int FailedCalls,
+    double? TokensPerSecond);

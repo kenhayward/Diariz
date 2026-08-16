@@ -1,5 +1,6 @@
 using Diariz.Api.Contracts;
 using Diariz.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
 
 namespace Diariz.Api.Services;
 
@@ -75,5 +76,65 @@ public static class LlmUsageQuery
         }
 
         return SortWhitelist.TryGetValue(sort, out column!);
+    }
+
+    /// <summary>Aggregates <paramref name="filtered"/> into one <see cref="LlmUsageTotals"/> via a
+    /// single grouped aggregate query (GROUP BY over a constant, so every row folds into one group) -
+    /// never N queries and never a client-side fold, because <c>LlmCalls</c> is the largest table in
+    /// the database.
+    ///
+    /// EF's LINQ-to-SQL translation of a nullable <c>Sum</c> is <c>COALESCE(sum(x), 0)</c>, not a bare
+    /// <c>sum(x)</c> - it is matching <c>Enumerable.Sum(IEnumerable&lt;long?&gt;)</c>, which returns 0
+    /// (not null) over an empty/all-null sequence. Left alone that silently turns "nothing in this set
+    /// reported tokens" into "0 tokens", which is exactly the bug this method exists to prevent. So each
+    /// token sum is paired with its own "how many rows had a value" count in the same query, and nulled
+    /// out in C# when that count is zero - still one round trip, just wider.</summary>
+    public static async Task<LlmUsageTotals> TotalsAsync(IQueryable<LlmCall> filtered, CancellationToken ct)
+    {
+        var row = await filtered
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                Calls = g.Count(),
+                Operations = g.Select(c => c.OperationId).Distinct().Count(),
+                DurationMs = g.Sum(c => (long)c.DurationMs),
+                PromptTokensSum = g.Sum(c => (long?)c.PromptTokens),
+                PromptTokensMeasured = g.Count(c => c.PromptTokens != null),
+                CompletionTokensSum = g.Sum(c => (long?)c.CompletionTokens),
+                CompletionTokensMeasured = g.Count(c => c.CompletionTokens != null),
+                ReasoningTokensSum = g.Sum(c => (long?)c.ReasoningTokens),
+                ReasoningTokensMeasured = g.Count(c => c.ReasoningTokens != null),
+                TotalTokensSum = g.Sum(c => (long?)c.TotalTokens),
+                TotalTokensMeasured = g.Count(c => c.TotalTokens != null),
+                FailedCalls = g.Count(c => !c.Success),
+            })
+            .SingleOrDefaultAsync(ct);
+
+        if (row is null)
+            return new LlmUsageTotals(0, 0, 0, null, null, null, null, 0, 0, null);
+
+        long? promptTokens = row.PromptTokensMeasured > 0 ? row.PromptTokensSum : null;
+        long? completionTokens = row.CompletionTokensMeasured > 0 ? row.CompletionTokensSum : null;
+        long? reasoningTokens = row.ReasoningTokensMeasured > 0 ? row.ReasoningTokensSum : null;
+        long? totalTokens = row.TotalTokensMeasured > 0 ? row.TotalTokensSum : null;
+
+        // Guard both degenerate cases explicitly: no completion tokens measured, and a zero summed
+        // duration. Either would produce NaN/Infinity from a raw division, and both are invalid JSON
+        // that would break the page instead of showing "no data".
+        double? tokensPerSecond = completionTokens is { } completion && row.DurationMs > 0
+            ? completion / (row.DurationMs / 1000.0)
+            : null;
+
+        return new LlmUsageTotals(
+            row.Calls,
+            row.Operations,
+            row.DurationMs,
+            promptTokens,
+            completionTokens,
+            reasoningTokens,
+            totalTokens,
+            row.CompletionTokensMeasured,
+            row.FailedCalls,
+            tokensPerSecond);
     }
 }
