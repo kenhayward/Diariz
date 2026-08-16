@@ -376,7 +376,7 @@
   "llmUsageRetentionHint": "Durée de conservation des lignes du journal avant leur suppression par la purge nocturne. 0 conserve tout.",
   "llmUsageRetentionInvalid": "La durée de conservation du journal d’utilisation doit être un nombre entier de jours (0 ou plus).",
   "llmStreamUsageLabel": "Demander le nombre de jetons sur les appels en streaming",
-  "llmStreamUsageHint": "Demande à l’endpoint le nombre de jetons pour les réponses en streaming, quand cela est pris en charge. Prendra effet dans une future version - ce commutateur n’a pas encore d’effet.",
+  "llmStreamUsageHint": "Demande à l’endpoint le nombre de jetons pour les réponses en streaming, quand cela est pris en charge. Désactivez ceci si votre endpoint rejette la demande.",
   "automationsTitle": "Automatisations",
   "automationsIntro": "Envoyez les événements de vos réunions vers des outils comme Zapier, n8n ou Make. Choisissez ce qui doit la déclencher, collez l'URL de votre outil, puis testez-la.",
   "automationDefaultName": "Automatisation",

@@ -376,7 +376,7 @@
   "llmUsageRetentionHint": "Cuánto tiempo se conservan las filas del registro antes de que la limpieza nocturna las elimine. 0 lo conserva todo.",
   "llmUsageRetentionInvalid": "El período de retención del registro de uso debe ser un número entero de días (0 o más).",
   "llmStreamUsageLabel": "Solicitar recuentos de tokens en llamadas en streaming",
-  "llmStreamUsageHint": "Solicita al endpoint recuentos de tokens en las respuestas en streaming, cuando lo admita. Tendrá efecto en una futura versión - este interruptor todavía no hace nada.",
+  "llmStreamUsageHint": "Solicita al endpoint recuentos de tokens en las respuestas en streaming, cuando lo admita. Desactívalo si tu endpoint rechaza la solicitud.",
   "automationsTitle": "Automatizaciones",
   "automationsIntro": "Envía los eventos de tus reuniones a herramientas como Zapier, n8n o Make. Elige qué debe activarla, pega la URL de tu herramienta y pruébala.",
   "automationDefaultName": "Automatización",

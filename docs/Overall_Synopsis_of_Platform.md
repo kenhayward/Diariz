@@ -825,11 +825,23 @@ already enforces for Sentry/GlitchTip spans.
    one is not.
 2. **`LlmTelemetryHandler`** (`Services/LlmTelemetry.cs`), the `DelegatingHandler` already attached to every
    LLM client's typed `HttpClient` for Sentry span timing, reads `LlmCallScope.Active` on each call, times
-   it, parses the response's `usage` block (buffered-body reads only - a streaming SSE response is left
-   strictly alone, since buffering one would hold every chat token until the model finished), and builds an
-   `LlmCall` row. Because the handler already wrapped every client, a new LLM client added later is logged
-   automatically with no call-site change. A telemetry failure here can never break the call it measures -
-   every read is best-effort and the final hand-off is wrapped in a swallowed try/catch.
+   it, and builds an `LlmCall` row. A non-streaming (buffered JSON) response is measured and recorded the
+   moment `SendAsync` returns, with `usage` parsed straight out of the buffered body. A **streaming** (SSE)
+   response is different: the client reads it with `ResponseHeadersRead`, so the call is nowhere near over
+   when `SendAsync` returns - it has barely started. The handler wraps the response's content stream in an
+   **`ObservingStream`** (`Services/ObservingStream.cs`), a read-only pass-through that forwards every byte
+   to the real caller (`ChatStreamClient` et al.) unbuffered - it never delays or reorders a chunk, so the
+   reply keeps streaming to the browser exactly as before - while feeding a copy of each chunk to an
+   **`SseUsageScanner`** (`Services/SseUsageScanner.cs`) looking for the trailing `usage` event. The
+   `LlmCall` row is completed only when the stream actually ends: cleanly at end-of-stream, when the caller
+   disposes it (a closed tab, a client that stops reading at `[DONE]` - not itself evidence of failure), or
+   when a read faults mid-stream (a dropped connection), which **is** recorded as a failure even though the
+   response started with a 200. The wrapper also stamps **time to first token** - the elapsed time from
+   `SendAsync` to the first byte observed on the stream - alongside the true end-to-end duration, both far
+   more meaningful for a streamed call than the old time-to-headers figure. Because the handler already
+   wrapped every client, a new LLM client added later is logged automatically with no call-site change. A
+   telemetry failure here can never break the call it measures - every read is best-effort, every observer
+   callback is individually guarded, and the final hand-off is wrapped in a swallowed try/catch.
 3. **`ILlmUsageSink`** / **`ChannelLlmUsageSink`** (`Services/LlmUsageSink.cs`) is where the handler hands the
    row off - a bounded (`Capacity = 10_000`) in-memory `Channel<LlmCall>`, `TryWrite` (never blocks the call
    path). Full is `DropOldest`; a sustained burst past capacity drops the oldest buffered rows rather than
@@ -860,14 +872,18 @@ older than now" on the first sweep.
 on/off switch for the log (`LlmUsageLoggingEnabled`, default **true** - the log is the feature), the
 retention window in days (`LlmUsageRetentionDays`, default 90, `0` = forever), and whether a streaming
 request should ask the endpoint for token counts via `stream_options.include_usage`
-(`LlmStreamUsageEnabled`, default true) - a toggle rather than a constant, so an OpenAI-compatible endpoint
-that rejects the unknown field is recoverable without a redeploy.
+(`LlmStreamUsageEnabled`, default true). `ChatStreamClient` adds that field to the request body only when
+the setting is on. It stays a toggle rather than a constant specifically so a platform administrator whose
+endpoint rejects the unrecognised field can turn it off from Model Settings and recover immediately, with
+no redeploy required.
 
-**Known gap.** Streaming calls (chat replies, formula runs) are excluded from the `usage` parse above by
-design - buffering an SSE response would defeat streaming - so today they record with **null token counts**
-and a `DurationMs` that understates the true generation time. A later release closes this by requesting
-`stream_options.include_usage` on the stream itself (the `LlmStreamUsageEnabled` setting above is wired for
-that release, not this one) and reading the trailing usage event.
+**Streaming token counts and duration.** Chat replies and formula runs (both driven by `ChatStreamClient`)
+now report real token counts, a true end-to-end duration, and a time to first token, closing the gap the
+previous release left open. A streamed call used to be recorded at `SendAsync`, which only ever measured
+time to the first response header - a few tens of milliseconds - not the time the model actually spent
+generating. It is now recorded when the stream ends (see the capture contract above), with `PromptTokens`/
+`CompletionTokens`/`ReasoningTokens`/`TotalTokens` parsed from the trailing `usage` chunk `stream_options`
+asked the endpoint to send, and `TimeToFirstTokenMs` populated for the first time.
 
 ## Meeting notes (the user's own notes)
 
