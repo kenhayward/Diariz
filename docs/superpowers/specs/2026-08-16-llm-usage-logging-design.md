@@ -97,8 +97,14 @@ non-zero-offset value bound to `timestamptz`, and the in-memory provider will no
 the aggregate must be `SUM(CompletionTokens) / SUM(DurationMs)` - not an average of per-row rates, which lets
 a 3-token 40 ms call outweigh a 4,000-token run.
 
-**Indexes:** `(StartedAt DESC)`, `(UserId, StartedAt DESC)`, `(OperationId)`. Only three, deliberately: this is
-a write-heavy table and every index is paid on every call.
+**Indexes:** three declared - `(StartedAt DESC)`, `(UserId, StartedAt DESC)`, `(OperationId)` - plus the two EF
+Core creates by convention on the `RecordingId` and `SectionId` foreign keys, for **five** in total.
+
+Those two are load-bearing, not incidental. The foreign keys are `ON DELETE SET NULL`, so deleting a recording
+makes Postgres find every referencing row in `LlmCalls`; unindexed, that is a sequential scan of the largest
+table in the database on an ordinary user action, and it gets worse exactly as the log grows. `UserId` needs no
+separate index because it leads the composite one. Five is the floor, not a ceiling: this is a write-heavy
+table, so a sixth index needs a specific justification.
 
 **`PlatformSettings` gains three fields:**
 

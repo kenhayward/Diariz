@@ -269,6 +269,9 @@ In `src/Diariz.Domain/DiarizDbContext.cs`, add alongside the other `DbSet` prope
 In `OnModelCreating`, add (this config is provider-agnostic, so it goes outside any `IsNpgsql()` guard):
 
 ```csharp
+        // Three indexes are declared here; EF adds two more by convention on the RecordingId and
+        // SectionId foreign keys, for five in total. Those two are load-bearing: the FKs are SET NULL,
+        // so without them deleting a recording sequentially scans the largest table in the database.
         builder.Entity<LlmCall>(e =>
         {
             e.HasIndex(c => c.StartedAt).IsDescending();
@@ -294,7 +297,7 @@ Confirm the user entity's type name in this file before writing `ApplicationUser
 dotnet ef migrations add AddLlmCalls --project src/Diariz.Domain --startup-project src/Diariz.Api
 ```
 
-Read the generated file and confirm: the three indexes exist, all three FKs are `ReferentialAction.SetNull`, and the timestamps are `timestamp with time zone`. The migration is purely additive, so `MaintenanceController.CurrentFormat` is **not** bumped - an older backup restores onto this schema fine.
+Read the generated file and confirm: the three declared indexes exist (EF adds two more on the RecordingId and SectionId FKs - expected, and required so SET NULL deletes stay indexed), all three FKs are `ReferentialAction.SetNull`, and the timestamps are `timestamp with time zone`. The migration is purely additive, so `MaintenanceController.CurrentFormat` is **not** bumped - an older backup restores onto this schema fine.
 
 - [ ] **Step 7: Run the test to verify it passes**
 
