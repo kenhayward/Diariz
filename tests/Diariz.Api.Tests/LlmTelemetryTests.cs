@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
+using Diariz.Domain.Entities;
 
 namespace Diariz.Api.Tests;
 
@@ -92,7 +93,7 @@ public class LlmUsageParserTests
 public class LlmTelemetryHandlerTests
 {
     private static HttpClient Client(FakeLlmTrace trace, FakeHttpMessageHandler inner) =>
-        new(new LlmTelemetryHandler(trace) { InnerHandler = inner });
+        new(new LlmTelemetryHandler(trace, new FakeLlmUsageSink()) { InnerHandler = inner });
 
     private const string ChatJson =
         """{"choices":[{"message":{"content":"hi"}}],"usage":{"prompt_tokens":7,"completion_tokens":3,"total_tokens":10}}""";
@@ -149,7 +150,7 @@ public class LlmTelemetryHandlerTests
         // buffer that can be re-read at will, so the test passed with the fix removed. A single-read
         // stream is what actually reproduces the hazard.
         var trace = new FakeLlmTrace();
-        var http = new HttpClient(new LlmTelemetryHandler(trace) { InnerHandler = new OneShotStreamHandler(ChatJson) });
+        var http = new HttpClient(new LlmTelemetryHandler(trace, new FakeLlmUsageSink()) { InnerHandler = new OneShotStreamHandler(ChatJson) });
 
         var resp = await http.PostAsync("https://llm.test/v1/chat/completions", JsonContent.Create(new { }));
         var body = await resp.Content.ReadAsStringAsync();
@@ -206,7 +207,7 @@ public class LlmTelemetryHandlerTests
     public async Task FinishesTheSpanWhenTheTransportThrows()
     {
         var trace = new FakeLlmTrace();
-        var http = new HttpClient(new LlmTelemetryHandler(trace) { InnerHandler = new ThrowingHandler() });
+        var http = new HttpClient(new LlmTelemetryHandler(trace, new FakeLlmUsageSink()) { InnerHandler = new ThrowingHandler() });
 
         await Assert.ThrowsAsync<HttpRequestException>(
             () => http.PostAsync("https://llm.test/v1/chat/completions", JsonContent.Create(new { })));
@@ -284,5 +285,157 @@ public class LlmSpanDescriptionTests
     public void HandlesANullDescription()
     {
         Assert.Equal("(<500 tokens)", LlmSpanDescription.WithUsage(null, new LlmUsage(1, 2, 3)));
+    }
+}
+
+/// <summary>
+/// The handler's second output: a durable row per call, attributed via the ambient <see cref="LlmCallScope"/>
+/// and handed to <see cref="ILlmUsageSink"/>. This is additive to the Sentry span above, not a replacement -
+/// those tests are untouched.
+/// </summary>
+public class LlmTelemetryHandlerUsageTests
+{
+    /// <summary>Returns a fixed, canned <see cref="HttpResponseMessage"/> regardless of the request - unlike
+    /// <see cref="FakeHttpMessageHandler"/>, which builds the response from a body string, this takes the
+    /// response object directly so a test can control status/content-type together.</summary>
+    private sealed class StubHandler : HttpMessageHandler
+    {
+        private readonly HttpResponseMessage _response;
+        public StubHandler(HttpResponseMessage response) => _response = response;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            Task.FromResult(_response);
+    }
+
+    private static HttpClient Client(LlmTelemetryHandler handler, HttpResponseMessage response)
+    {
+        handler.InnerHandler = new StubHandler(response);
+        return new HttpClient(handler) { BaseAddress = new Uri("http://lmstudio:1234/") };
+    }
+
+    private static HttpResponseMessage Json(string body) => new(HttpStatusCode.OK)
+    {
+        Content = new StringContent(body, Encoding.UTF8, "application/json"),
+    };
+
+    [Fact]
+    public async Task RecordsTheCall_WithTheAmbientScopesAttribution()
+    {
+        var sink = new FakeLlmUsageSink();
+        var userId = Guid.NewGuid();
+        var recordingId = Guid.NewGuid();
+        using var scope = LlmCallScope.Push(
+            LlmCallKind.Summarize, userId, "owner@example.com", recordingId, "Standup");
+
+        var http = Client(
+            new LlmTelemetryHandler(new FakeLlmTrace(), sink),
+            Json("""{"usage":{"prompt_tokens":100,"completion_tokens":20,"total_tokens":120}}"""));
+        await http.PostAsync("/v1/chat/completions", new StringContent("""{"model":"qwen"}"""));
+
+        var call = Assert.Single(sink.Calls);
+        Assert.Equal(LlmCallKind.Summarize, call.Kind);
+        Assert.Equal(userId, call.UserId);
+        Assert.Equal("owner@example.com", call.UserEmail);
+        Assert.Equal(recordingId, call.RecordingId);
+        Assert.Equal("Standup", call.RecordingTitle);
+        Assert.Equal(scope.OperationId, call.OperationId);
+        Assert.Equal(1, call.Sequence);
+        Assert.Equal(100, call.PromptTokens);
+        Assert.Equal(20, call.CompletionTokens);
+        Assert.True(call.Success);
+        Assert.Equal(200, call.StatusCode);
+    }
+
+    [Fact]
+    public async Task RecordsAnUnattributedCall_AsUnknown_RatherThanDroppingIt()
+    {
+        // A client registered later without a scope must show up as a visible gap, not vanish. This is
+        // the failure mode AddLlmClient exists to prevent, and silence would reintroduce it.
+        var sink = new FakeLlmUsageSink();
+        var http = Client(new LlmTelemetryHandler(new FakeLlmTrace(), sink), Json("""{"usage":{"total_tokens":5}}"""));
+
+        await http.PostAsync("/v1/embeddings", new StringContent("{}"));
+
+        Assert.Equal(LlmCallKind.Unknown, Assert.Single(sink.Calls).Kind);
+    }
+
+    [Fact]
+    public async Task SequenceIncrementsAcrossCallsInOneScope()
+    {
+        var sink = new FakeLlmUsageSink();
+        using var scope = LlmCallScope.Push(LlmCallKind.ChatMessage);
+
+        var http = Client(new LlmTelemetryHandler(new FakeLlmTrace(), sink), Json("{}"));
+        await http.PostAsync("/v1/chat/completions", new StringContent("{}"));
+        http = Client(new LlmTelemetryHandler(new FakeLlmTrace(), sink), Json("{}"));
+        await http.PostAsync("/v1/chat/completions", new StringContent("{}"));
+
+        Assert.Equal([1, 2], sink.Calls.Select(c => c.Sequence));
+        Assert.Single(sink.Calls.Select(c => c.OperationId).Distinct());
+    }
+
+    [Fact]
+    public async Task RecordsAFailedCall_WithItsStatusAndErrorKind()
+    {
+        // A log of only successful calls hides the expensive problem: the call that burned the whole
+        // timeout and produced nothing.
+        var sink = new FakeLlmUsageSink();
+        using var _ = LlmCallScope.Push(LlmCallKind.Tags);
+        var http = Client(
+            new LlmTelemetryHandler(new FakeLlmTrace(), sink),
+            new HttpResponseMessage(HttpStatusCode.InternalServerError)
+            {
+                Content = new StringContent("boom", Encoding.UTF8, "text/plain"),
+            });
+
+        await http.PostAsync("/v1/chat/completions", new StringContent("{}"));
+
+        var call = Assert.Single(sink.Calls);
+        Assert.False(call.Success);
+        Assert.Equal(500, call.StatusCode);
+        Assert.Equal("Http500", call.ErrorKind);
+    }
+
+    [Fact]
+    public async Task StoresNoPromptOrCompletionContent()
+    {
+        // The hard line: counts and sizes only. If this ever fails, meeting content is leaking into a
+        // table an administrator browses.
+        var sink = new FakeLlmUsageSink();
+        using var _ = LlmCallScope.Push(LlmCallKind.Summarize);
+        var http = Client(
+            new LlmTelemetryHandler(new FakeLlmTrace(), sink),
+            Json("""{"choices":[{"message":{"content":"the secret merger closes friday"}}],"usage":{"total_tokens":9}}"""));
+
+        await http.PostAsync("/v1/chat/completions", new StringContent("""{"messages":[{"content":"confidential transcript"}]}"""));
+
+        var serialized = System.Text.Json.JsonSerializer.Serialize(Assert.Single(sink.Calls));
+        Assert.DoesNotContain("secret merger", serialized);
+        Assert.DoesNotContain("confidential transcript", serialized);
+    }
+
+    [Fact]
+    public async Task RecordsTheEndpointWithoutItsQueryString()
+    {
+        var sink = new FakeLlmUsageSink();
+        using var _ = LlmCallScope.Push(LlmCallKind.Embedding);
+        var http = Client(new LlmTelemetryHandler(new FakeLlmTrace(), sink), Json("{}"));
+
+        await http.PostAsync("/v1/embeddings?api_key=supersecret", new StringContent("{}"));
+
+        Assert.Equal("http://lmstudio:1234/v1/embeddings", Assert.Single(sink.Calls).Endpoint);
+    }
+
+    [Fact]
+    public async Task RecordsPromptChars_FromTheRequestBodyLength()
+    {
+        var sink = new FakeLlmUsageSink();
+        using var _ = LlmCallScope.Push(LlmCallKind.Summarize);
+        var http = Client(new LlmTelemetryHandler(new FakeLlmTrace(), sink), Json("{}"));
+        var body = """{"model":"qwen"}""";
+
+        await http.PostAsync("/v1/chat/completions", new StringContent(body));
+
+        Assert.Equal(body.Length, Assert.Single(sink.Calls).PromptChars);
     }
 }

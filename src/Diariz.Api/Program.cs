@@ -297,6 +297,8 @@ static void NoHttpTimeout(HttpClient c) => c.Timeout = System.Threading.Timeout.
 // means a client added later is measured for free, which is the failure mode that matters: the gap this closes
 // existed because nothing outside the ASP.NET request pipeline was ever instrumented at all.
 builder.Services.AddSingleton<ILlmTrace, SentryLlmTrace>();
+builder.Services.AddSingleton<ChannelLlmUsageSink>();
+builder.Services.AddSingleton<ILlmUsageSink>(sp => sp.GetRequiredService<ChannelLlmUsageSink>());
 builder.Services.AddTransient<LlmTelemetryHandler>();
 IHttpClientBuilder AddLlmClient<TClient, TImplementation>(Action<HttpClient>? configure = null)
     where TClient : class where TImplementation : class, TClient

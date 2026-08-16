@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Diariz.Domain.Entities;
 
 namespace Diariz.Api.Services;
 
@@ -120,8 +121,13 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
     public const string Op = "gen_ai.request";
 
     private readonly ILlmTrace _trace;
+    private readonly ILlmUsageSink _sink;
 
-    public LlmTelemetryHandler(ILlmTrace trace) => _trace = trace;
+    public LlmTelemetryHandler(ILlmTrace trace, ILlmUsageSink sink)
+    {
+        _trace = trace;
+        _sink = sink;
+    }
 
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken ct)
@@ -134,16 +140,123 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
 
         using var span = _trace.StartSpan(Op, $"{request.Method} {target}");
 
-        var response = await base.SendAsync(request, ct);
+        var scope = LlmCallScope.Active;
+        var startedAt = DateTimeOffset.UtcNow;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var promptChars = await PromptCharsAsync(request, ct);
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await base.SendAsync(request, ct);
+        }
+        catch (Exception ex)
+        {
+            // A transport failure or a timeout is exactly the expensive case an administrator needs to
+            // see, so it is recorded before the exception continues on to the caller unchanged.
+            clock.Stop();
+            Record(scope, target, request, startedAt, clock, promptChars, null, default, ErrorKindOf(ex));
+            throw;
+        }
+
         span.SetStatusCode((int)response.StatusCode);
 
         // `usage` only exists on a buffered JSON body. Streaming responses (SSE) are left strictly alone:
         // buffering one would defeat streaming entirely, leaving the chat UI silent until the model
         // finished instead of showing tokens as they arrive.
-        if (IsJson(response) && LlmUsageParser.TryParse(await ReadForUsageAsync(response, ct), out var usage))
-            span.SetUsage(usage);
+        var usage = default(LlmUsage);
+        if (IsJson(response) && LlmUsageParser.TryParse(await ReadForUsageAsync(response, ct), out var parsed))
+        {
+            usage = parsed;
+            span.SetUsage(parsed);
+        }
+
+        clock.Stop();
+        var status = (int)response.StatusCode;
+        Record(
+            scope, target, request, startedAt, clock, promptChars, status, usage,
+            response.IsSuccessStatusCode ? null : $"Http{status}");
 
         return response;
+    }
+
+    /// <summary>Length of the serialized request body, used as a proxy for prompt size so no call site has
+    /// to report it. Best-effort: a body that cannot be read costs a null, never the call.</summary>
+    private static async Task<int?> PromptCharsAsync(HttpRequestMessage request, CancellationToken ct)
+    {
+        if (request.Content is null) return null;
+        try
+        {
+            return (await request.Content.ReadAsStringAsync(ct)).Length;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Reads the <c>model</c> property out of the request body. Never throws - an unparseable or
+    /// absent body costs an empty string, never the call.</summary>
+    private static string ModelOf(HttpRequestMessage request)
+    {
+        try
+        {
+            var body = request.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
+            if (string.IsNullOrWhiteSpace(body)) return string.Empty;
+
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return string.Empty;
+            if (doc.RootElement.TryGetProperty("model", out var m) && m.ValueKind == JsonValueKind.String)
+                return m.GetString() ?? string.Empty;
+            return string.Empty;
+        }
+        catch (Exception)
+        {
+            return string.Empty;
+        }
+    }
+
+    private static string ErrorKindOf(Exception ex) => ex switch
+    {
+        TaskCanceledException or OperationCanceledException => "Timeout",
+        HttpRequestException => "Transport",
+        _ => ex.GetType().Name,
+    };
+
+    /// <summary>Builds the row and hands it to the sink. Content is never included - only counts, sizes
+    /// and identifiers.</summary>
+    private void Record(
+        LlmCallScope? scope, string target, HttpRequestMessage request, DateTimeOffset startedAt,
+        System.Diagnostics.Stopwatch clock, int? promptChars, int? statusCode, LlmUsage usage,
+        string? errorKind)
+    {
+        _sink.Record(new LlmCall
+        {
+            Id = Guid.NewGuid(),
+            OperationId = scope?.OperationId ?? Guid.NewGuid(),
+            Sequence = scope?.NextSequence() ?? 1,
+            Kind = scope?.Kind ?? LlmCallKind.Unknown,
+            UserId = scope?.UserId,
+            UserEmail = scope?.UserEmail ?? string.Empty,
+            RecordingId = scope?.RecordingId,
+            RecordingTitle = scope?.RecordingTitle,
+            SectionId = scope?.SectionId,
+            SectionName = scope?.SectionName,
+            Model = ModelOf(request),
+            Endpoint = target,
+            StartedAt = startedAt,
+            CompletedAt = startedAt.AddMilliseconds(clock.Elapsed.TotalMilliseconds),
+            DurationMs = (int)clock.ElapsedMilliseconds,
+            PromptTokens = usage.PromptTokens,
+            CompletionTokens = usage.CompletionTokens,
+            ReasoningTokens = usage.ReasoningTokens,
+            TotalTokens = usage.TotalTokens,
+            PromptChars = promptChars,
+            Streamed = false,
+            Success = errorKind is null,
+            StatusCode = statusCode,
+            ErrorKind = errorKind,
+        });
     }
 
     private static bool IsJson(HttpResponseMessage response) =>
