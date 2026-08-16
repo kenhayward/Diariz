@@ -701,24 +701,19 @@ public sealed class ChannelLlmUsageSink : ILlmUsageSink
     public const int Capacity = 10_000;
 
     private long _dropped;
-
-    private readonly Channel<LlmCall> _channel = Channel.CreateBounded<LlmCall>(
-        new BoundedChannelOptions(Capacity)
-        {
-            // Drop rather than block: TryWrite must always return immediately on the call path.
-            FullMode = BoundedChannelFullMode.DropOldest,
-            SingleReader = true,
-        },
-        itemDropped: _ => { });
+    private readonly Channel<LlmCall> _channel;
 
     public ChannelLlmUsageSink()
     {
         _channel = Channel.CreateBounded<LlmCall>(
             new BoundedChannelOptions(Capacity)
             {
+                // Drop rather than block: TryWrite must always return immediately on the call path.
                 FullMode = BoundedChannelFullMode.DropOldest,
                 SingleReader = true,
             },
+            // The channel is built in the constructor, not a field initialiser, because the
+            // itemDropped callback closes over _dropped.
             itemDropped: _ => Interlocked.Increment(ref _dropped));
     }
 
@@ -731,8 +726,6 @@ public sealed class ChannelLlmUsageSink : ILlmUsageSink
     public void Record(LlmCall call) => _channel.Writer.TryWrite(call);
 }
 ```
-
-Note: the field initialiser above is redundant with the constructor - delete the initialiser and keep only the constructor assignment, declaring the field as `private readonly Channel<LlmCall> _channel;`. It is shown here only to make the `itemDropped` callback obvious; leaving both in will not compile.
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
@@ -1092,7 +1085,145 @@ git commit -m "feat(llm-usage): record every non-streaming LLM call to the sink"
 
 ---
 
-### Task 6: The background writer
+### Task 6: Platform settings
+
+**Files:**
+- Modify: `src/Diariz.Domain/Entities/PlatformSettings.cs`, `src/Diariz.Api/Controllers/PlatformSettingsController.cs`, `apps/web/src/components/SettingsModal.tsx`, `apps/web/src/lib/types.ts`, `apps/web/src/locales/en/*.json` (and the other locale files)
+- Test: `tests/Diariz.Api.Tests/PlatformSettingsControllerTests.cs`, `apps/web/src/components/SettingsModal.test.tsx`
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: `PlatformSettings.LlmUsageLoggingEnabled` (bool, default `true`), `.LlmUsageRetentionDays` (int, default `90`), `.LlmStreamUsageEnabled` (bool, default `true`). All three appear on the platform settings GET/PUT payloads.
+
+- [ ] **Step 1: Write the failing controller test**
+
+Add to `tests/Diariz.Api.Tests/PlatformSettingsControllerTests.cs`, matching the file's existing arrangement style:
+
+```csharp
+    [Fact]
+    public async Task Update_PersistsTheLlmUsageLoggingSettings()
+    {
+        await using var db = TestDb.Create();
+        // ... arrange the controller exactly as the neighbouring tests in this file do ...
+
+        await controller.Update(new PlatformSettingsDto
+        {
+            // ... the other required fields, copied from a neighbouring test ...
+            LlmUsageLoggingEnabled = false,
+            LlmUsageRetentionDays = 30,
+            LlmStreamUsageEnabled = false,
+        });
+
+        var saved = await db.PlatformSettings.SingleAsync();
+        Assert.False(saved.LlmUsageLoggingEnabled);
+        Assert.Equal(30, saved.LlmUsageRetentionDays);
+        Assert.False(saved.LlmStreamUsageEnabled);
+    }
+
+    [Fact]
+    public void Defaults_KeepLoggingOn_AndRetainNinetyDays()
+    {
+        // Logging on by default is the point of the feature; retention on by default is what stops the
+        // largest table in the database growing without bound.
+        var settings = new PlatformSettings();
+        Assert.True(settings.LlmUsageLoggingEnabled);
+        Assert.Equal(90, settings.LlmUsageRetentionDays);
+        Assert.True(settings.LlmStreamUsageEnabled);
+    }
+```
+
+- [ ] **Step 2: Run to verify it fails**
+
+```bash
+dotnet test tests/Diariz.Api.Tests --filter "FullyQualifiedName~PlatformSettingsControllerTests"
+```
+
+Expected: compile failure on `LlmUsageLoggingEnabled`.
+
+- [ ] **Step 3: Add the entity fields**
+
+In `src/Diariz.Domain/Entities/PlatformSettings.cs`, next to the other LLM settings:
+
+```csharp
+    public const int DefaultLlmUsageRetentionDays = 90;
+
+    /// <summary>Master switch for the LLM usage log. On by default - the log is the feature. Enforced by
+    /// LlmUsageWriter, not the handler, so the call path never pays for a settings lookup.</summary>
+    public bool LlmUsageLoggingEnabled { get; set; } = true;
+
+    /// <summary>Usage rows older than this many days are deleted by the nightly sweep. 0 = keep forever.
+    /// This table gets a row per call, and embeddings write one per chunk, so a bound matters.</summary>
+    public int LlmUsageRetentionDays { get; set; } = DefaultLlmUsageRetentionDays;
+
+    /// <summary>Whether streaming requests ask for token counts via stream_options.include_usage.
+    /// A toggle rather than a constant because an OpenAI-compatible endpoint that rejects the unknown
+    /// field must be recoverable without a redeploy. Used from PR 2.</summary>
+    public bool LlmStreamUsageEnabled { get; set; } = true;
+```
+
+- [ ] **Step 4: Add the three fields to the DTO and the update path**
+
+In `PlatformSettingsController.cs`, add them to the settings DTO and to whatever mapping the `Update` action performs, following exactly how `LlmTimeoutSeconds` is handled. Clamp `LlmUsageRetentionDays` to `>= 0`.
+
+- [ ] **Step 5: Generate the migration**
+
+```bash
+dotnet ef migrations add AddLlmUsageSettings --project src/Diariz.Domain --startup-project src/Diariz.Api
+```
+
+Confirm the generated columns carry the defaults (`true`, `90`, `true`) so existing rows get sensible values rather than `false`/`0`.
+
+- [ ] **Step 6: Run to verify the tests pass**
+
+```bash
+dotnet test tests/Diariz.Api.Tests --filter "FullyQualifiedName~PlatformSettingsControllerTests"
+```
+
+Expected: all pass.
+
+- [ ] **Step 7: Write the failing web test**
+
+In `apps/web/src/components/SettingsModal.test.tsx`, following the existing patterns in that file (`vi.mock` of `../lib/api`, render inside `MemoryRouter` + `QueryClientProvider`, **plain assertions - no jest-dom matchers, nothing in apps/web uses them**):
+
+```tsx
+it("saves the LLM usage logging settings from the AI tab", async () => {
+  // ... render the modal on the "ai" tab as neighbouring tests do ...
+  await userEvent.clear(screen.getByLabelText(/keep usage log for/i));
+  await userEvent.type(screen.getByLabelText(/keep usage log for/i), "30");
+  await userEvent.click(screen.getByRole("button", { name: /save/i }));
+
+  expect(api.updatePlatformSettings).toHaveBeenCalledWith(
+    expect.objectContaining({ llmUsageRetentionDays: 30 }),
+  );
+});
+```
+
+- [ ] **Step 8: Run to verify it fails, then add the controls**
+
+```bash
+cd apps/web && npx vitest run src/components/SettingsModal.test.tsx
+```
+
+Expected: FAIL, the label is not found. Then add to the `ai` tab of `SettingsModal.tsx`: a "Log LLM usage" checkbox, a "Keep usage log for (days)" number input with the hint that 0 keeps everything, and a "Request token counts on streaming calls" checkbox. Add the strings to `apps/web/src/locales/en/` and every other locale file. **Plain hyphens only - no em or en dashes.** Add the three fields to the settings type in `apps/web/src/lib/types.ts`.
+
+- [ ] **Step 9: Run the web tests and the typecheck**
+
+```bash
+cd apps/web && npx vitest run src/components/SettingsModal.test.tsx && npm run build
+```
+
+Expected: tests pass, build clean.
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add src/Diariz.Domain/Entities/PlatformSettings.cs src/Diariz.Domain/Migrations src/Diariz.Api/Controllers/PlatformSettingsController.cs tests/Diariz.Api.Tests/PlatformSettingsControllerTests.cs apps/web/src/components/SettingsModal.tsx apps/web/src/components/SettingsModal.test.tsx apps/web/src/lib/types.ts apps/web/src/locales
+git commit -m "feat(llm-usage): add platform settings for logging, retention and stream usage"
+```
+
+---
+
+### Task 7: The background writer
 
 **Files:**
 - Create: `src/Diariz.Api/Services/LlmUsageWriter.cs`
@@ -1257,151 +1388,13 @@ builder.Services.AddHostedService<LlmUsageWriter>();
 dotnet test tests/Diariz.Api.Tests --filter "FullyQualifiedName~LlmUsageBatchTests"
 ```
 
-Expected: 2 passed. (`LlmUsageLoggingEnabled` does not exist yet - it arrives in Task 7. If the writer will not compile until then, do Task 7 first and return here; otherwise stub nothing.)
+Expected: 2 passed. `PlatformSettings.LlmUsageLoggingEnabled` already exists - it was added in Task 6, which is why settings come before the writer.
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add src/Diariz.Api/Services/LlmUsageWriter.cs src/Diariz.Api/Program.cs tests/Diariz.Api.Tests/LlmUsageSinkTests.cs
 git commit -m "feat(llm-usage): persist recorded calls from a background writer"
-```
-
----
-
-### Task 7: Platform settings
-
-**Files:**
-- Modify: `src/Diariz.Domain/Entities/PlatformSettings.cs`, `src/Diariz.Api/Controllers/PlatformSettingsController.cs`, `apps/web/src/components/SettingsModal.tsx`, `apps/web/src/lib/types.ts`, `apps/web/src/locales/en/*.json` (and the other locale files)
-- Test: `tests/Diariz.Api.Tests/PlatformSettingsControllerTests.cs`, `apps/web/src/components/SettingsModal.test.tsx`
-
-**Interfaces:**
-- Consumes: nothing.
-- Produces: `PlatformSettings.LlmUsageLoggingEnabled` (bool, default `true`), `.LlmUsageRetentionDays` (int, default `90`), `.LlmStreamUsageEnabled` (bool, default `true`). All three appear on the platform settings GET/PUT payloads.
-
-- [ ] **Step 1: Write the failing controller test**
-
-Add to `tests/Diariz.Api.Tests/PlatformSettingsControllerTests.cs`, matching the file's existing arrangement style:
-
-```csharp
-    [Fact]
-    public async Task Update_PersistsTheLlmUsageLoggingSettings()
-    {
-        await using var db = TestDb.Create();
-        // ... arrange the controller exactly as the neighbouring tests in this file do ...
-
-        await controller.Update(new PlatformSettingsDto
-        {
-            // ... the other required fields, copied from a neighbouring test ...
-            LlmUsageLoggingEnabled = false,
-            LlmUsageRetentionDays = 30,
-            LlmStreamUsageEnabled = false,
-        });
-
-        var saved = await db.PlatformSettings.SingleAsync();
-        Assert.False(saved.LlmUsageLoggingEnabled);
-        Assert.Equal(30, saved.LlmUsageRetentionDays);
-        Assert.False(saved.LlmStreamUsageEnabled);
-    }
-
-    [Fact]
-    public void Defaults_KeepLoggingOn_AndRetainNinetyDays()
-    {
-        // Logging on by default is the point of the feature; retention on by default is what stops the
-        // largest table in the database growing without bound.
-        var settings = new PlatformSettings();
-        Assert.True(settings.LlmUsageLoggingEnabled);
-        Assert.Equal(90, settings.LlmUsageRetentionDays);
-        Assert.True(settings.LlmStreamUsageEnabled);
-    }
-```
-
-- [ ] **Step 2: Run to verify it fails**
-
-```bash
-dotnet test tests/Diariz.Api.Tests --filter "FullyQualifiedName~PlatformSettingsControllerTests"
-```
-
-Expected: compile failure on `LlmUsageLoggingEnabled`.
-
-- [ ] **Step 3: Add the entity fields**
-
-In `src/Diariz.Domain/Entities/PlatformSettings.cs`, next to the other LLM settings:
-
-```csharp
-    public const int DefaultLlmUsageRetentionDays = 90;
-
-    /// <summary>Master switch for the LLM usage log. On by default - the log is the feature. Enforced by
-    /// LlmUsageWriter, not the handler, so the call path never pays for a settings lookup.</summary>
-    public bool LlmUsageLoggingEnabled { get; set; } = true;
-
-    /// <summary>Usage rows older than this many days are deleted by the nightly sweep. 0 = keep forever.
-    /// This table gets a row per call, and embeddings write one per chunk, so a bound matters.</summary>
-    public int LlmUsageRetentionDays { get; set; } = DefaultLlmUsageRetentionDays;
-
-    /// <summary>Whether streaming requests ask for token counts via stream_options.include_usage.
-    /// A toggle rather than a constant because an OpenAI-compatible endpoint that rejects the unknown
-    /// field must be recoverable without a redeploy. Used from PR 2.</summary>
-    public bool LlmStreamUsageEnabled { get; set; } = true;
-```
-
-- [ ] **Step 4: Add the three fields to the DTO and the update path**
-
-In `PlatformSettingsController.cs`, add them to the settings DTO and to whatever mapping the `Update` action performs, following exactly how `LlmTimeoutSeconds` is handled. Clamp `LlmUsageRetentionDays` to `>= 0`.
-
-- [ ] **Step 5: Generate the migration**
-
-```bash
-dotnet ef migrations add AddLlmUsageSettings --project src/Diariz.Domain --startup-project src/Diariz.Api
-```
-
-Confirm the generated columns carry the defaults (`true`, `90`, `true`) so existing rows get sensible values rather than `false`/`0`.
-
-- [ ] **Step 6: Run to verify the tests pass**
-
-```bash
-dotnet test tests/Diariz.Api.Tests --filter "FullyQualifiedName~PlatformSettingsControllerTests"
-```
-
-Expected: all pass.
-
-- [ ] **Step 7: Write the failing web test**
-
-In `apps/web/src/components/SettingsModal.test.tsx`, following the existing patterns in that file (`vi.mock` of `../lib/api`, render inside `MemoryRouter` + `QueryClientProvider`, **plain assertions - no jest-dom matchers, nothing in apps/web uses them**):
-
-```tsx
-it("saves the LLM usage logging settings from the AI tab", async () => {
-  // ... render the modal on the "ai" tab as neighbouring tests do ...
-  await userEvent.clear(screen.getByLabelText(/keep usage log for/i));
-  await userEvent.type(screen.getByLabelText(/keep usage log for/i), "30");
-  await userEvent.click(screen.getByRole("button", { name: /save/i }));
-
-  expect(api.updatePlatformSettings).toHaveBeenCalledWith(
-    expect.objectContaining({ llmUsageRetentionDays: 30 }),
-  );
-});
-```
-
-- [ ] **Step 8: Run to verify it fails, then add the controls**
-
-```bash
-cd apps/web && npx vitest run src/components/SettingsModal.test.tsx
-```
-
-Expected: FAIL, the label is not found. Then add to the `ai` tab of `SettingsModal.tsx`: a "Log LLM usage" checkbox, a "Keep usage log for (days)" number input with the hint that 0 keeps everything, and a "Request token counts on streaming calls" checkbox. Add the strings to `apps/web/src/locales/en/` and every other locale file. **Plain hyphens only - no em or en dashes.** Add the three fields to the settings type in `apps/web/src/lib/types.ts`.
-
-- [ ] **Step 9: Run the web tests and the typecheck**
-
-```bash
-cd apps/web && npx vitest run src/components/SettingsModal.test.tsx && npm run build
-```
-
-Expected: tests pass, build clean.
-
-- [ ] **Step 10: Commit**
-
-```bash
-git add src/Diariz.Domain/Entities/PlatformSettings.cs src/Diariz.Domain/Migrations src/Diariz.Api/Controllers/PlatformSettingsController.cs tests/Diariz.Api.Tests/PlatformSettingsControllerTests.cs apps/web/src/components/SettingsModal.tsx apps/web/src/components/SettingsModal.test.tsx apps/web/src/lib/types.ts apps/web/src/locales
-git commit -m "feat(llm-usage): add platform settings for logging, retention and stream usage"
 ```
 
 ---
@@ -1527,14 +1520,20 @@ In the existing chat controller test file, assert the ambient scope from inside 
     {
         // ChatToolOrchestrator loops without pushing its own scope, so all of a turn's round-trips share
         // this operation - which is what makes MAX(Sequence) the turn count.
-        var seen = new List<Guid>();
-        var client = new FakeChatStreamClient(onCall: () => seen.Add(LlmCallScope.Active!.OperationId));
+        var seenOperations = new List<Guid>();
+        var seenKinds = new List<LlmCallKind>();
+        var client = new FakeChatStreamClient(onCall: () =>
+        {
+            seenOperations.Add(LlmCallScope.Active!.OperationId);
+            seenKinds.Add(LlmCallScope.Active!.Kind);
+        });
 
         // ... invoke the streaming chat action as the neighbouring tests do, with a tool call forcing
         // two round-trips ...
 
-        Assert.Equal(LlmCallKind.ChatMessage, LlmCallScope.Active?.Kind ?? observedKind);
-        Assert.Single(seen.Distinct());
+        Assert.Equal(2, seenOperations.Count);              // the tool call forced a second round-trip
+        Assert.Single(seenOperations.Distinct());           // both belong to ONE operation
+        Assert.All(seenKinds, k => Assert.Equal(LlmCallKind.ChatMessage, k));
     }
 ```
 
@@ -1583,7 +1582,7 @@ git commit -m "feat(llm-usage): attribute chat, dictation, translation and searc
 - Test: `tests/Diariz.Api.Tests/LlmUsageRetentionTests.cs`, `tests/Diariz.Api.IntegrationTests/LlmUsageIntegrationTests.cs`
 
 **Interfaces:**
-- Consumes: `PlatformSettings.LlmUsageRetentionDays` (Task 7), `AudioRetentionSchedule.NextRun` (existing, reused).
+- Consumes: `PlatformSettings.LlmUsageRetentionDays` (Task 6), `AudioRetentionSchedule.NextRun` (existing, reused).
 - Produces: `static class LlmUsageRetentionSweep { static Task<int> RunAsync(DiarizDbContext db, DateTimeOffset nowUtc, int retentionDays, ILogger logger, CancellationToken ct) }`; `class LlmUsageRetentionWorker : BackgroundService`.
 
 - [ ] **Step 1: Write the failing integration test**
@@ -1842,7 +1841,7 @@ Then amend `releases.ts` with the real PR number and push again.
 
 ## Self-Review
 
-**Spec coverage:** Entity and migration (Task 1); scope (2); reasoning tokens (3); channel sink (4); handler capture including failures, privacy and endpoint scrubbing (5); background writer with its own DI scope (6); the three platform settings (7); all twelve push sites (8, 9); retention (10); live verification (11); docs, version, release notes (12). Streaming capture, the API and the viewer are explicitly PRs 2 and 3.
+**Spec coverage:** Entity and migration (Task 1); scope (2); reasoning tokens (3); channel sink (4); handler capture including failures, privacy and endpoint scrubbing (5); the three platform settings (6); background writer with its own DI scope (7); all twelve push sites (8, 9); retention (10); live verification (11); docs, version, release notes (12). Streaming capture, the API and the viewer are explicitly PRs 2 and 3.
 
 **Deviation from the spec, deliberate:** the spec says the handler skips the channel when `LlmUsageLoggingEnabled` is off. This plan enforces the switch in the **writer** instead, so the LLM call path never pays for a settings lookup. Records made while logging is off are drained and discarded. The spec has been amended to match.
 
