@@ -812,8 +812,12 @@ already enforces for Sentry/GlitchTip spans.
 **The capture contract, end to end:**
 
 1. **`LlmCallScope`** (`Services/LlmCallScope.cs`) is an `AsyncLocal<LlmCallScope?>` pushed once at the top
-   of each user-facing operation (a summarize job, a chat turn, a formula run, and so on - thirteen call
-   sites push a scope). It carries the `LlmCallKind`, an `OperationId` (groups every call the operation
+   of each user-facing operation (a summarize job, a chat turn, a formula run, and so on - seventeen call
+   sites push a scope, spanning thirteen distinct `LlmCallKind` values; two of the seventeen both push
+   `FormulaRun` - once in `FormulaRunner` for the synchronous chat/MCP tool path, once in
+   `FormulaRunProcessor` for the enqueued job path - so an MCP-invoked `run_formula` call, which has no
+   enclosing operation to inherit a scope from, is still attributed rather than falling through to
+   `Unknown`). It carries the `LlmCallKind`, an `OperationId` (groups every call the operation
    makes), and the attributed user/recording/section. Everything called beneath the push - however many
    layers of client/service code deep - is attributed for free, without threading a context parameter
    through every LLM client interface. A call made with **no active scope** is still recorded, as

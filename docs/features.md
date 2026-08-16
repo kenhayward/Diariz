@@ -554,6 +554,12 @@ last one instead of hunting for it in the folder tree.
 runs. Any user can override it for their own account (Preferences → Assistant → Change model); the resolved
 value - their override if they set one, else the platform default - is the single authority for that call,
 with no hidden HTTP cap underneath it. Raise it for a slow or large local model.
+- **LLM usage logging** (Platform Administrator, Settings → Model Settings): a master switch that turns
+capture of every outbound LLM call on or off, a retention window in days for how long the captured rows are
+kept before a nightly sweep deletes them (0 keeps everything), and a toggle to request token counts on
+streaming calls when the endpoint supports it (wired for a later release; has no effect yet). Captured rows
+hold only counts, sizes and identifiers - never prompt or completion content - and there is no admin viewer
+over them in this release.
 - **Preferences**: a tabbed window with the everyday entries (Profile, Recordings, Formulas, Calendars) over an
 **Advanced** divider holding the exception settings (Integrations, Assistant).
 Each user can edit their **profile** — display name, job title, company, job/company descriptions, LinkedIn

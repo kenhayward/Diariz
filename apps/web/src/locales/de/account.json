@@ -376,7 +376,7 @@
   "llmUsageRetentionHint": "Wie lange Protokollzeilen aufbewahrt werden, bevor der nächtliche Lauf sie löscht. 0 behält alles.",
   "llmUsageRetentionInvalid": "Die Aufbewahrungsdauer des Nutzungsprotokolls muss eine ganze Zahl in Tagen sein (0 oder mehr).",
   "llmStreamUsageLabel": "Bei Streaming-Aufrufen Token-Anzahl anfordern",
-  "llmStreamUsageHint": "Fragt beim Endpunkt Token-Anzahlen für gestreamte Antworten an, sofern unterstützt.",
+  "llmStreamUsageHint": "Fragt beim Endpunkt Token-Anzahlen für gestreamte Antworten an, sofern unterstützt. Wirkt sich erst in einer zukünftigen Version aus - dieser Schalter hat derzeit noch keine Wirkung.",
   "automationsTitle": "Automatisierungen",
   "automationsIntro": "Sende deine Besprechungsereignisse an Tools wie Zapier, n8n oder Make. Wähle aus, was sie auslösen soll, füge die URL aus deinem Tool ein und teste sie.",
   "automationDefaultName": "Automatisierung",

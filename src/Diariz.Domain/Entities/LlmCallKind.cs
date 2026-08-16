@@ -9,6 +9,9 @@ public enum LlmCallKind
     SectionSummary = 2,
     MeetingMinutes = 3,
     SectionMinutes = 4,
+    /// <summary>Reserved; never written. <c>MeetingTypeMinutesGenerator</c> and both its strategies
+    /// deliberately push no scope of their own - every call they make belongs to the enclosing
+    /// MeetingMinutes/SectionMinutes operation, so it is attributed to that Kind instead.</summary>
     MeetingTypeMinutes = 5,
     ExtractActions = 6,
     Tags = 7,
