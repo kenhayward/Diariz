@@ -53,6 +53,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<WorkflowSignal> WorkflowSignals => Set<WorkflowSignal>();
     public DbSet<FormulaWorkflowSignal> FormulaWorkflowSignals => Set<FormulaWorkflowSignal>();
     public DbSet<Feedback> Feedback => Set<Feedback>();
+    public DbSet<LlmCall> LlmCalls => Set<LlmCall>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -803,6 +804,25 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         {
             e.HasOne(f => f.User).WithMany().HasForeignKey(f => f.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // LLM usage log: one row per outbound model call. Provider-agnostic (plain columns, no
+        // vector/jsonb), so it stays outside the Npgsql guard and loads under the in-memory test
+        // provider too.
+        builder.Entity<LlmCall>(e =>
+        {
+            e.HasIndex(c => c.StartedAt).IsDescending();
+            e.HasIndex(c => new { c.UserId, c.StartedAt }).IsDescending(false, true);
+            e.HasIndex(c => c.OperationId);
+
+            // SET NULL, not CASCADE: deleting a user or a recording must not erase the usage history.
+            // The denormalised snapshot columns are what keep the orphaned row readable.
+            e.HasOne<ApplicationUser>().WithMany()
+                .HasForeignKey(c => c.UserId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne<Recording>().WithMany()
+                .HasForeignKey(c => c.RecordingId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne<Section>().WithMany()
+                .HasForeignKey(c => c.SectionId).OnDelete(DeleteBehavior.SetNull);
         });
     }
 }
