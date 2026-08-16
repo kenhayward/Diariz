@@ -1258,8 +1258,10 @@ export interface UpdateWorkflowSignalBody {
 // Mirrors src/Diariz.Api/Contracts/LlmUsageContracts.cs and LlmUsageController.
 
 /// What an LLM call was for. The API serializes LlmCallKind by name (JsonStringEnumConverter), so this
-/// is a string union of every enum member - NOT the numeric value the `kinds` filter is sent as (see
-/// LlmUsageFilter.kinds below; the two are deliberately different shapes for the same dimension).
+/// is a string union of every enum member - the shape used in BOTH directions: response rows report it
+/// this way, and LlmUsageFilter.kinds (below) is filtered by it too, since the server binds `kinds` as
+/// LlmCallKind[] and ASP.NET Core's query-string enum binder accepts names directly. No name-to-number
+/// translation is needed anywhere.
 export type LlmCallKind =
   | "Unknown"
   | "Summarize"
