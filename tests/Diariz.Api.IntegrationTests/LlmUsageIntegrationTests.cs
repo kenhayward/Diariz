@@ -163,8 +163,34 @@ public class LlmUsageIntegrationTests(ContainersFixture fx)
         var deleted = await LlmUsageRetentionSweep.RunAsync(
             db, now, retentionDays: 90, NullLogger.Instance, CancellationToken.None);
 
-        Assert.Equal(2, deleted);
+        // The sweep's Where has no marker filter - by design it deletes every row past the cutoff across
+        // the whole table - so `deleted` is a table-wide count, not a marker-scoped one. Other tests in this
+        // shared "integration" collection could (now or later) seed their own old LlmCall rows, so asserting
+        // an exact global count here would be coincidence, not isolation. Only the marker-scoped survivor
+        // count below is safe to assert exactly; `deleted` is asserted as a lower bound.
+        Assert.True(deleted >= 2, $"Expected at least the 2 marker rows past the cutoff to be deleted, got {deleted}.");
         Assert.Equal(2, await db.LlmCalls.CountAsync(c => c.OperationId == marker));
+    }
+
+    [Fact]
+    public async Task RetentionSweep_KeepsARowExactlyAtTheCutoffInstant()
+    {
+        // The cutoff comparison is StartedAt < cutoff, so a row exactly AT the cutoff instant is still
+        // inside the retention window and must survive. RetentionSweep_DeletesOnlyRowsOlderThanTheWindow does
+        // not pin this down - its rows sit a full day either side of the cutoff - so this test exists
+        // specifically to make the < vs <= choice explicit and catchable by mutation.
+        await using var db = fx.CreateDbContext();
+        var now = DateTimeOffset.UtcNow;
+        var marker = Guid.NewGuid();
+        var cutoff = now.AddDays(-90);
+
+        db.LlmCalls.Add(Row(marker, cutoff));
+        await db.SaveChangesAsync();
+
+        await LlmUsageRetentionSweep.RunAsync(
+            db, now, retentionDays: 90, NullLogger.Instance, CancellationToken.None);
+
+        Assert.Equal(1, await db.LlmCalls.CountAsync(c => c.OperationId == marker));
     }
 
     [Fact]
