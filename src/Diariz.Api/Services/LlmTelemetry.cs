@@ -4,7 +4,8 @@ namespace Diariz.Api.Services;
 
 /// <summary>Token counts from an OpenAI-compatible response's <c>usage</c> block. All nullable: plenty of
 /// compatible servers omit some or all of it, and a missing count must not cost the caller its timing.</summary>
-public readonly record struct LlmUsage(int? PromptTokens, int? CompletionTokens, int? TotalTokens);
+public readonly record struct LlmUsage(
+    int? PromptTokens, int? CompletionTokens, int? TotalTokens, int? ReasoningTokens = null);
 
 /// <summary>Reads the <c>usage</c> block out of an OpenAI-compatible response body.</summary>
 public static class LlmUsageParser
@@ -31,8 +32,15 @@ public static class LlmUsageParser
                         // deriving, so the Performance view is not full of blank totals.
                         ?? (prompt is null && completion is null ? null : (prompt ?? 0) + (completion ?? 0));
 
+            // Reported by reasoning models under completion_tokens_details. Absent almost everywhere
+            // else, and absent must stay null rather than becoming 0.
+            int? reasoning = null;
+            if (u.TryGetProperty("completion_tokens_details", out var details)
+                && details.ValueKind == JsonValueKind.Object)
+                reasoning = ReadInt(details, "reasoning_tokens");
+
             if (prompt is null && completion is null && total is null) return false;
-            usage = new LlmUsage(prompt, completion, total);
+            usage = new LlmUsage(prompt, completion, total, reasoning);
             return true;
         }
         catch (JsonException)

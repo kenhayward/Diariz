@@ -56,6 +56,37 @@ public class LlmUsageParserTests
         var ex = Record.Exception(() => LlmUsageParser.TryParse(json, out _));
         Assert.Null(ex);
     }
+
+    [Fact]
+    public void TryParse_ReadsReasoningTokens_FromCompletionTokenDetails()
+    {
+        var json = """
+        {"usage":{"prompt_tokens":100,"completion_tokens":50,"total_tokens":150,
+                  "completion_tokens_details":{"reasoning_tokens":40}}}
+        """;
+
+        Assert.True(LlmUsageParser.TryParse(json, out var usage));
+        Assert.Equal(40, usage.ReasoningTokens);
+    }
+
+    [Fact]
+    public void TryParse_LeavesReasoningNull_WhenTheServerDoesNotReportIt()
+    {
+        // Most local endpoints report no details block at all. Null must stay null: a reasoning count
+        // of 0 would be a claim the model did no reasoning, which is not what silence means.
+        var json = """{"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}""";
+
+        Assert.True(LlmUsageParser.TryParse(json, out var usage));
+        Assert.Null(usage.ReasoningTokens);
+    }
+
+    [Fact]
+    public void TryParse_NeverThrows_WhenDetailsIsTheWrongShape()
+    {
+        var json = """{"usage":{"prompt_tokens":10,"completion_tokens_details":"nonsense"}}""";
+        var ex = Record.Exception(() => LlmUsageParser.TryParse(json, out _));
+        Assert.Null(ex);
+    }
 }
 
 public class LlmTelemetryHandlerTests
