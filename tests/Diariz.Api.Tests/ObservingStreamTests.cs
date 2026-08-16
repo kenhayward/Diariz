@@ -53,6 +53,31 @@ public class ObservingStreamTests
     }
 
     [Fact]
+    public async Task EmptyBufferRead_DoesNotCompleteTheStream()
+    {
+        // A caller probing "is data available?" via ReadAsync(Memory<byte>.Empty) gets 0 back by ordinary
+        // Stream convention - that is NOT end-of-stream, it is "you asked for zero bytes". Conflating the
+        // two (as a bare `read <= 0` check does) would complete the usage record on the first such probe
+        // while real bytes kept flowing unrecorded. Contrast with DoesNotReportAFirstByte_ForAnEmptyStream
+        // above, which is the genuine end-of-stream case: a zero-length STREAM read into a NON-empty
+        // buffer. The two must stay distinct.
+        var done = 0;
+        var seen = new List<byte>();
+        await using var s = Wrap(new MemoryStream(Encoding.UTF8.GetBytes("abc")), seen, onDone: _ => done++);
+
+        var probe = await s.ReadAsync(Memory<byte>.Empty);
+
+        Assert.Equal(0, probe);
+        Assert.Equal(0, done); // must NOT have completed the record yet
+
+        // A subsequent real read still works and the stream still completes exactly once, normally.
+        var buffer = new byte[8];
+        while (await s.ReadAsync(buffer) > 0) { }
+        Assert.Equal("abc", Encoding.UTF8.GetString(seen.ToArray()));
+        Assert.Equal(1, done);
+    }
+
+    [Fact]
     public async Task CompletesOnEndOfStream()
     {
         var done = 0;

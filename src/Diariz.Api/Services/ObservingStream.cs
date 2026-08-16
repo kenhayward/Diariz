@@ -80,6 +80,18 @@ public sealed class ObservingStream : Stream
 
     private void Observe(Memory<byte> buffer, int read)
     {
+        if (read == 0 && buffer.IsEmpty)
+        {
+            // A read into an EMPTY buffer (e.g. a "is data available?" probe via
+            // ReadAsync(Memory<byte>.Empty)) legitimately returns 0 by ordinary Stream convention - the
+            // inner stream was never actually asked for a byte, so this carries no information about
+            // end-of-stream. Not reachable today (StreamReader/CopyTo/CopyToAsync/LoadIntoBufferAsync all
+            // use non-empty buffers), but treating it as EOF would complete the record early while real
+            // bytes kept flowing unrecorded. A zero-length read into a NON-empty buffer (the genuine
+            // end-of-stream case) still falls through to the check below.
+            return;
+        }
+
         if (read <= 0)
         {
             Complete(null);
