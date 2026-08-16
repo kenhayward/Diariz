@@ -1,3 +1,5 @@
+using Diariz.Domain.Entities;
+
 namespace Diariz.Api.Contracts;
 
 // ---- LLM usage viewer (Platform Administrator) ----
@@ -55,3 +57,62 @@ public record LlmUsageTotals(
     int TokenMeasuredCalls,
     int FailedCalls,
     double? TokensPerSecond);
+
+// ---- LLM usage viewer rows (LlmUsageController) ----
+
+/// <summary>One <c>LlmCalls</c> row, as returned by <c>mode=calls</c>.</summary>
+public record LlmUsageCallRow(
+    Guid Id,
+    Guid OperationId,
+    int Sequence,
+    LlmCallKind Kind,
+    Guid? UserId,
+    string UserEmail,
+    Guid? RecordingId,
+    string? RecordingTitle,
+    Guid? SectionId,
+    string? SectionName,
+    string Model,
+    DateTimeOffset StartedAt,
+    DateTimeOffset CompletedAt,
+    int DurationMs,
+    int? PromptTokens,
+    int? CompletionTokens,
+    int? ReasoningTokens,
+    int? TotalTokens,
+    bool Success,
+    int? StatusCode,
+    string? ErrorKind);
+
+/// <summary>One operation - every <c>LlmCalls</c> row sharing an <c>OperationId</c>, collapsed to a
+/// single row, as returned by <c>mode=operations</c> (the default). See
+/// <c>LlmUsageController.List</c> for why grouping by the composite key below is safe.</summary>
+public record LlmUsageOperationRow(
+    Guid OperationId,
+    LlmCallKind Kind,
+    Guid? UserId,
+    string UserEmail,
+    Guid? RecordingId,
+    string? RecordingTitle,
+    Guid? SectionId,
+    string? SectionName,
+    string Model,
+    int Turns,
+    DateTimeOffset StartedAt,
+    DateTimeOffset CompletedAt,
+    long? PromptTokens,
+    long? CompletionTokens,
+    long? ReasoningTokens,
+    long? TotalTokens,
+    bool Success);
+
+/// <summary>One page of <typeparamref name="TRow"/>, plus totals over the WHOLE filtered set (not the
+/// page - see <see cref="LlmUsageTotals"/>) and <paramref name="Total"/>, the row/operation count of the
+/// whole filtered set before paging. Neither <paramref name="Total"/> nor <paramref name="Totals"/> may
+/// be derived from <paramref name="Rows"/>.</summary>
+public record LlmUsagePage<TRow>(
+    IReadOnlyList<TRow> Rows,
+    int Page,
+    int PageSize,
+    int Total,
+    LlmUsageTotals Totals);

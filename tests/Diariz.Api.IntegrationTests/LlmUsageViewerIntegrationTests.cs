@@ -1,6 +1,11 @@
+using Diariz.Api.Contracts;
+using Diariz.Api.Controllers;
 using Diariz.Api.IntegrationTests.Infrastructure;
 using Diariz.Api.Services;
+using Diariz.Api.Tests.Infrastructure;
+using Diariz.Domain;
 using Diariz.Domain.Entities;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace Diariz.Api.IntegrationTests;
@@ -161,6 +166,90 @@ public class LlmUsageViewerIntegrationTests(ContainersFixture fx)
 
         Assert.Equal(0, totals.Calls);
         Assert.Null(totals.TokensPerSecond); // not NaN, not a divide-by-zero
+    }
+
+    // ---- LlmUsageController: mode=operations/calls, paging, sort validation ----
+    //
+    // Same isolation convention as the totals tests above: every call is filtered to
+    // models: [marker.ToString()], so it can never see another test's rows even though all tests in
+    // this collection share one Postgres database.
+
+    private static LlmUsageController Build(DiarizDbContext db) =>
+        new(db) { ControllerContext = Http.Context(Guid.NewGuid(), [Roles.PlatformAdministrator]) };
+
+    private static T OkValue<T>(IActionResult result) =>
+        Assert.IsType<T>(Assert.IsType<OkObjectResult>(result).Value);
+
+    [Fact]
+    public async Task OperationsMode_CollapsesToOneRow_ButCallsMode_ReturnsEveryCall()
+    {
+        // Three calls belonging to one operation: one row with turns == 3 and summed tokens in
+        // operations mode (the default), three rows in calls mode.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var operationId = Guid.NewGuid();
+        db.LlmCalls.AddRange(
+            Row(marker, operationId: operationId, sequence: 1, completionTokens: 100),
+            Row(marker, operationId: operationId, sequence: 2, completionTokens: 200),
+            Row(marker, operationId: operationId, sequence: 3, completionTokens: 300));
+        await db.SaveChangesAsync();
+
+        var opsPage = OkValue<LlmUsagePage<LlmUsageOperationRow>>(
+            await Build(db).List(mode: "operations", models: [marker.ToString()]));
+        var opRow = Assert.Single(opsPage.Rows);
+        Assert.Equal(3, opRow.Turns);
+        Assert.Equal(600, opRow.CompletionTokens);
+        Assert.Equal(1, opsPage.Total);
+
+        var callsPage = OkValue<LlmUsagePage<LlmUsageCallRow>>(
+            await Build(db).List(mode: "calls", models: [marker.ToString()]));
+        Assert.Equal(3, callsPage.Rows.Count);
+        Assert.Equal(3, callsPage.Total);
+    }
+
+    [Fact]
+    public async Task PageSize_IsCappedAt200_EvenWhenTheCallerAsksForMore()
+    {
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        db.LlmCalls.Add(Row(marker));
+        await db.SaveChangesAsync();
+
+        var page = OkValue<LlmUsagePage<LlmUsageCallRow>>(
+            await Build(db).List(mode: "calls", models: [marker.ToString()], pageSize: 10_000));
+
+        Assert.Equal(LlmUsageController.MaxPageSize, page.PageSize);
+    }
+
+    [Fact]
+    public async Task UnrecognisedSort_IsRejectedWith400_NotSilentlyIgnored()
+    {
+        // Silently ignoring it would show the administrator data ordered differently from what they
+        // asked for, which is worse than an error.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+
+        var result = await Build(db).List(mode: "calls", models: [marker.ToString()], sort: "notARealColumn");
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task Totals_CoverTheWholeFilter_NotJustTheReturnedPage()
+    {
+        // The requirement most likely to be implemented wrongly: summing the rows on screen is easy
+        // and looks right until the second page.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        db.LlmCalls.AddRange(Row(marker), Row(marker), Row(marker), Row(marker), Row(marker));
+        await db.SaveChangesAsync();
+
+        var result = OkValue<LlmUsagePage<LlmUsageCallRow>>(
+            await Build(db).List(mode: "calls", models: [marker.ToString()], pageSize: 2));
+
+        Assert.Equal(2, result.Rows.Count);
+        Assert.Equal(5, result.Total);
+        Assert.Equal(5, result.Totals.Calls);
     }
 
     private static LlmCall Row(
