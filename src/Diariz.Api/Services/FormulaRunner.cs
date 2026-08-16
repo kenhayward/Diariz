@@ -93,6 +93,20 @@ public class FormulaRunner : IFormulaRunner
         var formula = await ValidateRecordingRunAsync(userId, recordingId, formulaId, ct);
         var cfg = await _settings.ResolveAsync(userId, ct);
 
+        // Attribute this call's usage row: this is the SYNCHRONOUS run path (called directly from chat's
+        // run_formula tool and, over MCP, with no enclosing operation at all). Without a scope of its own, an
+        // MCP-invoked run lands as Kind = Unknown with no user attributed - a real user's LLM spend thrown
+        // away. Nested inside an existing ChatMessage scope (the chat tool-call case) this correctly shadows
+        // it for the duration of the call, so a formula's tokens are attributed to FormulaRun, not folded into
+        // the enclosing chat turn - mirroring FormulaRunProcessor's push for the async job path.
+        var recordingName = await _db.Recordings
+            .Where(r => r.Id == recordingId)
+            .Select(r => r.Name ?? r.Title)
+            .FirstOrDefaultAsync(ct);
+        using var llm = LlmCallScope.Push(
+            LlmCallKind.FormulaRun, userId, await OwnerEmailAsync(userId, ct),
+            recordingId: recordingId, recordingTitle: recordingName);
+
         // Reuse the shared context/LLM primitives (also driving the async FormulaRunProcessor). Ownership was
         // already enforced above by IsRecordingAccessibleAsync, so re-loading the context here (no ownership
         // filter) is safe. A TimeoutSeconds expiry surfaces as an OperationCanceledException with the OUTER `ct` still
@@ -138,6 +152,11 @@ public class FormulaRunner : IFormulaRunner
     /// <summary>Phase 1 recording access = ownership. Factored out (as a translatable expression, not just a
     /// predicate over a loaded entity) so room-sharing access can extend this later.</summary>
     private static Expression<Func<Recording, bool>> AccessibleBy(Guid userId) => r => r.UserId == userId;
+
+    /// <summary>Mirrors <c>FormulaRunProcessor.OwnerEmailAsync</c> - the caller is the recording's owner
+    /// (Phase 1 access = ownership), so this doubles as "the recording owner's email" for the pushed scope.</summary>
+    private Task<string?> OwnerEmailAsync(Guid userId, CancellationToken ct) =>
+        _db.Users.Where(u => u.Id == userId).Select(u => u.Email).FirstOrDefaultAsync(ct);
 
     /// <summary>The next display ordinal for this recording's results (max+1). <c>(RecordingId, Ordinal)</c>
     /// is intentionally NOT a unique index: Ordinal is display-order only, so a rare collision from two

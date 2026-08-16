@@ -1068,7 +1068,7 @@ bulk delete on the (future) admin viewer, not a cascade off the subject's own de
 | `Id` | uuid PK | |
 | `OperationId` | uuid | groups every call made by one user-facing operation (e.g. all section calls of one folder-minutes run); a "turn" = `MAX(Sequence)` per operation |
 | `Sequence` | int | 1-based index of this call within its operation |
-| `Kind` | int | `LlmCallKind`: what the call was for - `Unknown`(0, no active scope), `Summarize`, `SectionSummary`, `MeetingMinutes`, `SectionMinutes`, `MeetingTypeMinutes`, `ExtractActions`, `Tags`, `Translation`, `Dictation`, `Embedding`, `SearchQuery`, `ChatMessage`, `FormulaRun`, `ChatTitle`. Append-only enum |
+| `Kind` | int | `LlmCallKind`: what the call was for - `Unknown`(0, no active scope), `Summarize`, `SectionSummary`, `MeetingMinutes`, `SectionMinutes`, `MeetingTypeMinutes` (reserved; never written - the generator's calls belong to the enclosing MeetingMinutes/SectionMinutes operation), `ExtractActions`, `Tags`, `Translation`, `Dictation`, `Embedding`, `SearchQuery`, `ChatMessage`, `FormulaRun`, `ChatTitle`. Append-only enum |
 | `UserId` | uuid null FK → AspNetUsers | who the call was for; **`ON DELETE SET NULL`** |
 | `UserEmail` | text | denormalized snapshot of the user's email at write time; empty string when there was no active scope |
 | `RecordingId` | uuid null FK → Recordings | the recording the call was for, if any; **`ON DELETE SET NULL`** |

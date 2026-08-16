@@ -41,7 +41,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Automations (webhooks)** | When enabled, register outbound webhooks from Preferences - a list of what you have, with a composer for making or editing one - that fire when a recording is created, finishes or fails transcription, a summary / meeting minutes / action items / tags become ready (each carrying its output), or a formula finishes or fails. Every recording event also carries an **attendees** list - who spoke, the person they are, their title, company, and internal or external - with email addresses and phone numbers included only when that automation opts in. Signed deliveries with automatic retries (rate-limited per automation and 429-aware), a test-event button, auto-pause after repeated failures, and a Pause / Resume button that stops deliveries reversibly (deleting an automation discards its signing secret; pausing keeps it). Admins can also define named Workflow Signals and wire a platform automation to one, so a formula author just picks "When this finishes, trigger: ..." in the formula editor - no URL or per-user setup - and the formula's output is delivered inline to everyone routed through that signal. |
 | **n8n** | A published community node (\`n8n-nodes-diariz\`): a trigger that registers its own automation and verifies every signed delivery, with a Platform scope for administrators that adds events across every user including Feedback Received, plus an action node covering the whole REST API - with dropdowns listing your real recordings and formulas, files in and out, and a Run Formula step that waits for the document to finish. |
 | **Multi-user & groups** | A **Users & access** console: search and filter every account, and see on one panel what a person's groups actually let them do, alongside their quota, status and storage. Groups grant the five platform permissions - each explained in a sentence rather than a column heading - and carry a name, description and colour. Access requests are a tab with a waiting count, then an approval lifecycle. Per-user isolation and Light/Dark/Auto themes. |
-| **Admin controls** | Storage quotas, optional audio auto-deletion, a default AI request timeout that users can override for their own account, separate platform toggles for API access, Claude/MCP, and Automations (webhooks), and whole-platform backup & restore. |
+| **Admin controls** | Storage quotas, optional audio auto-deletion, a default AI request timeout that users can override for their own account, LLM usage logging (on/off, a retention window in days, and a streaming-token-count toggle), separate platform toggles for API access, Claude/MCP, and Automations (webhooks), and whole-platform backup & restore. |
 | **Provide Feedback** | Any signed-in user can describe something that looks or behaves wrong from the account menu; a scrubbed technical trail of recent app activity is attached automatically. Readable and deletable only by a Platform Administrator, in a Feedback tab in Settings, and can raise a \`feedback.submitted\` automation event - the submitter's words reach it only when that automation ticks Include What The Person Wrote. |
 | **Help & documentation** | A browsable help section at \`/help\` with a grouped article tree and instant search, plus contextual help throughout the app: a small \`?\` next to a feature opens a short explanation with a link straight to the full article. An **Advanced and admin** section covers configuring formulas, meeting types, Workflow Signals and webhooks, users and permissions, connecting Claude over MCP, building n8n and Zapier workflows, and the REST API. A **CRM integration** section covers wiring Diariz to any CRM through n8n or Zapier, with a worked EspoCRM example. |
 
@@ -61,6 +61,18 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.216.1",
+    date: "2026-08-16",
+    pr: 531,
+    headline: "Follow-up fixes for the LLM usage log",
+    summary:
+      "A final review pass on the LLM usage log from 0.216.0 turned up two gaps and fixed both here. A formula run invoked with no enclosing chat turn - an MCP client's run_formula call - was landing in the usage log unattributed, discarding a real user's LLM spend; it now records the recording and the user who ran it, the same as every other call site. Separately, the usage-logging handler was reading the outbound request body twice per call, which for a dictation upload (up to 10 MB of audio) meant buffering the whole file into memory and decoding binary audio as text, twice, on the one call path this feature promised never to slow down; it now reads a request body at most once, and only when it is actually JSON.",
+    fixed: [
+      "A formula run invoked with no enclosing chat turn (an MCP client's run_formula call) landed in the usage log unattributed; it now records the recording and the user who ran it.",
+      "The usage-logging handler no longer reads a non-JSON request body (a dictation upload's audio) to size it - it uses the declared content length instead, so a large upload is never buffered into memory twice.",
+    ],
+  },
   {
     version: "0.216.0",
     date: "2026-08-16",

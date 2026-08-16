@@ -376,7 +376,7 @@
   "llmUsageRetentionHint": "How long usage log rows are kept before the nightly sweep deletes them. 0 keeps everything.",
   "llmUsageRetentionInvalid": "The usage log retention window must be a whole number of days (0 or more).",
   "llmStreamUsageLabel": "Request token counts on streaming calls",
-  "llmStreamUsageHint": "Ask the endpoint for token counts on streamed responses, when it supports it.",
+  "llmStreamUsageHint": "Ask the endpoint for token counts on streamed responses, when it supports it. Takes effect in a future release - this switch has no effect yet.",
   "automationsTitle": "Automations",
   "automationsIntro": "Send your meeting events to tools like Zapier, n8n, or Make. Pick what should trigger, paste the URL from your tool, and test it.",
   "automationDefaultName": "Automation",

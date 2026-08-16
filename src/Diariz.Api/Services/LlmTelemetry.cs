@@ -143,7 +143,17 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
         var scope = LlmCallScope.Active;
         var startedAt = DateTimeOffset.UtcNow;
         var clock = System.Diagnostics.Stopwatch.StartNew();
-        var promptChars = await PromptCharsAsync(request, ct);
+
+        // The request body is read AT MOST ONCE, and only when it is actually JSON. A dictation upload is
+        // MultipartFormDataContent wrapping a StreamContent of up to 10 MiB of audio: ReadAsStringAsync would
+        // force the whole file to buffer into memory (defeating the streaming upload) and UTF-8-decode binary
+        // audio into meaningless replacement characters, twice over (once here, once in the old ModelOf). For
+        // a non-JSON body, PromptChars comes from the declared Content-Length instead - a header read that
+        // never touches the stream - and Model is empty (dictation has none to report anyway).
+        var isJsonRequest = IsJsonRequestBody(request);
+        var requestJson = isJsonRequest ? await ReadRequestBodyAsync(request, ct) : null;
+        var promptChars = isJsonRequest ? requestJson?.Length : ContentLengthOf(request);
+        var model = ModelOf(requestJson);
 
         HttpResponseMessage response;
         try
@@ -156,7 +166,7 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
             // see, so it is recorded before the exception continues on to the caller unchanged. There is
             // no response to inspect here, so Streamed is unconditionally false - not "unknown".
             clock.Stop();
-            Record(scope, target, request, startedAt, clock, promptChars, null, default, ErrorKindOf(ex), streamed: false);
+            Record(scope, target, model, startedAt, clock, promptChars, null, default, ErrorKindOf(ex), streamed: false);
             throw;
         }
 
@@ -181,20 +191,25 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
         clock.Stop();
         var status = (int)response.StatusCode;
         Record(
-            scope, target, request, startedAt, clock, promptChars, status, usage,
+            scope, target, model, startedAt, clock, promptChars, status, usage,
             response.IsSuccessStatusCode ? null : $"Http{status}", streamed);
 
         return response;
     }
 
-    /// <summary>Length of the serialized request body, used as a proxy for prompt size so no call site has
-    /// to report it. Best-effort: a body that cannot be read costs a null, never the call.</summary>
-    private static async Task<int?> PromptCharsAsync(HttpRequestMessage request, CancellationToken ct)
+    /// <summary>Header-only check - reads no part of the request body. A dictation upload is
+    /// <c>multipart/form-data</c>, never this, so it is the gate that keeps the handler from ever touching
+    /// the audio stream.</summary>
+    private static bool IsJsonRequestBody(HttpRequestMessage request) =>
+        request.Content?.Headers.ContentType?.MediaType is "application/json";
+
+    /// <summary>Reads the request body ONCE, for a JSON body only - the single read this handler ever
+    /// performs on a request. Best-effort: a body that cannot be read costs a null, never the call.</summary>
+    private static async Task<string?> ReadRequestBodyAsync(HttpRequestMessage request, CancellationToken ct)
     {
-        if (request.Content is null) return null;
         try
         {
-            return (await request.Content.ReadAsStringAsync(ct)).Length;
+            return await request.Content!.ReadAsStringAsync(ct);
         }
         catch (Exception)
         {
@@ -202,16 +217,22 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
         }
     }
 
-    /// <summary>Reads the <c>model</c> property out of the request body. Never throws - an unparseable or
-    /// absent body costs an empty string, never the call.</summary>
-    private static string ModelOf(HttpRequestMessage request)
+    /// <summary>The declared size of a non-JSON request body, read from the <c>Content-Length</c> header
+    /// only - never the stream itself. Null when the header is absent (e.g. a non-seekable upload stream,
+    /// which HttpContent cannot pre-compute a length for) rather than 0.</summary>
+    private static int? ContentLengthOf(HttpRequestMessage request) =>
+        request.Content?.Headers.ContentLength is { } len && len >= 0 && len <= int.MaxValue ? (int)len : null;
+
+    /// <summary>Reads the <c>model</c> property out of an already-read JSON request body. Never throws - an
+    /// absent or unparseable body costs an empty string, never the call. Takes the string directly (rather
+    /// than re-reading the request) so the body is parsed from the one read <see cref="ReadRequestBodyAsync"/>
+    /// already did - a second <c>ReadAsStringAsync</c>, sync-over-async, used to run here on every call.</summary>
+    private static string ModelOf(string? requestJson)
     {
+        if (string.IsNullOrWhiteSpace(requestJson)) return string.Empty;
         try
         {
-            var body = request.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
-            if (string.IsNullOrWhiteSpace(body)) return string.Empty;
-
-            using var doc = JsonDocument.Parse(body);
+            using var doc = JsonDocument.Parse(requestJson);
             if (doc.RootElement.ValueKind != JsonValueKind.Object) return string.Empty;
             if (doc.RootElement.TryGetProperty("model", out var m) && m.ValueKind == JsonValueKind.String)
                 return m.GetString() ?? string.Empty;
@@ -233,7 +254,7 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
     /// <summary>Builds the row and hands it to the sink. Content is never included - only counts, sizes
     /// and identifiers.</summary>
     private void Record(
-        LlmCallScope? scope, string target, HttpRequestMessage request, DateTimeOffset startedAt,
+        LlmCallScope? scope, string target, string model, DateTimeOffset startedAt,
         System.Diagnostics.Stopwatch clock, int? promptChars, int? statusCode, LlmUsage usage,
         string? errorKind, bool streamed)
     {
@@ -249,7 +270,7 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
             RecordingTitle = scope?.RecordingTitle,
             SectionId = scope?.SectionId,
             SectionName = scope?.SectionName,
-            Model = ModelOf(request),
+            Model = model,
             Endpoint = target,
             StartedAt = startedAt,
             CompletedAt = startedAt.AddMilliseconds(clock.Elapsed.TotalMilliseconds),
