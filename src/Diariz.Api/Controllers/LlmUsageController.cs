@@ -360,6 +360,84 @@ public class LlmUsageController : ControllerBase
         return Ok(new LlmUsageSummary(groups, totals));
     }
 
+    [HttpDelete]
+    [EndpointSummary("Delete LLM usage log entries matching a filter")]
+    [EndpointDescription(
+        "Platform Administrator only. THE MOST DESTRUCTIVE ENDPOINT IN THIS FEATURE: permanently removes " +
+        "LlmCalls rows - the usage log is the only record a given LLM call ever happened, and there is no " +
+        "undo. Uses the exact same LlmUsageQuery.Apply the read endpoints use, so an unfiltered request is " +
+        "still bounded by the default 30-day window - 'delete matching these filters' can never silently " +
+        "become 'delete everything'. Set-based (ExecuteDeleteAsync): the matching rows are never " +
+        "materialized into API process memory. Returns the count of rows removed.")]
+    public async Task<IActionResult> Delete(
+        [FromQuery] DateTimeOffset? from = null,
+        [FromQuery] DateTimeOffset? to = null,
+        [FromQuery] Guid[]? userIds = null,
+        [FromQuery] int[]? kinds = null,
+        [FromQuery] string[]? models = null,
+        [FromQuery] string? outcome = null,
+        [FromQuery] Guid? recordingId = null,
+        [FromQuery] Guid? sectionId = null,
+        CancellationToken ct = default)
+    {
+        var filter = new LlmUsageFilter(from, to, userIds, kinds, models, outcome, recordingId, sectionId);
+        var filtered = LlmUsageQuery.Apply(_db.LlmCalls.AsNoTracking(), filter, DateTimeOffset.UtcNow);
+
+        // A different guard from List/Summary's MaxOperationsPerRequest check, even though it reuses the
+        // same constant: List/Summary guard against materializing a candidate set into API process memory,
+        // which ExecuteDeleteAsync below never does - that original justification does not apply here. This
+        // guard exists purely to cap the blast radius of a single irreversible action, which is a judgement
+        // call, not a mechanical necessity (see task-5-report.md). It checks totals.Calls, not
+        // totals.Operations - the quantity that actually matters for a delete is the number of ROWS about
+        // to be permanently destroyed, not the List/Summary quantity (a lower bound on candidate rows in a
+        // DIFFERENT grouping, the wrong direction for a delete-size ceiling).
+        var totals = await LlmUsageQuery.TotalsAsync(filtered, ct);
+        if (totals.Calls > MaxOperationsPerRequest)
+            return BadRequest(
+                $"This filter matches too many rows to delete ({totals.Calls:N0}+, over the " +
+                $"{MaxOperationsPerRequest:N0} limit). Narrow the date range or add more filters, then retry.");
+
+        var deleted = await filtered.ExecuteDeleteAsync(ct);
+        return Ok(new LlmUsageDeleteResult(deleted));
+    }
+
+    [HttpGet("filters")]
+    [EndpointSummary("List the distinct users, models and kinds present in the LLM usage log")]
+    [EndpointDescription(
+        "Platform Administrator only. Populates the viewer's filter dropdowns with only combinations that " +
+        "actually occur in the scoped set, so a value the dropdown offers can never combine with the active " +
+        "date range to match zero rows. Scoped the same way every other endpoint defaults - the last 30 " +
+        "days unless from/to widen or narrow it - rather than reporting across all history.")]
+    public async Task<IActionResult> Filters(
+        [FromQuery] DateTimeOffset? from = null,
+        [FromQuery] DateTimeOffset? to = null,
+        CancellationToken ct = default)
+    {
+        // Only From/To are honoured here - every other LlmUsageFilter field is left null ("no filter").
+        // This endpoint POPULATES the userIds/models/kinds dropdowns, so it would be circular for it to
+        // also accept them: filtering by model before asking "which models exist" defeats the purpose.
+        var filter = new LlmUsageFilter(from, to, null, null, null, null, null, null);
+        var scoped = LlmUsageQuery.Apply(_db.LlmCalls.AsNoTracking(), filter, DateTimeOffset.UtcNow);
+
+        var userRows = await scoped
+            .Where(c => c.UserId != null)
+            .GroupBy(c => c.UserId!.Value)
+            .Select(g => new { UserId = g.Key, UserEmail = g.Max(c => c.UserEmail)! })
+            .ToListAsync(ct);
+        var models = await scoped.Select(c => c.Model).Distinct().ToListAsync(ct);
+        var kinds = await scoped.Select(c => c.Kind).Distinct().ToListAsync(ct);
+
+        var users = userRows
+            .Select(u => new LlmUsageFilterUser(u.UserId, u.UserEmail))
+            .OrderBy(u => u.UserEmail, StringComparer.Ordinal)
+            .ToList();
+
+        return Ok(new LlmUsageFilterOptions(
+            users,
+            models.OrderBy(m => m, StringComparer.Ordinal).ToList(),
+            kinds.OrderBy(k => k).ToList()));
+    }
+
     /// <summary>Applies the requested sort, then a final <c>Id</c> tiebreaker. Every whitelisted column
     /// - including <c>StartedAt</c>, which <see cref="LlmCallScope"/>'s own doc notes can tie under
     /// concurrent fan-out - is non-unique, and Postgres gives no guarantee that tied rows come back in

@@ -603,7 +603,9 @@ public class LlmUsageViewerIntegrationTests(ContainersFixture fx)
         Guid? operationId = null,
         int sequence = 1,
         bool success = true,
-        string? model = null) => new()
+        string? model = null,
+        Guid? recordingId = null,
+        Guid? sectionId = null) => new()
     {
         Id = Guid.NewGuid(),
         OperationId = operationId ?? marker,
@@ -618,7 +620,93 @@ public class LlmUsageViewerIntegrationTests(ContainersFixture fx)
         CompletionTokens = completionTokens,
         TotalTokens = totalTokens,
         Success = success,
+        RecordingId = recordingId,
+        SectionId = sectionId,
     };
+
+    // ---- LlmUsageController.List: recordingId/sectionId filters (Task 5) ----
+    //
+    // Never tested anywhere before this task (Task 1's review flagged it and it was carried forward
+    // here deliberately) - and the same two filters govern the destructive delete path below, so both
+    // read and delete get dedicated coverage. RecordingId/SectionId are themselves fresh Guids per
+    // test, which is isolation enough on its own (no collision risk with any other test's rows) - no
+    // Model marker needed on top, though one is included anyway for consistency with the rest of the
+    // file.
+    //
+    // Real Postgres enforces the LlmCalls -> Recordings/Sections FK (ON DELETE SET NULL, per
+    // LlmCall's own doc comment), unlike the in-memory provider used elsewhere in this repo's unit
+    // tests - so a real Recording/Section (and the user/room they in turn require) has to be seeded,
+    // not just a bare Guid.
+
+    private async Task<Guid> SeedUser()
+    {
+        await using var db = fx.CreateDbContext();
+        var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test", Email = "u@x.test" };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        return user.Id;
+    }
+
+    private async Task<Guid> SeedRecording()
+    {
+        var userId = await SeedUser();
+        await using var db = fx.CreateDbContext();
+        var recording = new Recording { Id = Guid.NewGuid(), UserId = userId, BlobKey = $"k/{Guid.NewGuid()}" };
+        db.Recordings.Add(recording);
+        await db.SaveChangesAsync();
+        return recording.Id;
+    }
+
+    private async Task<Guid> SeedSection()
+    {
+        var userId = await SeedUser();
+        await using var db = fx.CreateDbContext();
+        var roomId = await new RoomScope(db).PersonalRoomIdAsync(userId);
+        var section = new Section { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Name = "F" };
+        db.Sections.Add(section);
+        await db.SaveChangesAsync();
+        return section.Id;
+    }
+
+    [Fact]
+    public async Task List_FiltersByRecordingId_ReturnsOnlyThatRecordingsRows()
+    {
+        var recordingId = await SeedRecording();
+        var otherRecordingId = await SeedRecording();
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        db.LlmCalls.AddRange(
+            Row(marker, recordingId: recordingId),
+            Row(marker, recordingId: otherRecordingId),
+            Row(marker));
+        await db.SaveChangesAsync();
+
+        var result = OkValue<LlmUsagePage<LlmUsageCallRow>>(
+            await Build(db).List(mode: "calls", models: [marker.ToString()], recordingId: recordingId));
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal(recordingId, row.RecordingId);
+    }
+
+    [Fact]
+    public async Task List_FiltersBySectionId_ReturnsOnlyThatSectionsRows()
+    {
+        var sectionId = await SeedSection();
+        var otherSectionId = await SeedSection();
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        db.LlmCalls.AddRange(
+            Row(marker, sectionId: sectionId),
+            Row(marker, sectionId: otherSectionId),
+            Row(marker));
+        await db.SaveChangesAsync();
+
+        var result = OkValue<LlmUsagePage<LlmUsageCallRow>>(
+            await Build(db).List(mode: "calls", models: [marker.ToString()], sectionId: sectionId));
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal(sectionId, row.SectionId);
+    }
 
     // ---- LlmUsageController.Summary: roll-up grouped by user/model/kind (Task 4) ----
     //
@@ -1010,5 +1098,225 @@ public class LlmUsageViewerIntegrationTests(ContainersFixture fx)
         var result = await Build(db).Summary(groupBy: "user,model,kind", models: [marker.ToString()]);
 
         Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    // ---- LlmUsageController.Delete (Task 5) ----
+    //
+    // THE MOST DESTRUCTIVE ENDPOINT IN THIS FEATURE: it permanently removes LlmCalls rows, and the
+    // usage log is the only record a given LLM call ever happened. Every test below that CAN isolate
+    // via the file's usual Model marker does so; the one test that specifically has to prove "no filter
+    // at all" behaviour (Delete_WithNoDateFilterGiven_StillAppliesTheDefault30DayWindow) cannot rely on
+    // a Model filter for isolation - by definition, that test's whole point is to call Delete with no
+    // date bound - so it isolates via a userIds filter carrying a fresh, real ApplicationUser instead,
+    // which is still safe against every other test's rows in this shared database. It never calls
+    // Delete with truly zero query parameters against the live shared table.
+
+    [Fact]
+    public async Task Delete_RemovesOnlyRowsMatchingTheFilter_LeavesOthersUntouched()
+    {
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var wanted = Row(marker);
+        var otherModel = Row(marker, model: $"{marker}-other");
+        db.LlmCalls.AddRange(wanted, otherModel);
+        await db.SaveChangesAsync();
+
+        await Build(db).Delete(models: [marker.ToString()]);
+
+        await using var verifyDb = fx.CreateDbContext();
+        Assert.False(await verifyDb.LlmCalls.AnyAsync(c => c.Id == wanted.Id));
+        Assert.True(await verifyDb.LlmCalls.AnyAsync(c => c.Id == otherModel.Id));
+    }
+
+    [Fact]
+    public async Task Delete_ReturnsTheCountOfRowsRemoved()
+    {
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        db.LlmCalls.AddRange(Row(marker), Row(marker), Row(marker));
+        await db.SaveChangesAsync();
+
+        var result = OkValue<LlmUsageDeleteResult>(await Build(db).Delete(models: [marker.ToString()]));
+
+        Assert.Equal(3, result.Deleted);
+    }
+
+    [Fact]
+    public async Task Delete_WithNoDateFilterGiven_StillAppliesTheDefault30DayWindow()
+    {
+        // THE SINGLE MOST IMPORTANT TEST IN THIS TASK. Delete goes through the exact same
+        // LlmUsageQuery.Apply the read endpoints use, and Apply's own default (From ??
+        // nowUtc.AddDays(-30)) must still bound it even when the caller supplies no date filter at
+        // all - "delete matching these filters" must never silently become "delete everything" just
+        // because the filter happened to be empty on the date dimension. Isolated via a userIds filter
+        // (a fresh, real ApplicationUser) rather than Model, specifically BECAUSE this test must not
+        // pass any date-related parameter - userIds is an orthogonal dimension, so passing it doesn't
+        // weaken what's being proven about the date default.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        db.Users.Add(new ApplicationUser { Id = userId, UserName = $"{userId}@x.test", Email = $"{userId}@x.test" });
+        var recent = SummaryRow(marker, userId: userId, userEmail: $"{userId}@x.test");
+        var old = SummaryRow(marker, userId: userId, userEmail: $"{userId}@x.test");
+        old.StartedAt = DateTimeOffset.UtcNow.AddDays(-100);
+        old.CompletedAt = old.StartedAt;
+        db.LlmCalls.AddRange(recent, old);
+        await db.SaveChangesAsync();
+
+        var result = OkValue<LlmUsageDeleteResult>(await Build(db).Delete(userIds: [userId]));
+
+        await using var verifyDb = fx.CreateDbContext();
+        Assert.Equal(1, result.Deleted);
+        Assert.False(await verifyDb.LlmCalls.AnyAsync(c => c.Id == recent.Id)); // inside the window: gone
+        Assert.True(await verifyDb.LlmCalls.AnyAsync(c => c.Id == old.Id));     // outside it: untouched
+    }
+
+    [Fact]
+    public async Task Delete_IsSetBased_LeavesPreviouslyTrackedEntitiesUnsyncedInTheChangeTracker()
+    {
+        // Proves the implementation is ExecuteDeleteAsync (set-based) BY BEHAVIOUR, not by inspecting
+        // SQL: ExecuteDeleteAsync executes directly against the database and deliberately bypasses the
+        // change tracker entirely - a well-known, documented EF Core distinguishing signature from
+        // "load the matching entities, RemoveRange, SaveChangesAsync", which DOES update the tracker
+        // (a successfully removed entry transitions to Detached). This test tracks one matching row in
+        // the SAME DbContext instance the delete call itself uses, runs the delete, and checks whether
+        // that already-tracked entry is still sitting in the tracker as Unchanged (ExecuteDeleteAsync -
+        // correct) or was transitioned to Detached (materialize-then-remove - the absurd approach this
+        // whole task exists to rule out on the largest table in the database).
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        db.LlmCalls.Add(Row(marker));
+        await db.SaveChangesAsync();
+
+        var tracked = await db.LlmCalls.FirstAsync(c => c.Model == marker.ToString());
+        Assert.Equal(EntityState.Unchanged, db.Entry(tracked).State);
+
+        await Build(db).Delete(models: [marker.ToString()]);
+
+        // The row is genuinely gone from the database...
+        await using var verifyDb = fx.CreateDbContext();
+        Assert.False(await verifyDb.LlmCalls.AnyAsync(c => c.Model == marker.ToString()));
+
+        // ...but the entry THIS test tracked BEFORE the delete call is still sitting in db's own
+        // tracker, still Unchanged - proof the delete went straight to the database and never touched
+        // db's change tracker.
+        Assert.Equal(EntityState.Unchanged, db.Entry(tracked).State);
+        Assert.Contains(tracked, db.LlmCalls.Local);
+    }
+
+    [Fact]
+    public async Task Delete_FiltersByRecordingId_RemovesOnlyThatRecordingsRows()
+    {
+        var recordingId = await SeedRecording();
+        var otherRecordingId = await SeedRecording();
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var wanted = Row(marker, recordingId: recordingId);
+        var otherRecording = Row(marker, recordingId: otherRecordingId);
+        db.LlmCalls.AddRange(wanted, otherRecording);
+        await db.SaveChangesAsync();
+
+        var result = OkValue<LlmUsageDeleteResult>(await Build(db).Delete(recordingId: recordingId));
+
+        Assert.Equal(1, result.Deleted);
+        await using var verifyDb = fx.CreateDbContext();
+        Assert.False(await verifyDb.LlmCalls.AnyAsync(c => c.Id == wanted.Id));
+        Assert.True(await verifyDb.LlmCalls.AnyAsync(c => c.Id == otherRecording.Id));
+    }
+
+    [Fact]
+    public async Task Delete_FiltersBySectionId_RemovesOnlyThatSectionsRows()
+    {
+        var sectionId = await SeedSection();
+        var otherSectionId = await SeedSection();
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var wanted = Row(marker, sectionId: sectionId);
+        var otherSection = Row(marker, sectionId: otherSectionId);
+        db.LlmCalls.AddRange(wanted, otherSection);
+        await db.SaveChangesAsync();
+
+        var result = OkValue<LlmUsageDeleteResult>(await Build(db).Delete(sectionId: sectionId));
+
+        Assert.Equal(1, result.Deleted);
+        await using var verifyDb = fx.CreateDbContext();
+        Assert.False(await verifyDb.LlmCalls.AnyAsync(c => c.Id == wanted.Id));
+        Assert.True(await verifyDb.LlmCalls.AnyAsync(c => c.Id == otherSection.Id));
+    }
+
+    [Fact]
+    public async Task Delete_ExceedingTheRowCeiling_Returns400_NotAPartialDelete()
+    {
+        // Mirrors List's OperationsMode_ExceedingTheOperationCeiling_Returns400_NotATruncatedPage, but
+        // for the judgement call documented in task-5-report.md: Delete DOES carry a
+        // MaxOperationsPerRequest-sized guard even though ExecuteDeleteAsync never materializes
+        // anything into memory (the original reason List/Summary need the guard) - here it exists to
+        // cap the blast radius of a single irreversible action, checked against totals.Calls (the
+        // actual row count about to be destroyed), not totals.Operations. An explicit 400 with nothing
+        // deleted, never a silently partial delete.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        const int overCeiling = LlmUsageController.MaxOperationsPerRequest + 1;
+        db.LlmCalls.AddRange(
+            Enumerable.Range(0, overCeiling).Select(_ => Row(marker, operationId: Guid.NewGuid())));
+        await db.SaveChangesAsync();
+
+        var result = await Build(db).Delete(models: [marker.ToString()]);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        await using var verifyDb = fx.CreateDbContext();
+        Assert.Equal(overCeiling, await verifyDb.LlmCalls.CountAsync(c => c.Model == marker.ToString()));
+    }
+
+    // ---- LlmUsageController.Filters (Task 5) ----
+
+    [Fact]
+    public async Task Filters_ReturnsOnlyValuesActuallyPresentInTheScopedSet()
+    {
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var modelA = $"{marker}-a";
+        var userId = Guid.NewGuid();
+        db.Users.Add(new ApplicationUser { Id = userId, UserName = $"{userId}@x.test", Email = $"{userId}@x.test" });
+        db.LlmCalls.AddRange(
+            SummaryRow(marker, userId: userId, userEmail: $"{userId}@x.test", model: modelA, kind: LlmCallKind.Tags),
+            SummaryRow(marker, model: modelA, kind: LlmCallKind.Tags));
+        await db.SaveChangesAsync();
+
+        // Filters has no models/userIds parameter of its own to scope by - it's what POPULATES those
+        // dropdowns - so this test can only assert "contains what we seeded", not "equals exactly";
+        // other tests' rows within the same default 30-day window are legitimately in scope too.
+        var result = OkValue<LlmUsageFilterOptions>(await Build(db).Filters());
+
+        Assert.Contains(modelA, result.Models);
+        Assert.Contains(LlmCallKind.Tags, result.Kinds);
+        Assert.Contains(result.Users, u => u.UserId == userId && u.UserEmail == $"{userId}@x.test");
+    }
+
+    [Fact]
+    public async Task Filters_ExcludesValuesOutsideTheDefault30DayWindow_UnlessWidened()
+    {
+        // The judgement call from task-5-report.md, proved directly: Filters accepts from/to and
+        // defaults to the same 30-day window as every other endpoint rather than reporting across all
+        // history. A model that only appears on a 100-day-old row must not show up in the
+        // default-window dropdown (offering it together with the default date range would guarantee a
+        // zero-row match), but widening `from` must reveal it. staleModel is a fresh marker-derived
+        // value never seeded anywhere else, so its absence/presence is a safe assertion even though
+        // this endpoint is not otherwise scoped to one test's rows.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var staleModel = $"{marker}-stale";
+        var stale = SummaryRow(marker, model: staleModel);
+        stale.StartedAt = DateTimeOffset.UtcNow.AddDays(-100);
+        stale.CompletedAt = stale.StartedAt;
+        db.LlmCalls.Add(stale);
+        await db.SaveChangesAsync();
+
+        var defaultWindow = OkValue<LlmUsageFilterOptions>(await Build(db).Filters());
+        Assert.DoesNotContain(staleModel, defaultWindow.Models);
+
+        var widened = OkValue<LlmUsageFilterOptions>(
+            await Build(db).Filters(from: DateTimeOffset.UtcNow.AddDays(-365)));
+        Assert.Contains(staleModel, widened.Models);
     }
 }

@@ -12,11 +12,12 @@ public class LlmUsageQueryTests
 
     private static LlmCall Row(
         DateTimeOffset startedAt, LlmCallKind kind = LlmCallKind.Summarize, Guid? userId = null,
-        string model = "m", bool success = true) => new()
+        string model = "m", bool success = true, Guid? recordingId = null, Guid? sectionId = null) => new()
     {
         Id = Guid.NewGuid(), OperationId = Guid.NewGuid(), Sequence = 1, Kind = kind,
         UserId = userId, UserEmail = "u@e.com", Model = model, Endpoint = "http://x/v1",
         StartedAt = startedAt, CompletedAt = startedAt, DurationMs = 1, Success = success,
+        RecordingId = recordingId, SectionId = sectionId,
     };
 
     private static async Task<List<LlmCall>> QueryAsync(LlmUsageFilter filter, params LlmCall[] rows)
@@ -89,6 +90,39 @@ public class LlmUsageQueryTests
             Row(Now.AddDays(-1), success: true), Row(Now.AddDays(-1), success: false));
 
         Assert.Equal(2, found.Count);
+    }
+
+    [Fact]
+    public async Task FiltersByRecordingId()
+    {
+        // Never tested anywhere before this task (Task 1's review flagged it and it was carried
+        // forward here deliberately) - and this same filter clause governs the destructive delete
+        // path, not just this read path.
+        var recordingId = Guid.NewGuid();
+        var wanted = Row(Now.AddDays(-1), recordingId: recordingId);
+        var otherRecording = Row(Now.AddDays(-1), recordingId: Guid.NewGuid());
+        var noRecording = Row(Now.AddDays(-1));
+
+        var found = await QueryAsync(
+            new LlmUsageFilter(null, null, null, null, null, null, recordingId, null),
+            wanted, otherRecording, noRecording);
+
+        Assert.Equal(wanted.Id, Assert.Single(found).Id);
+    }
+
+    [Fact]
+    public async Task FiltersBySectionId()
+    {
+        var sectionId = Guid.NewGuid();
+        var wanted = Row(Now.AddDays(-1), sectionId: sectionId);
+        var otherSection = Row(Now.AddDays(-1), sectionId: Guid.NewGuid());
+        var noSection = Row(Now.AddDays(-1));
+
+        var found = await QueryAsync(
+            new LlmUsageFilter(null, null, null, null, null, null, null, sectionId),
+            wanted, otherSection, noSection);
+
+        Assert.Equal(wanted.Id, Assert.Single(found).Id);
     }
 
     [Fact]

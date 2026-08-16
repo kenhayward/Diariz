@@ -161,3 +161,29 @@ public record LlmUsageSummaryGroup(
 /// <c>LlmUsageQuery.Apply</c>, so the summary and the detail view can never silently disagree about what
 /// is in scope. <see cref="Totals"/> is never derived from folding over <see cref="Groups"/>.</summary>
 public record LlmUsageSummary(IReadOnlyList<LlmUsageSummaryGroup> Groups, LlmUsageTotals Totals);
+
+// ---- LLM usage viewer delete (LlmUsageController.Delete) ----
+
+/// <summary>Response for <c>DELETE /api/admin/llm-usage</c> - the count of rows permanently removed.
+/// There is no way to recover them: the usage log is the only record a given LLM call ever happened.</summary>
+public record LlmUsageDeleteResult(int Deleted);
+
+// ---- LLM usage viewer filter options (LlmUsageController.Filters) ----
+
+/// <summary>One user with at least one <c>LlmCalls</c> row in the scoped set, for populating the
+/// viewer's user filter dropdown. <paramref name="UserEmail"/> is the most recent denormalised snapshot
+/// in scope (<c>MAX(UserEmail)</c>) - the same "arbitrary but deterministic" convention
+/// <c>LlmUsageQuery.SummaryAsync</c> uses when a user's email snapshot disagrees across rows (see its own
+/// doc comment on why <c>UserEmail</c> is a snapshot, never an identity field).</summary>
+public record LlmUsageFilterUser(Guid UserId, string UserEmail);
+
+/// <summary>Response for <c>GET /api/admin/llm-usage/filters</c>: the distinct users, models and kinds
+/// that actually occur in the scoped set - never every enum value or every user in the system - so the
+/// viewer's filter dropdowns can never offer a combination guaranteed to match zero rows. Scoped through
+/// <c>LlmUsageQuery.Apply</c> with only <c>From</c>/<c>To</c> set (every other field null/"no filter") -
+/// see <c>LlmUsageController.Filters</c> for why it respects the same default 30-day window as every
+/// other endpoint rather than reporting across all history.</summary>
+public record LlmUsageFilterOptions(
+    IReadOnlyList<LlmUsageFilterUser> Users,
+    IReadOnlyList<string> Models,
+    IReadOnlyList<LlmCallKind> Kinds);
