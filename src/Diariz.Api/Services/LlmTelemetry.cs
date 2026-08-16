@@ -166,7 +166,9 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
             // see, so it is recorded before the exception continues on to the caller unchanged. There is
             // no response to inspect here, so Streamed is unconditionally false - not "unknown".
             clock.Stop();
-            Record(scope, target, model, startedAt, clock, promptChars, null, default, ErrorKindOf(ex), streamed: false);
+            Record(
+                scope, target, model, startedAt, clock, promptChars, null, default, ErrorKindOf(ex),
+                streamed: false, timeToFirstTokenMs: null);
             throw;
         }
 
@@ -178,9 +180,20 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
         // hold every chat token until the model finished).
         var streamed = IsEventStream(response);
 
-        // `usage` only exists on a buffered JSON body. Streaming responses (SSE) are left strictly alone:
-        // buffering one would defeat streaming entirely, leaving the chat UI silent until the model
-        // finished instead of showing tokens as they arrive.
+        if (streamed)
+        {
+            // A streamed call is not over when SendAsync returns - it is only just starting, because the
+            // client sent with ResponseHeadersRead. Recording here (as PR 1 did) measures time-to-headers
+            // and can never see the usage chunk, which arrives after every content delta. So the record is
+            // deferred to whenever the body actually finishes: end-of-stream, disposal, or a fault,
+            // whichever the caller (or a dropped connection) triggers first. The clock keeps running.
+            response.Content = await WrapForDeferredRecordingAsync(
+                response, scope, target, model, startedAt, clock, promptChars, ct);
+            return response;
+        }
+
+        // `usage` only exists on a buffered JSON body. Streaming responses (SSE) are handled above and
+        // never reach here.
         var usage = default(LlmUsage);
         if (IsJson(response) && LlmUsageParser.TryParse(await ReadForUsageAsync(response, ct), out var parsed))
         {
@@ -192,9 +205,50 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
         var status = (int)response.StatusCode;
         Record(
             scope, target, model, startedAt, clock, promptChars, status, usage,
-            response.IsSuccessStatusCode ? null : $"Http{status}", streamed);
+            response.IsSuccessStatusCode ? null : $"Http{status}", streamed, timeToFirstTokenMs: null);
 
         return response;
+    }
+
+    /// <summary>Wraps a streaming response's content stream so the telemetry row is written once the body
+    /// actually finishes, instead of at <c>SendAsync</c>.
+    ///
+    /// Reads the stream itself EXACTLY NEVER: <see cref="HttpContent.ReadAsStreamAsync(CancellationToken)"/>
+    /// hands back the response's own content stream (for a live network response, the socket stream as
+    /// bytes arrive - not a buffered copy), and the only thing done with it here is wrap it in an
+    /// <see cref="ObservingStream"/> that watches, byte-for-byte, whatever the real caller
+    /// (<c>ChatStreamClient</c> et al.) chooses to read. <c>DoesNotBufferAStreamingResponse</c> exists
+    /// specifically to catch a regression that reads ahead here.</summary>
+    private async Task<StreamContent> WrapForDeferredRecordingAsync(
+        HttpResponseMessage response, LlmCallScope? scope, string target, string model,
+        DateTimeOffset startedAt, System.Diagnostics.Stopwatch clock, int? promptChars, CancellationToken ct)
+    {
+        var scanner = new SseUsageScanner();
+        var status = (int)response.StatusCode;
+        var errorKind = response.IsSuccessStatusCode ? null : $"Http{status}";
+        TimeSpan? timeToFirstToken = null;
+
+        var inner = await response.Content.ReadAsStreamAsync(ct);
+        var observed = new ObservingStream(
+            inner,
+            onBytes: chunk => scanner.Feed(chunk.Span),
+            onFirstByte: () => timeToFirstToken ??= clock.Elapsed,
+            onCompleted: () =>
+            {
+                clock.Stop();
+                Record(
+                    scope, target, model, startedAt, clock, promptChars, status, scanner.Usage ?? default,
+                    errorKind, streamed: true, timeToFirstTokenMs: (int?)timeToFirstToken?.TotalMilliseconds);
+            });
+
+        var content = new StreamContent(observed);
+        // ChatStreamClient and its callers rely on the content headers - Content-Type above all, to
+        // recognise the body as SSE. Copied verbatim (not re-derived) so nothing here has to know the
+        // full set of headers a compatible server might send.
+        foreach (var header in response.Content.Headers)
+            content.Headers.TryAddWithoutValidation(header.Key, header.Value);
+
+        return content;
     }
 
     /// <summary>Header-only check - reads no part of the request body. A dictation upload is
@@ -256,7 +310,7 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
     private void Record(
         LlmCallScope? scope, string target, string model, DateTimeOffset startedAt,
         System.Diagnostics.Stopwatch clock, int? promptChars, int? statusCode, LlmUsage usage,
-        string? errorKind, bool streamed)
+        string? errorKind, bool streamed, int? timeToFirstTokenMs)
     {
         var call = new LlmCall
         {
@@ -281,6 +335,7 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
             TotalTokens = usage.TotalTokens,
             PromptChars = promptChars,
             Streamed = streamed,
+            TimeToFirstTokenMs = timeToFirstTokenMs,
             Success = errorKind is null,
             StatusCode = statusCode,
             ErrorKind = errorKind,
