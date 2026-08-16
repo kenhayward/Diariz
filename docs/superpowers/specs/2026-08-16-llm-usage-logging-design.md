@@ -104,7 +104,7 @@ a write-heavy table and every index is paid on every call.
 
 | Field | Default | Purpose |
 |---|---|---|
-| `LlmUsageLoggingEnabled` | `true` | Master switch; when off the handler skips the channel entirely |
+| `LlmUsageLoggingEnabled` | `true` | Master switch, enforced by the writer (see below) |
 | `LlmUsageRetentionDays` | `90` | `0` = keep forever |
 | `LlmStreamUsageEnabled` | `true` | Sends `stream_options: {"include_usage": true}` on streaming requests |
 
@@ -166,6 +166,10 @@ every ~2 seconds or 200 rows.
 The writer opens its **own DI scope per batch**. The handler must never hold a `DbContext`: it is registered
 transient, but `HttpClientFactory` pools handler instances for roughly two minutes, so an injected scoped
 dependency would be captive.
+
+`LlmUsageLoggingEnabled` is enforced **in the writer**, not the handler: the writer already reads settings once
+per batch, so the LLM call path never pays for a settings lookup. Records made while logging is off are drained
+and discarded.
 
 Rows buffered at the moment of a hard crash are lost. That is the accepted trade: a usage log must never add
 latency to a summary, and a database problem must never degrade transcription or chat.
