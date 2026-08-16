@@ -25,6 +25,11 @@ public sealed class SseUsageScanner
     /// <summary>Token counts from the most recent usage chunk seen, or null if none has appeared.</summary>
     public LlmUsage? Usage { get; private set; }
 
+    /// <summary>Bytes currently held in the partial-line buffer. Exposed only so the bound and the
+    /// per-line reset are testable through a public seam - this repo tests through public API rather than
+    /// <c>InternalsVisibleTo</c>. Not used by any production caller.</summary>
+    public int BufferedBytes => (int)_line.Length;
+
     public void Feed(ReadOnlySpan<byte> bytes)
     {
         try

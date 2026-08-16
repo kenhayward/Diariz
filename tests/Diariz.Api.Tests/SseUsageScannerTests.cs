@@ -67,10 +67,32 @@ public class SseUsageScannerTests
     }
 
     [Fact]
-    public void AbsurdlyLongLine_DoesNotGrowTheBufferWithoutBound()
+    public void AbsurdlyLongLine_KeepsTheBufferBounded()
     {
-        // A hostile or broken endpoint must not be able to make a telemetry scanner exhaust memory. The
-        // scanner drops an over-long line and resynchronises at the next newline.
+        // A hostile or broken endpoint must not be able to make a telemetry scanner exhaust memory. Feed a
+        // run of bytes with NO newline, well past MaxLineBytes, and check the buffer never exceeds the
+        // bound - not merely that the scanner recovers afterward (an unbounded buffer would recover too,
+        // since the junk line contains no "usage" substring either way).
+        var scanner = new SseUsageScanner();
+        var junk = Encoding.UTF8.GetBytes("data: " + new string('x', SseUsageScanner.MaxLineBytes * 3));
+
+        // Feed it in chunks, checking the bound holds throughout, not just at the end.
+        const int chunkSize = 4096;
+        for (var offset = 0; offset < junk.Length; offset += chunkSize)
+        {
+            var len = Math.Min(chunkSize, junk.Length - offset);
+            scanner.Feed(junk.AsSpan(offset, len));
+            Assert.True(scanner.BufferedBytes <= SseUsageScanner.MaxLineBytes);
+        }
+
+        Assert.True(scanner.BufferedBytes <= SseUsageScanner.MaxLineBytes);
+    }
+
+    [Fact]
+    public void AbsurdlyLongLine_IsDroppedAndTheScannerResynchronises()
+    {
+        // Separate from the bound check above: after the over-long line ends, the scanner recovers and
+        // still finds a usage chunk that follows it.
         var scanner = new SseUsageScanner();
         FeedAll(scanner, "data: " + new string('x', SseUsageScanner.MaxLineBytes * 2) + "\n\n" + UsageChunk + "\n\n");
 
@@ -88,12 +110,14 @@ public class SseUsageScannerTests
     [Fact]
     public void RetainsNoContent()
     {
-        // The scanner sees every content delta go past. It must keep none of them - this table is browsed
-        // by an administrator and meeting content must never reach it.
+        // The scanner sees every content delta go past. It must keep none of them once a line is complete -
+        // this table is browsed by an administrator and meeting content must never reach it. (That `Usage`
+        // itself can only ever carry counts, never text, is guaranteed by LlmUsage's type - four nullable
+        // ints, no string field - not by this test; this test instead proves the scanner does not squirrel
+        // the raw line away anywhere else after processing it.)
         var scanner = new SseUsageScanner();
-        FeedAll(scanner, "data: {\"choices\":[{\"delta\":{\"content\":\"the secret merger closes friday\"}}]}\n\n" + UsageChunk + "\n\n");
+        FeedAll(scanner, "data: {\"choices\":[{\"delta\":{\"content\":\"the secret merger closes friday\"}}]}\n\n");
 
-        var serialized = System.Text.Json.JsonSerializer.Serialize(scanner.Usage);
-        Assert.DoesNotContain("secret merger", serialized);
+        Assert.Equal(0, scanner.BufferedBytes);
     }
 }
