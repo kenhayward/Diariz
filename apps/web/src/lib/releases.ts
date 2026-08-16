@@ -64,7 +64,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.217.0",
     date: "2026-08-16",
-    pr: 0,
+    pr: 532,
     headline: "Streamed calls now report real tokens and duration",
     summary:
       "The LLM usage log added in 0.216.0 had a gap for streamed calls - chat replies and formula runs - which recorded no token counts and a duration of a few tens of milliseconds. That number was never the call: it was the time to the first response header, because a streamed reply keeps generating long after the response starts. This release closes the gap. When the streaming-token-count admin setting is on, the platform now asks the model endpoint for a token count on streamed responses too (stream_options.include_usage), and the usage-logging handler wraps the response body in a pass-through stream that forwards every byte to the browser untouched - nothing is buffered or delayed - while watching for the trailing usage event. The usage row is completed only when the stream actually ends, so it now carries prompt, completion, reasoning and total token counts, a true end-to-end duration, and a new time-to-first-token figure. A connection that drops or a read that faults mid-answer is now recorded as a failure, while a user simply closing the tab mid-reply is correctly left alone, not counted as an error. Measured live on the same system before and after: a streamed chat turn with three model round-trips previously recorded 20 ms with no tokens; it now records 8,770 / 2,168 / 11,797 ms with token counts and a time-to-first-token of 1,896 / 324 / 2,935 ms.",
