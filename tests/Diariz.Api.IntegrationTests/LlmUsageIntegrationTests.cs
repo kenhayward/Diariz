@@ -2,6 +2,7 @@ using Diariz.Api.IntegrationTests.Infrastructure;
 using Diariz.Api.Services;
 using Diariz.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Diariz.Api.IntegrationTests;
 
@@ -144,4 +145,49 @@ public class LlmUsageIntegrationTests(ContainersFixture fx)
         await using var read = fx.CreateDbContext();
         Assert.False(await read.LlmCalls.AnyAsync(c => c.Id == call.Id));
     }
+
+    [Fact]
+    public async Task RetentionSweep_DeletesOnlyRowsOlderThanTheWindow()
+    {
+        await using var db = fx.CreateDbContext();
+        var now = DateTimeOffset.UtcNow;
+        var marker = Guid.NewGuid();
+
+        db.LlmCalls.AddRange(
+            Row(marker, now.AddDays(-100)),
+            Row(marker, now.AddDays(-91)),
+            Row(marker, now.AddDays(-89)),
+            Row(marker, now));
+        await db.SaveChangesAsync();
+
+        var deleted = await LlmUsageRetentionSweep.RunAsync(
+            db, now, retentionDays: 90, NullLogger.Instance, CancellationToken.None);
+
+        Assert.Equal(2, deleted);
+        Assert.Equal(2, await db.LlmCalls.CountAsync(c => c.OperationId == marker));
+    }
+
+    [Fact]
+    public async Task RetentionSweep_DeletesNothing_WhenRetentionIsZero()
+    {
+        // 0 means keep forever. Treating it as "delete everything older than today" would silently
+        // destroy the whole log the first night after an admin typed 0 meaning "no limit".
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        db.LlmCalls.Add(Row(marker, DateTimeOffset.UtcNow.AddYears(-5)));
+        await db.SaveChangesAsync();
+
+        var deleted = await LlmUsageRetentionSweep.RunAsync(
+            db, DateTimeOffset.UtcNow, retentionDays: 0, NullLogger.Instance, CancellationToken.None);
+
+        Assert.Equal(0, deleted);
+        Assert.Equal(1, await db.LlmCalls.CountAsync(c => c.OperationId == marker));
+    }
+
+    private static LlmCall Row(Guid operationId, DateTimeOffset startedAt) => new()
+    {
+        Id = Guid.NewGuid(), OperationId = operationId, Sequence = 1, Kind = LlmCallKind.Tags,
+        Model = "m", Endpoint = "http://x/v1", StartedAt = startedAt, CompletedAt = startedAt,
+        DurationMs = 1, Success = true,
+    };
 }

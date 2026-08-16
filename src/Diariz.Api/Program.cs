@@ -532,6 +532,9 @@ builder.Services.AddHostedService<StorageBackfillService>();
 // Nightly audio-retention job: deletes audio blobs of old, transcribed, unprotected recordings when the
 // Platform Administrator has opted in (off by default). Runs at the configured server-local time of day.
 builder.Services.AddHostedService<AudioRetentionWorker>();
+// Nightly LLM usage-log retention sweep: deletes LlmCall rows older than LlmUsageRetentionDays (0 = keep
+// forever). Reuses AudioRetentionSchedule's server-local time of day.
+builder.Services.AddHostedService<LlmUsageRetentionWorker>();
 
 builder.Services.AddControllers()
     .AddJsonOptions(o => JsonConfig.Apply(o.JsonSerializerOptions));
