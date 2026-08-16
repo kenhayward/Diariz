@@ -949,3 +949,11 @@ public sealed class NoGoogleCalendar : IGoogleCalendarClient
     public Task<IReadOnlyList<CalendarListEntry>?> ListAllCalendarsAsync(Guid userId, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<CalendarListEntry>?>(null);
 }
+
+/// <summary>Records what the telemetry handler decided to log, so the handler can be tested without a
+/// database or a channel.</summary>
+public sealed class FakeLlmUsageSink : ILlmUsageSink
+{
+    public List<LlmCall> Calls { get; } = new();
+    public void Record(LlmCall call) => Calls.Add(call);
+}
