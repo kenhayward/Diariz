@@ -160,7 +160,6 @@ export default function UsageSummary({
                 {sortHeader("tokensPerSecond", "llmUsageColTokensPerSec")}
                 {sortHeader("failedCalls", "llmUsageColFailed")}
               </tr>
-              <SummaryTotalsRow totals={summary.totals} colSpan={dims.length} />
             </thead>
             <tbody>
               {isLoading ? (
@@ -179,6 +178,13 @@ export default function UsageSummary({
                 sortedGroups.map((group, i) => <SummaryRow key={i} group={group} dims={dims} testId={`llm-usage-summary-row-${i}`} />)
               )}
             </tbody>
+            {/* Pinned to the BOTTOM of the scroll container, not offset from the header - see
+                UsageTable.tsx's identical `TotalsRow`/`tfoot` for why: a pixel offset guessed from the
+                header's rendered height drifts the moment font size, padding, line height, or
+                locale-driven text wrapping changes it (verified live in the browser to actually happen -
+                see task-8-report.md's fix-round-2 section). A <tfoot> row pins to the bottom of its
+                scrolling ancestor with `position: sticky; bottom: 0` regardless of header height. */}
+            <SummaryTotalsRow totals={summary.totals} colSpan={dims.length} />
           </table>
         </div>
       )}
@@ -190,24 +196,38 @@ export default function UsageSummary({
 /// Like `UsageTable`'s own totals row, each token column is captioned with its OWN measured count
 /// (`promptTokensMeasured`, etc. - `LlmUsageTotals` carries these) - unlike a group row, which only has the
 /// coarser any-column `tokenMeasuredCalls` (there is no finer-grained figure per group on the wire).
+///
+/// Rendered as a `<tfoot>`, sticky to the BOTTOM of the scrolling container (`bottom-0`) - deliberately NOT
+/// offset from the header by a pixel figure. An earlier version pinned it under `<thead>` with a hand-typed
+/// `top-[26px]`, which looked right in isolation but was verified live in the browser to be wrong: the real
+/// rendered header is about 40px tall, so roughly 14px (~22%) of the totals row sat hidden underneath it
+/// once the table was actually scrolled - see task-8-report.md's fix-round-2 section for the measured
+/// numbers (the identical bug, found and fixed the same way, one file over in `UsageTable.tsx`). A
+/// `<tfoot>` pinned to the bottom has no dependency on the header's height at all, so it cannot drift the
+/// same way if the header's font size, padding, line height, or locale-driven text wrapping ever changes -
+/// and totals beneath the data is the more conventional reading order for a table besides.
 function SummaryTotalsRow({ totals, colSpan }: { totals: LlmUsageTotals; colSpan: number }) {
   const { t } = useTranslation("account");
   return (
-    <tr
-      data-testid="llm-usage-summary-totals-row"
-      className="sticky top-[26px] z-10 border-b bg-gray-50 font-medium text-gray-700 dark:border-gray-800 dark:bg-gray-800 dark:text-gray-200"
-    >
-      <td colSpan={colSpan + 2} className="px-2 py-1">
-        {t("llmUsageTotalsLabel", { calls: totals.calls, operations: totals.operations })}
-      </td>
-      <td className="px-2 py-1 text-right" colSpan={2} />
-      <TotalCell value={totals.promptTokens} measured={totals.promptTokensMeasured} total={totals.calls} />
-      <TotalCell value={totals.completionTokens} measured={totals.completionTokensMeasured} total={totals.calls} />
-      <TotalCell value={totals.reasoningTokens} measured={totals.reasoningTokensMeasured} total={totals.calls} />
-      <TotalCell value={totals.totalTokens} measured={totals.totalTokensMeasured} total={totals.calls} />
-      <td className="px-2 py-1 text-right">{totals.tokensPerSecond === null ? t("llmUsageNotMeasured") : totals.tokensPerSecond.toFixed(1)}</td>
-      <td className="px-2 py-1 text-right">{t("llmUsageTotalsFailed", { count: totals.failedCalls })}</td>
-    </tr>
+    <tfoot>
+      <tr
+        data-testid="llm-usage-summary-totals-row"
+        className="sticky bottom-0 z-10 border-t bg-gray-50 font-medium text-gray-700 dark:border-gray-800 dark:bg-gray-800 dark:text-gray-200"
+      >
+        <td colSpan={colSpan + 2} className="px-2 py-1">
+          {t("llmUsageTotalsLabel", { calls: totals.calls, operations: totals.operations })}
+        </td>
+        <td className="px-2 py-1 text-right" colSpan={2} />
+        <TotalCell value={totals.promptTokens} measured={totals.promptTokensMeasured} total={totals.calls} />
+        <TotalCell value={totals.completionTokens} measured={totals.completionTokensMeasured} total={totals.calls} />
+        <TotalCell value={totals.reasoningTokens} measured={totals.reasoningTokensMeasured} total={totals.calls} />
+        <TotalCell value={totals.totalTokens} measured={totals.totalTokensMeasured} total={totals.calls} />
+        <td className="px-2 py-1 text-right">
+          {totals.tokensPerSecond === null ? t("llmUsageNotMeasured") : totals.tokensPerSecond.toFixed(1)}
+        </td>
+        <td className="px-2 py-1 text-right">{t("llmUsageTotalsFailed", { count: totals.failedCalls })}</td>
+      </tr>
+    </tfoot>
   );
 }
 
