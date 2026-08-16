@@ -800,6 +800,71 @@ large folders silently rolled up only their first ~18 meetings. The old per-work
   **creator** or a member with **`ManageContents`**. The web **Formulas tab on the folder page** reuses the same
   `FormulasToolbar`/`FormulasManager`/`FormulasPanel`/`FormulaRunModal` components with a section target.
 
+## LLM usage logging (admin, no viewer yet)
+
+Every outbound call the platform makes to a model endpoint - summaries, minutes, tags, actions, embeddings,
+chat, formula runs, translation, dictation, search - is captured to a new `LlmCalls` table. There is
+deliberately **no admin viewer over it in this release**; only three Platform Administrator settings on
+Model Settings (below) are user-visible today. **No prompt or completion content is ever stored** - the
+table holds only counts, sizes, and identifiers, the same content-out-of-telemetry rule `SentryScrubber`
+already enforces for Sentry/GlitchTip spans.
+
+**The capture contract, end to end:**
+
+1. **`LlmCallScope`** (`Services/LlmCallScope.cs`) is an `AsyncLocal<LlmCallScope?>` pushed once at the top
+   of each user-facing operation (a summarize job, a chat turn, a formula run, and so on - thirteen call
+   sites push a scope). It carries the `LlmCallKind`, an `OperationId` (groups every call the operation
+   makes), and the attributed user/recording/section. Everything called beneath the push - however many
+   layers of client/service code deep - is attributed for free, without threading a context parameter
+   through every LLM client interface. A call made with **no active scope** is still recorded, as
+   `Kind = Unknown`, rather than silently dropped - an unattributed row is visible and fixable, a missing
+   one is not.
+2. **`LlmTelemetryHandler`** (`Services/LlmTelemetry.cs`), the `DelegatingHandler` already attached to every
+   LLM client's typed `HttpClient` for Sentry span timing, reads `LlmCallScope.Active` on each call, times
+   it, parses the response's `usage` block (buffered-body reads only - a streaming SSE response is left
+   strictly alone, since buffering one would hold every chat token until the model finished), and builds an
+   `LlmCall` row. Because the handler already wrapped every client, a new LLM client added later is logged
+   automatically with no call-site change. A telemetry failure here can never break the call it measures -
+   every read is best-effort and the final hand-off is wrapped in a swallowed try/catch.
+3. **`ILlmUsageSink`** / **`ChannelLlmUsageSink`** (`Services/LlmUsageSink.cs`) is where the handler hands the
+   row off - a bounded (`Capacity = 10_000`) in-memory `Channel<LlmCall>`, `TryWrite` (never blocks the call
+   path). Full is `DropOldest`; a sustained burst past capacity drops the oldest buffered rows rather than
+   stalling an LLM call, and records still buffered during a hard crash are lost. Both trade-offs are
+   accepted deliberately: a monitoring feature must never become an availability risk for transcription or
+   chat.
+4. **`LlmUsageWriter`** (`Services/LlmUsageWriter.cs`), a singleton `BackgroundService`, drains the channel -
+   coalescing on a real flush timer (up to ~2s or 200 rows, whichever comes first) so steady traffic batches
+   instead of paying a DI-scope + settings-query + `SaveChanges` round trip per record - and persists each
+   batch. It opens its **own** DI scope per batch (the handler cannot hold a `DbContext`: it is transient but
+   `HttpClientFactory` pools handler instances for ~2 minutes, so an injected scoped dependency would be
+   captive and used after disposal). The **`LlmUsageLoggingEnabled`** master switch is enforced here, in
+   `LlmUsageBatch.PersistAsync`, not in the handler - deliberately, so the LLM call path never pays for a
+   settings lookup even when logging is off; a batch drained while the switch is off is simply discarded. A
+   failed persist backs off 5s before the next iteration (so a database outage cannot spin the loop) and
+   never takes the writer down.
+5. **`LlmCalls`** (Postgres) is the resting place - see `Data_Schema.md` for every column, its five indexes,
+   and its three `ON DELETE SET NULL` foreign keys (each paired with a denormalized snapshot column so a row
+   stays readable after its subject is deleted).
+
+**Retention.** A nightly `LlmUsageRetentionWorker` (a singleton `BackgroundService`, mirroring
+`AudioRetentionWorker`'s schedule helper and server-local run time) deletes `LlmCalls` rows older than
+`PlatformSettings.LlmUsageRetentionDays` via a set-based `ExecuteDeleteAsync` (`LlmUsageRetentionSweep`) -
+`0` means keep forever, guarded explicitly so an admin typing `0` cannot be misread as "delete everything
+older than now" on the first sweep.
+
+**Admin settings (Model Settings tab).** Three new `PlatformSettings` fields, all admin-editable: a master
+on/off switch for the log (`LlmUsageLoggingEnabled`, default **true** - the log is the feature), the
+retention window in days (`LlmUsageRetentionDays`, default 90, `0` = forever), and whether a streaming
+request should ask the endpoint for token counts via `stream_options.include_usage`
+(`LlmStreamUsageEnabled`, default true) - a toggle rather than a constant, so an OpenAI-compatible endpoint
+that rejects the unknown field is recoverable without a redeploy.
+
+**Known gap.** Streaming calls (chat replies, formula runs) are excluded from the `usage` parse above by
+design - buffering an SSE response would defeat streaming - so today they record with **null token counts**
+and a `DurationMs` that understates the true generation time. A later release closes this by requesting
+`stream_options.include_usage` on the stream itself (the `LlmStreamUsageEnabled` setting above is wired for
+that release, not this one) and reading the trailing usage event.
+
 ## Meeting notes (the user's own notes)
 
 Users can jot their **own note lines** for a meeting - sparse trigger phrases, questions, observations - as

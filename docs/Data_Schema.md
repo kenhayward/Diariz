@@ -104,6 +104,8 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `OutlookNarrowSyncStamp` | `OutlookCalendarSources.LastNarrowSyncedAt` (timestamptz null) - when this device last completed a narrow (<= 2 day) push, so the desktop's "Sync today" has its own 10s cooldown instead of sharing the full run's 60s one and being refused in the moment it exists for. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddRecordingTagStatus` | `RecordingTags.Status` (int, NOT NULL, **default 0** = `Suggested`) + `RecordingTags.AdoptedAt` (timestamptz null) - tags become manual: the default demotes every existing tag to a suggestion, so the tag cloud and tag search start empty and rebuild only as users adopt tags. Also creates the Postgres-only unique index `IX_RecordingTags_RecordingId_TagLower` on `(RecordingId, lower("Tag"))`, first deleting legacy case-variant duplicates so the index can be created. Additive and forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) - an older backup's tags simply arrive as suggestions |
 | `AddUserLlmTimeout` | `UserSettings.LlmTimeoutSeconds` (int, nullable, no default = null) - a per-user override of the platform LLM timeout; null means inherit `PlatformSettings.LlmTimeoutSeconds`, which in turn falls back to the server option. Additive and nullable, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddLlmCalls` | `LlmCalls` (one row per outbound model call - kind, attribution, model/endpoint, timing, token counts, prompt size, success/error, streamed; `UserId`/`RecordingId`/`SectionId` FKs **`ON DELETE SET NULL`**, each paired with a denormalized snapshot column so a row stays readable after its subject is deleted; five indexes) - the LLM usage log's storage. Never stores prompt or completion content. New table, additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddLlmUsageSettings` | `PlatformSettings.LlmUsageLoggingEnabled` (bool, default **true**) + `LlmUsageRetentionDays` (int, default 90; 0 = keep forever) + `LlmStreamUsageEnabled` (bool, default true, wired from a later release) - the three admin controls for the usage log, edited on Model Settings. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 
 ### Entity-relationship overview
 
@@ -784,6 +786,9 @@ Single seeded row (`Id = 1`), edited by the Platform Administrator.
 | `LlmTimeoutSeconds` | int | platform-wide default per-request timeout (seconds) for every LLM call; default 120. A user can override it via `UserSettings.LlmTimeoutSeconds`; the resolved value (user ?? platform ?? server option) is the single authority - the HTTP clients themselves have no cap |
 | `McpAccessEnabled` | bool | master switch for the `/mcp` server and personal `dz_mcp_` tokens; default **true** (seeded true in its migration so shipping this toggle never disables an already-connected MCP client) |
 | `WebhooksEnabled` | bool | master switch for outbound webhooks / user Automations; default false = off (enforced starting with the Phase 2 webhooks core) |
+| `LlmUsageLoggingEnabled` | bool | master switch for the LLM usage log; default **true** (the log is the feature). Enforced by `LlmUsageWriter`, not the capture handler, so the LLM call path never pays for a settings lookup |
+| `LlmUsageRetentionDays` | int | usage log rows older than this many days are deleted by the nightly `LlmUsageRetentionWorker` sweep; default 90. `0` = keep forever |
+| `LlmStreamUsageEnabled` | bool | whether a streaming request asks the model for token counts via `stream_options.include_usage`; default true. A toggle rather than a constant so an endpoint that rejects the field is recoverable without a redeploy. Wired starting with a later release |
 
 #### Identity tables (`AspNet*`)
 Standard ASP.NET Identity schema with **Guid** keys: `AspNetUsers`, `AspNetRoles`, `AspNetUserRoles`,
@@ -1044,6 +1049,51 @@ are not enumerated here - a registered `Application` is a dynamically-registered
 type, redirect URIs, permitted scopes/grant types, PKCE requirement); an `Authorization` + its `Tokens`
 represent a user's granted, revocable connection. Revoking a connection deletes the authorization and its
 tokens. See `Overall_Synopsis_of_Platform.md` for the auth flow.
+
+#### `LlmCalls`
+One row per outbound call to a model endpoint, written by `LlmTelemetryHandler` off the request path via a
+bounded in-memory channel and a background writer (`LlmUsageWriter`) - see
+`Overall_Synopsis_of_Platform.md` for the full capture contract. **Never stores prompt or completion
+content** - counts and sizes only, the same rule `SentryScrubber` enforces elsewhere. There is no viewer for
+this table yet; a later release adds one.
+
+The `UserId`/`RecordingId`/`SectionId` links are each `ON DELETE SET NULL` and each paired with a
+**denormalized snapshot column** (`UserEmail`/`RecordingTitle`/`SectionName`) captured at write time, so a
+row stays readable - "who this was for", "which recording" - after the user, recording, or folder it
+pointed at is deleted. That is deliberate for an audit trail: erasure of this data is instead a filtered
+bulk delete on the (future) admin viewer, not a cascade off the subject's own deletion.
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid PK | |
+| `OperationId` | uuid | groups every call made by one user-facing operation (e.g. all section calls of one folder-minutes run); a "turn" = `MAX(Sequence)` per operation |
+| `Sequence` | int | 1-based index of this call within its operation |
+| `Kind` | int | `LlmCallKind`: what the call was for - `Unknown`(0, no active scope), `Summarize`, `SectionSummary`, `MeetingMinutes`, `SectionMinutes`, `MeetingTypeMinutes`, `ExtractActions`, `Tags`, `Translation`, `Dictation`, `Embedding`, `SearchQuery`, `ChatMessage`, `FormulaRun`, `ChatTitle`. Append-only enum |
+| `UserId` | uuid null FK → AspNetUsers | who the call was for; **`ON DELETE SET NULL`** |
+| `UserEmail` | text | denormalized snapshot of the user's email at write time; empty string when there was no active scope |
+| `RecordingId` | uuid null FK → Recordings | the recording the call was for, if any; **`ON DELETE SET NULL`** |
+| `RecordingTitle` | text null | denormalized snapshot of the recording's title at write time |
+| `SectionId` | uuid null FK → Sections | the folder the call was for, if any; **`ON DELETE SET NULL`** |
+| `SectionName` | text null | denormalized snapshot of the folder's name at write time |
+| `Model` | text | the `model` field read out of the outbound request body; empty string if absent/unparseable |
+| `Endpoint` | text | scheme + host + path only - the query string is dropped outright rather than scrubbed (the same rule already applied to span descriptions, after a SignalR JWT once reached a transaction name that way) |
+| `StartedAt` | timestamptz | |
+| `CompletedAt` | timestamptz | |
+| `DurationMs` | int | stored rather than derived from the two timestamps above, so ordering and `SUM` are trivial |
+| `TimeToFirstTokenMs` | int null | streaming calls only; always null until a later release wires it up |
+| `PromptTokens` | int null | from the response's `usage` block; null (not 0) when the endpoint reports none |
+| `CompletionTokens` | int null | ditto |
+| `ReasoningTokens` | int null | from `usage.completion_tokens_details.reasoning_tokens`, reported by reasoning models; almost always null |
+| `TotalTokens` | int null | reported directly, or derived as prompt + completion when the endpoint reports the two halves but not the sum |
+| `PromptChars` | int null | length of the serialized outbound request body - a proxy for prompt size, showing when context-budget truncation is biting |
+| `Streamed` | bool | whether the response was `text/event-stream` (SSE) |
+| `Success` | bool | false whenever `ErrorKind` is set |
+| `StatusCode` | int null | HTTP status of the response, when one was received |
+| `ErrorKind` | text null | a class, never a message: `Timeout` (covers both a genuine per-call timeout and an ordinary caller cancellation - the handler cannot tell them apart), `Transport` (`HttpRequestException`), `Http{status}` (a non-2xx response), or the raw exception type name as a fallback |
+
+Indexes: `(OperationId)`, `(RecordingId)`, `(SectionId)`, `(StartedAt)` descending, `(UserId, StartedAt)`
+(`UserId` ascending, `StartedAt` descending) - the last two support the admin viewer's default "my/everyone's
+usage, most recent first" queries.
 
 ### Vector columns summary
 

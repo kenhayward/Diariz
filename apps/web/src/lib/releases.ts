@@ -62,6 +62,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.216.0",
+    date: "2026-08-16",
+    pr: 530,
+    headline: "Every outbound model call is now logged",
+    summary:
+      "The platform can now account for its own LLM usage. Every call it makes to a model - summaries, minutes, tags, actions, embeddings, chat, formulas, translation, dictation, search - is recorded to a new database table: who asked for it, what recording or folder it was for, which model and endpoint answered, how long it took, and how many tokens it used. It is strictly a count - the prompt and completion text are never stored, only sizes and numbers. Recording happens off the request path (a background writer, not the call itself), so a database problem can never slow down or degrade transcription or chat. There is no admin viewer for this data yet - that lands in a later release - so nothing here is visible to a user today, only three new switches for a Platform Administrator on the Model Settings tab: turn logging on or off, choose how many days to keep it (or keep it forever), and whether streaming calls should ask the model for a token count. One gap to know about: streaming calls (chat replies, formula runs) do not yet report token counts or an accurate duration - that is closed in the next release.",
+    added: [
+      "An LLM usage log, off the request path, capturing every outbound model call platform-wide (who, what it was for, which model/endpoint, duration, token counts, success/failure) with no prompt or completion content ever stored.",
+      "Three Platform Administrator settings on Model Settings: a master on/off switch for usage logging, a retention window in days (0 = keep forever), and whether streaming calls request token counts from the model.",
+      "A nightly sweep that deletes usage log rows past the configured retention window.",
+    ],
+  },
+  {
     version: "0.215.0",
     date: "2026-08-15",
     pr: 529,
