@@ -236,6 +236,15 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                   <span className="font-medium text-gray-700 dark:text-gray-200">{t("llmStreamUsageLabel")}</span>
                 </label>
                 <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{t("llmStreamUsageHint")}</p>
+
+                <a
+                  href="/admin/llm-usage"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 inline-block text-xs text-indigo-600 hover:underline dark:text-indigo-400"
+                >
+                  {t("llmUsageViewLog")} →
+                </a>
               </div>
             </div>
           ) : tab === "quotas" ? (

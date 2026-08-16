@@ -17,6 +17,8 @@ import SectionDetail from "./pages/SectionDetail";
 import CalendarEventDetail from "./pages/CalendarEventDetail";
 // Lazy-loaded: the Scalar API reference is a large bundle, only needed on /developers/api.
 const ApiReference = lazy(() => import("./pages/ApiReference"));
+// Lazy-loaded: a Platform-Administrator-only page, no reason to ship it in the main bundle.
+const LlmUsage = lazy(() => import("./pages/LlmUsage"));
 import WorkspaceLayout from "./components/WorkspaceLayout";
 import RouteErrorBoundary from "./components/RouteErrorBoundary";
 import EmptyDetail from "./components/EmptyDetail";
@@ -76,6 +78,18 @@ export default function App() {
           <RequireAuth>
             <Suspense fallback={null}>
               <ApiReference />
+            </Suspense>
+          </RequireAuth>
+        }
+      />
+      {/* RequireAuth only checks that someone is signed in - the Platform Administrator gate lives inside
+          LlmUsage itself, which renders a refusal instead of the table for anyone else. */}
+      <Route
+        path="/admin/llm-usage"
+        element={
+          <RequireAuth>
+            <Suspense fallback={null}>
+              <LlmUsage />
             </Suspense>
           </RequireAuth>
         }
