@@ -459,16 +459,83 @@ public class LlmTelemetryHandlerUsageTests
     }
 
     [Fact]
-    public async Task RecordsPromptChars_FromTheRequestBodyLength()
+    // The real clients (ChatStreamClient/SummarizationClient/EmbeddingClient) all send JsonContent.Create,
+    // whose Content-Type is exactly "application/json" - so the request here is built the same way, rather
+    // than the default StringContent "text/plain", to exercise the actual JSON-detection path the handler
+    // now gates its one body read on.
+    public async Task RecordsPromptCharsAndModel_FromTheJsonRequestBody()
     {
         var sink = new FakeLlmUsageSink();
         using var _ = LlmCallScope.Push(LlmCallKind.Summarize);
         var http = Client(new LlmTelemetryHandler(new FakeLlmTrace(), sink), Json("{}"));
-        var body = """{"model":"qwen"}""";
+        var body = """{"model":"qwen2.5:14b","messages":[]}""";
 
-        await http.PostAsync("/v1/chat/completions", new StringContent(body));
+        await http.PostAsync(
+            "/v1/chat/completions", new StringContent(body, Encoding.UTF8, "application/json"));
 
-        Assert.Equal(body.Length, Assert.Single(sink.Calls).PromptChars);
+        var call = Assert.Single(sink.Calls);
+        Assert.Equal(body.Length, call.PromptChars);
+        Assert.Equal("qwen2.5:14b", call.Model);
+    }
+
+    [Fact]
+    // Models DictationClient's multipart audio upload (up to 10 MiB per ChatController.Transcribe). The
+    // stream throws if anything ever tries to read its bytes, proving the handler never buffers a non-JSON
+    // request body - the bug this guards against forced the whole upload into memory and UTF-8-decoded the
+    // binary audio, twice, on every dictation call. The stream still reports a Length (CanSeek = true), so
+    // PromptChars can be recorded from the request's Content-Length header without any byte ever being read -
+    // proving both halves of the fix in one test: sized without reading, and never buffered.
+    public async Task RecordsPromptChars_FromContentLength_ForANonJsonRequest_WithoutReadingTheBody()
+    {
+        var sink = new FakeLlmUsageSink();
+        using var _ = LlmCallScope.Push(LlmCallKind.Dictation);
+
+        using var audio = new ThrowsOnReadStream(4096);
+        using var form = new MultipartFormDataContent();
+        form.Add(new StreamContent(audio), "file", "clip.webm");
+        var expectedLength = form.Headers.ContentLength;
+        Assert.NotNull(expectedLength); // sanity: the fixture is set up to have a computable length
+
+        using var req = new HttpRequestMessage(
+            HttpMethod.Post, "http://lmstudio:1234/v1/audio/transcriptions") { Content = form };
+        var handler = new LlmTelemetryHandler(new FakeLlmTrace(), sink)
+        {
+            InnerHandler = new StubHandler(Json("""{"text":"hello"}""")),
+        };
+        using var http = new HttpClient(handler);
+
+        await http.SendAsync(req);
+
+        var call = Assert.Single(sink.Calls);
+        Assert.Equal((int)expectedLength!.Value, call.PromptChars);
+        Assert.Equal(string.Empty, call.Model);
+    }
+
+    /// <summary>A stream that reports a computable <see cref="Length"/> (so Content-Length can be derived
+    /// without touching the bytes) but throws if anything ever actually reads it - the strongest available
+    /// proof that the telemetry handler never buffers a non-JSON request body.</summary>
+    private sealed class ThrowsOnReadStream : Stream
+    {
+        private readonly long _length;
+        public ThrowsOnReadStream(long length) => _length = length;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => true;
+        public override bool CanWrite => false;
+        public override long Length => _length;
+        public override long Position { get; set; }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new InvalidOperationException("The telemetry handler read a non-JSON request body.");
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken ct) =>
+            throw new InvalidOperationException("The telemetry handler read a non-JSON request body.");
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default) =>
+            throw new InvalidOperationException("The telemetry handler read a non-JSON request body.");
+
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
     private static HttpResponseMessage EventStream(string body) => new(HttpStatusCode.OK)
