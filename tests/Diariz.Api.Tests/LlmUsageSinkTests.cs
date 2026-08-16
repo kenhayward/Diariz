@@ -1,4 +1,5 @@
 using Diariz.Api.Services;
+using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain.Entities;
 
 namespace Diariz.Api.Tests;
@@ -55,6 +56,10 @@ public class LlmUsageSinkTests
 
 public class LlmUsageBatchTests
 {
+    // Small but non-zero, so the coalescing test has a real window to land a second Record() in without
+    // making every drain test pay a large real-time delay.
+    private static readonly TimeSpan FastFlush = TimeSpan.FromMilliseconds(20);
+
     private static LlmCall Call() => new()
     {
         Id = Guid.NewGuid(), OperationId = Guid.NewGuid(), Sequence = 1,
@@ -62,19 +67,21 @@ public class LlmUsageBatchTests
         StartedAt = DateTimeOffset.UtcNow, CompletedAt = DateTimeOffset.UtcNow, Success = true,
     };
 
-    [Fact]
+    // Timeout: a regression to a spin-wait (e.g. DrainAsync never returning, or the flush delay looping)
+    // must fail the test outright rather than hang the run forever.
+    [Fact(Timeout = 5000)]
     public async Task DrainAsync_TakesAtMostMax_LeavingTheRestBuffered()
     {
         var sink = new ChannelLlmUsageSink();
         for (var i = 0; i < 5; i++) sink.Record(Call());
 
-        var batch = await LlmUsageBatch.DrainAsync(sink.Reader, max: 3, CancellationToken.None);
+        var batch = await LlmUsageBatch.DrainAsync(sink.Reader, max: 3, FastFlush, CancellationToken.None);
 
         Assert.Equal(3, batch.Count);
         Assert.True(sink.Reader.TryRead(out _)); // the remainder is still there
     }
 
-    [Fact]
+    [Fact(Timeout = 5000)]
     public async Task DrainAsync_ReturnsWhatIsAvailable_WithoutWaitingForMax()
     {
         // The writer flushes on a timer as well as on volume. If this blocked until `max` arrived, a
@@ -82,8 +89,66 @@ public class LlmUsageBatchTests
         var sink = new ChannelLlmUsageSink();
         sink.Record(Call());
 
-        var batch = await LlmUsageBatch.DrainAsync(sink.Reader, max: 200, CancellationToken.None);
+        var batch = await LlmUsageBatch.DrainAsync(sink.Reader, max: 200, FastFlush, CancellationToken.None);
 
         Assert.Single(batch);
+    }
+
+    [Fact(Timeout = 5000)]
+    public async Task DrainAsync_CoalescesRecordsThatArriveWithinTheFlushWindow()
+    {
+        // This is the batching the class doc promises ("every ~2 seconds or 200 rows"): a record that
+        // shows up while the writer is already waiting to flush must land in the SAME batch, not force a
+        // second scope-create + settings-query + SaveChanges round trip.
+        var sink = new ChannelLlmUsageSink();
+        sink.Record(Call());
+        var flushWindow = TimeSpan.FromMilliseconds(200);
+
+        var drainTask = LlmUsageBatch.DrainAsync(sink.Reader, max: 200, flushWindow, CancellationToken.None);
+        await Task.Delay(TimeSpan.FromMilliseconds(40)); // well inside the flush window
+        sink.Record(Call());
+
+        var batch = await drainTask;
+
+        Assert.Equal(2, batch.Count);
+    }
+
+    [Fact(Timeout = 5000)]
+    public async Task DrainAsync_ZeroFlushWindow_DoesNotWaitBeforeDraining()
+    {
+        // TimeSpan.Zero opts out of coalescing entirely - kept as an explicit case so "no wait when the
+        // window is zero" doesn't silently regress into always waiting.
+        var sink = new ChannelLlmUsageSink();
+        sink.Record(Call());
+
+        var batch = await LlmUsageBatch.DrainAsync(sink.Reader, max: 200, TimeSpan.Zero, CancellationToken.None);
+
+        Assert.Single(batch);
+    }
+
+    [Fact]
+    public async Task PersistAsync_DiscardsTheBatch_WhenLoggingIsDisabled()
+    {
+        // The master switch (PlatformSettings.LlmUsageLoggingEnabled) is enforced here, not in the
+        // handler - this is the test that actually exercises that gate.
+        using var db = TestDb.Create();
+        var batch = new List<LlmCall> { Call() };
+
+        var saved = await LlmUsageBatch.PersistAsync(db, batch, loggingEnabled: false, CancellationToken.None);
+
+        Assert.Equal(0, saved);
+        Assert.Empty(db.LlmCalls);
+    }
+
+    [Fact]
+    public async Task PersistAsync_SavesTheBatch_WhenLoggingIsEnabled()
+    {
+        using var db = TestDb.Create();
+        var batch = new List<LlmCall> { Call() };
+
+        var saved = await LlmUsageBatch.PersistAsync(db, batch, loggingEnabled: true, CancellationToken.None);
+
+        Assert.Equal(1, saved);
+        Assert.Single(db.LlmCalls);
     }
 }

@@ -1,4 +1,5 @@
 using Diariz.Api.IntegrationTests.Infrastructure;
+using Diariz.Api.Services;
 using Diariz.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -77,5 +78,70 @@ public class LlmUsageIntegrationTests(ContainersFixture fx)
         var found = await read.LlmCalls.SingleAsync(c => c.Id == call.Id);
         Assert.Null(found.UserId);
         Assert.Equal("leaver@example.com", found.UserEmail);
+    }
+
+    [Fact]
+    public async Task PersistAsync_NormalisesNonUtcTimestamps_BeforeSavingToPostgres()
+    {
+        // Npgsql THROWS at SaveChanges on a non-zero offset bound to timestamptz, and the EF in-memory
+        // provider does not enforce that - so this can only be proven against real Postgres. It exercises
+        // LlmUsageBatch.PersistAsync directly (the writer's actual persistence path), not a hand-rolled
+        // already-UTC record inserted straight through DbContext.
+        await using var db = fx.CreateDbContext();
+        var nonUtcStarted = DateTimeOffset.Now.ToOffset(TimeSpan.FromHours(1));
+        var call = new LlmCall
+        {
+            Id = Guid.NewGuid(),
+            OperationId = Guid.NewGuid(),
+            Sequence = 1,
+            Kind = LlmCallKind.Tags,
+            UserEmail = "offset@example.com",
+            Model = "m",
+            Endpoint = "http://x/v1",
+            StartedAt = nonUtcStarted,
+            CompletedAt = nonUtcStarted.AddSeconds(1),
+            DurationMs = 1000,
+            Success = true,
+        };
+
+        var saved = await LlmUsageBatch.PersistAsync(db, [call], loggingEnabled: true, CancellationToken.None);
+
+        Assert.Equal(1, saved);
+        await using var read = fx.CreateDbContext();
+        var found = await read.LlmCalls.SingleAsync(c => c.Id == call.Id);
+        Assert.Equal(TimeSpan.Zero, found.StartedAt.Offset); // stored as UTC despite the +1h input
+        Assert.Equal(TimeSpan.Zero, found.CompletedAt.Offset);
+        // Postgres timestamptz has microsecond precision vs .NET's 100ns ticks, so an exact Equal() would
+        // be flaky on the sub-microsecond remainder - a millisecond tolerance still proves the same wall-
+        // clock instant survived the UTC conversion and the round trip.
+        Assert.True(
+            Math.Abs((found.StartedAt - nonUtcStarted.ToUniversalTime()).TotalMilliseconds) < 1,
+            $"Expected ~{nonUtcStarted.ToUniversalTime():O}, got {found.StartedAt:O}");
+    }
+
+    [Fact]
+    public async Task PersistAsync_DiscardsTheBatch_WhenLoggingIsDisabled()
+    {
+        await using var db = fx.CreateDbContext();
+        var call = new LlmCall
+        {
+            Id = Guid.NewGuid(),
+            OperationId = Guid.NewGuid(),
+            Sequence = 1,
+            Kind = LlmCallKind.Tags,
+            UserEmail = "disabled@example.com",
+            Model = "m",
+            Endpoint = "http://x/v1",
+            StartedAt = DateTimeOffset.UtcNow,
+            CompletedAt = DateTimeOffset.UtcNow,
+            DurationMs = 10,
+            Success = true,
+        };
+
+        var saved = await LlmUsageBatch.PersistAsync(db, [call], loggingEnabled: false, CancellationToken.None);
+
+        Assert.Equal(0, saved);
+        await using var read = fx.CreateDbContext();
+        Assert.False(await read.LlmCalls.AnyAsync(c => c.Id == call.Id));
     }
 }
