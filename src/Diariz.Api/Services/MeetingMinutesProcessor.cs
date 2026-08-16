@@ -29,6 +29,13 @@ public static class MeetingMinutesProcessor
         var rec = await db.Recordings.FirstOrDefaultAsync(r => r.Id == job.RecordingId, ct);
         if (rec is null) return; // recording deleted before the job ran — nothing to do.
 
+        // Attribute every model call this job makes, including every per-section call the generator's
+        // PerSectionMinutesStrategy fans out internally - that fan-out is deliberately counted as turns
+        // within this one MeetingMinutes operation (see IMeetingTypeMinutesGenerator).
+        using var llm = LlmCallScope.Push(
+            LlmCallKind.MeetingMinutes, rec.UserId, await OwnerEmailAsync(db, rec.UserId, ct),
+            rec.Id, rec.Name ?? rec.Title);
+
         try
         {
             var transcription = await db.Transcriptions
@@ -118,6 +125,9 @@ public static class MeetingMinutesProcessor
         // failure here can't undo minutes that were written.
         await EnqueueAdditionalFormulasAsync(db, queue, hub, rec, logger, ct);
     }
+
+    private static Task<string?> OwnerEmailAsync(DiarizDbContext db, Guid userId, CancellationToken ct) =>
+        db.Users.Where(u => u.Id == userId).Select(u => u.Email).FirstOrDefaultAsync(ct);
 
     /// <summary>Queue one run per additional formula on the recording's meeting type, in Ordinal order. Each lands
     /// as an ordinary <see cref="FormulaResult"/> in the recording's Formulas tab.
