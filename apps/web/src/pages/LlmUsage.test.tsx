@@ -1,8 +1,15 @@
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { LlmUsageFilterOptions, LlmUsageOperationRow, LlmUsagePage, LlmUsageTotals } from "../lib/types";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type {
+  LlmUsageFilterOptions,
+  LlmUsageOperationRow,
+  LlmUsagePage,
+  LlmUsageSummary,
+  LlmUsageSummaryGroup,
+  LlmUsageTotals,
+} from "../lib/types";
 
 let isAdmin = true;
 vi.mock("../auth", () => ({ useAuth: () => ({ isPlatformAdmin: isAdmin }) }));
@@ -15,6 +22,8 @@ vi.mock("../lib/api", () => ({
   api: {
     getLlmUsage: vi.fn(),
     getLlmUsageFilters: vi.fn(),
+    getLlmUsageSummary: vi.fn(),
+    deleteLlmUsage: vi.fn(),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }));
@@ -79,6 +88,31 @@ function usagePage(
   return { rows, page: 1, pageSize: 50, total: rows.length, totals: totalsObj, ...overrides };
 }
 
+function summaryGroup(overrides: Partial<LlmUsageSummaryGroup> = {}): LlmUsageSummaryGroup {
+  return {
+    userId: null,
+    userEmail: null,
+    model: null,
+    kind: "Summarize",
+    calls: 4,
+    operations: 2,
+    averageTurnsPerOperation: 2,
+    maxTurnsPerOperation: 3,
+    promptTokens: 400,
+    completionTokens: 200,
+    reasoningTokens: null,
+    totalTokens: 600,
+    tokenMeasuredCalls: 3,
+    failedCalls: 0,
+    tokensPerSecond: 12.5,
+    ...overrides,
+  };
+}
+
+function summaryPage(groups: LlmUsageSummaryGroup[], totalsObj: LlmUsageTotals): LlmUsageSummary {
+  return { groups, totals: totalsObj };
+}
+
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -96,6 +130,8 @@ describe("LlmUsage", () => {
     vi.clearAllMocks();
     vi.mocked(api.getLlmUsageFilters).mockResolvedValue(filterOptions);
     vi.mocked(api.getLlmUsage).mockResolvedValue(usagePage([row()], totals()));
+    vi.mocked(api.getLlmUsageSummary).mockResolvedValue(summaryPage([summaryGroup()], totals()));
+    vi.mocked(api.deleteLlmUsage).mockResolvedValue({ deleted: 0 });
   });
 
   it("requests the first page with the default filters", async () => {
@@ -245,5 +281,93 @@ describe("LlmUsage", () => {
     expect(await screen.findByText(/filter options couldn't be loaded/i)).toBeTruthy();
     // The table itself is unaffected - getLlmUsage still runs and renders normally.
     await waitFor(() => expect(api.getLlmUsage).toHaveBeenCalled());
+  });
+
+  describe("mode switching", () => {
+    it("switches to Calls mode and requests the calls-level endpoint", async () => {
+      renderPage();
+      await waitFor(() => expect(api.getLlmUsage).toHaveBeenCalledTimes(1));
+      expect(vi.mocked(api.getLlmUsage).mock.calls[0][0].mode).toBe("operations");
+
+      fireEvent.click(screen.getByRole("button", { name: "Calls" }));
+
+      await waitFor(() => expect(api.getLlmUsage).toHaveBeenCalledTimes(2));
+      expect(vi.mocked(api.getLlmUsage).mock.calls[1][0].mode).toBe("calls");
+      // Switching between the two list modes must not touch the roll-up endpoint at all.
+      expect(api.getLlmUsageSummary).not.toHaveBeenCalled();
+    });
+
+    it("switches to Summary mode and requests the roll-up endpoint with the default group-by", async () => {
+      renderPage();
+      await waitFor(() => expect(api.getLlmUsage).toHaveBeenCalledTimes(1));
+
+      fireEvent.click(screen.getByRole("button", { name: "Summary" }));
+
+      await waitFor(() => expect(api.getLlmUsageSummary).toHaveBeenCalled());
+      const call = vi.mocked(api.getLlmUsageSummary).mock.calls[0][0];
+      expect(call.groupBy).toEqual(["kind"]);
+      expect(typeof call.from).toBe("string");
+      expect(call.outcome).toBe("all");
+      await screen.findByTestId("llm-usage-summary-totals-row");
+    });
+
+    it("a group-by chip changes the groupBy parameter sent to the summary endpoint", async () => {
+      renderPage();
+      await waitFor(() => expect(api.getLlmUsage).toHaveBeenCalledTimes(1));
+      fireEvent.click(screen.getByRole("button", { name: "Summary" }));
+      await waitFor(() => expect(api.getLlmUsageSummary).toHaveBeenCalledTimes(1));
+
+      fireEvent.click(screen.getByRole("button", { name: "Model" }));
+
+      await waitFor(() => expect(api.getLlmUsageSummary).toHaveBeenCalledTimes(2));
+      const call = vi.mocked(api.getLlmUsageSummary).mock.calls[1][0];
+      expect(call.groupBy).toEqual(["model", "kind"]);
+    });
+  });
+
+  describe("delete filtered rows", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("states the exact total from the current query and sends the CURRENT (non-default) filter", async () => {
+      renderPage();
+      await waitFor(() => expect(api.getLlmUsage).toHaveBeenCalledTimes(1));
+
+      // Seed a NON-DEFAULT filter (outcome != "all") and a distinctive total, so this test cannot pass by
+      // accident with an empty/default filter or a stale total left over from the initial load.
+      vi.mocked(api.getLlmUsage).mockResolvedValue(usagePage([row()], totals({ calls: 42 })));
+      fireEvent.change(screen.getByLabelText("Outcome"), { target: { value: "ok" } });
+      await waitFor(() => expect(api.getLlmUsage).toHaveBeenCalledTimes(2));
+      const usedFilter = vi.mocked(api.getLlmUsage).mock.calls[1][0];
+      expect(usedFilter.outcome).toBe("ok"); // sanity: the filter really did change
+
+      const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+      fireEvent.click(screen.getByRole("button", { name: "Delete filtered rows" }));
+
+      // The confirm must state the real server-reported total (42), not a page-visible row count (1).
+      expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("42"));
+      await waitFor(() => expect(api.deleteLlmUsage).toHaveBeenCalledTimes(1));
+      const deleteArg = vi.mocked(api.deleteLlmUsage).mock.calls[0][0];
+      // The exact CURRENT filter, not an empty one - the whole point of this test.
+      expect(deleteArg).toEqual({
+        from: usedFilter.from,
+        to: usedFilter.to,
+        userIds: undefined,
+        kinds: undefined,
+        models: undefined,
+        outcome: "ok",
+      });
+    });
+
+    it("does nothing when the delete confirm is cancelled", async () => {
+      renderPage();
+      await waitFor(() => expect(api.getLlmUsage).toHaveBeenCalledTimes(1));
+
+      vi.spyOn(window, "confirm").mockReturnValue(false);
+      fireEvent.click(screen.getByRole("button", { name: "Delete filtered rows" }));
+
+      expect(api.deleteLlmUsage).not.toHaveBeenCalled();
+    });
   });
 });

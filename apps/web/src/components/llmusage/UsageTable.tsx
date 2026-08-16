@@ -1,8 +1,15 @@
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
-import type { LlmUsageOperationRow, LlmUsagePage, LlmUsageSortKey, LlmUsageTotals } from "../../lib/types";
+import type { LlmUsageCallRow, LlmUsageOperationRow, LlmUsagePage, LlmUsageSortKey, LlmUsageTotals } from "../../lib/types";
 import { formatDuration } from "../../lib/format";
 import { kindLabel } from "./UsageFilterBar";
+
+/// Either row shape this table renders - `mode=operations` gives `LlmUsageOperationRow` (one row per
+/// operation, with a `turns` count), `mode=calls` gives `LlmUsageCallRow` (one row per call, no `turns` -
+/// each row already IS a single turn, so the column reads blank rather than a fabricated "1"). Every OTHER
+/// field this table touches (recording/section ids, model, timestamps, token counts, success) has the same
+/// name and type on both, so a single row renderer handles both with one small `"turns" in row` branch.
+type UsageRow = LlmUsageOperationRow | LlmUsageCallRow;
 
 // The table's TOTAL column count (sortable + plain), used for a full-width colSpan on the loading/empty
 // row - NOT the number of sortable columns (8 of these 12 are sortable; see the `header()`/`plainHeader()`
@@ -25,7 +32,7 @@ export default function UsageTable({
   onPageChange,
   basePath,
 }: {
-  page: LlmUsagePage<LlmUsageOperationRow> | undefined;
+  page: LlmUsagePage<UsageRow> | undefined;
   isLoading: boolean;
   isError: boolean;
   sort: LlmUsageSortKey;
@@ -103,7 +110,9 @@ export default function UsageTable({
                 </td>
               </tr>
             ) : (
-              page.rows.map((row) => <OperationRow key={row.operationId} row={row} basePath={basePath} />)
+              page.rows.map((row) => (
+                <OperationRow key={"id" in row ? row.id : row.operationId} row={row} basePath={basePath} />
+              ))
             )}
           </tbody>
         </table>
@@ -162,7 +171,7 @@ function TokenTotalCell({ value, measured, total }: { value: number | null; meas
   );
 }
 
-function OperationRow({ row, basePath }: { row: LlmUsageOperationRow; basePath: string }) {
+function OperationRow({ row, basePath }: { row: UsageRow; basePath: string }) {
   const { t, i18n } = useTranslation("account");
   return (
     <tr className="border-b hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800/60">
@@ -171,7 +180,8 @@ function OperationRow({ row, basePath }: { row: LlmUsageOperationRow; basePath: 
       <td className="max-w-[12rem] truncate px-2 py-1">{row.userEmail}</td>
       <RecordingCell row={row} basePath={basePath} />
       <td className="max-w-[10rem] truncate px-2 py-1">{row.model}</td>
-      <td className="px-2 py-1 text-right">{row.turns}</td>
+      {/* mode=calls rows have no `turns` - each row already IS one call/turn, so there's nothing to show. */}
+      <td className="px-2 py-1 text-right">{"turns" in row ? row.turns : ""}</td>
       <td className="px-2 py-1 text-right">
         {formatDuration(new Date(row.completedAt).getTime() - new Date(row.startedAt).getTime())}
       </td>
@@ -201,7 +211,7 @@ function TokenCell({ value }: { value: number | null }) {
 /// back to the viewer's Personal room. Rendered unconditionally whenever an id is present - a Platform
 /// Administrator has no automatic access to another user's recording, so some of these will 403, but
 /// pre-checking access per row would cost far more than the occasional dead link saves.
-function RecordingCell({ row, basePath }: { row: LlmUsageOperationRow; basePath: string }) {
+function RecordingCell({ row, basePath }: { row: UsageRow; basePath: string }) {
   const { t } = useTranslation("account");
   if (!row.recordingId && !row.sectionId) {
     return <td className="px-2 py-1 text-gray-400 dark:text-gray-500">{t("llmUsageNoRecording")}</td>;
