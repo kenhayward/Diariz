@@ -58,6 +58,75 @@ public class ChatStreamClientTests
         Assert.False(done);
     }
 
+    // ---- stream_options (usage reporting) ----
+    // LM Studio (verified live) honours stream_options.include_usage:true and appends a final chunk
+    // carrying usage.completion_tokens_details.reasoning_tokens right before [DONE]. That final chunk has
+    // an EMPTY choices array - the fourth test below guards that neither parser mishandles it.
+
+    private static readonly SummarizationRequestConfig cfg = new("http://llm.test/v1", "sk-x", "m", 60);
+
+    private static async Task<string> CaptureRequestBodyAsync(SummarizationRequestConfig config, bool useTools)
+    {
+        var handler = new FakeHttpMessageHandler("data: [DONE]\n");
+        var client = new ChatStreamClient(new HttpClient(handler));
+
+        if (useTools)
+        {
+            await foreach (var _ in client.StreamChunksAsync(config, [], null)) { }
+        }
+        else
+        {
+            await foreach (var _ in client.StreamAsync(config, [new ChatMessage("user", "hi")])) { }
+        }
+
+        return handler.LastRequestBody!;
+    }
+
+    [Fact]
+    public async Task StreamChunks_AsksForUsage_WhenTheToggleIsOn()
+    {
+        var captured = await CaptureRequestBodyAsync(cfg with { IncludeStreamUsage = true }, useTools: true);
+
+        using var doc = JsonDocument.Parse(captured);
+        Assert.True(doc.RootElement.TryGetProperty("stream_options", out var so));
+        Assert.True(so.GetProperty("include_usage").GetBoolean());
+    }
+
+    [Fact]
+    public async Task StreamChunks_OmitsTheFieldEntirely_WhenTheToggleIsOff()
+    {
+        // Omitted, not sent as false: the whole point of the toggle is recovering from an endpoint that
+        // rejects an unknown field, and a server that chokes on the key will choke on it either way.
+        var captured = await CaptureRequestBodyAsync(cfg with { IncludeStreamUsage = false }, useTools: true);
+
+        using var doc = JsonDocument.Parse(captured);
+        Assert.False(doc.RootElement.TryGetProperty("stream_options", out _));
+    }
+
+    [Fact]
+    public async Task Stream_AsksForUsage_Too()
+    {
+        // The plain (no-tools) path is a SEPARATE request builder in this client. PR 1 shipped a bug of
+        // exactly this shape - a field added to one builder and not its twin.
+        var captured = await CaptureRequestBodyAsync(cfg with { IncludeStreamUsage = true }, useTools: false);
+
+        using var doc = JsonDocument.Parse(captured);
+        Assert.True(doc.RootElement.GetProperty("stream_options").GetProperty("include_usage").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData("""data: {"id":"x","choices":[],"usage":{"prompt_tokens":69,"completion_tokens":5,"total_tokens":74}}""")]
+    public void TheUsageChunk_IsIgnoredByBothParsers_AndNeverEndsTheStreamEarly(string line)
+    {
+        // Turning stream_options on makes the server emit a chunk with an EMPTY choices array. If either
+        // parser mishandled that, enabling this feature would break chat for every user. This test is the
+        // guard on that blast radius.
+        Assert.Null(ChatStreamClient.ParseStreamLine(line, out var done1));
+        Assert.False(done1);
+        Assert.Null(ChatStreamClient.ParseStreamChunk(line, out var done2));
+        Assert.False(done2);
+    }
+
     // ---- StreamAsync (over a fake SSE handler) ----
 
     [Fact]
