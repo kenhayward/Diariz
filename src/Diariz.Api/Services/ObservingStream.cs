@@ -18,8 +18,9 @@ namespace Diariz.Api.Services;
 /// overridden. Every other read path on <see cref="Stream"/> - <see cref="CopyTo"/>, <see cref="CopyToAsync"/>,
 /// the legacy Task-based <c>ReadAsync(byte[], int, int, CancellationToken)</c>, <c>ReadByte</c>, and the APM
 /// <c>BeginRead</c>/<c>EndRead</c> pair - are, in the current BCL, all implemented in terms of one of these two
-/// primitives, so nothing can reach <see cref="_inner"/> unobserved. See task-4-report.md for how that was
-/// verified.</summary>
+/// primitives, so nothing can reach <see cref="_inner"/> unobserved. Confirmed by source review of
+/// System.Private.CoreLib's <c>Stream</c> base implementation, and spot-checked empirically by the
+/// synchronous-<c>CopyTo</c> test alongside this class.</summary>
 public sealed class ObservingStream : Stream
 {
     private readonly Stream _inner;
@@ -81,15 +82,16 @@ public sealed class ObservingStream : Stream
             return;
         }
 
-        Guard(() =>
+        // Guarded independently: a throw from onFirstByte must not suppress onBytes for this same chunk
+        // (or vice versa). Task 5 feeds onBytes into the usage scanner - losing a chunk here would
+        // silently drop bytes from that scan.
+        if (!_sawFirstByte)
         {
-            if (!_sawFirstByte)
-            {
-                _sawFirstByte = true;
-                _onFirstByte();
-            }
-            _onBytes(buffer[..read]);
-        });
+            _sawFirstByte = true;
+            Guard(_onFirstByte);
+        }
+
+        Guard(() => _onBytes(buffer[..read]));
     }
 
     /// <summary>Fires the completion callback at most once, whichever of end-of-stream, dispose or a fault
