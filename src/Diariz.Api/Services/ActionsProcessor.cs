@@ -37,6 +37,12 @@ public static class ActionsProcessor
             .FirstOrDefaultAsync(r => r.Id == job.RecordingId, ct);
         if (rec is null) return; // recording deleted before the job ran — nothing to do.
 
+        // Attribute every model call this job makes. Pushed once here rather than at the client, so the
+        // handler deep inside HttpClient can record who asked and why.
+        using var llm = LlmCallScope.Push(
+            LlmCallKind.ExtractActions, rec.UserId, await OwnerEmailAsync(db, rec.UserId, ct),
+            rec.Id, rec.Name ?? rec.Title);
+
         try
         {
             // Auto-extract only once: a set ActionsExtractedAt means extraction ran (or the user added an
@@ -110,6 +116,9 @@ public static class ActionsProcessor
             }
         }
     }
+
+    private static Task<string?> OwnerEmailAsync(DiarizDbContext db, Guid userId, CancellationToken ct) =>
+        db.Users.Where(u => u.Id == userId).Select(u => u.Email).FirstOrDefaultAsync(ct);
 
     /// <summary>Emits <c>recording.action_items_ready</c>, carrying the freshly extracted actions so a subscriber
     /// can act on them without a second call. Swallows its own failures - the actions are already persisted and
