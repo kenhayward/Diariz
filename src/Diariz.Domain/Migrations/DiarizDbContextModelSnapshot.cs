@@ -1087,10 +1087,19 @@ namespace Diariz.Domain.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
+                    b.Property<bool>("LlmStreamUsageEnabled")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("LlmTimeoutSeconds")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValue(120);
+
+                    b.Property<bool>("LlmUsageLoggingEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("LlmUsageRetentionDays")
+                        .HasColumnType("integer");
 
                     b.Property<long>("MaxQuotaBytes")
                         .HasColumnType("bigint");
@@ -1121,7 +1130,10 @@ namespace Diariz.Domain.Migrations
                             AudioDeletionTimeOfDay = new TimeOnly(3, 0, 0),
                             AudioRetentionDays = 30,
                             AutoDeleteAudioEnabled = false,
+                            LlmStreamUsageEnabled = true,
                             LlmTimeoutSeconds = 120,
+                            LlmUsageLoggingEnabled = true,
+                            LlmUsageRetentionDays = 90,
                             MaxQuotaBytes = 53687091200L,
                             McpAccessEnabled = true,
                             MinutesGenerationMode = 0,

@@ -214,6 +214,48 @@ public class PlatformSettingsControllerTests
     }
 
     [Fact]
+    public async Task Update_PersistsTheLlmUsageLoggingSettings()
+    {
+        using var db = TestDb.Create();
+        var gb = 5L * 1024 * 1024 * 1024;
+
+        var result = await Build(db).Update(new UpdatePlatformSettingsRequest(
+            gb, gb, LlmUsageLoggingEnabled: false, LlmUsageRetentionDays: 30, LlmStreamUsageEnabled: false));
+
+        var dto = Assert.IsType<PlatformSettingsDto>(result.Value);
+        Assert.False(dto.LlmUsageLoggingEnabled);
+        Assert.Equal(30, dto.LlmUsageRetentionDays);
+        Assert.False(dto.LlmStreamUsageEnabled);
+        var saved = await db.PlatformSettings.SingleAsync();
+        Assert.False(saved.LlmUsageLoggingEnabled);
+        Assert.Equal(30, saved.LlmUsageRetentionDays);
+        Assert.False(saved.LlmStreamUsageEnabled);
+    }
+
+    [Fact]
+    public void Defaults_KeepLoggingOn_AndRetainNinetyDays()
+    {
+        // Logging on by default is the point of the feature; retention on by default is what stops the
+        // largest table in the database growing without bound.
+        var settings = new PlatformSettings();
+        Assert.True(settings.LlmUsageLoggingEnabled);
+        Assert.Equal(90, settings.LlmUsageRetentionDays);
+        Assert.True(settings.LlmStreamUsageEnabled);
+    }
+
+    [Fact]
+    public async Task Update_ClampsNegativeLlmUsageRetentionDaysToZero()
+    {
+        using var db = TestDb.Create();
+        var gb = 5L * 1024 * 1024 * 1024;
+
+        var result = await Build(db).Update(new UpdatePlatformSettingsRequest(gb, gb, LlmUsageRetentionDays: -5));
+
+        Assert.Equal(0, Assert.IsType<PlatformSettingsDto>(result.Value).LlmUsageRetentionDays);
+        Assert.Equal(0, (await db.PlatformSettings.SingleAsync()).LlmUsageRetentionDays);
+    }
+
+    [Fact]
     public async Task RunTagBackfillNow_EnqueuesUntaggedRecordings_ReturnsCount()
     {
         using var db = TestDb.Create();

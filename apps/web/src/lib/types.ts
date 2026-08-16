@@ -482,6 +482,13 @@ export interface PlatformSettings {
   webhooksEnabled: boolean;
   /// Per-request timeout (seconds) applied to every LLM call platform-wide. Default 120.
   llmTimeoutSeconds: number;
+  /// Master switch for the LLM usage log. On by default.
+  llmUsageLoggingEnabled: boolean;
+  /// Usage rows older than this many days are deleted by the nightly sweep. 0 = keep forever. Default 90.
+  llmUsageRetentionDays: number;
+  /// Whether streaming requests ask for token counts (stream_options.include_usage). Not yet consumed by
+  /// this release - wired for the next one. On by default.
+  llmStreamUsageEnabled: boolean;
 }
 
 export interface GrantResult {
