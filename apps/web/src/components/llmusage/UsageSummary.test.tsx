@@ -100,11 +100,30 @@ describe("UsageSummary", () => {
     expect(row.textContent).toContain("measured on 3 of 4 calls");
   });
 
-  it("renders the totals row from summary.totals using each column's own measured count, not a fold over the groups", async () => {
+  it("renders the totals row from summary.totals using each column's own measured count, not the coarse any-column figure or a fold over the groups", async () => {
     // The two groups' promptTokens sum to 400+400=800 - the totals object below reports something else
     // (900), so a test where the two happened to agree would prove nothing.
+    //
+    // The four *Measured fields and the coarse any-column tokenMeasuredCalls are all given DISTINCT values
+    // on purpose: tokenMeasuredCalls (10) equals `calls` (10) and differs from every one of the four
+    // per-column counts below, so a regression that wired all four cells to the coarse any-column figure
+    // instead of their own field would render "measured on 10 of 10 calls" everywhere - which is asserted
+    // NOT to appear - rather than the four distinct captions below. (A prior version of this test gave
+    // tokenMeasuredCalls and promptTokensMeasured the same value and only checked prompt's own caption, so
+    // it could not have caught that regression.)
     const groups = [group({ promptTokens: 400 }), group({ promptTokens: 400, kind: "Tags" })];
-    const apiTotals = totals({ promptTokens: 900, promptTokensMeasured: 9, calls: 10 });
+    const apiTotals = totals({
+      calls: 10,
+      promptTokens: 900,
+      completionTokens: 500,
+      reasoningTokens: 2,
+      totalTokens: 1400,
+      tokenMeasuredCalls: 10,
+      promptTokensMeasured: 9,
+      completionTokensMeasured: 6,
+      reasoningTokensMeasured: 1,
+      totalTokensMeasured: 4,
+    });
     render(
       <UsageSummary
         summary={summary(groups, apiTotals)}
@@ -118,7 +137,11 @@ describe("UsageSummary", () => {
     const totalsRow = await screen.findByTestId("llm-usage-summary-totals-row");
     expect(within(totalsRow).getByText("900")).toBeTruthy();
     expect(within(totalsRow).queryByText("800")).toBeNull();
-    expect(totalsRow.textContent).toContain("measured on 9 of 10 calls");
+    expect(totalsRow.textContent).toContain("measured on 9 of 10 calls"); // prompt's own count
+    expect(totalsRow.textContent).toContain("measured on 6 of 10 calls"); // completion's own count
+    expect(totalsRow.textContent).toContain("measured on 1 of 10 calls"); // reasoning's own count
+    expect(totalsRow.textContent).toContain("measured on 4 of 10 calls"); // total's own count
+    expect(totalsRow.textContent).not.toContain("measured on 10 of 10 calls"); // the coarse figure must not leak in
   });
 
   it("sorts groups client-side on a header click, without requesting anything", async () => {

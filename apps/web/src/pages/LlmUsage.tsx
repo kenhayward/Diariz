@@ -117,9 +117,20 @@ export default function LlmUsage() {
   // page's totals and the summary's totals, so this one figure stays correct across all three modes.
   const activeTotals = mode === "summary" ? summaryQuery.data?.totals : usageQuery.data?.totals;
   const deleteCount = activeTotals?.calls;
+  // Both queries use `placeholderData: keepPreviousData`, so `data` (and therefore `deleteCount` above) can
+  // still belong to the PREVIOUS filter while a refetch for a newly-changed filter is in flight -
+  // `isFetching` is what actually tells the two apart (`isLoading` is only true on the very first fetch).
+  // Gating on it closes the exact race the filtered-delete requirement calls the worst possible outcome: a
+  // stale, smaller count staying on screen (and reachable) while the delete itself would run against the
+  // NEW, already-live filter state.
+  const activeIsFetching = mode === "summary" ? summaryQuery.isFetching : usageQuery.isFetching;
+  const deleteBlocked = deleteCount === undefined || deleteCount === 0 || deleting || activeIsFetching;
 
   async function handleDelete() {
-    if (deleteCount === undefined || deleteCount === 0 || deleting) return;
+    // Re-checked here too (not just via the button's `disabled`) so there is no path - keyboard, a
+    // programmatic click, a future second call site - that can reach the API call while the count on
+    // screen might not match the filter the delete would actually run against.
+    if (deleteBlocked) return;
     if (!window.confirm(t("llmUsageDeleteConfirm", { count: deleteCount }))) return;
     setDeleteError(null);
     setDeleting(true);
@@ -127,6 +138,7 @@ export default function LlmUsage() {
       // The EXACT current filter, built by the same `toApiFilter` the queries above use - a delete that
       // silently dropped the filter would destroy far more than the administrator asked for.
       await api.deleteLlmUsage(toApiFilter(filter));
+      setPage(1); // the current page may no longer exist once the matching rows are gone
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["llm-usage"] }),
         queryClient.invalidateQueries({ queryKey: ["llm-usage-summary"] }),
@@ -164,7 +176,7 @@ export default function LlmUsage() {
         <button
           type="button"
           onClick={() => void handleDelete()}
-          disabled={deleteCount === undefined || deleteCount === 0 || deleting}
+          disabled={deleteBlocked}
           className="rounded-full border border-red-300 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-40 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
         >
           {deleting ? t("llmUsageDeleting") : t("llmUsageDeleteButton")}

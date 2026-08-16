@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type {
+  LlmUsageCallRow,
   LlmUsageFilterOptions,
   LlmUsageOperationRow,
   LlmUsagePage,
@@ -60,6 +61,33 @@ function row(overrides: Partial<LlmUsageOperationRow> = {}): LlmUsageOperationRo
   };
 }
 
+function callRow(overrides: Partial<LlmUsageCallRow> = {}): LlmUsageCallRow {
+  return {
+    id: "call-1",
+    operationId: "op-1",
+    sequence: 1,
+    kind: "Summarize",
+    userId: "u1",
+    userEmail: "alice@example.com",
+    recordingId: "rec-1",
+    recordingTitle: "Weekly Standup",
+    sectionId: null,
+    sectionName: null,
+    model: "gpt-4o",
+    startedAt: "2026-08-15T10:00:00.000Z",
+    completedAt: "2026-08-15T10:00:05.000Z",
+    durationMs: 5000,
+    promptTokens: 100,
+    completionTokens: 50,
+    reasoningTokens: null,
+    totalTokens: 150,
+    success: true,
+    statusCode: 200,
+    errorKind: null,
+    ...overrides,
+  };
+}
+
 function totals(overrides: Partial<LlmUsageTotals> = {}): LlmUsageTotals {
   return {
     calls: 1,
@@ -86,6 +114,10 @@ function usagePage(
   overrides: Partial<LlmUsagePage<LlmUsageOperationRow>> = {},
 ): LlmUsagePage<LlmUsageOperationRow> {
   return { rows, page: 1, pageSize: 50, total: rows.length, totals: totalsObj, ...overrides };
+}
+
+function callsPage(rows: LlmUsageCallRow[], totalsObj: LlmUsageTotals): LlmUsagePage<LlmUsageCallRow> {
+  return { rows, page: 1, pageSize: 50, total: rows.length, totals: totalsObj };
 }
 
 function summaryGroup(overrides: Partial<LlmUsageSummaryGroup> = {}): LlmUsageSummaryGroup {
@@ -297,6 +329,45 @@ describe("LlmUsage", () => {
       expect(api.getLlmUsageSummary).not.toHaveBeenCalled();
     });
 
+    it("renders two calls that share one operationId as two distinct rows, with a blank Turns cell", async () => {
+      // This is the exact shape UsageTable's widened row type/key exists for: a real LlmUsageCallRow page,
+      // with TWO rows sharing ONE operationId (an ordinary multi-call operation) - proving the row key is
+      // `id`, not `operationId`, for calls-mode rows. If the key fix regressed back to `row.operationId`,
+      // React would log a duplicate-key warning and could silently drop/misplace one of the two rows on
+      // re-render; keying by row.operationId still just barely renders 2 <tr>s on a first mount (React does
+      // not deduplicate on initial render), so the console.error assertion below is what actually catches
+      // that regression - a bare row-count check would not.
+      const calls = [
+        callRow({ id: "call-1", operationId: "op-shared", model: "gpt-4o", promptTokens: 100 }),
+        callRow({ id: "call-2", operationId: "op-shared", model: "gpt-4o-mini", promptTokens: 200 }),
+      ];
+      vi.mocked(api.getLlmUsage).mockImplementation(async (params) =>
+        params.mode === "calls" ? callsPage(calls, totals({ calls: 2 })) : usagePage([row()], totals()),
+      );
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      const view = renderPage();
+      await waitFor(() => expect(api.getLlmUsage).toHaveBeenCalledTimes(1));
+      fireEvent.click(screen.getByRole("button", { name: "Calls" }));
+      await waitFor(() => expect(api.getLlmUsage).toHaveBeenCalledTimes(2));
+
+      expect(await screen.findByText("gpt-4o")).toBeTruthy();
+      expect(screen.getByText("gpt-4o-mini")).toBeTruthy();
+
+      const dataRows = view.container.querySelectorAll("tbody tr");
+      expect(dataRows.length).toBe(2); // two distinct rows, not one collapsed onto the other
+      // A call row has no `turns` field - each row already IS one call/turn, so the column reads blank
+      // rather than a fabricated "1" (column index 5: Started/Type/User/Recording/Model/Turns/...).
+      expect(dataRows[0].children[5].textContent).toBe("");
+      expect(dataRows[1].children[5].textContent).toBe("");
+
+      const keyWarning = consoleErrorSpy.mock.calls.some((args) =>
+        args.some((a) => typeof a === "string" && a.includes("same key")),
+      );
+      expect(keyWarning).toBe(false);
+      consoleErrorSpy.mockRestore();
+    });
+
     it("switches to Summary mode and requests the roll-up endpoint with the default group-by", async () => {
       renderPage();
       await waitFor(() => expect(api.getLlmUsage).toHaveBeenCalledTimes(1));
@@ -368,6 +439,47 @@ describe("LlmUsage", () => {
       fireEvent.click(screen.getByRole("button", { name: "Delete filtered rows" }));
 
       expect(api.deleteLlmUsage).not.toHaveBeenCalled();
+    });
+
+    it("blocks the delete while a filter change's refetch is still in flight (stale total race)", async () => {
+      renderPage();
+      await waitFor(() => expect(api.getLlmUsage).toHaveBeenCalledTimes(1));
+      // The initial load's total is 1 (the `totals()` fixture default) - that is what would be shown/used
+      // if the race were not closed.
+
+      // Hold the NEXT getLlmUsage call open - it represents the refetch triggered by the filter change
+      // below, which `placeholderData: keepPreviousData` means the UI does NOT wait for: the OLD data
+      // (total=1) stays on screen while this promise is pending.
+      let resolveNext!: (value: LlmUsagePage<LlmUsageOperationRow>) => void;
+      const pending = new Promise<LlmUsagePage<LlmUsageOperationRow>>((resolve) => {
+        resolveNext = resolve;
+      });
+      vi.mocked(api.getLlmUsage).mockReturnValue(pending);
+
+      fireEvent.change(screen.getByLabelText("Outcome"), { target: { value: "ok" } });
+      await waitFor(() => expect(api.getLlmUsage).toHaveBeenCalledTimes(2));
+
+      // The refetch for the new filter has not resolved yet - the on-screen total still belongs to the OLD
+      // filter. The delete button must not be usable in this window: clicking it must neither prompt nor
+      // call deleteLlmUsage, no matter what stale count is showing. `disabled` is a plain DOM property on a
+      // real <button> - no jest-dom matcher needed.
+      const deleteButton = () => screen.getByRole("button", { name: "Delete filtered rows" }) as HTMLButtonElement;
+      expect(deleteButton().disabled).toBe(true);
+
+      const confirmSpy = vi.spyOn(window, "confirm");
+      fireEvent.click(deleteButton());
+      expect(confirmSpy).not.toHaveBeenCalled();
+      expect(api.deleteLlmUsage).not.toHaveBeenCalled();
+
+      // Let the refetch settle, with a deliberately huge total - proving the earlier click really was
+      // blocked rather than merely slow (if it had gone through, it would have used the stale total, not
+      // this one).
+      resolveNext(usagePage([row()], totals({ calls: 9999 })));
+      await waitFor(() => expect(deleteButton().disabled).toBe(false));
+
+      confirmSpy.mockReturnValue(true);
+      fireEvent.click(screen.getByRole("button", { name: "Delete filtered rows" }));
+      expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("9999"));
     });
   });
 });
