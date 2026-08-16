@@ -85,6 +85,27 @@ public class ChatControllerTests
     }
 
     [Fact]
+    public async Task Create_AttributesTitleGeneration_AsChatTitle()
+    {
+        // Title generation is its own call shape (short/cheap/automatic) - a distinct kind so it doesn't
+        // get averaged into interactive chat latency.
+        Guid? seenOperation = null;
+        LlmCallKind? seenKind = null;
+        var chat = new FakeChatStreamClient(onCall: () =>
+        {
+            seenOperation = LlmCallScope.Active?.OperationId;
+            seenKind = LlmCallScope.Active?.Kind;
+        });
+        var (controller, _, _) = Build(Guid.NewGuid(), chat: chat);
+
+        await controller.CreateConversation(
+            Convo(("user", "What did we decide?"), ("assistant", "To ship Friday.")), default);
+
+        Assert.NotNull(seenOperation);
+        Assert.Equal(LlmCallKind.ChatTitle, seenKind);
+    }
+
+    [Fact]
     public async Task Create_Empty_ReturnsBadRequest()
     {
         var (controller, _, _) = Build(Guid.NewGuid());

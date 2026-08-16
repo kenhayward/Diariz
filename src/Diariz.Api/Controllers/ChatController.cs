@@ -579,6 +579,12 @@ public class ChatController : ControllerBase
                     "Return only the title, with no quotes or punctuation."),
                 new ChatMessage("user", excerpt),
             };
+            // Attribute the title-generation call. This method only receives the message list (not the
+            // caller's SavedChatContextDto), so no recording/section id is available here without a new
+            // query just to populate them - left null rather than doing that.
+            var userEmail = await _db.Users.Where(u => u.Id == UserId).Select(u => u.Email).FirstOrDefaultAsync(ct);
+            using var llm = LlmCallScope.Push(LlmCallKind.ChatTitle, UserId, userEmail);
+
             var sb = new StringBuilder();
             await foreach (var t in _chat.StreamAsync(cfg, prompt, ct))
                 sb.Append(t);

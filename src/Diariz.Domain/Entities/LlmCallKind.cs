@@ -18,4 +18,5 @@ public enum LlmCallKind
     SearchQuery = 11,
     ChatMessage = 12,
     FormulaRun = 13,
+    ChatTitle = 14,
 }
