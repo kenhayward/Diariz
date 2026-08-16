@@ -17,11 +17,11 @@ public class ChatControllerTests
 {
     private static (ChatController controller, DiarizDbContext db, FakeChatStreamClient chat) Build(
         Guid userId, bool llmEnabled = true, FakeAudioStorage? storage = null, FakeUrlFetcher? urlFetcher = null,
-        FakeChatToolSettingsResolver? toolSettings = null)
+        FakeChatToolSettingsResolver? toolSettings = null, FakeChatStreamClient? chat = null)
     {
         var db = TestDb.Create();
         Users.Ensure(db, userId); // create paths mint the owner's personal room, which needs a real user row
-        var chat = new FakeChatStreamClient();
+        chat ??= new FakeChatStreamClient();
         var settings = new FakeSummarizationSettingsResolver
         {
             Config = llmEnabled
@@ -316,6 +316,37 @@ public class ChatControllerTests
         Assert.Contains("Overall Q3 theme.", system);      // folder summary
         Assert.Contains("Hire two engineers.", system);    // folder minutes
         Assert.Contains("Draft the roadmap", system);      // aggregated folder actions
+    }
+
+    [Fact]
+    public async Task Stream_AttributesEveryModelRoundTrip_ToOneChatOperation()
+    {
+        // ChatToolOrchestrator loops without pushing its own scope, so all of a turn's round-trips share
+        // this operation - which is what makes MAX(Sequence) the turn count.
+        var seenOperations = new List<Guid>();
+        var seenKinds = new List<LlmCallKind>();
+        var chat = new FakeChatStreamClient(onCall: () =>
+        {
+            seenOperations.Add(LlmCallScope.Active!.OperationId);
+            seenKinds.Add(LlmCallScope.Active!.Kind);
+        })
+        {
+            // Round 1: the model calls a tool. Round 2: it answers in text - forcing a second round-trip.
+            ChunkRounds =
+            [
+                [new ChatStreamDelta(null, [new ToolCallFragment(0, "c1", "who_said_that", "{}")], "tool_calls")],
+                [new ChatStreamDelta("Alice said it.", null, null)],
+            ],
+        };
+        var (controller, _, _) = Build(Guid.NewGuid(), chat: chat);
+        controller.ControllerContext.HttpContext.Response.Body = new MemoryStream();
+
+        await controller.Stream(
+            new ChatStreamRequest([], null, null, [new ChatTurnDto("user", "Who said budget?")]), default);
+
+        Assert.Equal(2, seenOperations.Count);              // the tool call forced a second round-trip
+        Assert.Single(seenOperations.Distinct());            // both belong to ONE operation
+        Assert.All(seenKinds, k => Assert.Equal(LlmCallKind.ChatMessage, k));
     }
 
     [Fact]

@@ -320,7 +320,7 @@ public sealed class FakeTagsClient(Action? onCall = null) : ITagsClient
 
 /// <summary>Stub <see cref="ITranslationClient"/> — by default echoes each input prefixed with the target
 /// language (so tests can assert what was translated), or throws.</summary>
-public sealed class FakeTranslationClient : ITranslationClient
+public sealed class FakeTranslationClient(Action? onCall = null) : ITranslationClient
 {
     /// <summary>Optional override: maps an exact input string to a fixed translation.</summary>
     public Dictionary<string, string> Map { get; } = new();
@@ -333,6 +333,7 @@ public sealed class FakeTranslationClient : ITranslationClient
         SummarizationRequestConfig config, string targetLanguage, IReadOnlyList<string> texts,
         CancellationToken ct = default)
     {
+        onCall?.Invoke();
         Calls++;
         LastLanguage = targetLanguage;
         LastConfig = config;

@@ -4,6 +4,8 @@ using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
+using Diariz.Domain;
+using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -15,7 +17,12 @@ public class ChatTranscribeEndpointTests
     private sealed class FakeDictationClient : IDictationClient
     {
         private readonly string _text;
-        public FakeDictationClient(string text) => _text = text;
+        private readonly Action? _onCall;
+        public FakeDictationClient(string text, Action? onCall = null)
+        {
+            _text = text;
+            _onCall = onCall;
+        }
 
         public DictationRequestConfig? LastConfig { get; private set; }
         public string? LastContentType { get; private set; }
@@ -25,6 +32,7 @@ public class ChatTranscribeEndpointTests
             DictationRequestConfig config, Stream audio, string contentType, string fileName,
             CancellationToken ct = default)
         {
+            _onCall?.Invoke();
             LastConfig = config;
             LastContentType = contentType;
             LastFileName = fileName;
@@ -41,8 +49,12 @@ public class ChatTranscribeEndpointTests
 
     private static ChatController BuildController(IDictationClient dictation, DictationOptions opts, Guid userId)
     {
+        // Real (in-memory) db + seeded user row: the dictation action reads the caller's email to attribute
+        // the LlmCallScope it pushes.
+        var db = TestDb.Create();
+        Users.Ensure(db, userId);
         var controller = new ChatController(
-            db: null!, chat: null!, settings: null!, contextResolver: null!, extractor: null!,
+            db: db, chat: null!, settings: null!, contextResolver: null!, extractor: null!,
             storage: null!, urlFetcher: null!, toolSettings: null!, orchestrator: null!, rooms: null!,
             dictation: dictation, dictationOptions: Options.Create(opts));
         controller.ControllerContext = Http.Context(userId);
@@ -77,6 +89,25 @@ public class ChatTranscribeEndpointTests
         Assert.Equal("http://stt.test/v1", fake.LastConfig!.ApiBase);
         Assert.Equal("whisper-1", fake.LastConfig.Model);
         Assert.Equal("audio/webm", fake.LastContentType);
+    }
+
+    [Fact]
+    public async Task Transcribe_AttributesCall_AsDictation()
+    {
+        Guid? seenOperation = null;
+        LlmCallKind? seenKind = null;
+        var fake = new FakeDictationClient("Hello world.", onCall: () =>
+        {
+            seenOperation = LlmCallScope.Active?.OperationId;
+            seenKind = LlmCallScope.Active?.Kind;
+        });
+        var controller = BuildController(
+            fake, new DictationOptions { ApiBase = "http://stt.test/v1", Model = "whisper-1" }, Guid.NewGuid());
+
+        await controller.Transcribe(WebmFile(), CancellationToken.None);
+
+        Assert.NotNull(seenOperation);
+        Assert.Equal(LlmCallKind.Dictation, seenKind);
     }
 
     [Fact]

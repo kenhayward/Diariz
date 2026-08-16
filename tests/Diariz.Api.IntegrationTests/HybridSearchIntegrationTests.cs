@@ -157,4 +157,30 @@ public class HybridSearchIntegrationTests(ContainersFixture fx)
         Assert.Contains("budget", hit.Text);                 // the lexical (segment) hit
         Assert.DoesNotContain(hits, h => h.StartMs == 0 && h.Text.Contains("semantically relevant")); // no chunk hits
     }
+
+    [Fact]
+    public async Task Search_SemanticArm_AttributesTheEmbedCall_AsSearchQuery()
+    {
+        // Search embeds the user's own query text - deliberately Kind = SearchQuery, not Embedding, so a
+        // high-frequency interactive search never gets folded into (and hides behind) indexing volume.
+        var (userId, recId, trId) = await SeedRecording();
+        await AddChunk(userId, recId, trId, 0, "We cannot afford this quarter.", Axis(3));
+
+        Guid? seenOperation = null;
+        LlmCallKind? seenKind = null;
+        var client = new FakeEmbeddingClient(onCall: () =>
+        {
+            seenOperation = LlmCallScope.Active?.OperationId;
+            seenKind = LlmCallScope.Active?.Kind;
+        })
+        { Vectors = [Axis(3)] };
+        var resolver = new FakeEmbeddingSettingsResolver();
+
+        await using var db = fx.CreateDbContext();
+        await new TranscriptSearch(db, client, resolver, new RoomScope(db))
+            .SearchAsync(userId, "money worries", null, null, 20);
+
+        Assert.NotNull(seenOperation);
+        Assert.Equal(LlmCallKind.SearchQuery, seenKind);
+    }
 }

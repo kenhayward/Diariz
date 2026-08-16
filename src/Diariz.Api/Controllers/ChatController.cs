@@ -119,6 +119,14 @@ public class ChatController : ControllerBase
         var (contexts, allOwned) = await LoadTranscriptsAsync(req.RecordingIds ?? [], ct);
         if (!allOwned) return NotFound(); // a selected recording isn't visible to the caller
 
+        // Attribution target for the LlmCallScope pushed below: a single pre-selected recording (captured
+        // before any folder context is folded in), or the folder itself when one is in scope. Library-wide /
+        // multi-recording chat still gets Kind = ChatMessage, just with no recording/section target.
+        Guid? scopeRecordingId = req.RecordingIds is { Count: 1 } && contexts.Count == 1 ? req.RecordingIds[0] : null;
+        string? scopeRecordingTitle = scopeRecordingId is not null ? contexts[0].Title : null;
+        Guid? scopeSectionId = null;
+        string? scopeSectionName = null;
+
         // Folder chat: prepend the folder's roll-up (summary + minutes + aggregated actions) and scope the
         // attachments/tools to the folder's recordings (across it and its sub-folders).
         var scopeRecIds = (req.RecordingIds ?? []).ToList();
@@ -128,6 +136,10 @@ public class ChatController : ControllerBase
             if (folder is null) return NotFound(); // folder not visible to the caller
             contexts.Insert(0, folder.Value.Context);
             scopeRecIds.AddRange(folder.Value.RecordingIds);
+            scopeSectionId = sectionId;
+            scopeSectionName = folder.Value.SectionName;
+            scopeRecordingId = null; // a folder in scope wins over a single pre-selected recording
+            scopeRecordingTitle = null;
         }
 
         // Optionally pull the in-context recordings' attachments into the context (extracted file text +
@@ -143,6 +155,15 @@ public class ChatController : ControllerBase
         // the send_email tool always delivers to).
         var me = await _db.Users.Where(u => u.Id == UserId)
             .Select(u => new { u.FullName, u.Email }).FirstOrDefaultAsync(ct);
+
+        // Attribute every model call this turn makes. Pushed once here, covering the WHOLE enumeration below
+        // (not just its creation) - ChatToolOrchestrator loops over up to MaxToolRounds model round-trips
+        // without pushing its own scope, so they all land under this one operation, which is what makes
+        // MAX(Sequence) the turn count. Disposed only when this method returns (a `using var`, not a nested
+        // `using` block), so it stays active for the entire `await foreach` below.
+        using var llm = LlmCallScope.Push(
+            LlmCallKind.ChatMessage, UserId, me?.Email, scopeRecordingId, scopeRecordingTitle,
+            scopeSectionId, scopeSectionName);
         // Budget the injected context off the user's actual model window (the same number the context dial
         // reports against). It used to be a flat 48,000-char constant, so chat silently dropped transcript
         // text at ~12k tokens while the gauge still showed plenty of a 131k window free.
@@ -280,6 +301,10 @@ public class ChatController : ControllerBase
         var config = new DictationRequestConfig(
             _dictationOptions.ApiBase, _dictationOptions.ApiKey, _dictationOptions.Model,
             _dictationOptions.TimeoutSeconds);
+
+        // Attribute the transcription call. Pushed once here, ahead of the single client call below.
+        var userEmail = await _db.Users.Where(u => u.Id == UserId).Select(u => u.Email).FirstOrDefaultAsync(ct);
+        using var llm = LlmCallScope.Push(LlmCallKind.Dictation, UserId, userEmail);
 
         await using var stream = file.OpenReadStream();
         try
@@ -456,7 +481,7 @@ public class ChatController : ControllerBase
     /// <summary>Build a folder's chat context from its roll-ups (summary + minutes + aggregated actions
     /// across the section and its child sections) and return the folder's recording ids (for attachments +
     /// tool scope). Null when the folder isn't the caller's.</summary>
-    private async Task<(TranscriptContext Context, List<Guid> RecordingIds)?> LoadFolderContextAsync(
+    private async Task<(TranscriptContext Context, List<Guid> RecordingIds, string SectionName)?> LoadFolderContextAsync(
         Guid sectionId, CancellationToken ct)
     {
         // Folder membership + ownership now come from the caller's personal room, not Section.UserId /
@@ -485,7 +510,7 @@ public class ChatController : ControllerBase
 
         var text = ChatFolderContext.BuildText(
             section.Summary?.Text, section.Minutes?.Text, TranscriptFormatter.ActionsForChat(actions));
-        return (new TranscriptContext($"Folder: {section.Name}", text), recIds);
+        return (new TranscriptContext($"Folder: {section.Name}", text), recIds, section.Name);
     }
 
     /// <summary>Resolve the selected recordings' attachments into text documents for chat context: uploaded

@@ -198,4 +198,68 @@ public class RecordingTranslationControllerTests
 
         Assert.IsType<NotFoundResult>(result);
     }
+
+    // ---- LLM usage attribution ----
+
+    [Fact]
+    public async Task TranslateRecording_AttributesEveryCall_ToOneOperation()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, _) = await SeedTranscribed(db, userId); // has a summary and an action, so 3 client calls
+        var seenOperations = new List<Guid>();
+        var seenKinds = new List<LlmCallKind>();
+        var client = new FakeTranslationClient(onCall: () =>
+        {
+            seenOperations.Add(LlmCallScope.Active!.OperationId);
+            seenKinds.Add(LlmCallScope.Active!.Kind);
+        });
+
+        var result = await Build(db, userId, client).TranslateRecording(rec.Id, new TranslateRequest("fr"));
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.Equal(3, seenOperations.Count);            // segments + summary + actions
+        Assert.Single(seenOperations.Distinct());          // one operation for the whole request
+        Assert.All(seenKinds, k => Assert.Equal(LlmCallKind.Translation, k));
+    }
+
+    [Fact]
+    public async Task TranslateSegment_AttributesCall_AsTranslation()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, segId) = await SeedTranscribed(db, userId, withSummary: false, withAction: false);
+        Guid? seenOperation = null;
+        LlmCallKind? seenKind = null;
+        var client = new FakeTranslationClient(onCall: () =>
+        {
+            seenOperation = LlmCallScope.Active?.OperationId;
+            seenKind = LlmCallScope.Active?.Kind;
+        });
+
+        await Build(db, userId, client).TranslateSegment(rec.Id, segId, new TranslateRequest("es"));
+
+        Assert.NotNull(seenOperation);
+        Assert.Equal(LlmCallKind.Translation, seenKind);
+    }
+
+    [Fact]
+    public async Task TranslateSegments_AttributesCall_AsTranslation()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, segId) = await SeedTranscribed(db, userId, withSummary: false, withAction: false);
+        Guid? seenOperation = null;
+        LlmCallKind? seenKind = null;
+        var client = new FakeTranslationClient(onCall: () =>
+        {
+            seenOperation = LlmCallScope.Active?.OperationId;
+            seenKind = LlmCallScope.Active?.Kind;
+        });
+
+        await Build(db, userId, client).TranslateSegments(rec.Id, new TranslateSegmentsRequest(new[] { segId }, "es"));
+
+        Assert.NotNull(seenOperation);
+        Assert.Equal(LlmCallKind.Translation, seenKind);
+    }
 }
