@@ -153,13 +153,20 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
         catch (Exception ex)
         {
             // A transport failure or a timeout is exactly the expensive case an administrator needs to
-            // see, so it is recorded before the exception continues on to the caller unchanged.
+            // see, so it is recorded before the exception continues on to the caller unchanged. There is
+            // no response to inspect here, so Streamed is unconditionally false - not "unknown".
             clock.Stop();
-            Record(scope, target, request, startedAt, clock, promptChars, null, default, ErrorKindOf(ex));
+            Record(scope, target, request, startedAt, clock, promptChars, null, default, ErrorKindOf(ex), streamed: false);
             throw;
         }
 
         span.SetStatusCode((int)response.StatusCode);
+
+        // Whether this WAS a stream is visible for free from the content-type header alone - no body
+        // read required. Compute it before the usage block below, which is the one thing that must NOT
+        // touch a streaming body (see ReadForUsageAsync's doc for why: buffering an SSE stream would
+        // hold every chat token until the model finished).
+        var streamed = IsEventStream(response);
 
         // `usage` only exists on a buffered JSON body. Streaming responses (SSE) are left strictly alone:
         // buffering one would defeat streaming entirely, leaving the chat UI silent until the model
@@ -175,7 +182,7 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
         var status = (int)response.StatusCode;
         Record(
             scope, target, request, startedAt, clock, promptChars, status, usage,
-            response.IsSuccessStatusCode ? null : $"Http{status}");
+            response.IsSuccessStatusCode ? null : $"Http{status}", streamed);
 
         return response;
     }
@@ -228,7 +235,7 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
     private void Record(
         LlmCallScope? scope, string target, HttpRequestMessage request, DateTimeOffset startedAt,
         System.Diagnostics.Stopwatch clock, int? promptChars, int? statusCode, LlmUsage usage,
-        string? errorKind)
+        string? errorKind, bool streamed)
     {
         var call = new LlmCall
         {
@@ -252,7 +259,7 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
             ReasoningTokens = usage.ReasoningTokens,
             TotalTokens = usage.TotalTokens,
             PromptChars = promptChars,
-            Streamed = false,
+            Streamed = streamed,
             Success = errorKind is null,
             StatusCode = statusCode,
             ErrorKind = errorKind,
@@ -275,6 +282,13 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
 
     private static bool IsJson(HttpResponseMessage response) =>
         response.Content.Headers.ContentType?.MediaType is "application/json";
+
+    /// <summary>Header-only check - reads no part of the body. Deliberately the mirror of
+    /// <see cref="IsJson"/> rather than <c>!IsJson(response)</c>: a missing or unrecognised content type
+    /// must read as "not streamed" (<c>false</c>), the same defensive default every other read in this
+    /// handler falls back to, not as streamed-by-elimination.</summary>
+    private static bool IsEventStream(HttpResponseMessage response) =>
+        response.Content.Headers.ContentType?.MediaType is "text/event-stream";
 
     /// <summary>Read the body so `usage` can be parsed out of it, WITHOUT costing the caller its own read.
     ///

@@ -470,4 +470,36 @@ public class LlmTelemetryHandlerUsageTests
 
         Assert.Equal(body.Length, Assert.Single(sink.Calls).PromptChars);
     }
+
+    private static HttpResponseMessage EventStream(string body) => new(HttpStatusCode.OK)
+    {
+        Content = new StringContent(body, Encoding.UTF8, "text/event-stream"),
+    };
+
+    [Fact]
+    public async Task RecordsStreamedTrue_ForAnEventStreamResponse()
+    {
+        // A real streamed chat call was seen live with Streamed hardcoded false - a permanently-wrong
+        // admin-visible column is worse than no column at all, because a filter on it gives a silently
+        // wrong answer. This is visible for free from the content-type header; no body read required.
+        var sink = new FakeLlmUsageSink();
+        using var _ = LlmCallScope.Push(LlmCallKind.ChatMessage);
+        var http = Client(new LlmTelemetryHandler(new FakeLlmTrace(), sink), EventStream("data: {}\n\n"));
+
+        await http.PostAsync("/v1/chat/completions", new StringContent("{}"));
+
+        Assert.True(Assert.Single(sink.Calls).Streamed);
+    }
+
+    [Fact]
+    public async Task RecordsStreamedFalse_ForAnOrdinaryJsonResponse()
+    {
+        var sink = new FakeLlmUsageSink();
+        using var _ = LlmCallScope.Push(LlmCallKind.Summarize);
+        var http = Client(new LlmTelemetryHandler(new FakeLlmTrace(), sink), Json("{}"));
+
+        await http.PostAsync("/v1/chat/completions", new StringContent("{}"));
+
+        Assert.False(Assert.Single(sink.Calls).Streamed);
+    }
 }
