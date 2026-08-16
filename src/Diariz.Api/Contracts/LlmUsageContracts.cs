@@ -29,9 +29,17 @@ public record LlmUsageFilter(
 /// multi-round-trip operation (e.g. a chat turn) must count once. The token sums are all
 /// <c>long?</c> because <c>SUM</c> over an all-null/empty set is SQL NULL, never 0 - a model that
 /// reports no usage must not silently read as "emitted zero tokens".
-/// <paramref name="TokenMeasuredCalls"/> is how many calls in the set had a non-null
-/// <see cref="Diariz.Domain.Entities.LlmCall.CompletionTokens"/>, so the UI can say "measured on N of
-/// M calls" instead of implying every call was measured.
+///
+/// <paramref name="TokenMeasuredCalls"/> is how many calls in the set reported ANY token count at
+/// all - prompt, completion, reasoning, or total (any one of the four being non-null counts the
+/// call). It answers "how many of these calls do we have usage data for at all", which an
+/// administrator needs before trusting any total on the page - it is deliberately NOT scoped to
+/// <see cref="Diariz.Domain.Entities.LlmCall.CompletionTokens"/> specifically, because that would
+/// silently duplicate one column's own measured-count under a name that implies something broader.
+/// If the UI ever needs a *per-column* "measured on N of M" qualifier (e.g. specifically for
+/// completion tokens), that is a different, narrower question than this field answers and needs its
+/// own count - <c>LlmUsageQuery.TotalsAsync</c> already computes one such count per token column
+/// internally (to null out that column's sum correctly) but does not expose them individually here.
 /// <paramref name="TokensPerSecond"/> is <c>SUM(CompletionTokens) / SUM(DurationMs)</c> across the
 /// whole set - never an average of each row's own rate, which lets one tiny fast call outweigh one
 /// huge slow one. It is null (never NaN/Infinity, which are not valid JSON) when no completion

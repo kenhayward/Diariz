@@ -13,9 +13,10 @@ namespace Diariz.Api.IntegrationTests;
 /// stamps that marker onto <c>Model</c>. <c>OperationId</c> defaults to the same marker but can be
 /// overridden - it has to be, since <see cref="Totals_CountsOperationsDistinctly_AndFailures"/> is
 /// specifically about distinct <c>OperationId</c> values, so it can't also be the isolation key.
-/// Filtering on <c>Model</c> instead keeps one consistent isolation mechanism across all four tests
-/// (all tests in this shared "integration" collection run sequentially against one database, so an
-/// unscoped totals query would go flaky the moment another test seeds an <c>LlmCall</c>).</summary>
+/// Filtering on <c>Model</c> instead keeps one consistent isolation mechanism across every test in
+/// this file (all tests in this shared "integration" collection run sequentially against one
+/// database, so an unscoped totals query would go flaky the moment another test seeds an
+/// <c>LlmCall</c>).</summary>
 [Collection(IntegrationCollection.Name)]
 public class LlmUsageViewerIntegrationTests(ContainersFixture fx)
 {
@@ -106,6 +107,46 @@ public class LlmUsageViewerIntegrationTests(ContainersFixture fx)
         Assert.Null(totals.CompletionTokens);
         Assert.Null(totals.ReasoningTokens);
         Assert.Null(totals.TotalTokens);
+        Assert.Null(totals.TokensPerSecond);
+    }
+
+    [Fact]
+    public async Task Totals_TokenMeasuredCalls_CountsAnyColumnMeasured_NotJustCompletion()
+    {
+        // Discriminates the two possible definitions of TokenMeasuredCalls: "calls with a completion-
+        // token count specifically" vs "calls that reported ANY token count at all" (prompt, completion,
+        // reasoning, or total). This row reports PromptTokens but NOT CompletionTokens, so the two
+        // definitions disagree - under the (rejected) completion-only binding this would read 0; the
+        // chosen any-column binding reads 1, because the admin got *some* usage data for this call.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        db.LlmCalls.Add(Row(marker, promptTokens: 42, completionTokens: null));
+        await db.SaveChangesAsync();
+
+        var totals = await LlmUsageQuery.TotalsAsync(
+            db.LlmCalls.Where(c => c.Model == marker.ToString()), default);
+
+        Assert.Equal(1, totals.Calls);
+        Assert.Equal(1, totals.TokenMeasuredCalls);
+    }
+
+    [Fact]
+    public async Task Totals_WhenDurationSumsToZero_TokensPerSecondIsNull()
+    {
+        // TokensPerSecond's other guard: even with a real completion-token count, dividing by a zero
+        // summed duration must not raw-divide (that produces double.PositiveInfinity, which is not
+        // valid JSON and would break the page) - it must return null, same as the "nothing measured"
+        // case above.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        db.LlmCalls.Add(Row(marker, durationMs: 0, completionTokens: 500));
+        await db.SaveChangesAsync();
+
+        var totals = await LlmUsageQuery.TotalsAsync(
+            db.LlmCalls.Where(c => c.Model == marker.ToString()), default);
+
+        Assert.Equal(1, totals.Calls);
+        Assert.Equal(500, totals.CompletionTokens);
         Assert.Null(totals.TokensPerSecond);
     }
 

@@ -87,8 +87,12 @@ public static class LlmUsageQuery
     /// <c>sum(x)</c> - it is matching <c>Enumerable.Sum(IEnumerable&lt;long?&gt;)</c>, which returns 0
     /// (not null) over an empty/all-null sequence. Left alone that silently turns "nothing in this set
     /// reported tokens" into "0 tokens", which is exactly the bug this method exists to prevent. So each
-    /// token sum is paired with its own "how many rows had a value" count in the same query, and nulled
-    /// out in C# when that count is zero - still one round trip, just wider.</summary>
+    /// token sum is paired with its own per-column "how many rows had a value" count in the same query
+    /// (<c>*TokensMeasured</c> locals below), and nulled out in C# when that column's count is zero -
+    /// still one round trip, just wider. Those per-column counts are what a future per-column "measured
+    /// on N of M" UI qualifier should read; <see cref="LlmUsageTotals.TokenMeasuredCalls"/> answers a
+    /// coarser, different question (see its doc comment) and is computed separately
+    /// (<c>AnyTokenMeasured</c>) rather than reusing one of the four.</summary>
     public static async Task<LlmUsageTotals> TotalsAsync(IQueryable<LlmCall> filtered, CancellationToken ct)
     {
         var row = await filtered
@@ -106,6 +110,9 @@ public static class LlmUsageQuery
                 ReasoningTokensMeasured = g.Count(c => c.ReasoningTokens != null),
                 TotalTokensSum = g.Sum(c => (long?)c.TotalTokens),
                 TotalTokensMeasured = g.Count(c => c.TotalTokens != null),
+                AnyTokenMeasured = g.Count(c =>
+                    c.PromptTokens != null || c.CompletionTokens != null ||
+                    c.ReasoningTokens != null || c.TotalTokens != null),
                 FailedCalls = g.Count(c => !c.Success),
             })
             .SingleOrDefaultAsync(ct);
@@ -133,7 +140,7 @@ public static class LlmUsageQuery
             completionTokens,
             reasoningTokens,
             totalTokens,
-            row.CompletionTokensMeasured,
+            row.AnyTokenMeasured,
             row.FailedCalls,
             tokensPerSecond);
     }
