@@ -243,4 +243,33 @@ public class SummarizationSettingsResolverTests
 
         Assert.True((await resolver.ResolveAsync(Guid.NewGuid())).ContextCharBudget > 200_000);
     }
+
+    // ---- Stream usage toggle ----
+
+    [Fact]
+    public async Task Resolve_CarriesTheStreamUsageToggle_FromPlatformSettings()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        db.PlatformSettings.Add(new PlatformSettings { Id = PlatformSettings.SingletonId, LlmStreamUsageEnabled = false });
+        db.UserSettings.Add(new UserSettings { UserId = userId });
+        await db.SaveChangesAsync();
+
+        var cfg = await Build(db).ResolveAsync(userId);
+
+        Assert.False(cfg.IncludeStreamUsage);
+    }
+
+    [Fact]
+    public async Task Resolve_DefaultsStreamUsageToTrue_WhenThereAreNoPlatformSettings()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        db.UserSettings.Add(new UserSettings { UserId = userId });
+        await db.SaveChangesAsync();
+
+        var cfg = await Build(db).ResolveAsync(userId);
+
+        Assert.True(cfg.IncludeStreamUsage);
+    }
 }

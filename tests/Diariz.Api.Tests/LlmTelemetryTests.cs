@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using Diariz.Api.Services;
@@ -6,6 +7,19 @@ using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain.Entities;
 
 namespace Diariz.Api.Tests;
+
+/// <summary>Returns a fixed, canned <see cref="HttpResponseMessage"/> regardless of the request - unlike
+/// <see cref="FakeHttpMessageHandler"/>, which builds the response from a body string, this takes the
+/// response object directly so a test can control status/content-type together. Shared across the usage
+/// and streaming test classes below.</summary>
+internal sealed class StubHandler : HttpMessageHandler
+{
+    private readonly HttpResponseMessage _response;
+    public StubHandler(HttpResponseMessage response) => _response = response;
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+        Task.FromResult(_response);
+}
 
 /// <summary>
 /// The LLM call is the slowest and most failure-prone thing the API does, and until this it was
@@ -175,19 +189,55 @@ public class LlmTelemetryHandlerTests
         }
     }
 
+    /// <summary>Counts reads without otherwise changing behaviour. Unlike the request-side
+    /// <c>ThrowsOnReadStream</c> elsewhere in this file (where the body must never be touched, full stop),
+    /// the response side is legitimately read once - by the caller, after the handler hands the response
+    /// back. What must never happen is a read BEFORE that point, which this makes observable.</summary>
+    private sealed class CountingStream : MemoryStream
+    {
+        public int ReadCalls { get; private set; }
+        public CountingStream(byte[] bytes) : base(bytes) { }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            ReadCalls++;
+            return base.Read(buffer, offset, count);
+        }
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
+        {
+            ReadCalls++;
+            return base.ReadAsync(buffer, ct);
+        }
+    }
+
     [Fact]
     public async Task DoesNotBufferAStreamingResponse()
     {
         // Buffering an SSE stream would defeat streaming entirely: the chat UI would sit silent
         // until the model finished instead of showing tokens as they arrive.
+        //
+        // Deliberately NOT FakeHttpMessageHandler + PostAsync (the pattern the rest of this class uses):
+        // FakeHttpMessageHandler's StringContent is a fully-buffered in-memory copy, so an accidental
+        // handler-side read leaves no trace on it, and PostAsync's own default completion option
+        // (ResponseContentRead) makes HttpClient itself drain any streamed content before PostAsync
+        // returns - independent of this handler entirely. Either one would hide a regression and let this
+        // test pass even if the handler read ahead. Sending with ResponseHeadersRead (as the real
+        // ChatStreamClient does) and counting reads on the source stream is what actually proves it.
         var trace = new FakeLlmTrace();
-        var inner = new FakeHttpMessageHandler("data: {}\n\n", HttpStatusCode.OK, "text/event-stream");
-        var http = Client(trace, inner);
+        var source = new CountingStream(Encoding.UTF8.GetBytes("data: {}\n\n"));
+        var content = new StreamContent(source) { Headers = { ContentType = new MediaTypeHeaderValue("text/event-stream") } };
+        var http = new HttpClient(new LlmTelemetryHandler(trace, new FakeLlmUsageSink())
+            { InnerHandler = new StubHandler(new HttpResponseMessage(HttpStatusCode.OK) { Content = content }) });
 
-        var resp = await http.PostAsync("https://llm.test/v1/chat/completions", JsonContent.Create(new { }));
+        using var req = new HttpRequestMessage(HttpMethod.Post, "https://llm.test/v1/chat/completions")
+            { Content = JsonContent.Create(new { }) };
+        var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
 
+        Assert.Equal(0, source.ReadCalls); // nothing read before the caller reads
         Assert.Null(Assert.Single(trace.Spans).Usage);
         Assert.Equal("text/event-stream", resp.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("data: {}\n\n", await resp.Content.ReadAsStringAsync());
     }
 
     [Fact]
@@ -295,18 +345,6 @@ public class LlmSpanDescriptionTests
 /// </summary>
 public class LlmTelemetryHandlerUsageTests
 {
-    /// <summary>Returns a fixed, canned <see cref="HttpResponseMessage"/> regardless of the request - unlike
-    /// <see cref="FakeHttpMessageHandler"/>, which builds the response from a body string, this takes the
-    /// response object directly so a test can control status/content-type together.</summary>
-    private sealed class StubHandler : HttpMessageHandler
-    {
-        private readonly HttpResponseMessage _response;
-        public StubHandler(HttpResponseMessage response) => _response = response;
-
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
-            Task.FromResult(_response);
-    }
-
     private static HttpClient Client(LlmTelemetryHandler handler, HttpResponseMessage response)
     {
         handler.InnerHandler = new StubHandler(response);
@@ -548,12 +586,16 @@ public class LlmTelemetryHandlerUsageTests
     {
         // A real streamed chat call was seen live with Streamed hardcoded false - a permanently-wrong
         // admin-visible column is worse than no column at all, because a filter on it gives a silently
-        // wrong answer. This is visible for free from the content-type header; no body read required.
+        // wrong answer. Streamed itself is still known header-only, before any body read (see
+        // LlmTelemetryStreamingTests.DoesNotRecordAtSendAsync_ButAfterTheStreamIsRead) - but since Task 5
+        // the row for a streamed call isn't written until the body is read to completion, so this test
+        // does that read before asserting.
         var sink = new FakeLlmUsageSink();
         using var _ = LlmCallScope.Push(LlmCallKind.ChatMessage);
         var http = Client(new LlmTelemetryHandler(new FakeLlmTrace(), sink), EventStream("data: {}\n\n"));
 
-        await http.PostAsync("/v1/chat/completions", new StringContent("{}"));
+        var resp = await http.PostAsync("/v1/chat/completions", new StringContent("{}"));
+        await resp.Content.ReadAsStringAsync();
 
         Assert.True(Assert.Single(sink.Calls).Streamed);
     }
@@ -568,5 +610,306 @@ public class LlmTelemetryHandlerUsageTests
         await http.PostAsync("/v1/chat/completions", new StringContent("{}"));
 
         Assert.False(Assert.Single(sink.Calls).Streamed);
+    }
+}
+
+/// <summary>
+/// The keystone: a streamed record must be completed when the stream actually ends, not at
+/// <c>SendAsync</c> (which returns as soon as headers arrive, under <c>ResponseHeadersRead</c>). Recording
+/// there measured time-to-headers and no tokens - the bug a real chat turn was seen shipping with (20 ms
+/// for a call that took much longer).
+/// </summary>
+public class LlmTelemetryStreamingTests
+{
+    private static HttpClient Client(LlmTelemetryHandler handler, HttpResponseMessage response)
+    {
+        handler.InnerHandler = new StubHandler(response);
+        return new HttpClient(handler) { BaseAddress = new Uri("http://lmstudio:1234/") };
+    }
+
+    private static HttpResponseMessage Sse(string body) =>
+        new(System.Net.HttpStatusCode.OK)
+        {
+            Content = new StreamContent(new MemoryStream(Encoding.UTF8.GetBytes(body)))
+            {
+                Headers = { ContentType = new MediaTypeHeaderValue("text/event-stream") },
+            },
+        };
+
+    private const string StreamBody =
+        "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n" +
+        "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":69,\"completion_tokens\":5,\"total_tokens\":74}}\n\n" +
+        "data: [DONE]\n\n";
+
+    [Fact]
+    public async Task DoesNotRecordAtSendAsync_ButAfterTheStreamIsRead()
+    {
+        // The whole point: a streamed record completed at SendAsync would carry time-to-headers and no
+        // tokens, which is exactly the bug PR 1 shipped with.
+        //
+        // Sent via SendAsync(ResponseHeadersRead) rather than the plain PostAsync the rest of this file
+        // uses - deliberately, and the one deviation from this task's prescribed test code. PostAsync's
+        // completion option defaults to ResponseContentRead, under which HttpClient itself (not this
+        // handler) calls response.Content.LoadIntoBufferAsync() before the call returns - fully draining a
+        // genuine StreamContent synchronously, which would make "nothing yet" false no matter how SendAsync
+        // is implemented. ChatStreamClient - the real caller this task exists for - already sends with
+        // ResponseHeadersRead for exactly this reason (see ChatStreamClient.SendAsync); this test sends the
+        // same way so it measures the handler's own deferral instead of HttpClient's unrelated buffering.
+        var sink = new FakeLlmUsageSink();
+        using var _ = LlmCallScope.Push(LlmCallKind.ChatMessage);
+        var http = Client(new LlmTelemetryHandler(new FakeLlmTrace(), sink), Sse(StreamBody));
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions") { Content = new StringContent("{}") };
+        var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
+        Assert.Empty(sink.Calls); // nothing yet
+
+        await resp.Content.ReadAsStringAsync();
+        Assert.Single(sink.Calls);
+    }
+
+    [Fact]
+    public async Task RecordsTheTokenCounts_FromTheFinalUsageChunk()
+    {
+        var sink = new FakeLlmUsageSink();
+        using var _ = LlmCallScope.Push(LlmCallKind.ChatMessage);
+        var http = Client(new LlmTelemetryHandler(new FakeLlmTrace(), sink), Sse(StreamBody));
+
+        var resp = await http.PostAsync("/v1/chat/completions", new StringContent("{}"));
+        await resp.Content.ReadAsStringAsync();
+
+        var call = Assert.Single(sink.Calls);
+        Assert.True(call.Streamed);
+        Assert.Equal(69, call.PromptTokens);
+        Assert.Equal(5, call.CompletionTokens);
+        Assert.Equal(74, call.TotalTokens);
+        Assert.NotNull(call.TimeToFirstTokenMs);
+    }
+
+    [Fact]
+    public async Task RecordsTheCall_EvenWhenTheReaderAbandonsTheStream()
+    {
+        // A browser disconnecting mid-answer must still produce a row - that is a real cost the
+        // administrator needs to see, and it is the case most likely to be expensive.
+        //
+        // Sent via SendAsync(ResponseHeadersRead), like its DoesNotRecordAtSendAsync_ButAfterTheStreamIsRead
+        // sibling above and for the same reason: PostAsync's own ResponseContentRead default makes
+        // HttpClient itself drain the ObservingStream to EOF before PostAsync returns. That would make the
+        // row already exist before this test's "abandonment" lines even run, AND - because
+        // HttpContent.ReadAsStreamAsync serves from the buffered copy once LoadIntoBufferAsync has run -
+        // the ReadAsync/DisposeAsync below would then operate on a plain buffered MemoryStream that never
+        // reaches the ObservingStream at all. Either way this test would pass without ever exercising the
+        // thing it claims to: that disposing the HttpResponseMessage reaches
+        // StreamContent.Dispose -> ObservingStream.Dispose -> a row, with no intervening EOF.
+        var sink = new FakeLlmUsageSink();
+        using var _ = LlmCallScope.Push(LlmCallKind.ChatMessage);
+        var http = Client(new LlmTelemetryHandler(new FakeLlmTrace(), sink), Sse(StreamBody));
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions") { Content = new StringContent("{}") };
+        var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
+        var stream = await resp.Content.ReadAsStreamAsync();
+#pragma warning disable CA2022 // A partial read is the point here - only enough to prove the row still
+                               // gets written when the reader never reaches the end of the stream.
+        await stream.ReadAsync(new byte[4]);
+#pragma warning restore CA2022
+        await stream.DisposeAsync();
+
+        Assert.Single(sink.Calls);
+    }
+
+    [Fact]
+    public async Task RecordsExactlyOneRow_PerStreamedCall()
+    {
+        var sink = new FakeLlmUsageSink();
+        using var _ = LlmCallScope.Push(LlmCallKind.ChatMessage);
+        var http = Client(new LlmTelemetryHandler(new FakeLlmTrace(), sink), Sse(StreamBody));
+
+        var resp = await http.PostAsync("/v1/chat/completions", new StringContent("{}"));
+        await resp.Content.ReadAsStringAsync();
+        resp.Dispose(); // read to the end AND disposed
+
+        Assert.Single(sink.Calls);
+    }
+
+    [Fact]
+    public async Task StoresNoContent_FromTheStream()
+    {
+        var sink = new FakeLlmUsageSink();
+        using var _ = LlmCallScope.Push(LlmCallKind.ChatMessage);
+        var body = "data: {\"choices\":[{\"delta\":{\"content\":\"the secret merger closes friday\"}}]}\n\n"
+                   + "data: {\"choices\":[],\"usage\":{\"total_tokens\":9}}\n\ndata: [DONE]\n\n";
+        var http = Client(new LlmTelemetryHandler(new FakeLlmTrace(), sink), Sse(body));
+
+        var resp = await http.PostAsync("/v1/chat/completions", new StringContent("{}"));
+        await resp.Content.ReadAsStringAsync();
+
+        var serialized = System.Text.Json.JsonSerializer.Serialize(Assert.Single(sink.Calls));
+        Assert.DoesNotContain("secret merger", serialized);
+    }
+
+    [Fact]
+    public async Task ANonStreamingResponse_StillRecordsImmediately()
+    {
+        // Guard against the deferral leaking onto the buffered path, which would silently stop recording
+        // summaries, tags, actions and embeddings.
+        var sink = new FakeLlmUsageSink();
+        using var _ = LlmCallScope.Push(LlmCallKind.Summarize);
+        var http = Client(new LlmTelemetryHandler(new FakeLlmTrace(), sink),
+            new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"usage":{"total_tokens":5}}""", Encoding.UTF8, "application/json"),
+            });
+
+        await http.PostAsync("/v1/chat/completions", new StringContent("{}"));
+
+        Assert.Single(sink.Calls);
+        Assert.False(Assert.Single(sink.Calls).Streamed);
+    }
+
+    /// <summary>Serves one legitimate chunk, then throws on every subsequent read - modelling a connection
+    /// that drops mid-answer (a 200 that started fine and then faulted), as distinct from a clean stream
+    /// that simply ends.</summary>
+    private sealed class FaultingAfterFirstChunkStream : Stream
+    {
+        private readonly byte[] _first;
+        private int _reads;
+        public FaultingAfterFirstChunkStream(string first) => _first = Encoding.UTF8.GetBytes(first);
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => 0; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
+        {
+            _reads++;
+            if (_reads == 1)
+            {
+                _first.CopyTo(buffer);
+                return ValueTask.FromResult(_first.Length);
+            }
+            throw new IOException("connection reset mid-stream");
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    [Fact]
+    public async Task RecordsFailure_WhenTheStreamFaultsMidAnswer()
+    {
+        // A 200 whose connection drops partway through must not read as a clean success - that is the same
+        // "permanently wrong admin-visible column" problem already fixed for Streamed in PR 1: a filter on
+        // Success/ErrorKind would silently lie about this call.
+        var sink = new FakeLlmUsageSink();
+        using var _ = LlmCallScope.Push(LlmCallKind.ChatMessage);
+        var faultingStream = new FaultingAfterFirstChunkStream(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n");
+        var content = new StreamContent(faultingStream)
+        {
+            Headers = { ContentType = new MediaTypeHeaderValue("text/event-stream") },
+        };
+        var http = Client(
+            new LlmTelemetryHandler(new FakeLlmTrace(), sink),
+            new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = content });
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions") { Content = new StringContent("{}") };
+        var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
+        // The caller's own read still fails - telemetry observing the fault must not hide it from the
+        // real consumer. What the exact surfaced exception type is isn't this handler's concern; only that
+        // the row it wrote reflects the failure.
+        await Record.ExceptionAsync(() => resp.Content.ReadAsStringAsync());
+
+        var call = Assert.Single(sink.Calls);
+        Assert.False(call.Success);
+        Assert.Equal("IOException", call.ErrorKind);
+    }
+
+    /// <summary>Serves one legitimate chunk, then throws <see cref="OperationCanceledException"/> on every
+    /// subsequent read - modelling what a closed browser tab or a Stop button actually does today: the
+    /// request's <c>CancellationToken</c> (bound to <c>HttpContext.RequestAborted</c>) is handed all the way
+    /// down to this read, and cancelling it mid-stream faults the read exactly like a dropped connection
+    /// does. There is no separate "reader politely walked away" signal at this layer - see
+    /// RecordsFailure_ButNotIndistinguishableFromATimeout_WhenTheReadIsCancelled below.</summary>
+    private sealed class CancelledAfterFirstChunkStream : Stream
+    {
+        private readonly byte[] _first;
+        private int _reads;
+        public CancelledAfterFirstChunkStream(string first) => _first = Encoding.UTF8.GetBytes(first);
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => 0; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
+        {
+            _reads++;
+            if (_reads == 1)
+            {
+                _first.CopyTo(buffer);
+                return ValueTask.FromResult(_first.Length);
+            }
+            throw new OperationCanceledException("caller cancelled - e.g. a closed tab or a Stop button");
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    [Fact]
+    public async Task RecordsFailure_ButNotIndistinguishableFromATimeout_WhenTheReadIsCancelled()
+    {
+        // Pins TODAY's behaviour so a future change to it is deliberate, not accidental. The most common
+        // real "abandonment" - a closed tab or a Stop button - cancels the in-flight read via the same
+        // CancellationToken a genuine inactivity timeout would fire on (ChatController.Stream's ct binds to
+        // HttpContext.RequestAborted and flows into the read). ObservingStream.ReadAsync's catch fires
+        // Complete(ex) for ANY exception, including OperationCanceledException, and ErrorKindOf maps it to
+        // "Timeout" - the same label a genuine per-call timeout gets. The two are not distinguishable at
+        // this layer (every client passes a linked CTS composite), and separating them is deliberately out
+        // of scope - see the PR 2 self-review. This is NOT the clean-dispose path
+        // (RecordsTheCall_EvenWhenTheReaderAbandonsTheStream above): that only covers a caller that stops
+        // reading and disposes with no fault, which is the normally-completed [DONE] case, not this one.
+        var sink = new FakeLlmUsageSink();
+        using var _ = LlmCallScope.Push(LlmCallKind.ChatMessage);
+        var cancelledStream = new CancelledAfterFirstChunkStream(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n");
+        var content = new StreamContent(cancelledStream)
+        {
+            Headers = { ContentType = new MediaTypeHeaderValue("text/event-stream") },
+        };
+        var http = Client(
+            new LlmTelemetryHandler(new FakeLlmTrace(), sink),
+            new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = content });
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions") { Content = new StringContent("{}") };
+        var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
+        await Record.ExceptionAsync(() => resp.Content.ReadAsStringAsync());
+
+        var call = Assert.Single(sink.Calls);
+        Assert.False(call.Success);
+        Assert.Equal("Timeout", call.ErrorKind);
+    }
+
+    [Fact]
+    public async Task RecordsSuccess_ForACleanStream_DespiteTheFaultHandling()
+    {
+        // Sibling to RecordsFailure_WhenTheStreamFaultsMidAnswer - guards against the fault-signalling
+        // change accidentally marking every streamed call as failed.
+        var sink = new FakeLlmUsageSink();
+        using var _ = LlmCallScope.Push(LlmCallKind.ChatMessage);
+        var http = Client(new LlmTelemetryHandler(new FakeLlmTrace(), sink), Sse(StreamBody));
+
+        var resp = await http.PostAsync("/v1/chat/completions", new StringContent("{}"));
+        await resp.Content.ReadAsStringAsync();
+
+        Assert.True(Assert.Single(sink.Calls).Success);
     }
 }

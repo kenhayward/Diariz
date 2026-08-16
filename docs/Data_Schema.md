@@ -105,7 +105,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddRecordingTagStatus` | `RecordingTags.Status` (int, NOT NULL, **default 0** = `Suggested`) + `RecordingTags.AdoptedAt` (timestamptz null) - tags become manual: the default demotes every existing tag to a suggestion, so the tag cloud and tag search start empty and rebuild only as users adopt tags. Also creates the Postgres-only unique index `IX_RecordingTags_RecordingId_TagLower` on `(RecordingId, lower("Tag"))`, first deleting legacy case-variant duplicates so the index can be created. Additive and forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) - an older backup's tags simply arrive as suggestions |
 | `AddUserLlmTimeout` | `UserSettings.LlmTimeoutSeconds` (int, nullable, no default = null) - a per-user override of the platform LLM timeout; null means inherit `PlatformSettings.LlmTimeoutSeconds`, which in turn falls back to the server option. Additive and nullable, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddLlmCalls` | `LlmCalls` (one row per outbound model call - kind, attribution, model/endpoint, timing, token counts, prompt size, success/error, streamed; `UserId`/`RecordingId`/`SectionId` FKs **`ON DELETE SET NULL`**, each paired with a denormalized snapshot column so a row stays readable after its subject is deleted; five indexes) - the LLM usage log's storage. Never stores prompt or completion content. New table, additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
-| `AddLlmUsageSettings` | `PlatformSettings.LlmUsageLoggingEnabled` (bool, default **true**) + `LlmUsageRetentionDays` (int, default 90; 0 = keep forever) + `LlmStreamUsageEnabled` (bool, default true, wired from a later release) - the three admin controls for the usage log, edited on Model Settings. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddLlmUsageSettings` | `PlatformSettings.LlmUsageLoggingEnabled` (bool, default **true**) + `LlmUsageRetentionDays` (int, default 90; 0 = keep forever) + `LlmStreamUsageEnabled` (bool, default true) - the three admin controls for the usage log, edited on Model Settings. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 
 ### Entity-relationship overview
 
@@ -788,7 +788,7 @@ Single seeded row (`Id = 1`), edited by the Platform Administrator.
 | `WebhooksEnabled` | bool | master switch for outbound webhooks / user Automations; default false = off (enforced starting with the Phase 2 webhooks core) |
 | `LlmUsageLoggingEnabled` | bool | master switch for the LLM usage log; default **true** (the log is the feature). Enforced by `LlmUsageWriter`, not the capture handler, so the LLM call path never pays for a settings lookup |
 | `LlmUsageRetentionDays` | int | usage log rows older than this many days are deleted by the nightly `LlmUsageRetentionWorker` sweep; default 90. `0` = keep forever |
-| `LlmStreamUsageEnabled` | bool | whether a streaming request asks the model for token counts via `stream_options.include_usage`; default true. A toggle rather than a constant so an endpoint that rejects the field is recoverable without a redeploy. Wired starting with a later release |
+| `LlmStreamUsageEnabled` | bool | whether a streaming request asks the model for token counts via `stream_options.include_usage`; default true. A toggle rather than a constant so an endpoint that rejects the field is recoverable without a redeploy |
 
 #### Identity tables (`AspNet*`)
 Standard ASP.NET Identity schema with **Guid** keys: `AspNetUsers`, `AspNetRoles`, `AspNetUserRoles`,
@@ -1080,7 +1080,7 @@ bulk delete on the (future) admin viewer, not a cascade off the subject's own de
 | `StartedAt` | timestamptz | |
 | `CompletedAt` | timestamptz | |
 | `DurationMs` | int | stored rather than derived from the two timestamps above, so ordering and `SUM` are trivial |
-| `TimeToFirstTokenMs` | int null | streaming calls only; always null until a later release wires it up |
+| `TimeToFirstTokenMs` | int null | populated for streamed calls (chat replies, formula runs) with the elapsed time from request to the first response byte; null for non-streaming calls, which have no meaningful first-token moment |
 | `PromptTokens` | int null | from the response's `usage` block; null (not 0) when the endpoint reports none |
 | `CompletionTokens` | int null | ditto |
 | `ReasoningTokens` | int null | from `usage.completion_tokens_details.reasoning_tokens`, reported by reasoning models; almost always null |

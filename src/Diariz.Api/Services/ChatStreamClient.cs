@@ -107,6 +107,10 @@ public class ChatStreamClient : IChatStreamClient
         if (tools is { Count: > 0 }) { body["tools"] = tools; body["tool_choice"] = "auto"; }
         if (config.ReasoningEffort is not null) body["reasoning_effort"] = config.ReasoningEffort;
 
+        // Ask the server to append a final usage chunk after the content. Omitted entirely when off, so an
+        // endpoint that rejects the unknown field can be recovered with a settings change, not a redeploy.
+        if (config.IncludeStreamUsage) body["stream_options"] = new Dictionary<string, object?> { ["include_usage"] = true };
+
         var resp = await SendRawAsync(config, body, ct);
         using (resp)
         {
@@ -152,6 +156,11 @@ public class ChatStreamClient : IChatStreamClient
             ["messages"] = messages.Select(m => new { role = m.Role, content = m.Content }).ToArray(),
         };
         if (config.ReasoningEffort is not null) body["reasoning_effort"] = config.ReasoningEffort;
+
+        // Ask the server to append a final usage chunk after the content. Omitted entirely when off, so an
+        // endpoint that rejects the unknown field can be recovered with a settings change, not a redeploy.
+        if (config.IncludeStreamUsage) body["stream_options"] = new Dictionary<string, object?> { ["include_usage"] = true };
+
         return await SendRawAsync(config, body, ct);
     }
 

@@ -21,6 +21,12 @@ public record SummarizationRequestConfig(string ApiBase, string ApiKey, string M
     /// record because this record already reaches every client, prompt builder and worker. The default keeps
     /// hand-constructed configs (tests, fakes) at the floor rather than at zero.</summary>
     public int ContextCharBudget { get; init; } = LlmContextBudget.MinimumChars;
+
+    /// <summary>Whether streamed requests ask the server for token counts via
+    /// <c>stream_options.include_usage</c>. A toggle rather than a constant because an OpenAI-compatible
+    /// endpoint that rejects the unknown field must be recoverable without a redeploy. Defaults true so a
+    /// hand-built config (tests, fakes) still asks for usage.</summary>
+    public bool IncludeStreamUsage { get; init; } = true;
 }
 
 public interface ISummarizationSettingsResolver
@@ -73,6 +79,7 @@ public class SummarizationSettingsResolver : ISummarizationSettingsResolver
             // truncation finally agree.
             ContextCharBudget = LlmContextBudget.CharsFor(
                 s?.ChatContextWindow is > 0 ? s.ChatContextWindow.Value : _chat.ContextLength),
+            IncludeStreamUsage = ps?.LlmStreamUsageEnabled ?? true,
         };
     }
 
