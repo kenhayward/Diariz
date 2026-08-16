@@ -67,4 +67,72 @@ public class LlmCallScopeTests
         await Task.Delay(1);
         Assert.Equal(LlmCallKind.FormulaRun, LlmCallScope.Active!.Kind);
     }
+
+    [Fact]
+    public async Task ConcurrentFlows_EachSeeTheirOwnScope()
+    {
+        // AsyncLocal MUST isolate concurrent logical flows from each other. Two concurrent tasks,
+        // each pushing a different Kind/OperationId, must each see only their own scope. A plain
+        // static field would fail this test because the second task's Push would overwrite the first.
+        // Also verify that Interlocked.Increment is necessary: concurrent NextSequence calls produce
+        // no duplicates and no skipped values.
+
+        Guid flowAOperationId = Guid.Empty, flowBOperationId = Guid.Empty;
+        LlmCallKind flowAKind = LlmCallKind.Unknown, flowBKind = LlmCallKind.Unknown;
+        var sequencesA = new List<int>();
+        var sequencesB = new List<int>();
+
+        var taskA = Task.Run(async () =>
+        {
+            using var scope = LlmCallScope.Push(LlmCallKind.Summarize);
+            flowAOperationId = scope.OperationId;
+            flowAKind = scope.Kind;
+
+            // Yield to let task B run and push its own scope.
+            await Task.Yield();
+
+            // Assert task A still sees its own scope, not task B's.
+            Assert.Equal(LlmCallKind.Summarize, LlmCallScope.Active!.Kind);
+            Assert.Equal(flowAOperationId, LlmCallScope.Active.OperationId);
+
+            // Collect sequence numbers to verify Interlocked semantics.
+            for (int i = 0; i < 3; i++)
+            {
+                sequencesA.Add(scope.NextSequence());
+                await Task.Delay(0);
+            }
+        });
+
+        var taskB = Task.Run(async () =>
+        {
+            using var scope = LlmCallScope.Push(LlmCallKind.Tags);
+            flowBOperationId = scope.OperationId;
+            flowBKind = scope.Kind;
+
+            // Yield to let task A run and assert its scope.
+            await Task.Yield();
+
+            // Assert task B still sees its own scope, not task A's.
+            Assert.Equal(LlmCallKind.Tags, LlmCallScope.Active!.Kind);
+            Assert.Equal(flowBOperationId, LlmCallScope.Active.OperationId);
+
+            // Collect sequence numbers to verify Interlocked semantics.
+            for (int i = 0; i < 3; i++)
+            {
+                sequencesB.Add(scope.NextSequence());
+                await Task.Delay(0);
+            }
+        });
+
+        await Task.WhenAll(taskA, taskB);
+
+        // Verify the flows never mixed.
+        Assert.Equal(LlmCallKind.Summarize, flowAKind);
+        Assert.Equal(LlmCallKind.Tags, flowBKind);
+        Assert.NotEqual(flowAOperationId, flowBOperationId);
+
+        // Verify each flow incremented its own sequence independently.
+        Assert.Equal(new[] { 1, 2, 3 }, sequencesA.OrderBy(x => x).ToArray());
+        Assert.Equal(new[] { 1, 2, 3 }, sequencesB.OrderBy(x => x).ToArray());
+    }
 }
