@@ -270,6 +270,67 @@ public class FormulaRunProcessorTests
     }
 
     [Fact]
+    public async Task Recording_run_attributes_the_call_to_the_recording_and_its_owner()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecordingWithTranscript(db, userId);
+        var (formula, result) = await SeedFormulaAndResult(db, userId, rec.Id);
+
+        LlmCallKind? observedKind = null;
+        Guid? observedRecording = null;
+        Guid? observedUser = null;
+        var chat = new FakeChatStreamClient(onCall: () =>
+        {
+            observedKind = LlmCallScope.Active?.Kind;
+            observedRecording = LlmCallScope.Active?.RecordingId;
+            observedUser = LlmCallScope.Active?.UserId;
+        });
+
+        await Run(db, chat, new FakeSummarizationSettingsResolver(), new FakeHubContext(),
+            new FormulaRunJob(rec.Id, null, result.Id, formula.Id, userId));
+
+        Assert.Equal(LlmCallKind.FormulaRun, observedKind);
+        Assert.Equal(rec.Id, observedRecording);
+        Assert.Equal(userId, observedUser);
+    }
+
+    /// <summary>The section (folder) map-reduce path has no single recording to target - the brief's table only
+    /// covers the recording-scoped case. Since <see cref="LlmCallScope"/> already carries section fields for
+    /// exactly this purpose (see SectionSummaryProcessor/SectionMinutesProcessor), the folder run is attributed
+    /// to the SECTION instead of left as Kind=Unknown, which would otherwise mean every folder-scoped formula
+    /// run went unattributed.</summary>
+    [Fact]
+    public async Task Section_run_attributes_the_call_to_the_section_and_its_owner()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var roomId = Guid.NewGuid();
+        var section = SeedSection(db, userId, roomId);
+        await db.SaveChangesAsync();
+        await SeedRecordingInFolder(db, userId, roomId, section.Id, "Alpha", withContent: true,
+            createdAt: DateTimeOffset.UtcNow);
+        var (formula, result) = await SeedFormulaAndSectionResult(db, userId, section.Id);
+
+        LlmCallKind? observedKind = null;
+        Guid? observedSection = null;
+        Guid? observedUser = null;
+        var chat = new FakeChatStreamClient(onCall: () =>
+        {
+            observedKind = LlmCallScope.Active?.Kind;
+            observedSection = LlmCallScope.Active?.SectionId;
+            observedUser = LlmCallScope.Active?.UserId;
+        });
+
+        await Run(db, chat, new FakeSummarizationSettingsResolver(), new FakeHubContext(),
+            new FormulaRunJob(null, section.Id, result.Id, formula.Id, userId));
+
+        Assert.Equal(LlmCallKind.FormulaRun, observedKind);
+        Assert.Equal(section.Id, observedSection);
+        Assert.Equal(userId, observedUser);
+    }
+
+    [Fact]
     public async Task Chat_error_marks_failed_with_message_and_notifies()
     {
         using var db = TestDb.Create();

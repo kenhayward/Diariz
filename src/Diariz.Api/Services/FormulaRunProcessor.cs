@@ -37,6 +37,22 @@ public static class FormulaRunProcessor
             return;
         }
 
+        // Attribute every model call this job makes (the recording run's single prompt, or every map + the
+        // reduce call of a folder run). job.UserId/RecordingId/SectionId are already in hand from the job
+        // itself; only the display name needs a lookup, and only for whichever target this job actually has.
+        // A folder-scoped run (job.SectionId) has no single recording to target - the brief's table only
+        // covers the recording-scoped case, so this attributes it to the SECTION instead, using the fields
+        // LlmCallScope already carries for exactly that (see SectionSummaryProcessor/SectionMinutesProcessor).
+        string? targetName = job.RecordingId is { } targetRecordingId
+            ? await db.Recordings.Where(r => r.Id == targetRecordingId).Select(r => r.Name ?? r.Title).FirstOrDefaultAsync(ct)
+            : job.SectionId is { } targetSectionId
+                ? await db.Sections.Where(s => s.Id == targetSectionId).Select(s => s.Name).FirstOrDefaultAsync(ct)
+                : null;
+        using var llm = LlmCallScope.Push(
+            LlmCallKind.FormulaRun, job.UserId, await OwnerEmailAsync(db, job.UserId, ct),
+            recordingId: job.RecordingId, recordingTitle: job.RecordingId is not null ? targetName : null,
+            sectionId: job.SectionId, sectionName: job.SectionId is not null ? targetName : null);
+
         try
         {
             string text;
@@ -110,6 +126,9 @@ public static class FormulaRunProcessor
             await FailAsync(db, hub, job, ex.Message, webhooks, publicUrl, logger, ct);
         }
     }
+
+    private static Task<string?> OwnerEmailAsync(DiarizDbContext db, Guid userId, CancellationToken ct) =>
+        db.Users.Where(u => u.Id == userId).Select(u => u.Email).FirstOrDefaultAsync(ct);
 
     private static async Task FailAsync(
         DiarizDbContext db, IHubContext<TranscriptionHub> hub, FormulaRunJob job, string error,
