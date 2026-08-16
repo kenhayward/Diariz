@@ -59,6 +59,17 @@ public class LlmCall
     public bool Success { get; set; }
     public int? StatusCode { get; set; }
 
-    /// <summary>A class, never a message body: Timeout, Canceled, Transport, Http500.</summary>
+    /// <summary>A class, never a message body. Emitted values: <c>Timeout</c>, <c>Transport</c>
+    /// (<see cref="System.Net.Http.HttpRequestException"/>), <c>Http&lt;status&gt;</c> (e.g. <c>Http500</c>,
+    /// for a non-2xx response), or the raw exception type name as a fallback for anything else unmapped.
+    ///
+    /// <c>Timeout</c> covers BOTH a genuine per-call timeout and an ordinary caller-initiated cancellation
+    /// (e.g. a shutting-down BackgroundService) - NOT just the former, despite the name. Every LLM client
+    /// calls <c>CancellationTokenSource.CreateLinkedTokenSource(ct)</c> then <c>CancelAfter(timeout)</c> and
+    /// passes that single composite token to <c>SendAsync</c>, so by the time the cancellation reaches
+    /// <c>LlmTelemetryHandler</c>, its token reads <c>IsCancellationRequested = true</c> identically whether
+    /// the caller cancelled or only the timeout fired - the handler has no way to tell them apart. Recovering
+    /// the distinction would require checking the raw, un-linked token at the individual client, where both
+    /// it and the linked composite are still in scope.</summary>
     public string? ErrorKind { get; set; }
 }
