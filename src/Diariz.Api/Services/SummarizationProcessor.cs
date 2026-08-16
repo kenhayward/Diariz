@@ -26,6 +26,12 @@ public static class SummarizationProcessor
         var rec = await db.Recordings.FirstOrDefaultAsync(r => r.Id == job.RecordingId, ct);
         if (rec is null) return; // recording deleted before the job ran — nothing to do.
 
+        // Attribute every model call this job makes. Pushed once here rather than at the client, so the
+        // handler deep inside HttpClient can record who asked and why.
+        using var llm = LlmCallScope.Push(
+            LlmCallKind.Summarize, rec.UserId, await OwnerEmailAsync(db, rec.UserId, ct),
+            rec.Id, rec.Name ?? rec.Title);
+
         try
         {
             var transcription = await db.Transcriptions
@@ -97,6 +103,9 @@ public static class SummarizationProcessor
             await hub.NotifyStatusAsync(rec.UserId, rec.Id, RecordingStatus.Failed.ToString());
         }
     }
+
+    private static Task<string?> OwnerEmailAsync(DiarizDbContext db, Guid userId, CancellationToken ct) =>
+        db.Users.Where(u => u.Id == userId).Select(u => u.Email).FirstOrDefaultAsync(ct);
 
     /// <summary>Emits <c>recording.summarized</c>, carrying the summary text so a subscriber can act on it
     /// without a second call. Both success paths emit: a preserved hand-edited summary still means the

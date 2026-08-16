@@ -120,6 +120,32 @@ public class SummarizationProcessorTests
     }
 
     [Fact]
+    public async Task ProcessAsync_AttributesTheCall_ToTheRecordingAndItsOwner()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, tr) = await Seed(db, userId, name: "Attributed Recording");
+
+        LlmCallKind? observedKind = null;
+        Guid? observedRecording = null;
+        Guid? observedUser = null;
+        var client = new FakeSummarizationClient(onCall: () =>
+        {
+            observedKind = LlmCallScope.Active?.Kind;
+            observedRecording = LlmCallScope.Active?.RecordingId;
+            observedUser = LlmCallScope.Active?.UserId;
+        });
+
+        await SummarizationProcessor.ProcessAsync(db, client, new FakeSummarizationSettingsResolver(),
+            new FakeHubContext(), Job(rec, tr), SummarizationPrompt.DefaultTemplate, NullLogger.Instance,
+            new CapturingWebhookPublisher(), "");
+
+        Assert.Equal(LlmCallKind.Summarize, observedKind);
+        Assert.Equal(rec.Id, observedRecording);
+        Assert.Equal(rec.UserId, observedUser);
+    }
+
+    [Fact]
     public async Task ProcessAsync_NoSegments_SetsFailed()
     {
         using var db = TestDb.Create();
