@@ -690,11 +690,22 @@ public class LlmTelemetryStreamingTests
     {
         // A browser disconnecting mid-answer must still produce a row - that is a real cost the
         // administrator needs to see, and it is the case most likely to be expensive.
+        //
+        // Sent via SendAsync(ResponseHeadersRead), like its DoesNotRecordAtSendAsync_ButAfterTheStreamIsRead
+        // sibling above and for the same reason: PostAsync's own ResponseContentRead default makes
+        // HttpClient itself drain the ObservingStream to EOF before PostAsync returns. That would make the
+        // row already exist before this test's "abandonment" lines even run, AND - because
+        // HttpContent.ReadAsStreamAsync serves from the buffered copy once LoadIntoBufferAsync has run -
+        // the ReadAsync/DisposeAsync below would then operate on a plain buffered MemoryStream that never
+        // reaches the ObservingStream at all. Either way this test would pass without ever exercising the
+        // thing it claims to: that disposing the HttpResponseMessage reaches
+        // StreamContent.Dispose -> ObservingStream.Dispose -> a row, with no intervening EOF.
         var sink = new FakeLlmUsageSink();
         using var _ = LlmCallScope.Push(LlmCallKind.ChatMessage);
         var http = Client(new LlmTelemetryHandler(new FakeLlmTrace(), sink), Sse(StreamBody));
 
-        var resp = await http.PostAsync("/v1/chat/completions", new StringContent("{}"));
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions") { Content = new StringContent("{}") };
+        var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
         var stream = await resp.Content.ReadAsStreamAsync();
 #pragma warning disable CA2022 // A partial read is the point here - only enough to prove the row still
                                // gets written when the reader never reaches the end of the stream.
@@ -752,5 +763,83 @@ public class LlmTelemetryStreamingTests
 
         Assert.Single(sink.Calls);
         Assert.False(Assert.Single(sink.Calls).Streamed);
+    }
+
+    /// <summary>Serves one legitimate chunk, then throws on every subsequent read - modelling a connection
+    /// that drops mid-answer (a 200 that started fine and then faulted), as distinct from a clean stream
+    /// that simply ends.</summary>
+    private sealed class FaultingAfterFirstChunkStream : Stream
+    {
+        private readonly byte[] _first;
+        private int _reads;
+        public FaultingAfterFirstChunkStream(string first) => _first = Encoding.UTF8.GetBytes(first);
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => 0; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
+        {
+            _reads++;
+            if (_reads == 1)
+            {
+                _first.CopyTo(buffer);
+                return ValueTask.FromResult(_first.Length);
+            }
+            throw new IOException("connection reset mid-stream");
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    [Fact]
+    public async Task RecordsFailure_WhenTheStreamFaultsMidAnswer()
+    {
+        // A 200 whose connection drops partway through must not read as a clean success - that is the same
+        // "permanently wrong admin-visible column" problem already fixed for Streamed in PR 1: a filter on
+        // Success/ErrorKind would silently lie about this call.
+        var sink = new FakeLlmUsageSink();
+        using var _ = LlmCallScope.Push(LlmCallKind.ChatMessage);
+        var faultingStream = new FaultingAfterFirstChunkStream(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n");
+        var content = new StreamContent(faultingStream)
+        {
+            Headers = { ContentType = new MediaTypeHeaderValue("text/event-stream") },
+        };
+        var http = Client(
+            new LlmTelemetryHandler(new FakeLlmTrace(), sink),
+            new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = content });
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions") { Content = new StringContent("{}") };
+        var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
+        // The caller's own read still fails - telemetry observing the fault must not hide it from the
+        // real consumer. What the exact surfaced exception type is isn't this handler's concern; only that
+        // the row it wrote reflects the failure.
+        await Record.ExceptionAsync(() => resp.Content.ReadAsStringAsync());
+
+        var call = Assert.Single(sink.Calls);
+        Assert.False(call.Success);
+        Assert.Equal("IOException", call.ErrorKind);
+    }
+
+    [Fact]
+    public async Task RecordsSuccess_ForACleanStream_DespiteTheFaultHandling()
+    {
+        // Sibling to RecordsFailure_WhenTheStreamFaultsMidAnswer - guards against the fault-signalling
+        // change accidentally marking every streamed call as failed.
+        var sink = new FakeLlmUsageSink();
+        using var _ = LlmCallScope.Push(LlmCallKind.ChatMessage);
+        var http = Client(new LlmTelemetryHandler(new FakeLlmTrace(), sink), Sse(StreamBody));
+
+        var resp = await http.PostAsync("/v1/chat/completions", new StringContent("{}"));
+        await resp.Content.ReadAsStringAsync();
+
+        Assert.True(Assert.Single(sink.Calls).Success);
     }
 }

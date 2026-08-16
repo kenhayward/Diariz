@@ -26,13 +26,17 @@ public sealed class ObservingStream : Stream
     private readonly Stream _inner;
     private readonly Action<ReadOnlyMemory<byte>> _onBytes;
     private readonly Action _onFirstByte;
-    private readonly Action _onCompleted;
+    private readonly Action<Exception?> _onCompleted;
 
     private int _completed;
     private bool _sawFirstByte;
 
+    /// <param name="onCompleted">Fired exactly once, however the stream ends. Receives the exception that
+    /// ended it when the inner stream faulted mid-read, or <c>null</c> for a clean end-of-stream or a
+    /// dispose/abandon with no fault - the caller stopping listening is not itself evidence the call
+    /// failed, so it must not be reported as one.</param>
     public ObservingStream(
-        Stream inner, Action<ReadOnlyMemory<byte>> onBytes, Action onFirstByte, Action onCompleted)
+        Stream inner, Action<ReadOnlyMemory<byte>> onBytes, Action onFirstByte, Action<Exception?> onCompleted)
     {
         _inner = inner;
         _onBytes = onBytes;
@@ -47,9 +51,9 @@ public sealed class ObservingStream : Stream
         {
             read = await _inner.ReadAsync(buffer, ct);
         }
-        catch
+        catch (Exception ex)
         {
-            Complete();
+            Complete(ex);
             throw; // the caller's failure is theirs; we only note that the stream ended
         }
 
@@ -64,9 +68,9 @@ public sealed class ObservingStream : Stream
         {
             read = _inner.Read(buffer, offset, count);
         }
-        catch
+        catch (Exception ex)
         {
-            Complete();
+            Complete(ex);
             throw;
         }
 
@@ -78,7 +82,7 @@ public sealed class ObservingStream : Stream
     {
         if (read <= 0)
         {
-            Complete();
+            Complete(null);
             return;
         }
 
@@ -96,11 +100,13 @@ public sealed class ObservingStream : Stream
 
     /// <summary>Fires the completion callback at most once, whichever of end-of-stream, dispose or a fault
     /// happens first. A reader that stops at <c>[DONE]</c> never reaches end-of-stream, so dispose has to
-    /// count - otherwise an abandoned turn would never be recorded at all.</summary>
-    private void Complete()
+    /// count - otherwise an abandoned turn would never be recorded at all. Whichever cause wins the race
+    /// decides the fault it reports - a fault that arrives after a dispose already completed the stream is
+    /// dropped, same as everything else here once <c>_completed</c> is set.</summary>
+    private void Complete(Exception? fault)
     {
         if (Interlocked.Exchange(ref _completed, 1) != 0) return;
-        Guard(_onCompleted);
+        Guard(() => _onCompleted(fault));
     }
 
     private static void Guard(Action action)
@@ -121,7 +127,10 @@ public sealed class ObservingStream : Stream
     // idempotent, so the redundant call from that shared path is harmless.
     protected override void Dispose(bool disposing)
     {
-        Complete();
+        // A dispose with no prior fault is a caller choosing to stop listening (a closed browser tab, a
+        // client that stops at [DONE]) - not evidence the call itself failed, so it completes with no fault
+        // just like end-of-stream does.
+        Complete(null);
         if (disposing) _inner.Dispose();
         base.Dispose(disposing);
     }

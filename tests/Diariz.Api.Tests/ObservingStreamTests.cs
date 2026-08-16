@@ -6,8 +6,8 @@ namespace Diariz.Api.Tests;
 public class ObservingStreamTests
 {
     private static ObservingStream Wrap(
-        Stream inner, List<byte> seen, Action? onFirst = null, Action? onDone = null) =>
-        new(inner, b => seen.AddRange(b.ToArray()), onFirst ?? (() => { }), onDone ?? (() => { }));
+        Stream inner, List<byte> seen, Action? onFirst = null, Action<Exception?>? onDone = null) =>
+        new(inner, b => seen.AddRange(b.ToArray()), onFirst ?? (() => { }), onDone ?? (_ => { }));
 
     [Fact]
     public async Task ForwardsEveryByte_Unchanged()
@@ -44,7 +44,7 @@ public class ObservingStreamTests
         var done = 0;
         var seen = new List<byte>();
         await using var s = Wrap(new MemoryStream([]), seen,
-            onFirst: () => firstByteCalls++, onDone: () => done++);
+            onFirst: () => firstByteCalls++, onDone: _ => done++);
 
         Assert.Equal(0, await s.ReadAsync(new byte[4]));
         Assert.Equal(0, firstByteCalls);
@@ -57,12 +57,28 @@ public class ObservingStreamTests
     {
         var done = 0;
         var seen = new List<byte>();
-        await using var s = Wrap(new MemoryStream(Encoding.UTF8.GetBytes("abc")), seen, onDone: () => done++);
+        await using var s = Wrap(new MemoryStream(Encoding.UTF8.GetBytes("abc")), seen, onDone: _ => done++);
 
         var buffer = new byte[8];
         while (await s.ReadAsync(buffer) > 0) { }
 
         Assert.Equal(1, done);
+    }
+
+    [Fact]
+    public async Task CompletesWithNoFault_ForACleanEndOfStream()
+    {
+        // A clean end-of-stream is not a failure - the completion callback must receive null, not some
+        // synthesised "everything is fine" exception, so a consumer can tell "succeeded" from "faulted"
+        // by a single null check.
+        Exception? faultSeen = new InvalidOperationException("sentinel - must be overwritten with null");
+        var seen = new List<byte>();
+        await using var s = Wrap(new MemoryStream(Encoding.UTF8.GetBytes("abc")), seen, onDone: ex => faultSeen = ex);
+
+        var buffer = new byte[8];
+        while (await s.ReadAsync(buffer) > 0) { }
+
+        Assert.Null(faultSeen);
     }
 
     [Fact]
@@ -72,7 +88,7 @@ public class ObservingStreamTests
         // Without this the record for an abandoned turn would never be written at all.
         var done = 0;
         var seen = new List<byte>();
-        var s = Wrap(new MemoryStream(Encoding.UTF8.GetBytes("abcdefghij")), seen, onDone: () => done++);
+        var s = Wrap(new MemoryStream(Encoding.UTF8.GetBytes("abcdefghij")), seen, onDone: _ => done++);
 
         // CA2022 (avoid inexact read) fires here: the byte count is deliberately unused - this test is
         // about abandoning the stream partway through, not about how many bytes that first read returned.
@@ -85,11 +101,29 @@ public class ObservingStreamTests
     }
 
     [Fact]
+    public async Task CompletesWithNoFault_WhenTheReaderAbandonsTheStream()
+    {
+        // The caller choosing to stop listening - closing a browser tab, stopping at [DONE] - is not
+        // itself evidence the underlying call failed. Only an actual read fault (see CompletesOnFault_...
+        // below) should report one; a plain abandon must complete with null, the same as a clean EOF.
+        Exception? faultSeen = new InvalidOperationException("sentinel - must be overwritten with null");
+        var seen = new List<byte>();
+        var s = Wrap(new MemoryStream(Encoding.UTF8.GetBytes("abcdefghij")), seen, onDone: ex => faultSeen = ex);
+
+#pragma warning disable CA2022
+        await s.ReadAsync(new byte[2]);
+#pragma warning restore CA2022
+        await s.DisposeAsync();
+
+        Assert.Null(faultSeen);
+    }
+
+    [Fact]
     public async Task CompletesExactlyOnce_EvenWhenReadToEndAndThenDisposed()
     {
         var done = 0;
         var seen = new List<byte>();
-        var s = Wrap(new MemoryStream(Encoding.UTF8.GetBytes("abc")), seen, onDone: () => done++);
+        var s = Wrap(new MemoryStream(Encoding.UTF8.GetBytes("abc")), seen, onDone: _ => done++);
 
         var buffer = new byte[8];
         while (await s.ReadAsync(buffer) > 0) { }
@@ -101,16 +135,21 @@ public class ObservingStreamTests
     [Fact]
     public async Task CompletesOnFault_AndStillLetsTheExceptionThrough()
     {
+        // A stream that faults mid-read (a dropped connection) must report the fault to the completion
+        // callback, not just "something ended it" - a consumer needs to tell this apart from a clean end or
+        // an abandon (see the two CompletesWithNoFault_... tests above) to attribute the call correctly.
         var done = 0;
+        Exception? faultSeen = null;
         var seen = new List<byte>();
-        await using var s = Wrap(new ThrowingStream(), seen, onDone: () => done++);
+        await using var s = Wrap(new ThrowingStream(), seen, onDone: ex => { done++; faultSeen = ex; });
 
         // CA2022 fires here too: the point of the test is the thrown IOException, not the (never-returned)
         // byte count.
 #pragma warning disable CA2022
-        await Assert.ThrowsAsync<IOException>(async () => await s.ReadAsync(new byte[4]));
+        var thrown = await Assert.ThrowsAsync<IOException>(async () => await s.ReadAsync(new byte[4]));
 #pragma warning restore CA2022
         Assert.Equal(1, done);
+        Assert.Same(thrown, faultSeen);
     }
 
     [Fact]
@@ -121,7 +160,7 @@ public class ObservingStreamTests
         await using var s = new ObservingStream(
             new MemoryStream(payload), _ => throw new InvalidOperationException("observer blew up"),
             () => throw new InvalidOperationException("first-byte blew up"),
-            () => throw new InvalidOperationException("completion blew up"));
+            _ => throw new InvalidOperationException("completion blew up"));
 
         using var output = new MemoryStream();
         var ex = await Record.ExceptionAsync(() => s.CopyToAsync(output));
@@ -143,7 +182,7 @@ public class ObservingStreamTests
         await using var s = new ObservingStream(
             new MemoryStream(payload), b => seen.AddRange(b.ToArray()),
             () => throw new InvalidOperationException("first-byte blew up"),
-            () => { });
+            _ => { });
 
         using var output = new MemoryStream();
         await s.CopyToAsync(output);
@@ -183,7 +222,7 @@ public class ObservingStreamTests
             inner,
             b => events.Add($"onBytes:{Encoding.UTF8.GetString(b.Span)}"),
             () => { },
-            () => { });
+            _ => { });
 
         var buffer = new byte[16];
         while (await s.ReadAsync(buffer) > 0) { }

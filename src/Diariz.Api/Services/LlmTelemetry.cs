@@ -187,6 +187,11 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
             // and can never see the usage chunk, which arrives after every content delta. So the record is
             // deferred to whenever the body actually finishes: end-of-stream, disposal, or a fault,
             // whichever the caller (or a dropped connection) triggers first. The clock keeps running.
+            //
+            // The original content is dropped here with no explicit Dispose: WrapForDeferredRecordingAsync
+            // already took ownership of its stream via ObservingStream (which disposes it on its own
+            // Dispose/DisposeAsync), so disposing the old HttpContent too would dispose that same
+            // underlying stream a second time.
             response.Content = await WrapForDeferredRecordingAsync(
                 response, scope, target, model, startedAt, clock, promptChars, ct);
             return response;
@@ -219,26 +224,47 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
     /// <see cref="ObservingStream"/> that watches, byte-for-byte, whatever the real caller
     /// (<c>ChatStreamClient</c> et al.) chooses to read. <c>DoesNotBufferAStreamingResponse</c> exists
     /// specifically to catch a regression that reads ahead here.</summary>
-    private async Task<StreamContent> WrapForDeferredRecordingAsync(
+    private async Task<HttpContent> WrapForDeferredRecordingAsync(
         HttpResponseMessage response, LlmCallScope? scope, string target, string model,
         DateTimeOffset startedAt, System.Diagnostics.Stopwatch clock, int? promptChars, CancellationToken ct)
     {
         var scanner = new SseUsageScanner();
         var status = (int)response.StatusCode;
+        // The HTTP-level verdict, known before any byte flows. A later fault (see onCompleted below)
+        // overrides this with a more specific classification; absent one, this is what stands.
         var errorKind = response.IsSuccessStatusCode ? null : $"Http{status}";
         TimeSpan? timeToFirstToken = null;
 
-        var inner = await response.Content.ReadAsStreamAsync(ct);
+        Stream inner;
+        try
+        {
+            inner = await response.Content.ReadAsStreamAsync(ct);
+        }
+        catch (Exception)
+        {
+            // Symmetric with every other read in this file: a failure to even obtain the stream must not
+            // cost the caller its response. Falls back to the original, unwrapped content - unmeasured
+            // (no row for this call) rather than broken.
+            return response.Content;
+        }
+
         var observed = new ObservingStream(
             inner,
             onBytes: chunk => scanner.Feed(chunk.Span),
             onFirstByte: () => timeToFirstToken ??= clock.Elapsed,
-            onCompleted: () =>
+            onCompleted: fault =>
             {
                 clock.Stop();
+                // A fault mid-stream (the connection dropping, a read throwing) is a real failure of the
+                // call, indistinguishable from success at the HTTP-status level alone: the response had
+                // already started with a 200 by the time anything could go wrong. Reuses ErrorKindOf's
+                // existing classification rather than inventing a new label for it. No fault at all - a
+                // clean end-of-stream, or the caller simply disposing - keeps the HTTP-derived verdict from
+                // above (success, for the streamed responses that ever reach this callback).
+                var finalErrorKind = fault is not null ? ErrorKindOf(fault) : errorKind;
                 Record(
                     scope, target, model, startedAt, clock, promptChars, status, scanner.Usage ?? default,
-                    errorKind, streamed: true, timeToFirstTokenMs: (int?)timeToFirstToken?.TotalMilliseconds);
+                    finalErrorKind, streamed: true, timeToFirstTokenMs: (int?)timeToFirstToken?.TotalMilliseconds);
             });
 
         var content = new StreamContent(observed);
