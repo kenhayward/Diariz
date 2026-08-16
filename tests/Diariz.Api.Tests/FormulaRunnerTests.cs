@@ -292,6 +292,52 @@ public class FormulaRunnerTests
     }
 
     [Fact]
+    // The synchronous run path (chat's run_formula tool, and - with no enclosing scope at all - the MCP
+    // run_formula tool) must attribute its own LLM call rather than inheriting whatever happens to be
+    // ambient. Asserted from INSIDE the fake chat client's onCall, at the moment the call is actually made -
+    // LlmCallScope.Active read after RunAsync returns would prove nothing, since Dispose has already run.
+    public async Task RunAsync_AttributesTheCallToTheRecordingAndItsOwner()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, _) = await SeedRecordingWithTranscript(db, userId);
+        db.Users.Add(new ApplicationUser
+        {
+            Id = userId, UserName = "owner@example.com", Email = "owner@example.com",
+        });
+        await db.SaveChangesAsync();
+
+        var formula = new Formula
+        {
+            Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = userId,
+            Name = "F", ContentJson = TemplateContent.FromPrompt("P").Serialize(),
+            Context = FormulaContext.Transcript, Enabled = true,
+        };
+        db.Formulas.Add(formula);
+        await db.SaveChangesAsync();
+
+        LlmCallKind? observedKind = null;
+        Guid? observedUser = null;
+        Guid? observedRecording = null;
+        string? observedEmail = null;
+        var chat = new FakeChatStreamClient(onCall: () =>
+        {
+            observedKind = LlmCallScope.Active?.Kind;
+            observedUser = LlmCallScope.Active?.UserId;
+            observedRecording = LlmCallScope.Active?.RecordingId;
+            observedEmail = LlmCallScope.Active?.UserEmail;
+        });
+        var runner = MakeRunner(db, chat, new FakeSummarizationSettingsResolver());
+
+        await runner.RunAsync(userId, rec.Id, formula.Id);
+
+        Assert.Equal(LlmCallKind.FormulaRun, observedKind);
+        Assert.Equal(userId, observedUser);
+        Assert.Equal(rec.Id, observedRecording);
+        Assert.Equal("owner@example.com", observedEmail);
+    }
+
+    [Fact]
     public async Task RunAsync_NotConfigured_ThrowsFormulaNotConfiguredException()
     {
         using var db = TestDb.Create();
