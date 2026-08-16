@@ -4,7 +4,13 @@ using Diariz.Domain.Entities;
 namespace Diariz.Api.Services;
 
 /// <summary>Where a finished LLM call goes. An interface so the handler can be unit-tested without a
-/// database - see FakeLlmUsageSink.</summary>
+/// database - see FakeLlmUsageSink.
+///
+/// INVARIANT: <see cref="Record"/> MUST NOT throw. It is called from <c>LlmTelemetryHandler</c> on both
+/// the success and the transport-failure path of every outbound LLM call, and the handler's entire design
+/// is that a telemetry operation can never break the call it measures. The handler guards the call with a
+/// try/catch as a last line of defence, but an implementation that can throw defeats the intent of that
+/// guard existing at all - handle your own failures (log, drop, whatever) rather than propagating them.</summary>
 public interface ILlmUsageSink
 {
     void Record(LlmCall call);

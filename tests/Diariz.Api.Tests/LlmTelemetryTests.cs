@@ -396,6 +396,38 @@ public class LlmTelemetryHandlerUsageTests
         Assert.Equal("Http500", call.ErrorKind);
     }
 
+    /// <summary>Throws before any response is ever produced - models a connection refused / DNS failure /
+    /// TLS handshake failure, i.e. <see cref="HttpRequestException"/> reaching the handler from
+    /// <c>base.SendAsync</c> itself rather than from a completed (if unsuccessful) response.</summary>
+    private sealed class ThrowingHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            throw new HttpRequestException("connection refused");
+    }
+
+    [Fact]
+    public async Task RecordsATransportFailure_AndStillLetsTheExceptionThrough()
+    {
+        // The try/catch around base.SendAsync is the most novel code this handler adds, and it is easy to
+        // get subtly wrong: forget the Record call inside the catch, double-record on top of some other
+        // path, or swallow the exception instead of rethrowing it. Every one of those regressions would
+        // pass a suite that only ever exercises successful/HTTP-error responses - this is the one that
+        // actually exercises base.SendAsync throwing.
+        var sink = new FakeLlmUsageSink();
+        using var _ = LlmCallScope.Push(LlmCallKind.Tags);
+        var handler = new LlmTelemetryHandler(new FakeLlmTrace(), sink) { InnerHandler = new ThrowingHandler() };
+        var http = new HttpClient(handler) { BaseAddress = new Uri("http://lmstudio:1234/") };
+
+        await Assert.ThrowsAsync<HttpRequestException>(
+            () => http.PostAsync("/v1/chat/completions", new StringContent("{}")));
+
+        // Exactly one - not zero (the catch dropped it), not two (recorded twice on some double path).
+        var call = Assert.Single(sink.Calls);
+        Assert.False(call.Success);
+        Assert.Equal("Transport", call.ErrorKind);
+        Assert.Null(call.StatusCode);
+    }
+
     [Fact]
     public async Task StoresNoPromptOrCompletionContent()
     {

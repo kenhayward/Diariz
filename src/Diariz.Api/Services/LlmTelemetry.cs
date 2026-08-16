@@ -230,7 +230,7 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
         System.Diagnostics.Stopwatch clock, int? promptChars, int? statusCode, LlmUsage usage,
         string? errorKind)
     {
-        _sink.Record(new LlmCall
+        var call = new LlmCall
         {
             Id = Guid.NewGuid(),
             OperationId = scope?.OperationId ?? Guid.NewGuid(),
@@ -256,7 +256,21 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
             Success = errorKind is null,
             StatusCode = statusCode,
             ErrorKind = errorKind,
-        });
+        };
+
+        try
+        {
+            _sink.Record(call);
+        }
+        catch (Exception)
+        {
+            // Symmetric with every read above: a telemetry operation must never break the call it
+            // measures. This is called from both the success path (after a good response was already
+            // obtained) and the catch block around base.SendAsync (where a throwing sink would replace
+            // the real transport exception before `throw;` runs) - either way, a broken sink must not
+            // become the caller's problem. ILlmUsageSink.Record documents the "must not throw" contract;
+            // this is the last line of defence in case an implementation ever violates it.
+        }
     }
 
     private static bool IsJson(HttpResponseMessage response) =>
