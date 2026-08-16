@@ -252,6 +252,205 @@ public class LlmUsageViewerIntegrationTests(ContainersFixture fx)
         Assert.Equal(5, result.Totals.Calls);
     }
 
+    [Fact]
+    public async Task OperationsMode_Total_CoversTheWholeFilter_NotJustTheReturnedPage()
+    {
+        // Mirrors the calls-mode test above, but in operations mode - the DEFAULT the user sees first.
+        // OperationsMode_CollapsesToOneRow_ButCallsMode_ReturnsEveryCall alone cannot catch a "total
+        // derived from the page" bug here: it seeds a single operation, so Total == 1 would pass
+        // identically whether or not Total was computed correctly. Five separate operations with a
+        // pageSize smaller than the operation count is what actually exercises this.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        db.LlmCalls.AddRange(
+            Row(marker, operationId: Guid.NewGuid()),
+            Row(marker, operationId: Guid.NewGuid()),
+            Row(marker, operationId: Guid.NewGuid()),
+            Row(marker, operationId: Guid.NewGuid()),
+            Row(marker, operationId: Guid.NewGuid()));
+        await db.SaveChangesAsync();
+
+        var result = OkValue<LlmUsagePage<LlmUsageOperationRow>>(
+            await Build(db).List(mode: "operations", models: [marker.ToString()], pageSize: 2));
+
+        Assert.Equal(2, result.Rows.Count);
+        Assert.Equal(5, result.Total);
+    }
+
+    [Fact]
+    public async Task OperationsMode_SplitsIntoSeparateRows_WhenModelDiffersWithinOneOperationId()
+    {
+        // LlmCallScope (the "ambient scope" the OperationKey doc comment describes) has NO Model
+        // property - Model is parsed per call, out of that specific call's own request body, entirely
+        // independent of the scope. So two calls sharing an OperationId CAN carry different Model
+        // values; nothing enforces otherwise, it just happens to be true for every current call site.
+        // That means COUNT(DISTINCT OperationId) - which is all totals.Operations computes - is only a
+        // LOWER BOUND on the number of operation rows this grouping actually produces: it would report
+        // 1 here, but grouping by the real composite key (which includes Model) produces 2 rows for
+        // this one OperationId. This is the scenario the exact grouped-count fix exists for.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var operationId = Guid.NewGuid();
+        var modelA = $"{marker}-a";
+        var modelB = $"{marker}-b";
+        db.LlmCalls.AddRange(
+            Row(marker, operationId: operationId, sequence: 1, model: modelA),
+            Row(marker, operationId: operationId, sequence: 2, model: modelB));
+        await db.SaveChangesAsync();
+
+        var result = OkValue<LlmUsagePage<LlmUsageOperationRow>>(
+            await Build(db).List(mode: "operations", models: [modelA, modelB]));
+
+        Assert.Equal(2, result.Rows.Count);
+        Assert.Equal(2, result.Total);
+        // The old (wrong) behaviour is captured here too: totals.Operations alone would say 1 - it
+        // still means "distinct OperationIds", which is a real and correct number, just not the same
+        // number as "how many operation rows come back". That's exactly why Total is no longer read
+        // off it for operations mode.
+        Assert.Equal(1, result.Totals.Operations);
+    }
+
+    // ---- Every whitelisted sort key, against real Postgres, in both modes (finding 3) ----
+    //
+    // Three rows/operations are seeded with every sortable dimension increasing together with the same
+    // index i in [0, 1, 2] - StartedAt, DurationMs (calls mode) / the CompletedAt-StartedAt span
+    // (operations mode), PromptTokens, CompletionTokens, TotalTokens, Kind, Model and UserEmail are all
+    // ascending in lockstep - so sorting ascending by ANY whitelisted column must return them in the
+    // same [0, 1, 2] order, and descending must reverse it. Each row is its own OperationId (one call
+    // per operation), so the same seed exercises both modes: in operations mode every group has exactly
+    // one member, so an aggregate (MIN/MAX/SUM) equals that single row's own value.
+    private static LlmCall[] BuildOrderableTriple(Guid marker, out string[] models)
+    {
+        var baseTime = DateTimeOffset.UtcNow.AddMinutes(-30);
+        var modelValues = Enumerable.Range(0, 3).Select(i => $"{marker}-{i}").ToArray();
+        models = modelValues;
+        var rows = Enumerable.Range(0, 3).Select(i => new LlmCall
+        {
+            Id = Guid.NewGuid(),
+            OperationId = Guid.NewGuid(),
+            Sequence = 1,
+            Kind = (LlmCallKind)i, // Unknown(0) < Summarize(1) < SectionSummary(2)
+            UserEmail = $"{marker}-u{i}@x.test", // lexically ascending: single-digit i
+            Model = modelValues[i], // lexically ascending: single-digit i
+            Endpoint = "http://x/v1",
+            StartedAt = baseTime.AddSeconds(i),
+            CompletedAt = baseTime.AddSeconds(i).AddMilliseconds((i + 1) * 100), // ascending span
+            DurationMs = (i + 1) * 1000,
+            PromptTokens = (i + 1) * 10,
+            CompletionTokens = (i + 1) * 20,
+            TotalTokens = (i + 1) * 30,
+            Success = true,
+        }).ToArray();
+        return rows;
+    }
+
+    public static IEnumerable<object[]> AllWhitelistedSortKeys() =>
+        new[] { "startedAt", "durationMs", "promptTokens", "completionTokens", "totalTokens", "kind", "model", "userEmail" }
+            .Select(k => new object[] { k });
+
+    [Theory]
+    [MemberData(nameof(AllWhitelistedSortKeys))]
+    public async Task EveryWhitelistedSortKey_OrdersCallsMode_AscendingAndDescending(string sortKey)
+    {
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var rows = BuildOrderableTriple(marker, out var models);
+        db.LlmCalls.AddRange(rows);
+        await db.SaveChangesAsync();
+        var expectedAscending = rows.Select(r => r.Id).ToArray();
+
+        var asc = OkValue<LlmUsagePage<LlmUsageCallRow>>(
+            await Build(db).List(mode: "calls", models: models, sort: sortKey, desc: false));
+        Assert.Equal(expectedAscending, asc.Rows.Select(r => r.Id).ToArray());
+
+        var desc = OkValue<LlmUsagePage<LlmUsageCallRow>>(
+            await Build(db).List(mode: "calls", models: models, sort: sortKey, desc: true));
+        Assert.Equal(expectedAscending.Reverse(), desc.Rows.Select(r => r.Id).ToArray());
+    }
+
+    [Theory]
+    [MemberData(nameof(AllWhitelistedSortKeys))]
+    public async Task EveryWhitelistedSortKey_OrdersOperationsMode_AscendingAndDescending(string sortKey)
+    {
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var rows = BuildOrderableTriple(marker, out var models);
+        db.LlmCalls.AddRange(rows);
+        await db.SaveChangesAsync();
+        var expectedAscending = rows.Select(r => r.OperationId).ToArray();
+
+        var asc = OkValue<LlmUsagePage<LlmUsageOperationRow>>(
+            await Build(db).List(mode: "operations", models: models, sort: sortKey, desc: false));
+        Assert.Equal(expectedAscending, asc.Rows.Select(r => r.OperationId).ToArray());
+
+        var desc = OkValue<LlmUsagePage<LlmUsageOperationRow>>(
+            await Build(db).List(mode: "operations", models: models, sort: sortKey, desc: true));
+        Assert.Equal(expectedAscending.Reverse(), desc.Rows.Select(r => r.OperationId).ToArray());
+    }
+
+    // ---- Deterministic tiebreak so paging can't lose or duplicate rows (finding 4) ----
+
+    [Fact]
+    public async Task Paging_ThroughTiedSortValues_CoversEveryRowExactlyOnce_ViaCallsMode()
+    {
+        // Every row shares the same StartedAt (the default sort column) - the exact scenario
+        // LlmCallScope's own doc warns can happen under concurrent fan-out. Without a deterministic
+        // final tiebreaker, Postgres does not guarantee ties come back in the same relative order
+        // across two separately executed, separately paginated queries, so a row could be skipped
+        // between page 1 and page 2, or returned on both.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var tiedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
+        var seeded = Enumerable.Range(0, 9)
+            .Select(_ => new LlmCall
+            {
+                Id = Guid.NewGuid(),
+                OperationId = Guid.NewGuid(),
+                Sequence = 1,
+                Kind = LlmCallKind.Tags,
+                Model = marker.ToString(),
+                Endpoint = "http://x/v1",
+                StartedAt = tiedAt,
+                CompletedAt = tiedAt,
+                DurationMs = 1000,
+                Success = true,
+            })
+            .ToArray();
+        db.LlmCalls.AddRange(seeded);
+        await db.SaveChangesAsync();
+        var expectedIds = seeded.Select(r => r.Id).ToHashSet();
+
+        var collected = new HashSet<Guid>();
+        for (var page = 1; page <= 3; page++)
+        {
+            // A fresh DbContext per page - the same as two separate HTTP requests hitting the endpoint
+            // at different times, which is the real scenario this tiebreaker protects.
+            await using var pageDb = fx.CreateDbContext();
+            var result = OkValue<LlmUsagePage<LlmUsageCallRow>>(
+                await Build(pageDb).List(mode: "calls", models: [marker.ToString()], pageSize: 3, page: page));
+            foreach (var row in result.Rows)
+                Assert.True(collected.Add(row.Id), $"Row {row.Id} was returned on more than one page.");
+
+            // Perturb the physical storage of the rows NOT yet fetched, between page requests - an
+            // UPDATE always writes a new tuple version in Postgres, which can change a row's position in
+            // a plain sequential scan. This simulates the real scenario the tiebreaker protects against
+            // (data changing between one page request and the next) rather than relying on incidental
+            // physical stability of an untouched table, which a small, single-session integration test
+            // would otherwise not disturb at all.
+            if (page < 3)
+            {
+                await using var writeDb = fx.CreateDbContext();
+                var notYetFetched = await writeDb.LlmCalls
+                    .Where(c => c.Model == marker.ToString() && !collected.Contains(c.Id))
+                    .ToListAsync();
+                foreach (var row in notYetFetched) row.Endpoint = $"http://x/v1?touched={page}";
+                await writeDb.SaveChangesAsync();
+            }
+        }
+
+        Assert.Equal(expectedIds, collected);
+    }
+
     private static LlmCall Row(
         Guid marker,
         int durationMs = 1000,
@@ -260,13 +459,14 @@ public class LlmUsageViewerIntegrationTests(ContainersFixture fx)
         int? totalTokens = null,
         Guid? operationId = null,
         int sequence = 1,
-        bool success = true) => new()
+        bool success = true,
+        string? model = null) => new()
     {
         Id = Guid.NewGuid(),
         OperationId = operationId ?? marker,
         Sequence = sequence,
         Kind = LlmCallKind.Tags,
-        Model = marker.ToString(),
+        Model = model ?? marker.ToString(),
         Endpoint = "http://x/v1",
         StartedAt = DateTimeOffset.UtcNow,
         CompletedAt = DateTimeOffset.UtcNow,
