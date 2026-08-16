@@ -179,6 +179,32 @@ public class SectionMinutesProcessorTests
     }
 
     [Fact]
+    public async Task ProcessAsync_AttributesTheCall_ToTheSectionAndItsOwner()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var section = await SeedSection(db, userId);
+        await SeedRecording(db, userId, section.Id, minutesText: "Existing minutes.");
+
+        LlmCallKind? observedKind = null;
+        Guid? observedSection = null;
+        Guid? observedUser = null;
+        var combiner = new FakeMeetingMinutesClient(onCall: () =>
+        {
+            observedKind = LlmCallScope.Active?.Kind;
+            observedSection = LlmCallScope.Active?.SectionId;
+            observedUser = LlmCallScope.Active?.UserId;
+        });
+
+        await Run(db, new FakeMeetingTypeMinutesGenerator(), combiner, new FakeSummarizationSettingsResolver(),
+            new FakeHubContext(), section);
+
+        Assert.Equal(LlmCallKind.SectionMinutes, observedKind);
+        Assert.Equal(section.Id, observedSection);
+        Assert.Equal(userId, observedUser);
+    }
+
+    [Fact]
     public async Task Combiner_error_marks_failed()
     {
         using var db = TestDb.Create();
