@@ -1245,18 +1245,24 @@ public class LlmUsageViewerIntegrationTests(ContainersFixture fx)
     }
 
     [Fact]
-    public async Task Delete_ExceedingTheRowCeiling_Returns400_NotAPartialDelete()
+    public async Task Delete_ExceedingTheRowCeiling_OneCallPerOperation_Returns400_NotAPartialDelete()
     {
         // Mirrors List's OperationsMode_ExceedingTheOperationCeiling_Returns400_NotATruncatedPage, but
         // for the judgement call documented in task-5-report.md: Delete DOES carry a
-        // MaxOperationsPerRequest-sized guard even though ExecuteDeleteAsync never materializes
-        // anything into memory (the original reason List/Summary need the guard) - here it exists to
-        // cap the blast radius of a single irreversible action, checked against totals.Calls (the
-        // actual row count about to be destroyed), not totals.Operations. An explicit 400 with nothing
-        // deleted, never a silently partial delete.
+        // MaxDeleteRowsPerRequest-sized guard even though ExecuteDeleteAsync never materializes anything
+        // into memory (the original reason List/Summary need MaxOperationsPerRequest) - here it exists to
+        // cap the blast radius of a single irreversible action, checked against totals.Calls (the actual
+        // row count about to be destroyed), not totals.Operations. An explicit 400 with nothing deleted,
+        // never a silently partial delete.
+        //
+        // NOTE what this fixture does NOT prove: every row here is its own operation, so totals.Calls ==
+        // totals.Operations for this exact data shape - the guard would fire identically whichever
+        // quantity it checked, so this test alone cannot tell Calls and Operations apart. See the
+        // companion test below (ViaManyCallsPerOperation) for the fixture shape that actually pins
+        // totals.Calls as the correct quantity, and its own comment for the mutation run that proves it.
         await using var db = fx.CreateDbContext();
         var marker = Guid.NewGuid();
-        const int overCeiling = LlmUsageController.MaxOperationsPerRequest + 1;
+        const int overCeiling = LlmUsageController.MaxDeleteRowsPerRequest + 1;
         db.LlmCalls.AddRange(
             Enumerable.Range(0, overCeiling).Select(_ => Row(marker, operationId: Guid.NewGuid())));
         await db.SaveChangesAsync();
@@ -1266,6 +1272,40 @@ public class LlmUsageViewerIntegrationTests(ContainersFixture fx)
         Assert.IsType<BadRequestObjectResult>(result);
         await using var verifyDb = fx.CreateDbContext();
         Assert.Equal(overCeiling, await verifyDb.LlmCalls.CountAsync(c => c.Model == marker.ToString()));
+    }
+
+    [Fact]
+    public async Task Delete_ExceedingTheRowCeiling_ViaManyCallsPerOperation_Returns400_NotAPartialDelete()
+    {
+        // THE test that actually pins the judgement call (totals.Calls, not totals.Operations) rather
+        // than merely being consistent with it. FEW operations, MANY calls each - operationCount is
+        // comfortably UNDER MaxDeleteRowsPerRequest while totalRows (operationCount * callsPerOperation)
+        // sits OVER it, so this is exactly the shape the guard's own rationale describes: a filter that
+        // matches few operations which each fan out to many calls. A regression that swapped the guard
+        // back to totals.Operations would sail past the ceiling here and delete everything - verified
+        // directly by temporarily making that swap and confirming this exact test fails (see
+        // task-5-report.md's fix-round-1 section for the pasted failure output).
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        const int callsPerOperation = 5;
+        const int operationCount = LlmUsageController.MaxDeleteRowsPerRequest / callsPerOperation + 1;
+        const int totalRows = operationCount * callsPerOperation;
+        Assert.True(totalRows > LlmUsageController.MaxDeleteRowsPerRequest); // rows: OVER the ceiling
+        Assert.True(operationCount < LlmUsageController.MaxDeleteRowsPerRequest); // operations: comfortably UNDER it
+        db.LlmCalls.AddRange(
+            Enumerable.Range(0, operationCount).SelectMany(_ =>
+            {
+                var operationId = Guid.NewGuid();
+                return Enumerable.Range(1, callsPerOperation)
+                    .Select(seq => Row(marker, operationId: operationId, sequence: seq));
+            }));
+        await db.SaveChangesAsync();
+
+        var result = await Build(db).Delete(models: [marker.ToString()]);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        await using var verifyDb = fx.CreateDbContext();
+        Assert.Equal(totalRows, await verifyDb.LlmCalls.CountAsync(c => c.Model == marker.ToString()));
     }
 
     // ---- LlmUsageController.Filters (Task 5) ----
@@ -1318,5 +1358,28 @@ public class LlmUsageViewerIntegrationTests(ContainersFixture fx)
         var widened = OkValue<LlmUsageFilterOptions>(
             await Build(db).Filters(from: DateTimeOffset.UtcNow.AddDays(-365)));
         Assert.Contains(staleModel, widened.Models);
+    }
+
+    [Fact]
+    public async Task Filters_RowWithNullUserId_IsExcludedFromUsers_ButStillContributesModelAndKind()
+    {
+        // The Where(c => c.UserId != null) filter before grouping in Filters is deliberate -
+        // LlmUsageFilterUser.UserId is a non-nullable Guid, and there is nothing a userIds filter could
+        // match a null UserId against - but was previously unasserted. Proves it by behaviour: a
+        // null-UserId row must not surface as a bogus entry (the specific failure mode this guards
+        // against is grouping by `c.UserId ?? Guid.Empty` without filtering nulls out first, which would
+        // collapse every anonymous row into one spurious Guid.Empty "user"), while its Model/Kind must
+        // still show up in the other two lists - the exclusion is per-FIELD, not per-ROW.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var anonymousModel = $"{marker}-anon";
+        db.LlmCalls.Add(SummaryRow(marker, userId: null, model: anonymousModel, kind: LlmCallKind.SectionSummary));
+        await db.SaveChangesAsync();
+
+        var result = OkValue<LlmUsageFilterOptions>(await Build(db).Filters());
+
+        Assert.DoesNotContain(result.Users, u => u.UserId == Guid.Empty);
+        Assert.Contains(anonymousModel, result.Models);
+        Assert.Contains(LlmCallKind.SectionSummary, result.Kinds);
     }
 }

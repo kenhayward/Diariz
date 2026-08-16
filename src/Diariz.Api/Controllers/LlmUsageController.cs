@@ -31,6 +31,15 @@ public class LlmUsageController : ControllerBase
     /// not as a limit anyone should expect to hit in normal use.</summary>
     public const int MaxOperationsPerRequest = 25_000;
 
+    /// <summary>Ceiling on how many <c>LlmCalls</c> ROWS a single <see cref="Delete"/> request may
+    /// permanently remove. Equal-valued to <see cref="MaxOperationsPerRequest"/> today, but a DISTINCT
+    /// constant on purpose: the two guards bound different quantities for different reasons. This one
+    /// caps the blast radius of a single irreversible action (see <see cref="Delete"/>'s own doc comment
+    /// for why - deliberately not the memory-pressure rationale <see cref="MaxOperationsPerRequest"/>
+    /// documents), so retuning <c>List</c>'s/<c>Summary</c>'s materialization ceiling must never silently
+    /// retune how large a single delete is allowed to be.</summary>
+    public const int MaxDeleteRowsPerRequest = 25_000;
+
     private readonly DiarizDbContext _db;
 
     public LlmUsageController(DiarizDbContext db)
@@ -383,19 +392,28 @@ public class LlmUsageController : ControllerBase
         var filter = new LlmUsageFilter(from, to, userIds, kinds, models, outcome, recordingId, sectionId);
         var filtered = LlmUsageQuery.Apply(_db.LlmCalls.AsNoTracking(), filter, DateTimeOffset.UtcNow);
 
-        // A different guard from List/Summary's MaxOperationsPerRequest check, even though it reuses the
-        // same constant: List/Summary guard against materializing a candidate set into API process memory,
-        // which ExecuteDeleteAsync below never does - that original justification does not apply here. This
-        // guard exists purely to cap the blast radius of a single irreversible action, which is a judgement
-        // call, not a mechanical necessity (see task-5-report.md). It checks totals.Calls, not
+        // A different guard from List/Summary's MaxOperationsPerRequest check, using its own DISTINCTLY
+        // NAMED constant (MaxDeleteRowsPerRequest - see its doc comment) even though the two happen to be
+        // equal-valued today: List/Summary guard against materializing a candidate set into API process
+        // memory, which ExecuteDeleteAsync below never does - that original justification does not apply
+        // here. This guard exists purely to cap the blast radius of a single irreversible action, which is
+        // a judgement call, not a mechanical necessity (see task-5-report.md). It checks totals.Calls, not
         // totals.Operations - the quantity that actually matters for a delete is the number of ROWS about
         // to be permanently destroyed, not the List/Summary quantity (a lower bound on candidate rows in a
-        // DIFFERENT grouping, the wrong direction for a delete-size ceiling).
+        // DIFFERENT grouping, the wrong direction for a delete-size ceiling: a filter can easily match FEW
+        // operations that each fan out to MANY calls, so gating on totals.Operations could silently let a
+        // delete of far more than the ceiling's worth of ROWS through).
+        //
+        // SNAPSHOT, NOT A HARD BOUND under concurrent writes: TotalsAsync above and ExecuteDeleteAsync
+        // below are two separate round trips, not one transaction, so a row inserted matching this same
+        // filter between them would be deleted without ever having been counted against the ceiling. This
+        // never widens what gets deleted beyond the filter/window actually in force at delete time - it
+        // only means the ceiling itself is checked against a moment-in-time count, not a live one.
         var totals = await LlmUsageQuery.TotalsAsync(filtered, ct);
-        if (totals.Calls > MaxOperationsPerRequest)
+        if (totals.Calls > MaxDeleteRowsPerRequest)
             return BadRequest(
                 $"This filter matches too many rows to delete ({totals.Calls:N0}+, over the " +
-                $"{MaxOperationsPerRequest:N0} limit). Narrow the date range or add more filters, then retry.");
+                $"{MaxDeleteRowsPerRequest:N0} limit). Narrow the date range or add more filters, then retry.");
 
         var deleted = await filtered.ExecuteDeleteAsync(ct);
         return Ok(new LlmUsageDeleteResult(deleted));
@@ -404,10 +422,14 @@ public class LlmUsageController : ControllerBase
     [HttpGet("filters")]
     [EndpointSummary("List the distinct users, models and kinds present in the LLM usage log")]
     [EndpointDescription(
-        "Platform Administrator only. Populates the viewer's filter dropdowns with only combinations that " +
-        "actually occur in the scoped set, so a value the dropdown offers can never combine with the active " +
-        "date range to match zero rows. Scoped the same way every other endpoint defaults - the last 30 " +
-        "days unless from/to widen or narrow it - rather than reporting across all history.")]
+        "Platform Administrator only. Populates the viewer's filter dropdowns with only VALUES that " +
+        "actually occur in the scoped set, so no single dropdown offers a value guaranteed to match zero " +
+        "rows on its own. Scoped the same way every other endpoint defaults - the last 30 days unless " +
+        "from/to widen or narrow it - rather than reporting across all history. This reports MARGINAL " +
+        "presence per field, not JOINT presence across a multi-field selection: a user, a model, and a " +
+        "kind can each individually show as present while no single row has all three together, so " +
+        "picking one value from each dropdown can still yield zero matching rows. True per-combination " +
+        "faceting is a much larger feature and is out of scope here.")]
     public async Task<IActionResult> Filters(
         [FromQuery] DateTimeOffset? from = null,
         [FromQuery] DateTimeOffset? to = null,
