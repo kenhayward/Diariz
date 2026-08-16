@@ -52,3 +52,38 @@ public class LlmUsageSinkTests
         Assert.Equal(0, new ChannelLlmUsageSink().Dropped);
     }
 }
+
+public class LlmUsageBatchTests
+{
+    private static LlmCall Call() => new()
+    {
+        Id = Guid.NewGuid(), OperationId = Guid.NewGuid(), Sequence = 1,
+        Kind = LlmCallKind.Tags, Model = "m", Endpoint = "http://x/v1",
+        StartedAt = DateTimeOffset.UtcNow, CompletedAt = DateTimeOffset.UtcNow, Success = true,
+    };
+
+    [Fact]
+    public async Task DrainAsync_TakesAtMostMax_LeavingTheRestBuffered()
+    {
+        var sink = new ChannelLlmUsageSink();
+        for (var i = 0; i < 5; i++) sink.Record(Call());
+
+        var batch = await LlmUsageBatch.DrainAsync(sink.Reader, max: 3, CancellationToken.None);
+
+        Assert.Equal(3, batch.Count);
+        Assert.True(sink.Reader.TryRead(out _)); // the remainder is still there
+    }
+
+    [Fact]
+    public async Task DrainAsync_ReturnsWhatIsAvailable_WithoutWaitingForMax()
+    {
+        // The writer flushes on a timer as well as on volume. If this blocked until `max` arrived, a
+        // quiet system would never persist anything.
+        var sink = new ChannelLlmUsageSink();
+        sink.Record(Call());
+
+        var batch = await LlmUsageBatch.DrainAsync(sink.Reader, max: 200, CancellationToken.None);
+
+        Assert.Single(batch);
+    }
+}

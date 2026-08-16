@@ -299,6 +299,7 @@ static void NoHttpTimeout(HttpClient c) => c.Timeout = System.Threading.Timeout.
 builder.Services.AddSingleton<ILlmTrace, SentryLlmTrace>();
 builder.Services.AddSingleton<ChannelLlmUsageSink>();
 builder.Services.AddSingleton<ILlmUsageSink>(sp => sp.GetRequiredService<ChannelLlmUsageSink>());
+builder.Services.AddHostedService<LlmUsageWriter>();
 builder.Services.AddTransient<LlmTelemetryHandler>();
 IHttpClientBuilder AddLlmClient<TClient, TImplementation>(Action<HttpClient>? configure = null)
     where TClient : class where TImplementation : class, TClient
