@@ -430,6 +430,10 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.Property(s => s.AudioDeletionTimeOfDay).HasDefaultValue(new TimeOnly(3, 0));
             e.Property(s => s.LlmTimeoutSeconds)
                 .HasDefaultValue(Entities.PlatformSettings.DefaultLlmTimeoutSeconds);
+            e.Property(s => s.LlmUsageLoggingEnabled).HasDefaultValue(true);
+            e.Property(s => s.LlmUsageRetentionDays)
+                .HasDefaultValue(Entities.PlatformSettings.DefaultLlmUsageRetentionDays);
+            e.Property(s => s.LlmStreamUsageEnabled).HasDefaultValue(true);
             e.HasData(new PlatformSettings
             {
                 Id = Entities.PlatformSettings.SingletonId,

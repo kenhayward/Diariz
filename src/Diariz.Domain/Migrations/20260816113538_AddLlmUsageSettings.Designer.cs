@@ -13,7 +13,7 @@ using Pgvector;
 namespace Diariz.Domain.Migrations
 {
     [DbContext(typeof(DiarizDbContext))]
-    [Migration("20260816111700_AddLlmUsageSettings")]
+    [Migration("20260816113538_AddLlmUsageSettings")]
     partial class AddLlmUsageSettings
     {
         /// <inheritdoc />
@@ -1091,7 +1091,9 @@ namespace Diariz.Domain.Migrations
                         .HasDefaultValue(false);
 
                     b.Property<bool>("LlmStreamUsageEnabled")
-                        .HasColumnType("boolean");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
 
                     b.Property<int>("LlmTimeoutSeconds")
                         .ValueGeneratedOnAdd()
@@ -1099,10 +1101,14 @@ namespace Diariz.Domain.Migrations
                         .HasDefaultValue(120);
 
                     b.Property<bool>("LlmUsageLoggingEnabled")
-                        .HasColumnType("boolean");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
 
                     b.Property<int>("LlmUsageRetentionDays")
-                        .HasColumnType("integer");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(90);
 
                     b.Property<long>("MaxQuotaBytes")
                         .HasColumnType("bigint");

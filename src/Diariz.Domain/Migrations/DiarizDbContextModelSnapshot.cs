@@ -1088,7 +1088,9 @@ namespace Diariz.Domain.Migrations
                         .HasDefaultValue(false);
 
                     b.Property<bool>("LlmStreamUsageEnabled")
-                        .HasColumnType("boolean");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
 
                     b.Property<int>("LlmTimeoutSeconds")
                         .ValueGeneratedOnAdd()
@@ -1096,10 +1098,14 @@ namespace Diariz.Domain.Migrations
                         .HasDefaultValue(120);
 
                     b.Property<bool>("LlmUsageLoggingEnabled")
-                        .HasColumnType("boolean");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
 
                     b.Property<int>("LlmUsageRetentionDays")
-                        .HasColumnType("integer");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(90);
 
                     b.Property<long>("MaxQuotaBytes")
                         .HasColumnType("bigint");
