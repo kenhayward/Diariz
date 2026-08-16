@@ -4,7 +4,10 @@ import type { LlmUsageOperationRow, LlmUsagePage, LlmUsageSortKey, LlmUsageTotal
 import { formatDuration } from "../../lib/format";
 import { kindLabel } from "./UsageFilterBar";
 
-const SORTABLE_COLUMNS = 12;
+// The table's TOTAL column count (sortable + plain), used for a full-width colSpan on the loading/empty
+// row - NOT the number of sortable columns (8 of these 12 are sortable; see the `header()`/`plainHeader()`
+// calls below for the actual split).
+const TOTAL_COLUMN_COUNT = 12;
 
 /// The operations-mode results table: sortable headers, a totals row pinned under the header (never a sum
 /// of the rows on screen - see `TotalsRow`), and a Previous/Next pager. Sorting is server-side (`onSort`
@@ -89,13 +92,13 @@ export default function UsageTable({
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={SORTABLE_COLUMNS} className="px-2 py-3 text-center text-gray-400 dark:text-gray-500">
+                <td colSpan={TOTAL_COLUMN_COUNT} className="px-2 py-3 text-center text-gray-400 dark:text-gray-500">
                   {t("common:loading")}
                 </td>
               </tr>
             ) : page.rows.length === 0 ? (
               <tr>
-                <td colSpan={SORTABLE_COLUMNS} className="px-2 py-3 text-center text-gray-400 dark:text-gray-500">
+                <td colSpan={TOTAL_COLUMN_COUNT} className="px-2 py-3 text-center text-gray-400 dark:text-gray-500">
                   {t("llmUsageNoRows")}
                 </td>
               </tr>
@@ -124,21 +127,25 @@ function TotalsRow({ totals }: { totals: LlmUsageTotals }) {
         {t("llmUsageTotalsLabel", { calls: totals.calls, operations: totals.operations })}
       </td>
       <td className="px-2 py-1 text-right">{formatDuration(totals.durationMs)}</td>
-      <TokenTotalCell value={totals.promptTokens} measured={totals.tokenMeasuredCalls} total={totals.calls} />
-      <TokenTotalCell value={totals.completionTokens} measured={totals.tokenMeasuredCalls} total={totals.calls} />
-      <TokenTotalCell value={totals.reasoningTokens} measured={totals.tokenMeasuredCalls} total={totals.calls} />
-      <TokenTotalCell value={totals.totalTokens} measured={totals.tokenMeasuredCalls} total={totals.calls} />
+      {/* Each cell uses that column's OWN measured count (promptTokensMeasured, etc.), never the coarser
+          any-column tokenMeasuredCalls - see LlmUsageTotals's doc comment for why reusing one shared
+          figure across four independently-nullable columns states something false about at least three
+          of them whenever they differ (which, for reasoning tokens especially, is the common case). */}
+      <TokenTotalCell value={totals.promptTokens} measured={totals.promptTokensMeasured} total={totals.calls} />
+      <TokenTotalCell value={totals.completionTokens} measured={totals.completionTokensMeasured} total={totals.calls} />
+      <TokenTotalCell value={totals.reasoningTokens} measured={totals.reasoningTokensMeasured} total={totals.calls} />
+      <TokenTotalCell value={totals.totalTokens} measured={totals.totalTokensMeasured} total={totals.calls} />
       <td className="px-2 py-1">{t("llmUsageTotalsFailed", { count: totals.failedCalls })}</td>
     </tr>
   );
 }
 
 /// A token-sum cell for the totals row. `value` is `number | null` - null means nothing in the filtered set
-/// reported this field, which must never render as "0". Every total is qualified with how many of the
-/// filtered calls actually measured any tokens at all (`tokenMeasuredCalls` / `calls`) - `LlmUsageTotals`
-/// exposes only that one coarse count, not a separate measured-count per column, so the same qualifier is
-/// reused for prompt/completion/reasoning/total - a total that silently covers only part of the set is
-/// worse than no total.
+/// reported this field, which must never render as "0". `measured` must be THIS column's own measured
+/// count (`promptTokensMeasured`, etc.) - never the coarser any-column `tokenMeasuredCalls`, which would
+/// misstate how trustworthy this specific total is whenever the columns' real measured counts differ (see
+/// the call site in `TotalsRow`). A total that silently covers only part of the set, without saying so,
+/// is worse than no total.
 function TokenTotalCell({ value, measured, total }: { value: number | null; measured: number; total: number }) {
   const { t } = useTranslation("account");
   return (

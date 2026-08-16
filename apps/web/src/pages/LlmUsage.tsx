@@ -24,6 +24,13 @@ export default function LlmUsage() {
   // Outside any RoomProvider (this is a top-level route, not nested under WorkspaceLayout), so this
   // resolves to "" - the top-level route prefix. Still routed through the hook rather than hard-coded, so a
   // recording/folder link is built the same way every other link in the app is.
+  //
+  // FORWARD-LOOKING GAP: LlmUsageOperationRow carries no per-row room id, so this single page-wide
+  // basePath cannot be room-correct for a recording that lives in a SHARED room once those exist for real
+  // (today there is effectively one room per user, so this is unobservable). Once cross-room usage rows
+  // are possible, a link built from this basePath would open the wrong room the same way the bugs
+  // documented in "Room-aware links and routes" (this repo's own memory notes, PRs #298/#299) did -
+  // fixing it needs the API to start returning a room id per row, not a client-side workaround here.
   const basePath = useRoomBasePath();
 
   const [filter, setFilter] = useState<UsageFilterState>(() => defaultUsageFilter());
@@ -88,6 +95,13 @@ export default function LlmUsage() {
   return (
     <div className="flex h-screen flex-col">
       <TopBar />
+      {/* GET /filters failing is otherwise silent - the multi-selects would just render with no options
+          and nothing would say why, unlike the table's own explicit error state below. */}
+      {filterOptionsQuery.isError && (
+        <p className="border-b bg-amber-50 px-3 py-1 text-xs text-amber-800 dark:border-gray-800 dark:bg-amber-900/20 dark:text-amber-300">
+          {t("llmUsageFiltersLoadError")}
+        </p>
+      )}
       <UsageFilterBar filter={filter} onChange={updateFilter} filterOptions={filterOptionsQuery.data} />
       <div className="min-h-0 flex-1">
         <UsageTable

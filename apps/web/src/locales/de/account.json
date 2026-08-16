@@ -381,6 +381,7 @@
   "llmUsageViewerTitle": "LLM-Nutzungsprotokoll",
   "llmUsageForbidden": "Sie haben keine Berechtigung, das LLM-Nutzungsprotokoll anzuzeigen. Dies ist auf Plattform-Administratoren beschränkt.",
   "llmUsageLoadError": "Das Nutzungsprotokoll konnte nicht geladen werden.",
+  "llmUsageFiltersLoadError": "Die Filteroptionen für Benutzer/Typ/Modell konnten nicht geladen werden - die Filter unten sind möglicherweise unvollständig.",
   "llmUsageNoRows": "Keine Nutzung entspricht diesen Filtern.",
   "llmUsagePreset24h": "Letzte 24 Stunden",
   "llmUsagePreset7d": "Letzte 7 Tage",

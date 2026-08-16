@@ -61,6 +61,10 @@ function totals(overrides: Partial<LlmUsageTotals> = {}): LlmUsageTotals {
     reasoningTokens: null,
     totalTokens: 150,
     tokenMeasuredCalls: 1,
+    promptTokensMeasured: 1,
+    completionTokensMeasured: 1,
+    reasoningTokensMeasured: 0,
+    totalTokensMeasured: 1,
     failedCalls: 0,
     tokensPerSecond: 10,
     ...overrides,
@@ -153,6 +157,10 @@ describe("LlmUsage", () => {
       reasoningTokens: null,
       totalTokens: 850,
       tokenMeasuredCalls: 5,
+      promptTokensMeasured: 5,
+      completionTokensMeasured: 5,
+      reasoningTokensMeasured: 0,
+      totalTokensMeasured: 5,
       failedCalls: 1,
     });
     vi.mocked(api.getLlmUsage).mockResolvedValue(usagePage(rows, apiTotals));
@@ -166,6 +174,39 @@ describe("LlmUsage", () => {
     expect(totalsRow.textContent).toContain("measured on 5 of 10 calls");
     // reasoningTokens is null in the totals - never rendered as 0.
     expect(within(totalsRow).getByText("-")).toBeTruthy();
+  });
+
+  it("captions each token column with its OWN measured count, not the any-column count", async () => {
+    // Fix round 1 finding: LlmUsageTotals.tokenMeasuredCalls answers "did ANY column report usage",
+    // which is a coarser, different question from each column's own measured count - and the four
+    // columns are, in practice, very unevenly populated (most models never report reasoning tokens at
+    // all). tokenMeasuredCalls is deliberately set to 10 here - equal to `calls`, and different from
+    // every one of the four per-column counts below - so a rendering that (wrongly) reused it under all
+    // four columns would show "measured on 10 of 10 calls" everywhere instead of the four distinct
+    // figures asserted below.
+    const apiTotals = totals({
+      calls: 10,
+      promptTokens: 900,
+      completionTokens: 600,
+      reasoningTokens: 2,
+      totalTokens: 400,
+      tokenMeasuredCalls: 10,
+      promptTokensMeasured: 9,
+      completionTokensMeasured: 6,
+      reasoningTokensMeasured: 1,
+      totalTokensMeasured: 4,
+    });
+    vi.mocked(api.getLlmUsage).mockResolvedValue(usagePage([row()], apiTotals));
+
+    renderPage();
+    const totalsRow = await screen.findByTestId("llm-usage-totals-row");
+
+    expect(totalsRow.textContent).toContain("measured on 9 of 10 calls"); // prompt's own count
+    expect(totalsRow.textContent).toContain("measured on 6 of 10 calls"); // completion's own count
+    expect(totalsRow.textContent).toContain("measured on 1 of 10 calls"); // reasoning's own count
+    expect(totalsRow.textContent).toContain("measured on 4 of 10 calls"); // total's own count
+    // The any-column figure (10) must not leak into any of the four per-column captions.
+    expect(totalsRow.textContent).not.toContain("measured on 10 of 10 calls");
   });
 
   it("shows a refusal instead of the table for a non-admin", async () => {
@@ -195,5 +236,14 @@ describe("LlmUsage", () => {
     // No RoomProvider ancestor here (this is a top-level admin route), so useRoomBasePath's documented
     // fallback is "" - proving the link goes through the hook rather than a hard-coded path.
     expect(link.getAttribute("href")).toBe("/recordings/rec-1");
+  });
+
+  it("surfaces a GET /filters failure instead of leaving the multi-selects silently empty", async () => {
+    vi.mocked(api.getLlmUsageFilters).mockRejectedValue(new Error("network error"));
+    renderPage();
+
+    expect(await screen.findByText(/filter options couldn't be loaded/i)).toBeTruthy();
+    // The table itself is unaffected - getLlmUsage still runs and renders normally.
+    await waitFor(() => expect(api.getLlmUsage).toHaveBeenCalled());
   });
 });

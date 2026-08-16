@@ -381,6 +381,7 @@
   "llmUsageViewerTitle": "Registro de uso de LLM",
   "llmUsageForbidden": "No tienes permiso para ver el registro de uso de LLM. Esto está limitado a los administradores de la plataforma.",
   "llmUsageLoadError": "No se pudo cargar el registro de uso.",
+  "llmUsageFiltersLoadError": "No se pudieron cargar las opciones de filtro de usuario/tipo/modelo - los filtros de abajo pueden estar incompletos.",
   "llmUsageNoRows": "Ningún uso coincide con estos filtros.",
   "llmUsagePreset24h": "Últimas 24 horas",
   "llmUsagePreset7d": "Últimos 7 días",

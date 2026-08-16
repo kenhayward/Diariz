@@ -121,6 +121,43 @@ public class LlmUsageViewerIntegrationTests(ContainersFixture fx)
     }
 
     [Fact]
+    public async Task Totals_PerColumnMeasuredCounts_AreIndependent_NotAllEqualToTheAnyColumnCount()
+    {
+        // Fix round 1, Task 7 finding: TokenMeasuredCalls (any column) must not be the only measured
+        // count exposed - each column needs its OWN count, because in practice they are very unevenly
+        // populated (most models never report reasoning tokens). Three calls: every call reports
+        // PromptTokens (3 of 3), only two report CompletionTokens (2 of 3), only one reports
+        // ReasoningTokens (1 of 3), and none report TotalTokens (0 of 3) - four different numbers, which
+        // a shared "measured on N of M" caption cannot represent correctly for more than one column at
+        // once.
+        // Uses SummaryRow (declared further below, alongside the Summary-endpoint tests) rather than
+        // this file's own Row helper - SummaryRow already takes reasoningTokens, Row does not.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        db.LlmCalls.AddRange(
+            SummaryRow(marker, promptTokens: 10, completionTokens: 20, reasoningTokens: 5, totalTokens: null),
+            SummaryRow(marker, promptTokens: 11, completionTokens: 21, reasoningTokens: null, totalTokens: null),
+            SummaryRow(marker, promptTokens: 12, completionTokens: null, reasoningTokens: null, totalTokens: null));
+        await db.SaveChangesAsync();
+
+        var totals = await LlmUsageQuery.TotalsAsync(
+            db.LlmCalls.Where(c => c.Model == marker.ToString()), default);
+
+        Assert.Equal(3, totals.Calls);
+        Assert.Equal(3, totals.PromptTokensMeasured);
+        Assert.Equal(2, totals.CompletionTokensMeasured);
+        Assert.Equal(1, totals.ReasoningTokensMeasured);
+        Assert.Equal(0, totals.TotalTokensMeasured);
+        // TokenMeasuredCalls (ANY column) stays the coarse, different question it always was - 3 of 3
+        // calls reported something, even though no single column was measured on all 3.
+        Assert.Equal(3, totals.TokenMeasuredCalls);
+        // TotalTokensMeasured == 0 must still null out the sum, not read as a measured 0 - same
+        // null-vs-zero discipline the rest of this file already covers, restated here because this is
+        // the one test where TotalTokensMeasured is deliberately zero.
+        Assert.Null(totals.TotalTokens);
+    }
+
+    [Fact]
     public async Task Totals_TokenMeasuredCalls_CountsAnyColumnMeasured_NotJustCompletion()
     {
         // Discriminates the two possible definitions of TokenMeasuredCalls: "calls with a completion-

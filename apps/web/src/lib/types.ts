@@ -1316,6 +1316,14 @@ export interface LlmUsageFilter {
 /// this set reported a value", which must never render as "0 tokens". `tokenMeasuredCalls` is how many
 /// calls reported ANY token count at all (prompt, completion, reasoning, or total), a coarser question
 /// than any single column's own measured count.
+///
+/// `promptTokensMeasured`/`completionTokensMeasured`/`reasoningTokensMeasured`/`totalTokensMeasured` are
+/// that narrower, per-column count - always `number` (never null; a count of zero is a legitimate answer,
+/// not an absence of data). Use these, never `tokenMeasuredCalls`, to caption a SPECIFIC column's own
+/// total ("measured on N of M calls") - the four columns are independently nullable and in practice very
+/// unevenly populated (most models never report reasoning tokens at all), so captioning every column with
+/// the same any-column figure states something false about at least three of the four columns whenever
+/// they differ. `tokenMeasuredCalls` remains the right number for qualifying the set as a whole.
 export interface LlmUsageTotals {
   calls: number;
   operations: number;
@@ -1325,6 +1333,10 @@ export interface LlmUsageTotals {
   reasoningTokens: number | null;
   totalTokens: number | null;
   tokenMeasuredCalls: number;
+  promptTokensMeasured: number;
+  completionTokensMeasured: number;
+  reasoningTokensMeasured: number;
+  totalTokensMeasured: number;
   failedCalls: number;
   tokensPerSecond: number | null;
 }

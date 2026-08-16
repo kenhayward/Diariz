@@ -38,10 +38,20 @@ public record LlmUsageFilter(
 /// administrator needs before trusting any total on the page - it is deliberately NOT scoped to
 /// <see cref="Diariz.Domain.Entities.LlmCall.CompletionTokens"/> specifically, because that would
 /// silently duplicate one column's own measured-count under a name that implies something broader.
-/// If the UI ever needs a *per-column* "measured on N of M" qualifier (e.g. specifically for
-/// completion tokens), that is a different, narrower question than this field answers and needs its
-/// own count - <c>LlmUsageQuery.TotalsAsync</c> already computes one such count per token column
-/// internally (to null out that column's sum correctly) but does not expose them individually here.
+///
+/// <paramref name="PromptTokensMeasured"/>/<paramref name="CompletionTokensMeasured"/>/
+/// <paramref name="ReasoningTokensMeasured"/>/<paramref name="TotalTokensMeasured"/> are the
+/// *per-column* counterpart <see cref="TokenMeasuredCalls"/>'s own doc comment above flags as a
+/// distinct, narrower question - "of the calls in this set, how many reported THIS specific column".
+/// They matter because the four columns are independently nullable and, in practice, very unevenly
+/// populated: most models never report reasoning tokens at all, so a reasoning total measured on 2 of
+/// 100 calls must not be captioned identically to a prompt total measured on 100 of 100 - reusing
+/// <see cref="TokenMeasuredCalls"/> (an ANY-column count) under all four columns would say exactly
+/// that, which is misleading in an audit tool whose entire purpose is telling an administrator how
+/// much to trust a number. <c>LlmUsageQuery.TotalsAsync</c> already computes all four counts
+/// internally (to null out each column's own sum correctly, per the token-sum comment above) - these
+/// four fields are pure exposure of numbers already in hand, not new computation, so surfacing them
+/// costs no extra round trip.
 /// <paramref name="TokensPerSecond"/> is <c>SUM(CompletionTokens) / SUM(DurationMs)</c> across the
 /// whole set - never an average of each row's own rate, which lets one tiny fast call outweigh one
 /// huge slow one. It is null (never NaN/Infinity, which are not valid JSON) when no completion
@@ -55,6 +65,10 @@ public record LlmUsageTotals(
     long? ReasoningTokens,
     long? TotalTokens,
     int TokenMeasuredCalls,
+    int PromptTokensMeasured,
+    int CompletionTokensMeasured,
+    int ReasoningTokensMeasured,
+    int TotalTokensMeasured,
     int FailedCalls,
     double? TokensPerSecond);
 

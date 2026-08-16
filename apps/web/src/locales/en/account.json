@@ -381,6 +381,7 @@
   "llmUsageViewerTitle": "LLM usage log",
   "llmUsageForbidden": "You don't have permission to view the LLM usage log. This is limited to Platform Administrators.",
   "llmUsageLoadError": "The usage log couldn't be loaded.",
+  "llmUsageFiltersLoadError": "The user/type/model filter options couldn't be loaded - the filters below may be incomplete.",
   "llmUsageNoRows": "No usage matches these filters.",
   "llmUsagePreset24h": "Last 24 hours",
   "llmUsagePreset7d": "Last 7 days",

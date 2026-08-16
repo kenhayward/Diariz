@@ -381,6 +381,7 @@
   "llmUsageViewerTitle": "Journal d'utilisation LLM",
   "llmUsageForbidden": "Vous n'avez pas la permission de consulter le journal d'utilisation LLM. Ceci est réservé aux administrateurs de la plateforme.",
   "llmUsageLoadError": "Le journal d'utilisation n'a pas pu être chargé.",
+  "llmUsageFiltersLoadError": "Les options de filtre utilisateur/type/modèle n'ont pas pu être chargées - les filtres ci-dessous peuvent être incomplets.",
   "llmUsageNoRows": "Aucune utilisation ne correspond à ces filtres.",
   "llmUsagePreset24h": "Dernières 24 heures",
   "llmUsagePreset7d": "7 derniers jours",

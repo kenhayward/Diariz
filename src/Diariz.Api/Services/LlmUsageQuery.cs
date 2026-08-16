@@ -170,7 +170,7 @@ public static class LlmUsageQuery
             .SingleOrDefaultAsync(ct);
 
         if (row is null)
-            return new LlmUsageTotals(0, 0, 0, null, null, null, null, 0, 0, null);
+            return new LlmUsageTotals(0, 0, 0, null, null, null, null, 0, 0, 0, 0, 0, 0, null);
 
         long? promptTokens = row.PromptTokensMeasured > 0 ? row.PromptTokensSum : null;
         long? completionTokens = row.CompletionTokensMeasured > 0 ? row.CompletionTokensSum : null;
@@ -193,6 +193,10 @@ public static class LlmUsageQuery
             reasoningTokens,
             totalTokens,
             row.AnyTokenMeasured,
+            row.PromptTokensMeasured,
+            row.CompletionTokensMeasured,
+            row.ReasoningTokensMeasured,
+            row.TotalTokensMeasured,
             row.FailedCalls,
             tokensPerSecond);
     }
