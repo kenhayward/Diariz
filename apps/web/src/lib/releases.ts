@@ -62,6 +62,18 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.216.1",
+    date: "2026-08-16",
+    pr: 531,
+    headline: "Follow-up fixes for the LLM usage log",
+    summary:
+      "A final review pass on the LLM usage log from 0.216.0 turned up two gaps and fixed both here. A formula run invoked with no enclosing chat turn - an MCP client's run_formula call - was landing in the usage log unattributed, discarding a real user's LLM spend; it now records the recording and the user who ran it, the same as every other call site. Separately, the usage-logging handler was reading the outbound request body twice per call, which for a dictation upload (up to 10 MB of audio) meant buffering the whole file into memory and decoding binary audio as text, twice, on the one call path this feature promised never to slow down; it now reads a request body at most once, and only when it is actually JSON.",
+    fixed: [
+      "A formula run invoked with no enclosing chat turn (an MCP client's run_formula call) landed in the usage log unattributed; it now records the recording and the user who ran it.",
+      "The usage-logging handler no longer reads a non-JSON request body (a dictation upload's audio) to size it - it uses the declared content length instead, so a large upload is never buffered into memory twice.",
+    ],
+  },
+  {
     version: "0.216.0",
     date: "2026-08-16",
     pr: 530,
@@ -72,10 +84,6 @@ export const RELEASES: Release[] = [
       "An LLM usage log, off the request path, capturing every outbound model call platform-wide (who, what it was for, which model/endpoint, duration, token counts, success/failure) with no prompt or completion content ever stored.",
       "Three Platform Administrator settings on Model Settings: a master on/off switch for usage logging, a retention window in days (0 = keep forever), and whether streaming calls request token counts from the model.",
       "A nightly sweep that deletes usage log rows past the configured retention window.",
-    ],
-    fixed: [
-      "A formula run invoked with no enclosing chat turn (an MCP client's run_formula call) landed in the usage log unattributed; it now records the recording and the user who ran it.",
-      "The usage-logging handler no longer reads a non-JSON request body (a dictation upload's audio) to size it - it uses the declared content length instead, so a large upload is never buffered into memory twice.",
     ],
   },
   {
