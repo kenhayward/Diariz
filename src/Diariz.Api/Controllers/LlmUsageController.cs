@@ -306,6 +306,46 @@ public class LlmUsageController : ControllerBase
         return Ok(new LlmUsagePage<LlmUsageOperationRow>(operationRows, page, pageSize, operationsTotal, totals));
     }
 
+    [HttpGet("summary")]
+    [EndpointSummary("Roll up LLM usage log entries by user, model, and/or call kind")]
+    [EndpointDescription(
+        "Platform Administrator only. groupBy is a required, comma-separated list of 'user', 'model', " +
+        "and/or 'kind' - an unrecognised or missing value is rejected with 400, same discipline as sort " +
+        "and mode. Each returned group's tokens/second is that group's own SUM(completion)/SUM(duration), " +
+        "never an average of its rows or the overall total's rate. turns is reported per operation as an " +
+        "average and a maximum, never summed across operations. totals covers the whole filtered set, " +
+        "the same as List's totals, computed through the same filter so the two views can never disagree " +
+        "about what is in scope.")]
+    public async Task<IActionResult> Summary(
+        [FromQuery] string? groupBy = null,
+        [FromQuery] DateTimeOffset? from = null,
+        [FromQuery] DateTimeOffset? to = null,
+        [FromQuery] Guid[]? userIds = null,
+        [FromQuery] int[]? kinds = null,
+        [FromQuery] string[]? models = null,
+        [FromQuery] string? outcome = null,
+        [FromQuery] Guid? recordingId = null,
+        [FromQuery] Guid? sectionId = null,
+        CancellationToken ct = default)
+    {
+        // Silently ignoring an unrecognised (or missing) groupBy would show the administrator a report
+        // grouped differently from what they asked for, which is worse than an error - same discipline
+        // as the unrecognised-sort/unrecognised-mode rejections in List above.
+        if (!LlmUsageQuery.TryResolveGroupBy(groupBy, out var dimensions))
+            return BadRequest(
+                $"Unknown or missing groupBy value '{groupBy}'. Expected a comma-separated list of " +
+                "'user', 'model', and/or 'kind'.");
+
+        // Reuse LlmUsageQuery.Apply for the filter, exactly as List does above, so the summary and the
+        // detail view can never silently disagree about what is "in scope" for the same query string.
+        var filter = new LlmUsageFilter(from, to, userIds, kinds, models, outcome, recordingId, sectionId);
+        var filtered = LlmUsageQuery.Apply(_db.LlmCalls.AsNoTracking(), filter, DateTimeOffset.UtcNow);
+
+        var totals = await LlmUsageQuery.TotalsAsync(filtered, ct);
+        var groups = await LlmUsageQuery.SummaryAsync(filtered, dimensions, ct);
+        return Ok(new LlmUsageSummary(groups, totals));
+    }
+
     /// <summary>Applies the requested sort, then a final <c>Id</c> tiebreaker. Every whitelisted column
     /// - including <c>StartedAt</c>, which <see cref="LlmCallScope"/>'s own doc notes can tie under
     /// concurrent fan-out - is non-unique, and Postgres gives no guarantee that tied rows come back in

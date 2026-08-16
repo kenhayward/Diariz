@@ -619,4 +619,252 @@ public class LlmUsageViewerIntegrationTests(ContainersFixture fx)
         TotalTokens = totalTokens,
         Success = success,
     };
+
+    // ---- LlmUsageController.Summary: roll-up grouped by user/model/kind (Task 4) ----
+    //
+    // Same isolation convention as the rest of this file: every seeded row carries Model ==
+    // marker.ToString() (or a marker-prefixed variant when the test itself groups by Model), and every
+    // call filters models: [...] down to exactly the markers it seeded.
+
+    private static LlmCallKind[] Kinds => [LlmCallKind.Tags, LlmCallKind.ChatMessage, LlmCallKind.Summarize];
+
+    private static LlmCall SummaryRow(
+        Guid marker,
+        Guid? operationId = null,
+        int sequence = 1,
+        Guid? userId = null,
+        string? userEmail = null,
+        string? model = null,
+        LlmCallKind kind = LlmCallKind.Tags,
+        int durationMs = 1000,
+        int? promptTokens = null,
+        int? completionTokens = null,
+        int? reasoningTokens = null,
+        int? totalTokens = null,
+        bool success = true) => new()
+    {
+        Id = Guid.NewGuid(),
+        OperationId = operationId ?? Guid.NewGuid(),
+        Sequence = sequence,
+        Kind = kind,
+        UserId = userId,
+        UserEmail = userEmail ?? "u@x.test",
+        Model = model ?? marker.ToString(),
+        Endpoint = "http://x/v1",
+        StartedAt = DateTimeOffset.UtcNow,
+        CompletedAt = DateTimeOffset.UtcNow,
+        DurationMs = durationMs,
+        PromptTokens = promptTokens,
+        CompletionTokens = completionTokens,
+        ReasoningTokens = reasoningTokens,
+        TotalTokens = totalTokens,
+        Success = success,
+    };
+
+    [Fact]
+    public async Task Summary_GroupsByOneDimension_ReportsPerGroupCallsOperationsAndTokens()
+    {
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var modelA = $"{marker}-a";
+        var modelB = $"{marker}-b";
+        db.LlmCalls.AddRange(
+            SummaryRow(marker, model: modelA, durationMs: 1000, completionTokens: 100), // op 1
+            SummaryRow(marker, model: modelA, durationMs: 1000, completionTokens: 300), // op 2
+            SummaryRow(marker, model: modelB, durationMs: 500, completionTokens: 50));  // op 3
+        await db.SaveChangesAsync();
+
+        var result = OkValue<LlmUsageSummary>(
+            await Build(db).Summary(groupBy: "model", models: [modelA, modelB]));
+
+        Assert.Equal(2, result.Groups.Count);
+        var groupA = result.Groups.Single(g => g.Model == modelA);
+        Assert.Equal(2, groupA.Calls);
+        Assert.Equal(2, groupA.Operations);
+        Assert.Equal(400, groupA.CompletionTokens);
+        Assert.NotNull(groupA.TokensPerSecond);
+        Assert.InRange(groupA.TokensPerSecond!.Value, 199, 201); // 400 tokens / 2.0s
+
+        var groupB = result.Groups.Single(g => g.Model == modelB);
+        Assert.Equal(1, groupB.Calls);
+        Assert.Equal(1, groupB.Operations);
+        Assert.Equal(50, groupB.CompletionTokens);
+        Assert.InRange(groupB.TokensPerSecond!.Value, 99, 101); // 50 tokens / 0.5s
+
+        // The un-grouped dimensions are null on every row - a dimension not asked for collapses.
+        Assert.All(result.Groups, g => Assert.Null(g.UserId));
+        Assert.All(result.Groups, g => Assert.Null(g.Kind));
+    }
+
+    [Fact]
+    public async Task Summary_GroupsByTwoDimensionsCombined_ProducesOneRowPerCombination()
+    {
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var modelA = $"{marker}-a";
+        var modelB = $"{marker}-b";
+        db.LlmCalls.AddRange(
+            SummaryRow(marker, model: modelA, kind: LlmCallKind.Tags),
+            SummaryRow(marker, model: modelA, kind: LlmCallKind.ChatMessage),
+            SummaryRow(marker, model: modelB, kind: LlmCallKind.Tags));
+        await db.SaveChangesAsync();
+
+        var result = OkValue<LlmUsageSummary>(
+            await Build(db).Summary(groupBy: "model,kind", models: [modelA, modelB]));
+
+        Assert.Equal(3, result.Groups.Count);
+        Assert.Contains(result.Groups, g => g.Model == modelA && g.Kind == LlmCallKind.Tags);
+        Assert.Contains(result.Groups, g => g.Model == modelA && g.Kind == LlmCallKind.ChatMessage);
+        Assert.Contains(result.Groups, g => g.Model == modelB && g.Kind == LlmCallKind.Tags);
+        Assert.All(result.Groups, g => Assert.Equal(1, g.Calls));
+    }
+
+    [Fact]
+    public async Task Summary_UnknownGroupBy_IsRejectedWith400_NotSilentlyIgnored()
+    {
+        // Same whitelist discipline as sort/mode - silently ignoring an unrecognised grouping would show
+        // the administrator a different report from the one they asked for.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+
+        var result = await Build(db).Summary(groupBy: "notARealDimension", models: [marker.ToString()]);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task Summary_MissingGroupBy_IsRejectedWith400()
+    {
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+
+        var result = await Build(db).Summary(groupBy: null, models: [marker.ToString()]);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task Summary_ReportsTurnsAsAveragePerOperation_NeverASum()
+    {
+        // Two operations in the same group: one with 2 calls, one with 5. Summing across operations
+        // (2 + 5 = 7) is a meaningless number - the report must show an average (3.5) and a max (5).
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var shortOp = Guid.NewGuid();
+        var longOp = Guid.NewGuid();
+        db.LlmCalls.AddRange(
+            SummaryRow(marker, operationId: shortOp, sequence: 1),
+            SummaryRow(marker, operationId: shortOp, sequence: 2),
+            SummaryRow(marker, operationId: longOp, sequence: 1),
+            SummaryRow(marker, operationId: longOp, sequence: 2),
+            SummaryRow(marker, operationId: longOp, sequence: 3),
+            SummaryRow(marker, operationId: longOp, sequence: 4),
+            SummaryRow(marker, operationId: longOp, sequence: 5));
+        await db.SaveChangesAsync();
+
+        var result = OkValue<LlmUsageSummary>(
+            await Build(db).Summary(groupBy: "model", models: [marker.ToString()]));
+
+        var group = Assert.Single(result.Groups);
+        Assert.Equal(7, group.Calls);              // the row count, sum is fine here
+        Assert.Equal(2, group.Operations);
+        Assert.Equal(3.5, group.AverageTurnsPerOperation);
+        Assert.Equal(5, group.MaxTurnsPerOperation);
+        Assert.NotEqual(7, group.MaxTurnsPerOperation); // guards against a sum-of-turns regression
+    }
+
+    [Fact]
+    public async Task Summary_TokensPerSecond_IsEachGroupsOwnSumOverSum()
+    {
+        // Two groups with genuinely different rates. A cheap implementation could pass a single-group
+        // test either by averaging per-row rates OR by copying the overall Totals.TokensPerSecond onto
+        // every group - this seeds two groups whose correct rates differ from EACH OTHER and from the
+        // overall total, so both shortcuts are caught.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var modelFast = $"{marker}-fast"; // one tiny fast call, one large slow one: ~399 tokens/s
+        var modelSlow = $"{marker}-slow"; // one call: exactly 100 tokens/s
+        db.LlmCalls.AddRange(
+            SummaryRow(marker, model: modelFast, durationMs: 40, completionTokens: 3),
+            SummaryRow(marker, model: modelFast, durationMs: 10_000, completionTokens: 4000),
+            SummaryRow(marker, model: modelSlow, durationMs: 1000, completionTokens: 100));
+        await db.SaveChangesAsync();
+
+        var result = OkValue<LlmUsageSummary>(
+            await Build(db).Summary(groupBy: "model", models: [modelFast, modelSlow]));
+
+        var fast = result.Groups.Single(g => g.Model == modelFast);
+        Assert.InRange(fast.TokensPerSecond!.Value, 395, 403);
+
+        var slow = result.Groups.Single(g => g.Model == modelSlow);
+        Assert.InRange(slow.TokensPerSecond!.Value, 99, 101);
+
+        // The overall total (4103 tokens / 11.04s =~ 371.6/s) sits between the two - distinct from
+        // either group's own rate, so a group silently inheriting Totals.TokensPerSecond would fail here.
+        Assert.NotInRange(slow.TokensPerSecond!.Value, 370, 373);
+    }
+
+    [Fact]
+    public async Task Summary_TokensPerSecond_IsNullNotNaNOrInfinity_WhenUnmeasuredOrDurationIsZero()
+    {
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var modelUnmeasured = $"{marker}-unmeasured"; // no completion tokens reported
+        var modelZeroDuration = $"{marker}-zero";       // completion tokens reported, but 0 duration
+        db.LlmCalls.AddRange(
+            SummaryRow(marker, model: modelUnmeasured, durationMs: 1000, completionTokens: null),
+            SummaryRow(marker, model: modelZeroDuration, durationMs: 0, completionTokens: 500));
+        await db.SaveChangesAsync();
+
+        var result = OkValue<LlmUsageSummary>(
+            await Build(db).Summary(groupBy: "model", models: [modelUnmeasured, modelZeroDuration]));
+
+        Assert.Null(result.Groups.Single(g => g.Model == modelUnmeasured).TokensPerSecond);
+        Assert.Null(result.Groups.Single(g => g.Model == modelZeroDuration).TokensPerSecond);
+    }
+
+    [Fact]
+    public async Task Summary_TotalsCoverTheWholeFilter_NotDerivedFromTheGroups()
+    {
+        // Same convention as the detail endpoint's Totals_CoverTheWholeFilter test - Totals here must be
+        // LlmUsageQuery.TotalsAsync over the whole filtered set, not a fold over the returned Groups.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var modelA = $"{marker}-a";
+        var modelB = $"{marker}-b";
+        db.LlmCalls.AddRange(
+            SummaryRow(marker, model: modelA, completionTokens: 10),
+            SummaryRow(marker, model: modelB, completionTokens: 20),
+            SummaryRow(marker, model: modelB, completionTokens: 30));
+        await db.SaveChangesAsync();
+
+        var result = OkValue<LlmUsageSummary>(
+            await Build(db).Summary(groupBy: "model", models: [modelA, modelB]));
+
+        Assert.Equal(3, result.Totals.Calls);
+        Assert.Equal(60, result.Totals.CompletionTokens);
+    }
+
+    [Fact]
+    public async Task Summary_UsesTheSameFilterAsTheDetailView_RespectsOutcome()
+    {
+        // The mutation-check target (Step 5 of the task brief): Summary must build its scope through
+        // LlmUsageQuery.Apply, the same primitive the detail endpoint uses, so the two views can never
+        // silently disagree about what is in scope. This seeds a failed call that outcome="ok" must
+        // exclude - if Summary ever grows its own hand-rolled filter and drops the outcome clause, this
+        // is the test that catches it (see the task report for the mutation-check run).
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        db.LlmCalls.AddRange(
+            SummaryRow(marker, success: true, completionTokens: 100),
+            SummaryRow(marker, success: false, completionTokens: 999));
+        await db.SaveChangesAsync();
+
+        var result = OkValue<LlmUsageSummary>(
+            await Build(db).Summary(groupBy: "model", models: [marker.ToString()], outcome: "ok"));
+
+        var group = Assert.Single(result.Groups);
+        Assert.Equal(1, group.Calls);
+        Assert.Equal(100, group.CompletionTokens);
+    }
 }

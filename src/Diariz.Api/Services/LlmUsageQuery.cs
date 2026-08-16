@@ -4,6 +4,16 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Diariz.Api.Services;
 
+/// <summary>A dimension the roll-up summary (<c>LlmUsageController.Summary</c>) can group by. Deliberately
+/// a closed enum, not a free-form string carried through to the query - <see cref="LlmUsageQuery.TryResolveGroupBy"/>
+/// is the only place a query-string token becomes one of these.</summary>
+public enum LlmUsageGroupDimension
+{
+    User,
+    Model,
+    Kind,
+}
+
 /// <summary>Shared filter/sort primitives for the LLM usage viewer. Every endpoint over
 /// <c>LlmCalls</c> composes its query through <see cref="Apply"/> and resolves its sort key through
 /// <see cref="TryResolveSort"/>, so there is exactly one place that decides what is filterable and
@@ -27,6 +37,18 @@ public static class LlmUsageQuery
         ["kind"] = nameof(LlmCall.Kind),
         ["model"] = nameof(LlmCall.Model),
         ["userEmail"] = nameof(LlmCall.UserEmail),
+    };
+
+    /// <summary>Dimension names a caller may group the roll-up summary by, keyed by the token a query
+    /// string sends (a comma-separated list, e.g. <c>groupBy=user,model</c>). Same discipline as
+    /// <see cref="SortWhitelist"/>: a lookup, never string interpolation, and an unrecognised token is
+    /// rejected rather than silently dropped - silently ignoring it would show the administrator a
+    /// different report from the one they asked for.</summary>
+    private static readonly Dictionary<string, LlmUsageGroupDimension> GroupByWhitelist = new()
+    {
+        ["user"] = LlmUsageGroupDimension.User,
+        ["model"] = LlmUsageGroupDimension.Model,
+        ["kind"] = LlmUsageGroupDimension.Kind,
     };
 
     /// <summary>Composes the shared filter predicate. <paramref name="filter"/>.From defaults to 30
@@ -76,6 +98,36 @@ public static class LlmUsageQuery
         }
 
         return SortWhitelist.TryGetValue(sort, out column!);
+    }
+
+    /// <summary>Resolves a comma-separated <c>groupBy</c> query-string value (e.g. <c>"user,model"</c>)
+    /// into the distinct set of dimensions it names, via whitelist lookup on each token. False - not a
+    /// best-effort partial parse - for null/empty/whitespace-only input, or if ANY token fails to
+    /// resolve, so one bad token in an otherwise-valid list rejects the whole request rather than
+    /// silently grouping by less than what was asked for. Whitespace around each token is trimmed;
+    /// duplicate tokens collapse rather than error.</summary>
+    public static bool TryResolveGroupBy(string? groupBy, out LlmUsageGroupDimension[] dimensions)
+    {
+        dimensions = [];
+        if (string.IsNullOrWhiteSpace(groupBy))
+            return false;
+
+        var tokens = groupBy.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (tokens.Length == 0)
+            return false;
+
+        var resolved = new List<LlmUsageGroupDimension>(tokens.Length);
+        foreach (var token in tokens)
+        {
+            if (!GroupByWhitelist.TryGetValue(token, out var dimension))
+                return false; // dimensions is still [] here - no partial result on rejection
+
+            if (!resolved.Contains(dimension))
+                resolved.Add(dimension);
+        }
+
+        dimensions = resolved.ToArray();
+        return true;
     }
 
     /// <summary>Aggregates <paramref name="filtered"/> into one <see cref="LlmUsageTotals"/> via a
@@ -143,5 +195,126 @@ public static class LlmUsageQuery
             row.AnyTokenMeasured,
             row.FailedCalls,
             tokensPerSecond);
+    }
+
+    /// <summary>Rolls <paramref name="filtered"/> up into one row per distinct combination of the
+    /// requested <paramref name="dimensions"/> - the query behind <c>LlmUsageController.Summary</c>.
+    /// Every field NOT in <paramref name="dimensions"/> is folded to a constant before grouping (see the
+    /// <c>byUser</c>/<c>byModel</c>/<c>byKind</c> conditionals below), so rows that differ only in an
+    /// unrequested dimension collapse into the same group - e.g. <c>groupBy=model</c> alone puts every
+    /// user's and every kind's calls for one model into a single row.
+    ///
+    /// TWO-LEVEL AGGREGATION, not one flat GROUP BY, because "turns" (calls per operation) needs an
+    /// AVERAGE and a MAX per operation within the group, never a SUM across operations (see
+    /// <see cref="LlmUsageSummaryGroup"/>'s doc comment for why a sum is meaningless here). The first
+    /// level groups by (the requested dimensions + OperationId) to get one row per operation *as seen
+    /// through this group's dimensions* - Turns, per-operation token sums/measured-counts, duration, and
+    /// failed-call count. The second level groups THAT by the requested dimensions alone and aggregates
+    /// across operations: Operations = COUNT, Calls = SUM(Turns), AverageTurnsPerOperation = AVG(Turns),
+    /// MaxTurnsPerOperation = MAX(Turns), and every token/duration/failure figure summed a second time
+    /// (sum-of-sums, which is exact - SUM is associative - as long as the per-operation nulls are folded
+    /// to 0 the same way <see cref="TotalsAsync"/> does, with the real "was anything measured" question
+    /// answered separately by the *Measured counts, not by the coalesced sum itself).
+    ///
+    /// This is a single call - two chained <c>GroupBy</c>/<c>Select</c> stages, one <c>ToListAsync</c> at
+    /// the end - translated by EF/Npgsql into one SQL statement (an inner GROUP BY subquery feeding an
+    /// outer GROUP BY), verified against real Postgres. The result set materialized into memory is bounded
+    /// by the number of DISTINCT GROUPS the request can produce (at most #users x #models x #kinds for the
+    /// widest possible <c>groupBy</c>), never by the number of matching calls or operations - grouping by
+    /// user or kind alone is naturally small (bounded by how many distinct users/kinds exist on the
+    /// platform), and grouping by model is equally small in practice (a handful of configured model
+    /// names). Unlike <c>LlmUsageController.List</c>'s operations mode, nothing here hits the EF/Npgsql
+    /// compound-ORDER-BY translation limitation documented there - this method issues no ORDER BY at
+    /// all - so no <c>MaxOperationsPerRequest</c>-style pre-fetch guard is needed for this query shape.</summary>
+    public static async Task<IReadOnlyList<LlmUsageSummaryGroup>> SummaryAsync(
+        IQueryable<LlmCall> filtered, LlmUsageGroupDimension[] dimensions, CancellationToken ct)
+    {
+        var byUser = dimensions.Contains(LlmUsageGroupDimension.User);
+        var byModel = dimensions.Contains(LlmUsageGroupDimension.Model);
+        var byKind = dimensions.Contains(LlmUsageGroupDimension.Kind);
+
+        var perOperation = filtered
+            .Select(c => new
+            {
+                UserId = byUser ? c.UserId : (Guid?)null,
+                UserEmail = byUser ? c.UserEmail : null,
+                Model = byModel ? c.Model : null,
+                Kind = byKind ? (LlmCallKind?)c.Kind : null,
+                c.OperationId,
+                c.PromptTokens,
+                c.CompletionTokens,
+                c.ReasoningTokens,
+                c.TotalTokens,
+                c.DurationMs,
+                c.Success,
+            })
+            .GroupBy(x => new { x.UserId, x.UserEmail, x.Model, x.Kind, x.OperationId })
+            .Select(g => new
+            {
+                g.Key.UserId,
+                g.Key.UserEmail,
+                g.Key.Model,
+                g.Key.Kind,
+                Turns = g.Count(),
+                PromptTokensSum = g.Sum(x => (long?)x.PromptTokens),
+                PromptTokensMeasured = g.Count(x => x.PromptTokens != null),
+                CompletionTokensSum = g.Sum(x => (long?)x.CompletionTokens),
+                CompletionTokensMeasured = g.Count(x => x.CompletionTokens != null),
+                ReasoningTokensSum = g.Sum(x => (long?)x.ReasoningTokens),
+                ReasoningTokensMeasured = g.Count(x => x.ReasoningTokens != null),
+                TotalTokensSum = g.Sum(x => (long?)x.TotalTokens),
+                TotalTokensMeasured = g.Count(x => x.TotalTokens != null),
+                AnyTokenMeasured = g.Count(x =>
+                    x.PromptTokens != null || x.CompletionTokens != null ||
+                    x.ReasoningTokens != null || x.TotalTokens != null),
+                DurationMsSum = g.Sum(x => (long)x.DurationMs),
+                FailedCalls = g.Count(x => !x.Success),
+            });
+
+        var grouped = await perOperation
+            .GroupBy(x => new { x.UserId, x.UserEmail, x.Model, x.Kind })
+            .Select(g => new
+            {
+                g.Key.UserId,
+                g.Key.UserEmail,
+                g.Key.Model,
+                g.Key.Kind,
+                Operations = g.Count(),
+                Calls = g.Sum(x => x.Turns),
+                AverageTurns = g.Average(x => (double)x.Turns),
+                MaxTurns = g.Max(x => x.Turns),
+                PromptTokensSum = g.Sum(x => x.PromptTokensSum ?? 0),
+                PromptTokensMeasured = g.Sum(x => x.PromptTokensMeasured),
+                CompletionTokensSum = g.Sum(x => x.CompletionTokensSum ?? 0),
+                CompletionTokensMeasured = g.Sum(x => x.CompletionTokensMeasured),
+                ReasoningTokensSum = g.Sum(x => x.ReasoningTokensSum ?? 0),
+                ReasoningTokensMeasured = g.Sum(x => x.ReasoningTokensMeasured),
+                TotalTokensSum = g.Sum(x => x.TotalTokensSum ?? 0),
+                TotalTokensMeasured = g.Sum(x => x.TotalTokensMeasured),
+                AnyTokenMeasured = g.Sum(x => x.AnyTokenMeasured),
+                DurationMsSum = g.Sum(x => x.DurationMsSum),
+                FailedCalls = g.Sum(x => x.FailedCalls),
+            })
+            .ToListAsync(ct);
+
+        return grouped.Select(x =>
+        {
+            long? promptTokens = x.PromptTokensMeasured > 0 ? x.PromptTokensSum : null;
+            long? completionTokens = x.CompletionTokensMeasured > 0 ? x.CompletionTokensSum : null;
+            long? reasoningTokens = x.ReasoningTokensMeasured > 0 ? x.ReasoningTokensSum : null;
+            long? totalTokens = x.TotalTokensMeasured > 0 ? x.TotalTokensSum : null;
+
+            // Same two guards as TotalsAsync, applied to THIS group's own sums - never the overall
+            // totals' DurationMs/CompletionTokens.
+            double? tokensPerSecond = completionTokens is { } completion && x.DurationMsSum > 0
+                ? completion / (x.DurationMsSum / 1000.0)
+                : null;
+
+            return new LlmUsageSummaryGroup(
+                x.UserId, x.UserEmail, x.Model, x.Kind,
+                x.Calls, x.Operations, x.AverageTurns, x.MaxTurns,
+                promptTokens, completionTokens, reasoningTokens, totalTokens,
+                x.AnyTokenMeasured, x.FailedCalls, tokensPerSecond);
+        }).ToList();
     }
 }

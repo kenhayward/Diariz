@@ -116,3 +116,48 @@ public record LlmUsagePage<TRow>(
     int PageSize,
     int Total,
     LlmUsageTotals Totals);
+
+// ---- LLM usage viewer summary (LlmUsageController.Summary - the roll-up view) ----
+
+/// <summary>One roll-up row from <c>GET /api/admin/llm-usage/summary</c> - <c>LlmCalls</c> collapsed by
+/// whichever of <c>user</c>/<c>model</c>/<c>kind</c> the caller asked to group by (see
+/// <c>LlmUsageQuery.TryResolveGroupBy</c>). A dimension NOT requested is null on every row (every row
+/// with a different value for that dimension folds into the same group); a dimension that IS requested
+/// is never null on a real row (its column value, or the denormalised email snapshot for
+/// <paramref name="UserEmail"/>).
+///
+/// <paramref name="AverageTurnsPerOperation"/>/<paramref name="MaxTurnsPerOperation"/> are computed PER
+/// OPERATION (an operation's "turns" is how many calls it made), never summed across the operations in
+/// the group - see <c>LlmUsageQuery.SummaryAsync</c>'s two-level aggregation. Summing turns across
+/// operations is a meaningless number that looks authoritative: two operations of 2 and 5 turns is "up
+/// to 5 turns per operation, 3.5 on average" - not "7 turns".
+///
+/// <paramref name="TokensPerSecond"/> is this GROUP's own <c>SUM(CompletionTokens) / SUM(DurationMs)</c>
+/// - never an average of its rows' own rates (one tiny fast call must not outweigh one huge slow one),
+/// and never the overall <see cref="LlmUsageTotals.TokensPerSecond"/> inherited unchanged. Null (never
+/// NaN/Infinity, which are not valid JSON) under the same two guards as
+/// <see cref="LlmUsageTotals.TokensPerSecond"/>: no completion tokens measured in the group, or the
+/// group's summed duration is zero.</summary>
+public record LlmUsageSummaryGroup(
+    Guid? UserId,
+    string? UserEmail,
+    string? Model,
+    LlmCallKind? Kind,
+    int Calls,
+    int Operations,
+    double AverageTurnsPerOperation,
+    int MaxTurnsPerOperation,
+    long? PromptTokens,
+    long? CompletionTokens,
+    long? ReasoningTokens,
+    long? TotalTokens,
+    int TokenMeasuredCalls,
+    int FailedCalls,
+    double? TokensPerSecond);
+
+/// <summary>Response for <c>GET /api/admin/llm-usage/summary</c>: one row per requested group, plus
+/// <see cref="LlmUsageTotals"/> over the WHOLE filtered set - computed by the same
+/// <c>LlmUsageQuery.TotalsAsync</c> the detail view uses, over a filter built by the same
+/// <c>LlmUsageQuery.Apply</c>, so the summary and the detail view can never silently disagree about what
+/// is in scope. <see cref="Totals"/> is never derived from folding over <see cref="Groups"/>.</summary>
+public record LlmUsageSummary(IReadOnlyList<LlmUsageSummaryGroup> Groups, LlmUsageTotals Totals);

@@ -122,4 +122,32 @@ public class LlmUsageQueryTests
         // interpolation into SQL.
         Assert.False(LlmUsageQuery.TryResolveSort(sort, out _));
     }
+
+    [Theory]
+    [InlineData("user")]
+    [InlineData("model")]
+    [InlineData("kind")]
+    [InlineData("user,model")]
+    [InlineData("model,kind")]
+    [InlineData("user,model,kind")]
+    [InlineData(" user , model ")] // trimmed
+    [InlineData("user,user")] // duplicates collapse rather than error
+    public void TryResolveGroupBy_AcceptsWhitelistedDimensionCombinations(string groupBy)
+    {
+        Assert.True(LlmUsageQuery.TryResolveGroupBy(groupBy, out var dims));
+        Assert.NotEmpty(dims);
+    }
+
+    [Theory]
+    [InlineData("UserId; DROP TABLE \"LlmCalls\"")]
+    [InlineData("nonsense")]
+    [InlineData("")]
+    [InlineData(null)]
+    [InlineData("user,nonsense")] // one bad token in an otherwise-valid list still rejects the whole thing
+    public void TryResolveGroupBy_RejectsAnythingElse(string? groupBy)
+    {
+        // Same whitelist discipline as TryResolveSort: silently ignoring an unrecognised dimension would
+        // show the administrator a different report from the one they asked for.
+        Assert.False(LlmUsageQuery.TryResolveGroupBy(groupBy, out _));
+    }
 }
