@@ -297,6 +297,9 @@ static void NoHttpTimeout(HttpClient c) => c.Timeout = System.Threading.Timeout.
 // means a client added later is measured for free, which is the failure mode that matters: the gap this closes
 // existed because nothing outside the ASP.NET request pipeline was ever instrumented at all.
 builder.Services.AddSingleton<ILlmTrace, SentryLlmTrace>();
+builder.Services.AddSingleton<ChannelLlmUsageSink>();
+builder.Services.AddSingleton<ILlmUsageSink>(sp => sp.GetRequiredService<ChannelLlmUsageSink>());
+builder.Services.AddHostedService<LlmUsageWriter>();
 builder.Services.AddTransient<LlmTelemetryHandler>();
 IHttpClientBuilder AddLlmClient<TClient, TImplementation>(Action<HttpClient>? configure = null)
     where TClient : class where TImplementation : class, TClient
@@ -529,6 +532,9 @@ builder.Services.AddHostedService<StorageBackfillService>();
 // Nightly audio-retention job: deletes audio blobs of old, transcribed, unprotected recordings when the
 // Platform Administrator has opted in (off by default). Runs at the configured server-local time of day.
 builder.Services.AddHostedService<AudioRetentionWorker>();
+// Nightly LLM usage-log retention sweep: deletes LlmCall rows older than LlmUsageRetentionDays (0 = keep
+// forever). Reuses AudioRetentionSchedule's server-local time of day.
+builder.Services.AddHostedService<LlmUsageRetentionWorker>();
 
 builder.Services.AddControllers()
     .AddJsonOptions(o => JsonConfig.Apply(o.JsonSerializerOptions));

@@ -65,6 +65,9 @@ public class PlatformSettingsController : ControllerBase
         s.LlmTimeoutSeconds = req.LlmTimeoutSeconds;
         s.McpAccessEnabled = req.McpAccessEnabled;
         s.WebhooksEnabled = req.WebhooksEnabled;
+        s.LlmUsageLoggingEnabled = req.LlmUsageLoggingEnabled;
+        s.LlmUsageRetentionDays = Math.Max(0, req.LlmUsageRetentionDays);
+        s.LlmStreamUsageEnabled = req.LlmStreamUsageEnabled;
         await _db.SaveChangesAsync();
         return ToDto(s);
     }
@@ -96,5 +99,6 @@ public class PlatformSettingsController : ControllerBase
     private static PlatformSettingsDto ToDto(PlatformSettings s) => new(
         s.StarterQuotaBytes, s.MaxQuotaBytes, s.MinutesGenerationMode,
         s.AutoDeleteAudioEnabled, s.AudioRetentionDays, s.AudioDeletionTimeOfDay, s.ApiAccessEnabled,
-        s.LlmTimeoutSeconds, s.McpAccessEnabled, s.WebhooksEnabled);
+        s.LlmTimeoutSeconds, s.McpAccessEnabled, s.WebhooksEnabled,
+        s.LlmUsageLoggingEnabled, s.LlmUsageRetentionDays, s.LlmStreamUsageEnabled);
 }

@@ -179,6 +179,11 @@ public sealed class TranscriptSearch : ITranscriptSearch
         string queryLiteral;
         try
         {
+            // Attribute the query-embedding call. Separate Kind from Embedding (used for indexing chunks) -
+            // search is user-interactive and high-frequency, and folding it into indexing volume would hide
+            // both. Pushed here, immediately around the single call it covers.
+            using var llm = LlmCallScope.Push(LlmCallKind.SearchQuery, userId, await UserEmailAsync(userId, ct));
+
             // Prefix the query with the model's query task instruction (nomic: "search_query: "); empty for
             // models that don't use prefixes. Must pair with the document prefix used when embedding chunks.
             var vectors = await _embeddings.EmbedAsync(cfg, [cfg.QueryPrefix + phrase], ct);
@@ -411,4 +416,7 @@ public sealed class TranscriptSearch : ITranscriptSearch
 
     /// <summary>Escapes the LIKE wildcards in user input so a name filter is treated literally.</summary>
     private static string Like(string s) => s.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
+
+    private Task<string?> UserEmailAsync(Guid userId, CancellationToken ct) =>
+        _db.Users.Where(u => u.Id == userId).Select(u => u.Email).FirstOrDefaultAsync(ct);
 }

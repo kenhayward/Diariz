@@ -184,7 +184,7 @@ public sealed class FakeApiKeyProtector : IApiKeyProtector
 }
 
 /// <summary>Stub <see cref="ISummarizationClient"/> — returns a canned result or throws.</summary>
-public sealed class FakeSummarizationClient : ISummarizationClient
+public sealed class FakeSummarizationClient(Action? onCall = null) : ISummarizationClient
 {
     public SummaryResult Result { get; set; } = new("A concise summary.", "Auto Name");
     public Exception? ThrowOnCall { get; set; }
@@ -197,6 +197,7 @@ public sealed class FakeSummarizationClient : ISummarizationClient
         SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, bool needName, string template,
         CancellationToken ct = default)
     {
+        onCall?.Invoke();
         Calls++;
         LastNeedName = needName;
         LastConfig = config;
@@ -208,7 +209,7 @@ public sealed class FakeSummarizationClient : ISummarizationClient
 
 /// <summary>Stub <see cref="IMeetingMinutesClient"/> — returns canned Markdown or throws, and records the
 /// arguments it was called with.</summary>
-public sealed class FakeMeetingMinutesClient : IMeetingMinutesClient
+public sealed class FakeMeetingMinutesClient(Action? onCall = null) : IMeetingMinutesClient
 {
     public string Result { get; set; } = "# Meeting\n\nMinutes body.";
     public Exception? ThrowOnCall { get; set; }
@@ -226,6 +227,7 @@ public sealed class FakeMeetingMinutesClient : IMeetingMinutesClient
     public Task<string> GenerateAsync(
         SummarizationRequestConfig config, IReadOnlyList<ChatMessage> messages, CancellationToken ct = default)
     {
+        onCall?.Invoke();
         Calls++;
         LastConfig = config;
         LastMessages = messages;
@@ -237,7 +239,7 @@ public sealed class FakeMeetingMinutesClient : IMeetingMinutesClient
 
 /// <summary>Stub <see cref="IMeetingTypeMinutesGenerator"/> - returns canned Markdown (or throws) and records the
 /// meeting-type + actions it was handed, so the processor can be tested without the real generator/strategies.</summary>
-public sealed class FakeMeetingTypeMinutesGenerator : IMeetingTypeMinutesGenerator
+public sealed class FakeMeetingTypeMinutesGenerator(Action? onCall = null) : IMeetingTypeMinutesGenerator
 {
     public string Result { get; set; } = "# Minutes\n\nBody.";
     public Exception? ThrowOnCall { get; set; }
@@ -254,6 +256,7 @@ public sealed class FakeMeetingTypeMinutesGenerator : IMeetingTypeMinutesGenerat
         IReadOnlyList<MeetingNoteDto> notes,
         SummarizationRequestConfig config, CancellationToken ct = default)
     {
+        onCall?.Invoke();
         Calls++;
         LastOwnerId = recordingOwnerId;
         LastMeetingTypeId = meetingTypeId;
@@ -266,7 +269,7 @@ public sealed class FakeMeetingTypeMinutesGenerator : IMeetingTypeMinutesGenerat
 }
 
 /// <summary>Stub <see cref="IActionsClient"/> — returns a canned action list or throws.</summary>
-public sealed class FakeActionsClient : IActionsClient
+public sealed class FakeActionsClient(Action? onCall = null) : IActionsClient
 {
     public List<ExtractedAction> Result { get; set; } = new();
     public Exception? ThrowOnCall { get; set; }
@@ -280,6 +283,7 @@ public sealed class FakeActionsClient : IActionsClient
         SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
         DateTimeOffset? meetingDate, CancellationToken ct = default)
     {
+        onCall?.Invoke();
         Calls++;
         LastConfig = config;
         LastSegments = segments;
@@ -291,7 +295,7 @@ public sealed class FakeActionsClient : IActionsClient
 }
 
 /// <summary>Stub <see cref="ITagsClient"/> — returns a canned tag list or throws.</summary>
-public sealed class FakeTagsClient : ITagsClient
+public sealed class FakeTagsClient(Action? onCall = null) : ITagsClient
 {
     public List<ExtractedTag> Result { get; set; } = new();
     public Exception? ThrowOnCall { get; set; }
@@ -304,6 +308,7 @@ public sealed class FakeTagsClient : ITagsClient
         SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
         CancellationToken ct = default)
     {
+        onCall?.Invoke();
         Calls++;
         LastConfig = config;
         LastSegments = segments;
@@ -315,7 +320,7 @@ public sealed class FakeTagsClient : ITagsClient
 
 /// <summary>Stub <see cref="ITranslationClient"/> — by default echoes each input prefixed with the target
 /// language (so tests can assert what was translated), or throws.</summary>
-public sealed class FakeTranslationClient : ITranslationClient
+public sealed class FakeTranslationClient(Action? onCall = null) : ITranslationClient
 {
     /// <summary>Optional override: maps an exact input string to a fixed translation.</summary>
     public Dictionary<string, string> Map { get; } = new();
@@ -328,6 +333,7 @@ public sealed class FakeTranslationClient : ITranslationClient
         SummarizationRequestConfig config, string targetLanguage, IReadOnlyList<string> texts,
         CancellationToken ct = default)
     {
+        onCall?.Invoke();
         Calls++;
         LastLanguage = targetLanguage;
         LastConfig = config;
@@ -359,7 +365,7 @@ public sealed class FakeEmbeddingSettingsResolver : IEmbeddingSettingsResolver
 
 /// <summary>Stub <see cref="IEmbeddingClient"/> — returns a deterministic unit vector per input (unless
 /// <see cref="Vectors"/> overrides) and records the inputs it was asked to embed.</summary>
-public sealed class FakeEmbeddingClient : IEmbeddingClient
+public sealed class FakeEmbeddingClient(Action? onCall = null) : IEmbeddingClient
 {
     /// <summary>Optional exact outputs (one per input). When null, a fixed 3-d vector is returned per input.</summary>
     public IReadOnlyList<float[]>? Vectors { get; set; }
@@ -371,6 +377,7 @@ public sealed class FakeEmbeddingClient : IEmbeddingClient
     public Task<IReadOnlyList<float[]>> EmbedAsync(
         EmbeddingRequestConfig config, IReadOnlyList<string> inputs, CancellationToken ct = default)
     {
+        onCall?.Invoke();
         Calls++;
         LastConfig = config;
         LastInputs = inputs.ToList();
@@ -430,7 +437,7 @@ public sealed class FakeSpeakerIdentifier : ISpeakerIdentifier
 /// <summary>Stub <see cref="IChatStreamClient"/> — yields a canned token sequence or throws. For the
 /// tool-calling path, <see cref="ChunkRounds"/> scripts one delta list per model call (sequentially); when
 /// empty, <see cref="StreamChunksAsync"/> falls back to streaming <see cref="Tokens"/> as content deltas.</summary>
-public sealed class FakeChatStreamClient : IChatStreamClient
+public sealed class FakeChatStreamClient(Action? onCall = null) : IChatStreamClient
 {
     public List<string> Tokens { get; set; } = ["Project", " Kickoff", " Recap"];
     public Exception? ThrowOnCall { get; set; }
@@ -458,6 +465,7 @@ public sealed class FakeChatStreamClient : IChatStreamClient
         SummarizationRequestConfig config, IReadOnlyList<ChatMessage> messages,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {
+        onCall?.Invoke();
         Calls++;
         LastConfig = config;
         LastMessages = messages.ToList();
@@ -481,6 +489,7 @@ public sealed class FakeChatStreamClient : IChatStreamClient
         IReadOnlyList<object>? tools,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {
+        onCall?.Invoke();
         Calls++;
         LastConfig = config;
         ChunkCallMessages.Add(messages.ToList());
@@ -948,4 +957,12 @@ public sealed class NoGoogleCalendar : IGoogleCalendarClient
 
     public Task<IReadOnlyList<CalendarListEntry>?> ListAllCalendarsAsync(Guid userId, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<CalendarListEntry>?>(null);
+}
+
+/// <summary>Records what the telemetry handler decided to log, so the handler can be tested without a
+/// database or a channel.</summary>
+public sealed class FakeLlmUsageSink : ILlmUsageSink
+{
+    public List<LlmCall> Calls { get; } = new();
+    public void Record(LlmCall call) => Calls.Add(call);
 }

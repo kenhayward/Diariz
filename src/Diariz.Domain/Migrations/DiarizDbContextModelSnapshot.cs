@@ -466,6 +466,104 @@ namespace Diariz.Domain.Migrations
                     b.ToTable("IcsCalendarSources");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.LlmCall", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("CompletionTokens")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DurationMs")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Endpoint")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ErrorKind")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("PromptChars")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("PromptTokens")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ReasoningTokens")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("RecordingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RecordingTitle")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("SectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SectionName")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("StatusCode")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("Streamed")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("Success")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("TimeToFirstTokenMs")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("TotalTokens")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UserEmail")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OperationId");
+
+                    b.HasIndex("RecordingId");
+
+                    b.HasIndex("SectionId");
+
+                    b.HasIndex("StartedAt")
+                        .IsDescending();
+
+                    b.HasIndex("UserId", "StartedAt")
+                        .IsDescending(false, true);
+
+                    b.ToTable("LlmCalls");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.McpAccessToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -989,10 +1087,25 @@ namespace Diariz.Domain.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
+                    b.Property<bool>("LlmStreamUsageEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<int>("LlmTimeoutSeconds")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValue(120);
+
+                    b.Property<bool>("LlmUsageLoggingEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<int>("LlmUsageRetentionDays")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(90);
 
                     b.Property<long>("MaxQuotaBytes")
                         .HasColumnType("bigint");
@@ -1023,7 +1136,10 @@ namespace Diariz.Domain.Migrations
                             AudioDeletionTimeOfDay = new TimeOnly(3, 0, 0),
                             AudioRetentionDays = 30,
                             AutoDeleteAudioEnabled = false,
+                            LlmStreamUsageEnabled = true,
                             LlmTimeoutSeconds = 120,
+                            LlmUsageLoggingEnabled = true,
+                            LlmUsageRetentionDays = 90,
                             MaxQuotaBytes = 53687091200L,
                             McpAccessEnabled = true,
                             MinutesGenerationMode = 0,
@@ -2567,6 +2683,24 @@ namespace Diariz.Domain.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.LlmCall", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.Recording", null)
+                        .WithMany()
+                        .HasForeignKey("RecordingId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Diariz.Domain.Entities.Section", null)
+                        .WithMany()
+                        .HasForeignKey("SectionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Diariz.Domain.Entities.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.McpAccessToken", b =>

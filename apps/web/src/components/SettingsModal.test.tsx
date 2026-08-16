@@ -41,6 +41,9 @@ const platformDefaults = {
   mcpAccessEnabled: true,
   webhooksEnabled: false,
   llmTimeoutSeconds: 120,
+  llmUsageLoggingEnabled: true,
+  llmUsageRetentionDays: 90,
+  llmStreamUsageEnabled: true,
 };
 
 function renderModal(onClose: () => void = () => {}) {
@@ -136,6 +139,41 @@ describe("SettingsModal", () => {
 
     expect(await screen.findByText(/at least 5/i)).toBeTruthy();
     expect(api.updatePlatformSettings).not.toHaveBeenCalled();
+  });
+
+  it("shows the LLM usage logging settings loaded from the API", async () => {
+    (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...platformDefaults, llmUsageLoggingEnabled: false, llmUsageRetentionDays: 45, llmStreamUsageEnabled: false,
+    });
+    renderModal();
+
+    const logging = (await screen.findByLabelText(/log llm usage/i)) as HTMLInputElement;
+    await waitFor(() => expect(logging.checked).toBe(false));
+    const retention = screen.getByLabelText(/keep usage log for/i) as HTMLInputElement;
+    expect(retention.value).toBe("45");
+    const streaming = screen.getByLabelText(/request token counts on streaming calls/i) as HTMLInputElement;
+    expect(streaming.checked).toBe(false);
+  });
+
+  it("saves the LLM usage logging settings from the AI tab", async () => {
+    renderModal();
+
+    const retention = await screen.findByLabelText(/keep usage log for/i);
+    await waitFor(() => expect((retention as HTMLInputElement).value).toBe("90"));
+    fireEvent.change(retention, { target: { value: "30" } });
+    fireEvent.click(screen.getByLabelText(/log llm usage/i));
+    fireEvent.click(screen.getByLabelText(/request token counts on streaming calls/i));
+    fireEvent.click(screen.getByRole("button", { name: /^ok$/i }));
+
+    await waitFor(() =>
+      expect(api.updatePlatformSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          llmUsageRetentionDays: 30,
+          llmUsageLoggingEnabled: false,
+          llmStreamUsageEnabled: false,
+        }),
+      ),
+    );
   });
 
   it("edits the quota defaults (GB → bytes) and saves on OK without touching user settings", async () => {

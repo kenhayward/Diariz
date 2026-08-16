@@ -217,4 +217,27 @@ public class RecordingActionsControllerTests
         var other = await Build(db, Guid.NewGuid(), new FakeActionsClient()).List(rec.Id);
         Assert.IsType<NotFoundResult>(other.Result);
     }
+
+    [Fact]
+    public async Task Extract_AttributesCall_AsExtractActions()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribed(db, userId);
+        Guid? seenOperation = null;
+        LlmCallKind? seenKind = null;
+        var client = new FakeActionsClient(onCall: () =>
+        {
+            seenOperation = LlmCallScope.Active?.OperationId;
+            seenKind = LlmCallScope.Active?.Kind;
+        })
+        {
+            Result = { new ExtractedAction("Send the report", "Bob", "Friday") },
+        };
+
+        await Build(db, userId, client).Extract(rec.Id);
+
+        Assert.NotNull(seenOperation);
+        Assert.Equal(LlmCallKind.ExtractActions, seenKind);
+    }
 }

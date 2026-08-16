@@ -74,6 +74,32 @@ public class ActionsProcessorTests
     }
 
     [Fact]
+    public async Task ProcessAsync_AttributesTheCall_ToTheRecordingAndItsOwner()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, tr) = await Seed(db, userId);
+
+        LlmCallKind? observedKind = null;
+        Guid? observedRecording = null;
+        Guid? observedUser = null;
+        var client = new FakeActionsClient(onCall: () =>
+        {
+            observedKind = LlmCallScope.Active?.Kind;
+            observedRecording = LlmCallScope.Active?.RecordingId;
+            observedUser = LlmCallScope.Active?.UserId;
+        });
+
+        await ActionsProcessor.ProcessAsync(db, client, new FakeSummarizationSettingsResolver(),
+            new FakeHubContext(), new FakeJobQueue(), Job(rec, tr), Template, NullLogger.Instance,
+            new CapturingWebhookPublisher(), "");
+
+        Assert.Equal(LlmCallKind.ExtractActions, observedKind);
+        Assert.Equal(rec.Id, observedRecording);
+        Assert.Equal(rec.UserId, observedUser);
+    }
+
+    [Fact]
     public async Task ProcessAsync_SkipsWhenAlreadyExtracted_DoesNotClobberUserEdits()
     {
         using var db = TestDb.Create();

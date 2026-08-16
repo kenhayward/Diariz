@@ -3,6 +3,7 @@ using Diariz.Api.Contracts;
 using Diariz.Api.Localization;
 using Diariz.Api.Services;
 using Diariz.Domain;
+using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -31,6 +32,9 @@ public class RecordingTranslationController : ControllerBase
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+    private Task<string?> UserEmailAsync() =>
+        _db.Users.Where(u => u.Id == UserId).Select(u => u.Email).FirstOrDefaultAsync();
 
     /// <summary>Resolve the target language: the request value, else the caller's native language. Returns
     /// the language's English name (for the prompt), or an error result.</summary>
@@ -78,6 +82,11 @@ public class RecordingTranslationController : ControllerBase
         var (name, error) = await ResolveTargetAsync(req.Language);
         if (error is not null) return error;
 
+        // Attribute every model call this request makes (segments + summary + actions below), pushed once
+        // here rather than per call.
+        using var llm = LlmCallScope.Push(
+            LlmCallKind.Translation, UserId, await UserEmailAsync(), rec.Id, rec.Name ?? rec.Title);
+
         // Segments: translate each model Original into the revision column.
         var segments = current.Segments.OrderBy(s => s.Ordinal).ToList();
         var translated = await _client.TranslateAsync(cfg, name!, segments.Select(s => s.Original).ToList());
@@ -116,13 +125,17 @@ public class RecordingTranslationController : ControllerBase
         var seg = await _db.Segments.Include(s => s.Transcription)
             .FirstOrDefaultAsync(s => s.Id == segmentId);
         if (seg?.Transcription is null || seg.Transcription.RecordingId != recordingId) return NotFound();
-        if (!await _db.Recordings.AnyAsync(r => r.Id == recordingId && r.UserId == UserId)) return NotFound();
+        var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == recordingId && r.UserId == UserId);
+        if (rec is null) return NotFound();
 
         var cfg = await _settings.ResolveAsync(UserId);
         if (!cfg.Enabled) return BadRequest("Translation needs an LLM endpoint. Set one in Settings.");
 
         var (name, error) = await ResolveTargetAsync(req.Language);
         if (error is not null) return error;
+
+        using var llm = LlmCallScope.Push(
+            LlmCallKind.Translation, UserId, await UserEmailAsync(), rec.Id, rec.Name ?? rec.Title);
 
         seg.Revised = (await _client.TranslateAsync(cfg, name!, [seg.Original]))[0];
         await _db.SaveChangesAsync();
@@ -144,7 +157,8 @@ public class RecordingTranslationController : ControllerBase
         var current = await _db.Transcriptions.Where(t => t.RecordingId == recordingId)
             .OrderByDescending(t => t.Version).FirstOrDefaultAsync();
         if (current is null) return NotFound();
-        if (!await _db.Recordings.AnyAsync(r => r.Id == recordingId && r.UserId == UserId)) return NotFound();
+        var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == recordingId && r.UserId == UserId);
+        if (rec is null) return NotFound();
 
         var cfg = await _settings.ResolveAsync(UserId);
         if (!cfg.Enabled) return BadRequest("Translation needs an LLM endpoint. Set one in Settings.");
@@ -158,6 +172,9 @@ public class RecordingTranslationController : ControllerBase
             .OrderBy(s => s.Ordinal)
             .ToListAsync();
         if (segments.Count == 0) return NoContent();
+
+        using var llm = LlmCallScope.Push(
+            LlmCallKind.Translation, UserId, await UserEmailAsync(), rec.Id, rec.Name ?? rec.Title);
 
         var translated = await _client.TranslateAsync(cfg, name!, segments.Select(s => s.Original).ToList());
         for (var i = 0; i < segments.Count; i++) segments[i].Revised = translated[i];

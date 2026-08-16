@@ -1,10 +1,12 @@
 using System.Text.Json;
+using Diariz.Domain.Entities;
 
 namespace Diariz.Api.Services;
 
 /// <summary>Token counts from an OpenAI-compatible response's <c>usage</c> block. All nullable: plenty of
 /// compatible servers omit some or all of it, and a missing count must not cost the caller its timing.</summary>
-public readonly record struct LlmUsage(int? PromptTokens, int? CompletionTokens, int? TotalTokens);
+public readonly record struct LlmUsage(
+    int? PromptTokens, int? CompletionTokens, int? TotalTokens, int? ReasoningTokens = null);
 
 /// <summary>Reads the <c>usage</c> block out of an OpenAI-compatible response body.</summary>
 public static class LlmUsageParser
@@ -31,8 +33,15 @@ public static class LlmUsageParser
                         // deriving, so the Performance view is not full of blank totals.
                         ?? (prompt is null && completion is null ? null : (prompt ?? 0) + (completion ?? 0));
 
+            // Reported by reasoning models under completion_tokens_details. Absent almost everywhere
+            // else, and absent must stay null rather than becoming 0.
+            int? reasoning = null;
+            if (u.TryGetProperty("completion_tokens_details", out var details)
+                && details.ValueKind == JsonValueKind.Object)
+                reasoning = ReadInt(details, "reasoning_tokens");
+
             if (prompt is null && completion is null && total is null) return false;
-            usage = new LlmUsage(prompt, completion, total);
+            usage = new LlmUsage(prompt, completion, total, reasoning);
             return true;
         }
         catch (JsonException)
@@ -112,8 +121,13 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
     public const string Op = "gen_ai.request";
 
     private readonly ILlmTrace _trace;
+    private readonly ILlmUsageSink _sink;
 
-    public LlmTelemetryHandler(ILlmTrace trace) => _trace = trace;
+    public LlmTelemetryHandler(ILlmTrace trace, ILlmUsageSink sink)
+    {
+        _trace = trace;
+        _sink = sink;
+    }
 
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken ct)
@@ -126,20 +140,155 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
 
         using var span = _trace.StartSpan(Op, $"{request.Method} {target}");
 
-        var response = await base.SendAsync(request, ct);
+        var scope = LlmCallScope.Active;
+        var startedAt = DateTimeOffset.UtcNow;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var promptChars = await PromptCharsAsync(request, ct);
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await base.SendAsync(request, ct);
+        }
+        catch (Exception ex)
+        {
+            // A transport failure or a timeout is exactly the expensive case an administrator needs to
+            // see, so it is recorded before the exception continues on to the caller unchanged. There is
+            // no response to inspect here, so Streamed is unconditionally false - not "unknown".
+            clock.Stop();
+            Record(scope, target, request, startedAt, clock, promptChars, null, default, ErrorKindOf(ex), streamed: false);
+            throw;
+        }
+
         span.SetStatusCode((int)response.StatusCode);
+
+        // Whether this WAS a stream is visible for free from the content-type header alone - no body
+        // read required. Compute it before the usage block below, which is the one thing that must NOT
+        // touch a streaming body (see ReadForUsageAsync's doc for why: buffering an SSE stream would
+        // hold every chat token until the model finished).
+        var streamed = IsEventStream(response);
 
         // `usage` only exists on a buffered JSON body. Streaming responses (SSE) are left strictly alone:
         // buffering one would defeat streaming entirely, leaving the chat UI silent until the model
         // finished instead of showing tokens as they arrive.
-        if (IsJson(response) && LlmUsageParser.TryParse(await ReadForUsageAsync(response, ct), out var usage))
-            span.SetUsage(usage);
+        var usage = default(LlmUsage);
+        if (IsJson(response) && LlmUsageParser.TryParse(await ReadForUsageAsync(response, ct), out var parsed))
+        {
+            usage = parsed;
+            span.SetUsage(parsed);
+        }
+
+        clock.Stop();
+        var status = (int)response.StatusCode;
+        Record(
+            scope, target, request, startedAt, clock, promptChars, status, usage,
+            response.IsSuccessStatusCode ? null : $"Http{status}", streamed);
 
         return response;
     }
 
+    /// <summary>Length of the serialized request body, used as a proxy for prompt size so no call site has
+    /// to report it. Best-effort: a body that cannot be read costs a null, never the call.</summary>
+    private static async Task<int?> PromptCharsAsync(HttpRequestMessage request, CancellationToken ct)
+    {
+        if (request.Content is null) return null;
+        try
+        {
+            return (await request.Content.ReadAsStringAsync(ct)).Length;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Reads the <c>model</c> property out of the request body. Never throws - an unparseable or
+    /// absent body costs an empty string, never the call.</summary>
+    private static string ModelOf(HttpRequestMessage request)
+    {
+        try
+        {
+            var body = request.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
+            if (string.IsNullOrWhiteSpace(body)) return string.Empty;
+
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return string.Empty;
+            if (doc.RootElement.TryGetProperty("model", out var m) && m.ValueKind == JsonValueKind.String)
+                return m.GetString() ?? string.Empty;
+            return string.Empty;
+        }
+        catch (Exception)
+        {
+            return string.Empty;
+        }
+    }
+
+    private static string ErrorKindOf(Exception ex) => ex switch
+    {
+        TaskCanceledException or OperationCanceledException => "Timeout",
+        HttpRequestException => "Transport",
+        _ => ex.GetType().Name,
+    };
+
+    /// <summary>Builds the row and hands it to the sink. Content is never included - only counts, sizes
+    /// and identifiers.</summary>
+    private void Record(
+        LlmCallScope? scope, string target, HttpRequestMessage request, DateTimeOffset startedAt,
+        System.Diagnostics.Stopwatch clock, int? promptChars, int? statusCode, LlmUsage usage,
+        string? errorKind, bool streamed)
+    {
+        var call = new LlmCall
+        {
+            Id = Guid.NewGuid(),
+            OperationId = scope?.OperationId ?? Guid.NewGuid(),
+            Sequence = scope?.NextSequence() ?? 1,
+            Kind = scope?.Kind ?? LlmCallKind.Unknown,
+            UserId = scope?.UserId,
+            UserEmail = scope?.UserEmail ?? string.Empty,
+            RecordingId = scope?.RecordingId,
+            RecordingTitle = scope?.RecordingTitle,
+            SectionId = scope?.SectionId,
+            SectionName = scope?.SectionName,
+            Model = ModelOf(request),
+            Endpoint = target,
+            StartedAt = startedAt,
+            CompletedAt = startedAt.AddMilliseconds(clock.Elapsed.TotalMilliseconds),
+            DurationMs = (int)clock.ElapsedMilliseconds,
+            PromptTokens = usage.PromptTokens,
+            CompletionTokens = usage.CompletionTokens,
+            ReasoningTokens = usage.ReasoningTokens,
+            TotalTokens = usage.TotalTokens,
+            PromptChars = promptChars,
+            Streamed = streamed,
+            Success = errorKind is null,
+            StatusCode = statusCode,
+            ErrorKind = errorKind,
+        };
+
+        try
+        {
+            _sink.Record(call);
+        }
+        catch (Exception)
+        {
+            // Symmetric with every read above: a telemetry operation must never break the call it
+            // measures. This is called from both the success path (after a good response was already
+            // obtained) and the catch block around base.SendAsync (where a throwing sink would replace
+            // the real transport exception before `throw;` runs) - either way, a broken sink must not
+            // become the caller's problem. ILlmUsageSink.Record documents the "must not throw" contract;
+            // this is the last line of defence in case an implementation ever violates it.
+        }
+    }
+
     private static bool IsJson(HttpResponseMessage response) =>
         response.Content.Headers.ContentType?.MediaType is "application/json";
+
+    /// <summary>Header-only check - reads no part of the body. Deliberately the mirror of
+    /// <see cref="IsJson"/> rather than <c>!IsJson(response)</c>: a missing or unrecognised content type
+    /// must read as "not streamed" (<c>false</c>), the same defensive default every other read in this
+    /// handler falls back to, not as streamed-by-elimination.</summary>
+    private static bool IsEventStream(HttpResponseMessage response) =>
+        response.Content.Headers.ContentType?.MediaType is "text/event-stream";
 
     /// <summary>Read the body so `usage` can be parsed out of it, WITHOUT costing the caller its own read.
     ///

@@ -84,6 +84,32 @@ public class MeetingMinutesProcessorTests
     }
 
     [Fact]
+    public async Task ProcessAsync_AttributesTheCall_ToTheRecordingAndItsOwner()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, tr) = await Seed(db, userId);
+
+        LlmCallKind? observedKind = null;
+        Guid? observedRecording = null;
+        Guid? observedUser = null;
+        var generator = new FakeMeetingTypeMinutesGenerator(onCall: () =>
+        {
+            observedKind = LlmCallScope.Active?.Kind;
+            observedRecording = LlmCallScope.Active?.RecordingId;
+            observedUser = LlmCallScope.Active?.UserId;
+        });
+
+        await MeetingMinutesProcessor.ProcessAsync(
+            db, generator, new FakeSummarizationSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
+            Job(rec, tr), NullLogger.Instance, new CapturingWebhookPublisher(), "");
+
+        Assert.Equal(LlmCallKind.MeetingMinutes, observedKind);
+        Assert.Equal(rec.Id, observedRecording);
+        Assert.Equal(rec.UserId, observedUser);
+    }
+
+    [Fact]
     public async Task ProcessAsync_UpdatesExistingMinutes()
     {
         using var db = TestDb.Create();

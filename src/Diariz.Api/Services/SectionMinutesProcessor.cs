@@ -25,6 +25,12 @@ public static class SectionMinutesProcessor
             .FirstOrDefaultAsync(s => s.Id == job.SectionId, ct);
         if (section is null) return;
 
+        // Attribute every model call this job makes (including the per-recording minutes it regenerates
+        // along the way - that fan-out is counted as turns within this one operation).
+        using var llm = LlmCallScope.Push(
+            LlmCallKind.SectionMinutes, section.UserId, await OwnerEmailAsync(db, section.UserId, ct),
+            sectionId: section.Id, sectionName: section.Name);
+
         var minutes = section.Minutes;
         if (minutes is { IsUserEdited: true })
         {
@@ -75,6 +81,9 @@ public static class SectionMinutesProcessor
             await hub.NotifySectionStatusAsync(section.UserId, section.Id, "minutes", "Failed");
         }
     }
+
+    private static Task<string?> OwnerEmailAsync(DiarizDbContext db, Guid userId, CancellationToken ct) =>
+        db.Users.Where(u => u.Id == userId).Select(u => u.Email).FirstOrDefaultAsync(ct);
 
     /// <summary>Returns the recording's current-transcription minutes text, generating &amp; persisting it via
     /// the normal per-recording generator first if missing. Mirrors <see cref="MeetingMinutesProcessor"/>.</summary>

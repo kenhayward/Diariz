@@ -33,6 +33,12 @@ public static class TagsProcessor
             .FirstOrDefaultAsync(r => r.Id == job.RecordingId, ct);
         if (rec is null) return; // recording deleted before the job ran — nothing to do.
 
+        // Attribute every model call this job makes. Pushed once here rather than at the client, so the
+        // handler deep inside HttpClient can record who asked and why.
+        using var llm = LlmCallScope.Push(
+            LlmCallKind.Tags, rec.UserId, await OwnerEmailAsync(db, rec.UserId, ct),
+            rec.Id, rec.Name ?? rec.Title);
+
         try
         {
             // Stale-job guard: only the latest transcription's job may (re)write the tags. A backfill job or
@@ -135,6 +141,9 @@ public static class TagsProcessor
             logger.LogError(ex, "Tag extraction failed for recording {RecordingId}", rec.Id);
         }
     }
+
+    private static Task<string?> OwnerEmailAsync(DiarizDbContext db, Guid userId, CancellationToken ct) =>
+        db.Users.Where(u => u.Id == userId).Select(u => u.Email).FirstOrDefaultAsync(ct);
 
     /// <summary>Emits <c>recording.tags_ready</c>, carrying the freshly extracted tags so a subscriber can act on
     /// them without a second call. Swallows its own failures - the tags are already persisted and must not be

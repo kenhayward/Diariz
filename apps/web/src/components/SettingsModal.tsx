@@ -35,6 +35,11 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const [minutesMode, setMinutesMode] = useState<MinutesGenerationMode>("SingleCall");
   // Platform-wide LLM request timeout in seconds. Default 120.
   const [llmTimeout, setLlmTimeout] = useState("120");
+  // LLM usage log: master switch, retention window in days (0 = keep forever), and whether streaming
+  // requests ask for token counts. All default on / 90 days.
+  const [llmUsageLoggingEnabled, setLlmUsageLoggingEnabled] = useState(true);
+  const [llmUsageRetentionDays, setLlmUsageRetentionDays] = useState("90");
+  const [llmStreamUsageEnabled, setLlmStreamUsageEnabled] = useState(true);
   // Audio retention: master switch, window in days, and server-local run time ("HH:mm").
   const [autoDeleteAudio, setAutoDeleteAudio] = useState(false);
   const [retentionDays, setRetentionDays] = useState("");
@@ -58,6 +63,9 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
       setMaxGb(String(bytesToGb(platform.maxQuotaBytes)));
       setMinutesMode(platform.minutesGenerationMode);
       setLlmTimeout(String(platform.llmTimeoutSeconds ?? 120));
+      setLlmUsageLoggingEnabled(platform.llmUsageLoggingEnabled ?? true);
+      setLlmUsageRetentionDays(String(platform.llmUsageRetentionDays ?? 90));
+      setLlmStreamUsageEnabled(platform.llmStreamUsageEnabled ?? true);
       setAutoDeleteAudio(platform.autoDeleteAudioEnabled);
       setRetentionDays(String(platform.audioRetentionDays));
       // "HH:mm:ss" on the wire -> "HH:mm" for the <input type="time">.
@@ -86,6 +94,8 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
       if (!Number.isInteger(days) || days < 1) throw new Error(t("retentionDaysInvalid"));
       const timeout = Number(llmTimeout);
       if (!Number.isInteger(timeout) || timeout < 5) throw new Error(t("llmTimeoutInvalid"));
+      const usageRetentionDays = Number(llmUsageRetentionDays);
+      if (!Number.isInteger(usageRetentionDays) || usageRetentionDays < 0) throw new Error(t("llmUsageRetentionInvalid"));
       await api.updatePlatformSettings({
         starterQuotaBytes: starter,
         maxQuotaBytes: max,
@@ -98,6 +108,9 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         mcpAccessEnabled,
         webhooksEnabled,
         llmTimeoutSeconds: timeout,
+        llmUsageLoggingEnabled,
+        llmUsageRetentionDays: usageRetentionDays,
+        llmStreamUsageEnabled,
       });
       qc.invalidateQueries({ queryKey: ["platform-settings"] });
       onClose();
@@ -186,6 +199,44 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                 />
                 <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">{t("llmTimeoutHint")}</span>
               </label>
+
+              {/* LLM usage log: master switch, retention window (0 = keep forever), and whether streaming
+                  calls ask for token counts (not yet consumed - wired for a later release). */}
+              <div className="border-t pt-3 dark:border-gray-700">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={llmUsageLoggingEnabled}
+                    onChange={(e) => setLlmUsageLoggingEnabled(e.target.checked)}
+                  />
+                  <span className="font-medium text-gray-700 dark:text-gray-200">{t("llmUsageLoggingLabel")}</span>
+                </label>
+                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{t("llmUsageLoggingHint")}</p>
+
+                <label className="mt-2 block text-sm">
+                  <span className="mb-1 block font-medium text-gray-700 dark:text-gray-200">{t("llmUsageRetentionLabel")}</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={llmUsageRetentionDays}
+                    onChange={(e) => setLlmUsageRetentionDays(e.target.value)}
+                    aria-label={t("llmUsageRetentionLabel")}
+                    className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                  />
+                  <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">{t("llmUsageRetentionHint")}</span>
+                </label>
+
+                <label className="mt-2 flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={llmStreamUsageEnabled}
+                    onChange={(e) => setLlmStreamUsageEnabled(e.target.checked)}
+                  />
+                  <span className="font-medium text-gray-700 dark:text-gray-200">{t("llmStreamUsageLabel")}</span>
+                </label>
+                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{t("llmStreamUsageHint")}</p>
+              </div>
             </div>
           ) : tab === "quotas" ? (
             <div className="space-y-3">

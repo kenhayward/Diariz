@@ -24,6 +24,12 @@ public static class EmbeddingProcessor
         var rec = await db.Recordings.FirstOrDefaultAsync(r => r.Id == job.RecordingId, ct);
         if (rec is null) return; // recording deleted before the job ran.
 
+        // Attribute every model call this job makes. Pushed once here rather than at the client, so the
+        // handler deep inside HttpClient can record who asked and why.
+        using var llm = LlmCallScope.Push(
+            LlmCallKind.Embedding, rec.UserId, await OwnerEmailAsync(db, rec.UserId, ct),
+            rec.Id, rec.Name ?? rec.Title);
+
         var cfg = await resolver.ResolveAsync(rec.UserId, ct);
         if (!cfg.Enabled) return; // no endpoint → RAG off; leave retrieval lexical.
 
@@ -81,6 +87,9 @@ public static class EmbeddingProcessor
         await ReplaceChunksAsync(db, rec.Id, fresh, ct);
         logger.LogInformation("Embedded {Count} chunk(s) for recording {RecordingId}", fresh.Count, rec.Id);
     }
+
+    private static Task<string?> OwnerEmailAsync(DiarizDbContext db, Guid userId, CancellationToken ct) =>
+        db.Users.Where(u => u.Id == userId).Select(u => u.Email).FirstOrDefaultAsync(ct);
 
     /// <summary>Deletes the recording's existing chunks and inserts the fresh set in one save.</summary>
     private static async Task ReplaceChunksAsync(

@@ -17,6 +17,10 @@ public class PlatformSettings
     /// translation, embeddings). Local models can be slow, so it is generous and admin-adjustable.</summary>
     public const int DefaultLlmTimeoutSeconds = 120;
 
+    /// <summary>Default number of days LLM usage log rows are retained before the nightly sweep deletes them.
+    /// 0 means keep forever.</summary>
+    public const int DefaultLlmUsageRetentionDays = 90;
+
     public int Id { get; set; } = SingletonId;
 
     /// <summary>Storage quota (bytes of recorded audio) granted to each user at account creation.</summary>
@@ -55,4 +59,17 @@ public class PlatformSettings
 
     /// <summary>Master switch for outbound webhooks / user Automations. Off by default; used from Phase 2.</summary>
     public bool WebhooksEnabled { get; set; }
+
+    /// <summary>Master switch for the LLM usage log. On by default - the log is the feature. Enforced by
+    /// LlmUsageWriter, not the handler, so the call path never pays for a settings lookup.</summary>
+    public bool LlmUsageLoggingEnabled { get; set; } = true;
+
+    /// <summary>Usage rows older than this many days are deleted by the nightly sweep. 0 = keep forever.
+    /// This table gets a row per call, and embeddings write one per chunk, so a bound matters.</summary>
+    public int LlmUsageRetentionDays { get; set; } = DefaultLlmUsageRetentionDays;
+
+    /// <summary>Whether streaming requests ask for token counts via stream_options.include_usage.
+    /// A toggle rather than a constant because an OpenAI-compatible endpoint that rejects the unknown
+    /// field must be recoverable without a redeploy. Used from PR 2.</summary>
+    public bool LlmStreamUsageEnabled { get; set; } = true;
 }

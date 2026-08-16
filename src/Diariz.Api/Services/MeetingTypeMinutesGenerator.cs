@@ -18,6 +18,10 @@ public interface IMeetingTypeMinutesGenerator
         SummarizationRequestConfig config, CancellationToken ct = default);
 }
 
+// No LlmCallScope.Push here (or in PerSectionMinutesStrategy/SingleCallMinutesStrategy below): every call this
+// generator makes - including the notes pre-pass and the per-section fan-out - belongs to the enclosing
+// MeetingMinutes/SectionMinutes operation pushed by the processor, so that fan-out is counted as turns within
+// one operation rather than attributed as its own thing. Do not "fix" this by adding a push here.
 public sealed class MeetingTypeMinutesGenerator : IMeetingTypeMinutesGenerator
 {
     private readonly DiarizDbContext _db;

@@ -68,6 +68,31 @@ public class TagsProcessorTests
     }
 
     [Fact]
+    public async Task ProcessAsync_AttributesTheCall_ToTheRecordingAndItsOwner()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, tr) = await Seed(db, userId);
+
+        LlmCallKind? observedKind = null;
+        Guid? observedRecording = null;
+        Guid? observedUser = null;
+        var client = new FakeTagsClient(onCall: () =>
+        {
+            observedKind = LlmCallScope.Active?.Kind;
+            observedRecording = LlmCallScope.Active?.RecordingId;
+            observedUser = LlmCallScope.Active?.UserId;
+        });
+
+        await TagsProcessor.ProcessAsync(db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(),
+            Job(rec, tr), Template, NullLogger.Instance, new CapturingWebhookPublisher(), "");
+
+        Assert.Equal(LlmCallKind.Tags, observedKind);
+        Assert.Equal(rec.Id, observedRecording);
+        Assert.Equal(rec.UserId, observedUser);
+    }
+
+    [Fact]
     public async Task ProcessAsync_ReplacesExistingSuggestion()
     {
         using var db = TestDb.Create();

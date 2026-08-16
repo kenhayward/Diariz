@@ -25,6 +25,12 @@ public static class SectionSummaryProcessor
             .FirstOrDefaultAsync(s => s.Id == job.SectionId, ct);
         if (section is null) return; // section deleted before the job ran.
 
+        // Attribute every model call this job makes (including the per-recording summaries it regenerates
+        // along the way - that fan-out is counted as turns within this one operation).
+        using var llm = LlmCallScope.Push(
+            LlmCallKind.SectionSummary, section.UserId, await OwnerEmailAsync(db, section.UserId, ct),
+            sectionId: section.Id, sectionName: section.Name);
+
         var summary = section.Summary;
 
         // Protect a hand-edited folder summary: leave it untouched (an explicit regenerate clears the flag first).
@@ -74,6 +80,9 @@ public static class SectionSummaryProcessor
             await hub.NotifySectionStatusAsync(section.UserId, section.Id, "summary", "Failed");
         }
     }
+
+    private static Task<string?> OwnerEmailAsync(DiarizDbContext db, Guid userId, CancellationToken ct) =>
+        db.Users.Where(u => u.Id == userId).Select(u => u.Email).FirstOrDefaultAsync(ct);
 
     /// <summary>The recordings filed under the section or anywhere beneath it. The folder walk is scoped by
     /// <c>RoomId</c>, matching the other four roll-up sites - it used to be scoped by <c>UserId</c>, which is

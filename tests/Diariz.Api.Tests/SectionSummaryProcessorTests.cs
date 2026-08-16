@@ -274,6 +274,32 @@ public class SectionSummaryProcessorTests
     }
 
     [Fact]
+    public async Task ProcessAsync_AttributesTheCall_ToTheSectionAndItsOwner()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var section = await SeedSection(db, userId);
+        await SeedRecording(db, userId, section.Id, summaryText: "Existing summary.");
+
+        LlmCallKind? observedKind = null;
+        Guid? observedSection = null;
+        Guid? observedUser = null;
+        var combiner = new FakeMeetingMinutesClient(onCall: () =>
+        {
+            observedKind = LlmCallScope.Active?.Kind;
+            observedSection = LlmCallScope.Active?.SectionId;
+            observedUser = LlmCallScope.Active?.UserId;
+        });
+
+        await Run(db, new FakeSummarizationClient(), combiner, new FakeSummarizationSettingsResolver(),
+            new FakeHubContext(), section);
+
+        Assert.Equal(LlmCallKind.SectionSummary, observedKind);
+        Assert.Equal(section.Id, observedSection);
+        Assert.Equal(userId, observedUser);
+    }
+
+    [Fact]
     public async Task Empty_folder_is_ready_with_no_text_and_no_llm_call()
     {
         using var db = TestDb.Create();

@@ -63,6 +63,8 @@ OUTPUT: clean Markdown. Do not wrap it in code fences and do not use emojis.
 /// <summary>Per-section strategy: each model-prompt block is its own LLM call (bounded-parallel), then the
 /// deterministic parts (headings, boilerplate, fields) and the block outputs are assembled in document order by
 /// <see cref="MeetingTypeMinutesComposer"/>. Guarantees the template's structure.</summary>
+// No LlmCallScope.Push here (see MeetingTypeMinutesGenerator): every call this strategy makes belongs to the
+// enclosing MeetingMinutes/SectionMinutes operation, so the per-section fan-out is counted as turns within it.
 public sealed class PerSectionMinutesStrategy : IMeetingTypeMinutesStrategy
 {
     private const int MaxParallel = 4;
@@ -108,6 +110,8 @@ public sealed class PerSectionMinutesStrategy : IMeetingTypeMinutesStrategy
 /// <summary>Single-call strategy: the whole template is composed into one document skeleton (headings + literal
 /// boilerplate + substituted fields, with each model-prompt block left as a <c>[[WRITE: ...]]</c> marker) and one
 /// LLM call fills the markers and emits the rest verbatim. Token-frugal.</summary>
+// No LlmCallScope.Push here (see MeetingTypeMinutesGenerator): its one call belongs to the enclosing
+// MeetingMinutes/SectionMinutes operation.
 public sealed class SingleCallMinutesStrategy : IMeetingTypeMinutesStrategy
 {
     private readonly IMeetingMinutesClient _client;

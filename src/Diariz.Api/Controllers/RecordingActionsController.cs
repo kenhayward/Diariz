@@ -87,6 +87,10 @@ public class RecordingActionsController : ControllerBase
         if (!cfg.Enabled)
             return BadRequest("Action extraction needs an LLM endpoint. Set one in Settings.");
 
+        // Attribute the extraction call. Pushed once here, ahead of the single client call below.
+        var userEmail = await _db.Users.Where(u => u.Id == UserId).Select(u => u.Email).FirstOrDefaultAsync();
+        using var llm = LlmCallScope.Push(LlmCallKind.ExtractActions, UserId, userEmail, rec.Id, rec.Name ?? rec.Title);
+
         var names = rec.Speakers.ToDictionary(s => s.Label, s => s.DisplayName);
         var segs = current.Segments
             .OrderBy(s => s.Ordinal)
