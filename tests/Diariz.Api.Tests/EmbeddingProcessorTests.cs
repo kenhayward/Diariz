@@ -53,6 +53,31 @@ public class EmbeddingProcessorTests
     }
 
     [Fact]
+    public async Task Process_AttributesTheCall_ToTheRecordingAndItsOwner()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, tr) = await Seed(db, userId);
+
+        LlmCallKind? observedKind = null;
+        Guid? observedRecording = null;
+        Guid? observedUser = null;
+        var client = new FakeEmbeddingClient(onCall: () =>
+        {
+            observedKind = LlmCallScope.Active?.Kind;
+            observedRecording = LlmCallScope.Active?.RecordingId;
+            observedUser = LlmCallScope.Active?.UserId;
+        });
+
+        await EmbeddingProcessor.ProcessAsync(db, client, new FakeEmbeddingSettingsResolver(),
+            new EmbeddingJob(rec.Id, tr.Id), NullLogger.Instance);
+
+        Assert.Equal(LlmCallKind.Embedding, observedKind);
+        Assert.Equal(rec.Id, observedRecording);
+        Assert.Equal(rec.UserId, observedUser);
+    }
+
+    [Fact]
     public async Task Process_PrefixesChunks_WithDocumentTaskInstruction_ButStoresCleanText()
     {
         using var db = TestDb.Create();
