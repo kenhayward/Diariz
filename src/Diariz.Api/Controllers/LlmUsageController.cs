@@ -146,7 +146,10 @@ public class LlmUsageController : ControllerBase
         if (isCallsMode)
         {
             var ordered = OrderCalls(filtered, sortColumn, desc);
-            var rows = await ordered
+            // The rate is applied in memory, from the SAME helper the operations path uses, rather than
+            // inlined as a second SQL expression - one formula, one place. The database projection passes
+            // null for it and the `with` below fills it in.
+            var rows = (await ordered
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .Select(c => new LlmUsageCallRow(
@@ -154,11 +157,30 @@ public class LlmUsageController : ControllerBase
                     c.RecordingId, c.RecordingTitle, c.SectionId, c.SectionName, c.Model,
                     c.StartedAt, c.CompletedAt, c.DurationMs,
                     c.PromptTokens, c.CompletionTokens, c.ReasoningTokens, c.TotalTokens,
-                    c.Success, c.StatusCode, c.ErrorKind))
-                .ToListAsync(ct);
+                    c.Success, c.StatusCode, c.ErrorKind, null))
+                .ToListAsync(ct))
+                .Select(r => r with { TokensPerSecond = TokensPerSecondOf(r.CompletionTokens, r.DurationMs) })
+                .ToList();
             return Ok(new LlmUsagePage<LlmUsageCallRow>(rows, page, pageSize, totals.Calls, totals));
         }
 
+        return await OperationsPageAsync(filtered, totals, sortColumn, desc, page, pageSize, ct);
+    }
+
+    /// <summary>Generation rate for one row: completion tokens over the time the model spent producing
+    /// them. The SAME shape as <c>LlmUsageQuery.TotalsAsync</c>'s and the summary's - a ratio of sums, not
+    /// an average of rates - so every level of this screen answers the question the same way.
+    ///
+    /// Null, never 0 and never Infinity, on both degenerate inputs: 0 would read as "generated nothing"
+    /// where the truth is "the server told us nothing", and Infinity does not survive JSON
+    /// serialisation.</summary>
+    private static double? TokensPerSecondOf(long? completionTokens, long durationMs) =>
+        completionTokens is not null && durationMs > 0 ? completionTokens.Value / (durationMs / 1000.0) : null;
+
+    private async Task<IActionResult> OperationsPageAsync(
+        IQueryable<LlmCall> filtered, LlmUsageTotals totals, string sortColumn, bool desc,
+        int page, int pageSize, CancellationToken ct)
+    {
         var grouped = filtered.GroupBy(c => new OperationKey(
             c.OperationId, c.Kind, c.UserId, c.UserEmail,
             c.RecordingId, c.RecordingTitle, c.SectionId, c.SectionName, c.Model));
@@ -199,6 +221,10 @@ public class LlmUsageController : ControllerBase
                 Turns = g.Count(),
                 StartedAt = g.Min(c => c.StartedAt),
                 CompletedAt = g.Max(c => c.CompletedAt),
+                // The denominator for this operation's tokens/second, and a value the row surfaces in its
+                // own right. NOT the same as CompletedAt - StartedAt: that wall-clock span includes the
+                // gaps between calls (tool execution inside a chat turn), which is not model time.
+                DurationMs = g.Sum(c => (long)c.DurationMs),
                 // Sum and "how many rows had a value" travel together, same as LlmUsageQuery.TotalsAsync:
                 // EF's translation of a nullable Sum is COALESCE(sum(x), 0), not a bare sum(x), so an
                 // operation where NOTHING reported a given token column would otherwise display "0
@@ -291,7 +317,7 @@ public class LlmUsageController : ControllerBase
             {
                 x.OperationId, x.Kind, x.UserId, x.UserEmail,
                 x.RecordingId, x.RecordingTitle, x.SectionId, x.SectionName, x.Model,
-                x.Turns, x.StartedAt, x.CompletedAt,
+                x.Turns, x.StartedAt, x.CompletedAt, x.DurationMs,
                 PromptTokens = x.PromptTokensMeasured > 0 ? x.PromptTokensSum : null,
                 CompletionTokens = x.CompletionTokensMeasured > 0 ? x.CompletionTokensSum : null,
                 ReasoningTokens = x.ReasoningTokensMeasured > 0 ? x.ReasoningTokensSum : null,
@@ -335,7 +361,8 @@ public class LlmUsageController : ControllerBase
             .Take(pageSize)
             .Select(x => new LlmUsageOperationRow(
                 x.OperationId, x.Kind, x.UserId, x.UserEmail, x.RecordingId, x.RecordingTitle, x.SectionId, x.SectionName, x.Model,
-                x.Turns, x.StartedAt, x.CompletedAt, x.PromptTokens, x.CompletionTokens, x.ReasoningTokens, x.TotalTokens, x.Success))
+                x.Turns, x.StartedAt, x.CompletedAt, x.PromptTokens, x.CompletionTokens, x.ReasoningTokens, x.TotalTokens, x.Success,
+                x.DurationMs, TokensPerSecondOf(x.CompletionTokens, x.DurationMs)))
             .ToList();
         return Ok(new LlmUsagePage<LlmUsageOperationRow>(operationRows, page, pageSize, operationsTotal, totals));
     }

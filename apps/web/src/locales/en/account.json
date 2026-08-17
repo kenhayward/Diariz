@@ -410,6 +410,8 @@
   "llmUsageColCompletionTokens": "Completion tokens",
   "llmUsageColReasoningTokens": "Reasoning tokens",
   "llmUsageColTotalTokens": "Total tokens",
+  "llmUsageColTokensPerSecond": "Tokens/s",
+  "llmUsageTokensPerSecondValue": "{{rate}}/s",
   "llmUsageColOutcome": "Outcome",
   "llmUsageNoRecording": "No recording",
   "llmUsageNotMeasured": "-",

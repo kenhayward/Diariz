@@ -62,6 +62,18 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.219.0",
+    date: "2026-08-17",
+    pr: 534,
+    headline: "Tokens per second on every line of the LLM usage log",
+    summary:
+      "The usage viewer reported a generation rate only for the whole filter and for each summary group, which is the one place it hides what you are usually looking for: a single slow operation averaged away inside an otherwise healthy set. Every row in the Operations and Calls views now carries its own tokens-per-second figure, in a new column beside the token counts, with the platform-wide rate still shown beneath it in the totals row. An operation's rate is measured against the time the model actually spent generating - the sum of its calls - rather than the wall-clock span the row also shows, because for a multi-call turn that span includes the gaps between calls while a tool runs, which would understate throughput. That summed model time is shown on the row too, so the rate reconciles with something visible rather than being a figure you have to take on trust. The same measured-versus-zero rule the rest of the screen follows applies here: a rate is blank when the server reported nothing to compute one from, and a genuine zero prints as zero.",
+    added: [
+      "A Tokens/s column in the Operations and Calls views of the LLM usage log, showing each row's own generation rate.",
+      "The model time an operation actually spent (the sum of its calls' durations), distinct from the wall-clock span between its first and last call.",
+    ],
+  },
+  {
     version: "0.218.0",
     date: "2026-08-17",
     pr: 533,

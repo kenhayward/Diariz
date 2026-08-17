@@ -96,7 +96,11 @@ public record LlmUsageCallRow(
     int? TotalTokens,
     bool Success,
     int? StatusCode,
-    string? ErrorKind);
+    string? ErrorKind,
+    /// <summary>This call's own generation rate: <c>CompletionTokens / DurationMs</c>. Null when the
+    /// server reported no completion tokens, or when the duration is zero - never 0 (which would read as
+    /// "generated nothing") and never Infinity (which does not survive JSON serialisation).</summary>
+    double? TokensPerSecond);
 
 /// <summary>One operation - every <c>LlmCalls</c> row sharing an <c>OperationId</c>, collapsed to a
 /// single row, as returned by <c>mode=operations</c> (the default). See
@@ -118,7 +122,19 @@ public record LlmUsageOperationRow(
     long? CompletionTokens,
     long? ReasoningTokens,
     long? TotalTokens,
-    bool Success);
+    bool Success,
+    /// <summary>Total time the model spent on this operation: the SUM of its calls' <c>DurationMs</c>.
+    ///
+    /// Deliberately NOT the wall-clock span this row also shows (<see cref="StartedAt"/> to
+    /// <see cref="CompletedAt"/>), which for a multi-call operation includes the gaps between calls -
+    /// tool execution in a chat turn, for instance. It is carried so <see cref="TokensPerSecond"/> has a
+    /// denominator the reader can see, rather than a rate that reconciles with nothing else on the
+    /// line.</summary>
+    long DurationMs,
+    /// <summary>This operation's generation rate: <c>SUM(CompletionTokens) / SUM(DurationMs)</c> over its
+    /// calls - the same formula the totals row and the summary use, never an average of its calls' own
+    /// rates. Null when nothing was measured or the duration sums to zero.</summary>
+    double? TokensPerSecond);
 
 /// <summary>One page of <typeparamref name="TRow"/>, plus totals over the WHOLE filtered set (not the
 /// page - see <see cref="LlmUsageTotals"/>) and <paramref name="Total"/>, the row/operation count of the

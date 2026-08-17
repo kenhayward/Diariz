@@ -57,6 +57,8 @@ function row(overrides: Partial<LlmUsageOperationRow> = {}): LlmUsageOperationRo
     reasoningTokens: null,
     totalTokens: 150,
     success: true,
+    durationMs: 4000,
+    tokensPerSecond: 12.5,
     ...overrides,
   };
 }
@@ -84,6 +86,7 @@ function callRow(overrides: Partial<LlmUsageCallRow> = {}): LlmUsageCallRow {
     success: true,
     statusCode: 200,
     errorKind: null,
+    tokensPerSecond: 12.5,
     ...overrides,
   };
 }
@@ -164,6 +167,41 @@ describe("LlmUsage", () => {
     vi.mocked(api.getLlmUsage).mockResolvedValue(usagePage([row()], totals()));
     vi.mocked(api.getLlmUsageSummary).mockResolvedValue(summaryPage([summaryGroup()], totals()));
     vi.mocked(api.deleteLlmUsage).mockResolvedValue({ deleted: 0 });
+  });
+
+  it("shows each operation row's own tokens per second, not just the totals row", async () => {
+    // The totals row already gives one platform-wide rate. A per-row rate is what lets an administrator
+    // spot the single slow operation inside an otherwise healthy filter.
+    vi.mocked(api.getLlmUsage).mockResolvedValue(
+      usagePage([row({ operationId: "op-fast", tokensPerSecond: 220.4 })], totals()),
+    );
+
+    renderPage();
+
+    const cells = await screen.findAllByTestId("usage-row-rate");
+    // Two cells: the operation row, then the totals row's own rate in the same column.
+    expect(cells[0].textContent).toBe("220.4/s");
+  });
+
+  it("renders a row rate of null as not measured, and a measured zero as zero", async () => {
+    // Same rule as every token cell here: null means the server reported nothing to compute a rate
+    // from, 0 means it measured and nothing was generated. Collapsing the two misreports a real
+    // measurement as an absent one.
+    vi.mocked(api.getLlmUsage).mockResolvedValue(
+      usagePage(
+        [
+          row({ operationId: "op-null", tokensPerSecond: null }),
+          row({ operationId: "op-zero", tokensPerSecond: 0 }),
+        ],
+        totals(),
+      ),
+    );
+
+    renderPage();
+
+    const cells = await screen.findAllByTestId("usage-row-rate");
+    expect(cells[0].textContent).toBe("-");
+    expect(cells[1].textContent).toBe("0/s");
   });
 
   it("requests the first page with the default filters", async () => {

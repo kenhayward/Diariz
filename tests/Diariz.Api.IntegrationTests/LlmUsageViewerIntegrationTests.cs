@@ -802,6 +802,110 @@ public class LlmUsageViewerIntegrationTests(ContainersFixture fx)
         Assert.Equal(expectedIds, collected);
     }
 
+    [Fact]
+    public async Task CallsMode_ReportsEachCallsOwnTokensPerSecond()
+    {
+        // 400 completion tokens in 2000 ms = 200/s. A per-row rate is what an administrator uses to
+        // spot the one slow call inside an otherwise healthy operation, which the totals row hides.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        db.LlmCalls.Add(Row(marker, durationMs: 2000, completionTokens: 400));
+        await db.SaveChangesAsync();
+
+        var page = OkValue<LlmUsagePage<LlmUsageCallRow>>(
+            await Build(db).List(mode: "calls", models: [marker.ToString()]));
+
+        var row = Assert.Single(page.Rows);
+        Assert.NotNull(row.TokensPerSecond);
+        Assert.InRange(row.TokensPerSecond!.Value, 199.9, 200.1);
+    }
+
+    [Fact]
+    public async Task OperationsMode_ReportsSumOverSum_NotTheRateOfAnyOneCall()
+    {
+        // One fast tiny call and one slow large one in a single operation. Averaging the two per-call
+        // rates gives ~275/s; the correct SUM/SUM is 4003 tokens over 10.04 s = ~399/s. This is the
+        // same formula the totals row and the summary use, so all three levels agree.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var operationId = Guid.NewGuid();
+        db.LlmCalls.AddRange(
+            Row(marker, operationId: operationId, sequence: 1, durationMs: 40, completionTokens: 3),
+            Row(marker, operationId: operationId, sequence: 2, durationMs: 10_000, completionTokens: 4000));
+        await db.SaveChangesAsync();
+
+        var page = OkValue<LlmUsagePage<LlmUsageOperationRow>>(
+            await Build(db).List(mode: "operations", models: [marker.ToString()]));
+
+        var row = Assert.Single(page.Rows);
+        Assert.NotNull(row.TokensPerSecond);
+        Assert.InRange(row.TokensPerSecond!.Value, 395, 403);
+    }
+
+    [Fact]
+    public async Task OperationsMode_CarriesTheSummedCallDuration_SoTheRateCanBeChecked()
+    {
+        // The row already shows a wall-clock span (MIN start to MAX end). The rate's denominator is the
+        // summed CALL time, which is a different number - so the row must carry it, or the rate is a
+        // figure the reader cannot reconcile with anything else on the line.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var operationId = Guid.NewGuid();
+        db.LlmCalls.AddRange(
+            Row(marker, operationId: operationId, sequence: 1, durationMs: 1500, completionTokens: 10),
+            Row(marker, operationId: operationId, sequence: 2, durationMs: 2500, completionTokens: 20));
+        await db.SaveChangesAsync();
+
+        var page = OkValue<LlmUsagePage<LlmUsageOperationRow>>(
+            await Build(db).List(mode: "operations", models: [marker.ToString()]));
+
+        Assert.Equal(4000, Assert.Single(page.Rows).DurationMs);
+    }
+
+    [Fact]
+    public async Task TokensPerSecond_IsZero_NotNull_WhenTheServerMeasuredZeroTokens()
+    {
+        // "Measured, and it produced nothing" is a real answer and a real rate. Only an ABSENT
+        // measurement is null. This is the same line LlmUsageQuery.TotalsAsync draws, so the totals row
+        // and the line above it cannot disagree about what a zero means.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        db.LlmCalls.Add(Row(marker, durationMs: 1000, completionTokens: 0));
+        await db.SaveChangesAsync();
+
+        var page = OkValue<LlmUsagePage<LlmUsageCallRow>>(
+            await Build(db).List(mode: "calls", models: [marker.ToString()]));
+
+        Assert.Equal(0, Assert.Single(page.Rows).TokensPerSecond);
+    }
+
+    [Theory]
+    // Unmeasured: the server reported no completion tokens at all, so there is no rate to state.
+    [InlineData(null, 1000)]
+    // Measured, but against a zero duration. This case is the one that exercises the duration guard:
+    // with a POSITIVE token count the null-check passes, so only the `durationMs > 0` half can stop a
+    // divide-by-zero. A fixture using 0 tokens here would short-circuit on the token check and prove
+    // nothing about the guard - which is exactly what the first version of this test did.
+    [InlineData(500, 0)]
+    public async Task TokensPerSecond_IsNull_WhenThereIsNoRateToState_NeverZeroOrInfinity(
+        int? completionTokens, int durationMs)
+    {
+        // Null, never 0 (which would read as "generated nothing" where the truth is "we were told
+        // nothing") and never Infinity, which does not survive JSON serialisation at all.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        db.LlmCalls.Add(Row(marker, durationMs: durationMs, completionTokens: completionTokens));
+        await db.SaveChangesAsync();
+
+        var calls = OkValue<LlmUsagePage<LlmUsageCallRow>>(
+            await Build(db).List(mode: "calls", models: [marker.ToString()]));
+        var operations = OkValue<LlmUsagePage<LlmUsageOperationRow>>(
+            await Build(db).List(mode: "operations", models: [marker.ToString()]));
+
+        Assert.Null(Assert.Single(calls.Rows).TokensPerSecond);
+        Assert.Null(Assert.Single(operations.Rows).TokensPerSecond);
+    }
+
     private static LlmCall Row(
         Guid marker,
         int durationMs = 1000,

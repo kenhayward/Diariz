@@ -12,9 +12,9 @@ import { kindLabel } from "./UsageFilterBar";
 type UsageRow = LlmUsageOperationRow | LlmUsageCallRow;
 
 // The table's TOTAL column count (sortable + plain), used for a full-width colSpan on the loading/empty
-// row - NOT the number of sortable columns (8 of these 12 are sortable; see the `header()`/`plainHeader()`
+// row - NOT the number of sortable columns (8 of these 13 are sortable; see the `header()`/`plainHeader()`
 // calls below for the actual split).
-const TOTAL_COLUMN_COUNT = 12;
+const TOTAL_COLUMN_COUNT = 13;
 
 /// The operations-mode results table: sortable headers, a totals row pinned under the header (never a sum
 /// of the rows on screen - see `TotalsRow`), and a Previous/Next pager. Sorting is server-side (`onSort`
@@ -90,6 +90,10 @@ export default function UsageTable({
               {header("completionTokens", "llmUsageColCompletionTokens")}
               {plainHeader("llmUsageColReasoningTokens")}
               {header("totalTokens", "llmUsageColTotalTokens")}
+              {/* Not sortable: tokensPerSecond is a ratio of sums, not a column, so it is deliberately
+                  absent from LlmUsageQuery.SortWhitelist - sorting rows by a per-row rate surfaces
+                  jitter (a 3-token 40ms call outranking a 4000-token run) rather than throughput. */}
+              {plainHeader("llmUsageColTokensPerSecond")}
               {plainHeader("llmUsageColOutcome")}
             </tr>
           </thead>
@@ -160,6 +164,7 @@ function TotalsRow({ totals }: { totals: LlmUsageTotals }) {
         <TokenTotalCell value={totals.completionTokens} measured={totals.completionTokensMeasured} total={totals.calls} />
         <TokenTotalCell value={totals.reasoningTokens} measured={totals.reasoningTokensMeasured} total={totals.calls} />
         <TokenTotalCell value={totals.totalTokens} measured={totals.totalTokensMeasured} total={totals.calls} />
+        <RateCell value={totals.tokensPerSecond} />
         <td className="px-2 py-1">{t("llmUsageTotalsFailed", { count: totals.failedCalls })}</td>
       </tr>
     </tfoot>
@@ -206,8 +211,25 @@ function OperationRow({ row, basePath }: { row: UsageRow; basePath: string }) {
       <TokenCell value={row.completionTokens} />
       <TokenCell value={row.reasoningTokens} />
       <TokenCell value={row.totalTokens} />
+      <RateCell value={row.tokensPerSecond} />
       <OutcomeCell success={row.success} />
     </tr>
+  );
+}
+
+/// A generation rate, per row or for the whole filter. Same measured-vs-zero rule as TokenCell: null is
+/// "the server reported nothing to compute a rate from", while a real 0 is a measured zero and prints as
+/// such. Never renders Infinity - the API guards the divide-by-zero before it reaches here.
+function RateCell({ value }: { value: number | null }) {
+  const { t } = useTranslation("account");
+  return (
+    <td data-testid="usage-row-rate" className="px-2 py-1 text-right tabular-nums">
+      {value === null ? (
+        <span className="text-gray-400 dark:text-gray-500">{t("llmUsageNotMeasured")}</span>
+      ) : (
+        t("llmUsageTokensPerSecondValue", { rate: Number(value.toFixed(1)).toLocaleString() })
+      )}
+    </td>
   );
 }
 
