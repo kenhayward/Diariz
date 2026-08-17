@@ -65,7 +65,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.220.0",
     date: "2026-08-17",
-    pr: 0,
+    pr: 535,
     headline: "Install Diariz as an app",
     summary:
       "Diariz can now be installed from a Chromium browser (Chrome, Edge) as an app in its own right: it gets a launcher entry and icon alongside your other applications, and opens in its own window with no browser chrome, tabs, or address bar. An **Install app** entry appears in the account menu whenever your browser offers it, which saves hunting for the small install icon in the address bar.\n\n" +
