@@ -9,8 +9,9 @@
 // third-party dependency (same approach as make-tray-icon.js). Keep the two in step: if the SVG's
 // geometry changes, change GLYPH below to match. Edges are 4x4 supersampled.
 //
-// Run: node build/make-app-icon.js   (from apps/desktop). The committed PNG is the source of truth;
-// this script just regenerates it if the mark ever changes.
+// Run: node build/make-app-icon.js   (from apps/desktop). Writes build/icon.png for the desktop app and
+// apps/web/public/icons/* for the web app manifest. The committed PNGs are the source of truth; this
+// script just regenerates them if the mark ever changes.
 
 const zlib = require("node:zlib");
 const fs = require("node:fs");
@@ -20,6 +21,11 @@ const SIZE = 1024;          // >=512 keeps the macOS .icns and the 256px Windows
 const VIEW = 60;            // the SVG viewBox the geometry below is expressed in
 const INDIGO = [79, 70, 229]; // #4f46e5, the SVG's rect fill
 const WHITE = [255, 255, 255];
+
+/// The web app's manifest icons. Generated here rather than by a second script so the glyph geometry
+/// below stays the single definition of the mark - it is already duplicated in diariz.svg, favicon.svg
+/// and trayTemplate.png, each held in step by a comment rather than a check.
+const WEB_ICONS = path.join(__dirname, "..", "..", "web", "public", "icons");
 
 function crc32(buf) {
   let c = ~0;
@@ -92,7 +98,12 @@ function inGlyph(x, y) {
   return distToSegment(x, y, 30, 40, 30, 46) <= 1.5;
 }
 
-function render(size) {
+/// `maskable`: fill the whole canvas instead of only the rounded square. A maskable icon is cropped by
+/// the platform to a circle/squircle of its choosing, so a rounded square's corners get shaved and the
+/// silhouette reads as damaged; full bleed survives every mask. The glyph needs no rescale - its furthest
+/// point from the centre is the stem tip at 17.5 of the 60-unit viewBox, 58% of the radius, already
+/// inside the central 80% that a maskable icon guarantees is visible.
+function render(size, { maskable = false } = {}) {
   const rgba = Buffer.alloc(size * size * 4); // transparent
   const samples = 4;
   const scale = VIEW / size;
@@ -106,7 +117,7 @@ function render(size) {
         for (let sx = 0; sx < samples; sx++) {
           const vx = (x + (sx + 0.5) / samples) * scale;
           const vy = (y + (sy + 0.5) / samples) * scale;
-          if (!inBackground(vx, vy)) continue;
+          if (!maskable && !inBackground(vx, vy)) continue;
           const [cr, cg, cb] = inGlyph(vx, vy) ? WHITE : INDIGO;
           covered++;
           r += cr;
@@ -127,3 +138,16 @@ function render(size) {
 
 fs.writeFileSync(path.join(__dirname, "icon.png"), pngFromRGBA(SIZE, render(SIZE)));
 console.log(`wrote icon.png (${SIZE}x${SIZE}) - microphone on an indigo rounded square`);
+
+// The web app manifest's icons. Re-rendered analytically at each size rather than downscaled from the
+// 1024, so small sizes stay as crisp as the supersampling allows.
+fs.mkdirSync(WEB_ICONS, { recursive: true });
+for (const px of [192, 512]) {
+  fs.writeFileSync(path.join(WEB_ICONS, `icon-${px}.png`), pngFromRGBA(px, render(px)));
+  console.log(`wrote ../../web/public/icons/icon-${px}.png (${px}x${px})`);
+}
+fs.writeFileSync(
+  path.join(WEB_ICONS, "icon-maskable-512.png"),
+  pngFromRGBA(512, render(512, { maskable: true })),
+);
+console.log("wrote ../../web/public/icons/icon-maskable-512.png (512x512) - full bleed for platform masks");
