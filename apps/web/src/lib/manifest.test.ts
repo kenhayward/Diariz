@@ -74,3 +74,69 @@ describe("PWA icons", () => {
     expect(script).toContain("icon-maskable-512.png");
   });
 });
+
+describe("web app manifest", () => {
+  const MANIFEST = join(WEB, "public", "manifest.webmanifest");
+  const manifest = () => JSON.parse(readFileSync(MANIFEST, "utf8"));
+
+  it("is shipped as a static asset the app can serve", () => {
+    expect(existsSync(MANIFEST)).toBe(true);
+  });
+
+  // Each of the next four is a hard Chromium install requirement. Missing any one of them means the
+  // install offer never appears, with no error anywhere for the user or the developer to see.
+  it("names the app", () => {
+    expect(manifest().name).toBe("Diariz");
+    expect(manifest().short_name).toBe("Diariz");
+  });
+
+  it("starts at the app root", () => {
+    expect(manifest().start_url).toBe("/");
+  });
+
+  it("opens without browser chrome", () => {
+    expect(manifest().display).toBe("standalone");
+  });
+
+  it("does not defer to a related native app", () => {
+    // `prefer_related_applications: true` would make Chromium point at a store listing instead of
+    // installing the site. Absent counts as false, which is what we want, so assert it never appears.
+    expect(manifest().prefer_related_applications).toBeUndefined();
+  });
+
+  it("declares icons that exist at the sizes it claims", () => {
+    // The size strings are what Chromium checks against the real files, so this is the assertion that
+    // catches a typo'd path or a renamed icon.
+    for (const icon of manifest().icons) {
+      const file = join(WEB, "public", icon.src.replace(/^\//, ""));
+      expect(existsSync(file)).toBe(true);
+      const [w, h] = icon.sizes.split("x").map(Number);
+      expect(pngSize(file)).toEqual({ width: w, height: h });
+      expect(icon.type).toBe("image/png");
+    }
+  });
+
+  it("declares both required sizes and a maskable variant", () => {
+    const icons = manifest().icons as { sizes: string; purpose?: string }[];
+    expect(icons.map((i) => i.sizes)).toContain("192x192");
+    expect(icons.map((i) => i.sizes)).toContain("512x512");
+    expect(icons.some((i) => i.purpose === "maskable")).toBe(true);
+  });
+
+  it("tints the installed window with the brand indigo", () => {
+    // A single static value cannot follow the app's light/dark theme, so it is deliberately the brand
+    // colour: intentional in both, rather than a light bar above a dark app. See the spec.
+    expect(manifest().theme_color).toBe("#4f46e5");
+    expect(manifest().background_color).toBe("#4f46e5");
+  });
+
+  it("carries no version number, which would only drift", () => {
+    expect(manifest().version).toBeUndefined();
+  });
+
+  it("is linked from the document, without which it is inert", () => {
+    const html = readFileSync(join(WEB, "index.html"), "utf8");
+    expect(html).toContain('rel="manifest"');
+    expect(html).toContain("/manifest.webmanifest");
+  });
+});
