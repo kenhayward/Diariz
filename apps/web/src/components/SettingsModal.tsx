@@ -246,6 +246,15 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                 >
                   {t("llmUsageViewLog")} →
                 </a>
+
+                <a
+                  href="/admin/llm-models"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 ml-4 inline-block text-xs text-indigo-600 hover:underline dark:text-indigo-400"
+                >
+                  {t("llmModelsManage")} →
+                </a>
               </div>
             </div>
           ) : tab === "quotas" ? (

@@ -1468,3 +1468,33 @@ export interface FeedbackDto {
   release: string;
   trailJson: string;
 }
+
+// ---- Platform LLM models (the /admin/llm-models page) ----
+
+/// One configured model. `parameters` maps a call-group name to that group's parameter-layer JSON, with
+/// `ModelBase` holding the model's own defaults; a group absent from the map has no override.
+///
+/// The key is never sent to the client - only `hasApiKey` - so the editor must omit `apiKey` on save
+/// rather than send back an empty string, which the API reads as "clear it".
+export interface LlmModel {
+  id: string;
+  name: string;
+  apiBase: string;
+  hasApiKey: boolean;
+  contextLength: number;
+  parameters: Record<string, string>;
+}
+
+export interface LlmModelUpsert {
+  name: string;
+  apiBase: string;
+  apiKey?: string;
+  contextLength: number;
+  parameters: Record<string, string>;
+}
+
+/// Which model serves which call group, plus the fallback for groups with no entry.
+export interface LlmAssignments {
+  defaultModelId: string | null;
+  assignments: Record<string, string>;
+}
