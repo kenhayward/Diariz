@@ -356,7 +356,12 @@ public static class LlmCallGroups
 }
 ```
 
-The compiler will warn that the switch is not exhaustive over all possible `int` values; that is expected for an enum switch and does not affect the guarantee this comment describes. If the project treats warnings as errors, add `_ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "no group decided for this call kind")` - a throw, never a silent default.
+**Correction to the comment above:** C# does **not** enforce exhaustiveness over an enum, so an undecided member is *not* a compile error - and adding a `_ => throw` arm suppresses even the CS8509 warning. Include the throwing arm anyway (a loud failure beats a silent fallthrough to Chat), and rely on `Every_kind_is_accounted_for` enumerating the enum as the mechanism that actually catches it:
+
+```csharp
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(kind), kind, "no parameter group has been decided for this call kind"),
+```
 
 - [ ] **Step 5: Run and watch it pass**
 
@@ -366,9 +371,9 @@ dotnet test tests/Diariz.Api.Tests --filter "FullyQualifiedName~LlmCallGroups"
 
 Expected: PASS.
 
-- [ ] **Step 6: Mutation-verify the compile-time guarantee**
+- [ ] **Step 6: Mutation-verify that an undecided kind is caught**
 
-Add a temporary member `TestKind = 99` to `LlmCallKind`. Rebuild. Expected: **a compiler error or warning on the switch**, proving the no-default-arm design works. If it compiles clean, the switch has a default arm somewhere and the guarantee is fictional. Remove the member afterwards.
+Add a temporary member `TestKind = 99` to `LlmCallKind` and run the tests. Expected: `Every_kind_is_accounted_for` FAILS - the throwing default arm fires and the enumeration test reports it. It compiles fine, which is precisely why that test exists. Remove the member afterwards and confirm `git status` is clean, taking care not to change the file's line endings.
 
 - [ ] **Step 7: Commit**
 
