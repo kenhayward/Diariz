@@ -43,6 +43,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Multi-user & groups** | A **Users & access** console: search and filter every account, and see on one panel what a person's groups actually let them do, alongside their quota, status and storage. Groups grant the five platform permissions - each explained in a sentence rather than a column heading - and carry a name, description and colour. Access requests are a tab with a waiting count, then an approval lifecycle. Per-user isolation and Light/Dark/Auto themes. |
 | **Admin controls** | Storage quotas, optional audio auto-deletion, a default AI request timeout that users can override for their own account, LLM usage logging (on/off, a retention window in days, a streaming-token-count toggle, and a usage viewer to filter, total, and delete the captured log), separate platform toggles for API access, Claude/MCP, and Automations (webhooks), and whole-platform backup & restore. |
 | **Provide Feedback** | Any signed-in user can describe something that looks or behaves wrong from the account menu; a scrubbed technical trail of recent app activity is attached automatically. Readable and deletable only by a Platform Administrator, in a Feedback tab in Settings, and can raise a \`feedback.submitted\` automation event - the submitter's words reach it only when that automation ticks Include What The Person Wrote. |
+| **Install as an app** | Install Diariz from a Chromium browser and it gets a launcher entry, an icon, and its own window with no browser chrome - the account menu offers it whenever your browser can. This is how Linux gets an app-like Diariz, since the desktop installer is Windows and macOS only. |
 | **Help & documentation** | A browsable help section at \`/help\` with a grouped article tree and instant search, plus contextual help throughout the app: a small \`?\` next to a feature opens a short explanation with a link straight to the full article. An **Advanced and admin** section covers configuring formulas, meeting types, Workflow Signals and webhooks, users and permissions, connecting Claude over MCP, building n8n and Zapier workflows, and the REST API. A **CRM integration** section covers wiring Diariz to any CRM through n8n or Zapier, with a worked EspoCRM example. |
 
 The interface is localized (English, Spanish, French, German), and languages are community-extensible via simple JSON files.
@@ -61,6 +62,20 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.220.0",
+    date: "2026-08-17",
+    pr: 0,
+    headline: "Install Diariz as an app",
+    summary:
+      "Diariz can now be installed from a Chromium browser (Chrome, Edge) as an app in its own right: it gets a launcher entry and icon alongside your other applications, and opens in its own window with no browser chrome, tabs, or address bar. An **Install app** entry appears in the account menu whenever your browser offers it, which saves hunting for the small install icon in the address bar.\n\n" +
+      "This matters most on **Linux**, where there is no desktop installer. Everything else about running Diariz on Linux was already covered - system audio can be recorded by installing the PipeWire configuration described in the Recording audio help article, which publishes your speakers as an ordinary microphone - so the application window was the last piece missing. Installing gives Linux users the same day-to-day feel as the Windows and macOS desktop apps.\n\n" +
+      "Windows and macOS users can install it this way too if they prefer it to the installer, though the desktop app remains the fuller option there: it adds a tray icon, recording without the window open, the pop-out notes window, and meeting screenshots. An installed window is a window, not the whole desktop app - there is no tray presence, and with no network it shows the browser's offline page rather than working offline.",
+    added: [
+      "Install Diariz from a Chromium browser as an app with its own launcher entry, icon, and chromeless window.",
+      "An Install app entry in the account menu, shown whenever the browser offers to install.",
+    ],
+  },
   {
     version: "0.219.0",
     date: "2026-08-17",

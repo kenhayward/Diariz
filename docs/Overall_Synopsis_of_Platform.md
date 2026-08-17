@@ -31,7 +31,7 @@ infrastructure services.
 | **API** | ASP.NET Core (**.NET 10**), EF Core, SignalR, AWS S3 SDK, MailKit, OpenIddict (OAuth AS) | `src/Diariz.Api` | Auth, orchestration, persistence, audio storage/streaming, summarisation + chat + action-extraction, SignalR notifications, OAuth 2.1 server for the MCP web connector |
 | **Domain** | EF Core + Npgsql + pgvector | `src/Diariz.Domain` | Entities, `DiarizDbContext`, migrations (compiled into the API) |
 | **Worker** | Python: WhisperX (large-v3), pyannote 3.1, SpeechBrain ECAPA, CUDA | `src/Diariz.Worker` | GPU transcription → alignment → diarization → per-speaker voiceprints |
-| **Web** | React 19 + TypeScript + Vite + Tailwind v4 | `apps/web` | SPA UI (served by nginx in Docker) |
+| **Web** | React 19 + TypeScript + Vite + Tailwind v4 | `apps/web` | SPA UI (served by nginx in Docker); **installable as a PWA** in Chromium - the only app-like client on Linux, which has no desktop build |
 | **Desktop** | Electron thin shell - Windows tray + **macOS (beta) menu-bar** | `apps/desktop` | Mic + system audio (Windows loopback / macOS ScreenCaptureKit), tray recording; auto-update on Windows, manual update check on macOS; loads the web app from the server origin |
 | **n8n node** | TypeScript, zero runtime dependencies, MIT | `integrations/n8n-nodes-diariz` | Published npm package (`n8n-nodes-diariz`) installed into a **user's own n8n**, not deployed with Diariz: a self-registering webhook trigger and a full REST action node. **Mirrors `version.json`** so the node's number names the Diariz version it wraps. |
 
@@ -100,6 +100,18 @@ it open for days. `apps/web/nginx.conf` therefore sets `no-cache` on `/index.htm
 on about a kilobyte) and `immutable, max-age=1y` on `/assets/`, which is safe precisely because those names
 are content-hashed. `/assets/` also stops falling through to the SPA fallback, so a missing bundle is a clean
 404 rather than HTML served as JavaScript.
+
+**The web app manifest is served under the same two rules, plus a third that is easy to miss.**
+`/manifest.webmanifest` gets `no-cache` for exactly the reason `index.html` does - it is the document that
+names the icons and the `start_url`, so a heuristically-cached copy pins an *installed* app's identity to a
+previous build - while `/icons/` gets `immutable, max-age=1y` like `/assets/`. The third rule is the MIME
+type: nginx's bundled `mime.types` has no `manifest` entry at all (verified on nginx 1.31.2), so without an
+explicit `types { application/manifest+json webmanifest; }` the file goes out as `application/octet-stream`.
+Vite's dev server resolves the extension on its own, which makes this a **deploy-only** failure, and any
+replacement front end or alternative web server in this position needs the same mapping. There is
+deliberately **no service worker**: it would put a second caching layer in front of the shell, which is the
+hazard this whole section is about, and Chromium has not required one for installability since version 112
+on desktop.
 
 The shell was given the matching half, because a header only helps a client that asks: it loads the document
 with `pragma: no-cache` (`apps/desktop/src/documentLoad.js`) so every launch revalidates, and its tray gained

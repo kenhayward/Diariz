@@ -60,6 +60,10 @@ Two things to be aware of: the device is visible to **every** application, so Zo
 list it as a microphone too; and it stays idle until something actually records from it, so it costs
 nothing when unused.
 
+There is no Linux installer for Diariz, but you do not have to live in a browser tab either: open the
+account menu and choose **Install app**, and Chromium adds Diariz to your applications with its own icon
+and window. Recording works exactly the same way inside it, including the system-audio device above.
+
 ### Installing it for everyone on a machine
 
 Administrators can install the same file system-wide instead of per user, which covers every account on
