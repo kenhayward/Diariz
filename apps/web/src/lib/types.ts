@@ -1254,6 +1254,194 @@ export interface UpdateWorkflowSignalBody {
   isActive: boolean;
 }
 
+// ---- LLM usage log (Platform Administrator) ----
+// Mirrors src/Diariz.Api/Contracts/LlmUsageContracts.cs and LlmUsageController.
+
+/// What an LLM call was for. The API serializes LlmCallKind by name (JsonStringEnumConverter), so this
+/// is a string union of every enum member - the shape used in BOTH directions: response rows report it
+/// this way, and LlmUsageFilter.kinds (below) is filtered by it too, since the server binds `kinds` as
+/// LlmCallKind[] and ASP.NET Core's query-string enum binder accepts names directly. No name-to-number
+/// translation is needed anywhere.
+export type LlmCallKind =
+  | "Unknown"
+  | "Summarize"
+  | "SectionSummary"
+  | "MeetingMinutes"
+  | "SectionMinutes"
+  | "MeetingTypeMinutes"
+  | "ExtractActions"
+  | "Tags"
+  | "Translation"
+  | "Dictation"
+  | "Embedding"
+  | "SearchQuery"
+  | "ChatMessage"
+  | "FormulaRun"
+  | "ChatTitle";
+
+/// Column a usage-log list request may sort by (LlmUsageQuery.SortWhitelist's keys).
+export type LlmUsageSortKey =
+  | "startedAt"
+  | "durationMs"
+  | "promptTokens"
+  | "completionTokens"
+  | "totalTokens"
+  | "kind"
+  | "model"
+  | "userEmail";
+
+/// Dimension the roll-up summary may group by (LlmUsageQuery.GroupByWhitelist's keys).
+export type LlmUsageGroupDimension = "user" | "model" | "kind";
+
+/// Filter shared by every /api/admin/llm-usage endpoint. `userIds`/`kinds`/`models` missing or empty both
+/// mean "no filter on this dimension" - never send an empty array meaning "match nothing". `kinds` is
+/// typed `LlmCallKind[]` - the same string-name shape a response row's own `kind` field uses - and is
+/// sent as the enum NAME on the wire (e.g. `?kinds=Tags`); the API binds `[FromQuery] LlmCallKind[]?`,
+/// and ASP.NET Core's query-string enum binder accepts names directly, so no name-to-number translation
+/// is needed to feed a value from `getLlmUsageFilters()` back into this filter. `from`/`to` are ISO 8601
+/// strings; omitting `from` defaults server-side to 30 days before now.
+export interface LlmUsageFilter {
+  from?: string | null;
+  to?: string | null;
+  userIds?: string[];
+  kinds?: LlmCallKind[];
+  models?: string[];
+  outcome?: "ok" | "failed" | "all" | null;
+  recordingId?: string | null;
+  sectionId?: string | null;
+}
+
+/// Aggregate totals over a filtered LlmCalls query. The token sums and `tokensPerSecond` are
+/// `number | null` - never `number | undefined`, never a bare `number` - because null means "nothing in
+/// this set reported a value", which must never render as "0 tokens". `tokenMeasuredCalls` is how many
+/// calls reported ANY token count at all (prompt, completion, reasoning, or total), a coarser question
+/// than any single column's own measured count.
+///
+/// `promptTokensMeasured`/`completionTokensMeasured`/`reasoningTokensMeasured`/`totalTokensMeasured` are
+/// that narrower, per-column count - always `number` (never null; a count of zero is a legitimate answer,
+/// not an absence of data). Use these, never `tokenMeasuredCalls`, to caption a SPECIFIC column's own
+/// total ("measured on N of M calls") - the four columns are independently nullable and in practice very
+/// unevenly populated (most models never report reasoning tokens at all), so captioning every column with
+/// the same any-column figure states something false about at least three of the four columns whenever
+/// they differ. `tokenMeasuredCalls` remains the right number for qualifying the set as a whole.
+export interface LlmUsageTotals {
+  calls: number;
+  operations: number;
+  durationMs: number;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  reasoningTokens: number | null;
+  totalTokens: number | null;
+  tokenMeasuredCalls: number;
+  promptTokensMeasured: number;
+  completionTokensMeasured: number;
+  reasoningTokensMeasured: number;
+  totalTokensMeasured: number;
+  failedCalls: number;
+  tokensPerSecond: number | null;
+}
+
+/// One LlmCalls row, as returned by mode=calls. Per-call token fields are `number | null`: null means this
+/// call reported no usage for that field, distinct from a measured zero.
+export interface LlmUsageCallRow {
+  id: string;
+  operationId: string;
+  sequence: number;
+  kind: LlmCallKind;
+  userId: string | null;
+  userEmail: string;
+  recordingId: string | null;
+  recordingTitle: string | null;
+  sectionId: string | null;
+  sectionName: string | null;
+  model: string;
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  reasoningTokens: number | null;
+  totalTokens: number | null;
+  success: boolean;
+  statusCode: number | null;
+  errorKind: string | null;
+}
+
+/// One operation - every LlmCalls row sharing an operationId, collapsed to a single row, as returned by
+/// mode=operations (the default). Token fields are `number | null`, same rule as LlmUsageCallRow.
+export interface LlmUsageOperationRow {
+  operationId: string;
+  kind: LlmCallKind;
+  userId: string | null;
+  userEmail: string;
+  recordingId: string | null;
+  recordingTitle: string | null;
+  sectionId: string | null;
+  sectionName: string | null;
+  model: string;
+  turns: number;
+  startedAt: string;
+  completedAt: string;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  reasoningTokens: number | null;
+  totalTokens: number | null;
+  success: boolean;
+}
+
+/// One page of `TRow`, plus totals over the WHOLE filtered set (not just the page - see LlmUsageTotals)
+/// and `total`, the row/operation count of the whole filtered set before paging.
+export interface LlmUsagePage<TRow> {
+  rows: TRow[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totals: LlmUsageTotals;
+}
+
+/// One roll-up row from GET /api/admin/llm-usage/summary, grouped by whichever of user/model/kind was
+/// requested. A dimension NOT requested is null on every row; a dimension that IS requested is never null
+/// on a real row. `averageTurnsPerOperation`/`maxTurnsPerOperation` are computed PER OPERATION, never
+/// summed across the operations in the group.
+export interface LlmUsageSummaryGroup {
+  userId: string | null;
+  userEmail: string | null;
+  model: string | null;
+  kind: LlmCallKind | null;
+  calls: number;
+  operations: number;
+  averageTurnsPerOperation: number;
+  maxTurnsPerOperation: number;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  reasoningTokens: number | null;
+  totalTokens: number | null;
+  tokenMeasuredCalls: number;
+  failedCalls: number;
+  tokensPerSecond: number | null;
+}
+
+/// Response for GET /api/admin/llm-usage/summary: one row per requested group, plus totals over the whole
+/// filtered set (never derived by folding over `groups`).
+export interface LlmUsageSummary {
+  groups: LlmUsageSummaryGroup[];
+  totals: LlmUsageTotals;
+}
+
+/// One user with at least one LlmCalls row in the scoped set, for the viewer's user filter dropdown.
+export interface LlmUsageFilterUser {
+  userId: string;
+  userEmail: string;
+}
+
+/// Response for GET /api/admin/llm-usage/filters: the distinct users, models and kinds that actually
+/// occur in the scoped set - never every enum value or every user in the system.
+export interface LlmUsageFilterOptions {
+  users: LlmUsageFilterUser[];
+  models: string[];
+  kinds: LlmCallKind[];
+}
+
 // ---- Feedback ----
 /// A user-submitted "something looks or behaves wrong" report, as returned to a Platform Administrator.
 /// `trailJson` is the client-scrubbed action trail (see `lib/trail`) serialized to JSON - stored verbatim

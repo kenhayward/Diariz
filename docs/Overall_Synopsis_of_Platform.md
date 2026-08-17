@@ -800,14 +800,13 @@ large folders silently rolled up only their first ~18 meetings. The old per-work
   **creator** or a member with **`ManageContents`**. The web **Formulas tab on the folder page** reuses the same
   `FormulasToolbar`/`FormulasManager`/`FormulasPanel`/`FormulaRunModal` components with a section target.
 
-## LLM usage logging (admin, no viewer yet)
+## LLM usage logging
 
 Every outbound call the platform makes to a model endpoint - summaries, minutes, tags, actions, embeddings,
-chat, formula runs, translation, dictation, search - is captured to a new `LlmCalls` table. There is
-deliberately **no admin viewer over it in this release**; only three Platform Administrator settings on
-Model Settings (below) are user-visible today. **No prompt or completion content is ever stored** - the
-table holds only counts, sizes, and identifiers, the same content-out-of-telemetry rule `SentryScrubber`
-already enforces for Sentry/GlitchTip spans.
+chat, formula runs, translation, dictation, search - is captured to a new `LlmCalls` table, browsable by a
+Platform Administrator at `/admin/llm-usage` (see "Admin usage viewer" below). **No prompt or completion
+content is ever stored** - the table holds only counts, sizes, and identifiers, the same
+content-out-of-telemetry rule `SentryScrubber` already enforces for Sentry/GlitchTip spans.
 
 **The capture contract, end to end:**
 
@@ -888,6 +887,43 @@ time to the first response header - a few tens of milliseconds - not the time th
 generating. It is now recorded when the stream ends (see the capture contract above), with `PromptTokens`/
 `CompletionTokens`/`ReasoningTokens`/`TotalTokens` parsed from the trailing `usage` chunk `stream_options`
 asked the endpoint to send, and `TimeToFirstTokenMs` populated for the first time.
+
+**Admin usage viewer (`/admin/llm-usage`).** The first user-visible surface over `LlmCalls` - a Platform
+Administrator page, linked from the Model Settings tab, over four endpoints on **`LlmUsageController`**
+(`api/admin/llm-usage`), every one gated by **`[Authorize(Policy = "ManagePlatform")]`** (not the weaker
+`ReadAdminSettings` Administrators also hold, because this log carries every user's activity across the
+whole platform, not just platform configuration):
+- **`GET api/admin/llm-usage`** - `mode=operations` (default) collapses every call belonging to one
+  operation (same `OperationId`, `Kind`, user, recording/section, and - conventionally, not enforced -
+  `Model`) into a single row with a turn count; `mode=calls` returns one row per individual `LlmCall`.
+  Both accept the shared filter (date range, `userIds`, `kinds`, `models`, `outcome`, `recordingId`,
+  `sectionId`), a whitelisted `sort`/`desc`, and `page`/`pageSize` (capped at 200), and both return a
+  `total` and a `totals` block computed over the *whole filtered set* - never just the returned page -
+  from the same `LlmUsageQuery.TotalsAsync` the other three endpoints reuse, so no two views of the data
+  can disagree about what is in scope. Each token total is paired with how many of the calls in scope
+  actually reported that figure (a nullable `SUM`/measured-count pair, not a bare sum), so a partial
+  measurement is never presented as a complete one. A request whose filter matches more than 25,000
+  operations is rejected with 400 rather than silently truncated or risking a large in-memory
+  materialization.
+- **`GET api/admin/llm-usage/summary`** - rolls the same filtered set up by a required, comma-separated
+  `groupBy` of `user`, `model`, and/or `kind`; each group's tokens-per-second is that group's own
+  `SUM(completion)/SUM(duration)`, never an average of its rows or the overall rate, and `turns` is
+  reported per operation as an average and a maximum, never summed across operations.
+- **`DELETE api/admin/llm-usage`** - the most destructive endpoint in the feature: permanently removes
+  every `LlmCalls` row matching the same shared filter (defaulting to the same 30-day window, so an
+  unfiltered request can never silently mean "delete everything") via a set-based `ExecuteDeleteAsync`
+  (rows are never materialized into API process memory), capped at 25,000 rows per request, and returns
+  the count actually removed. The web page confirms with that exact count before calling it.
+- **`GET api/admin/llm-usage/filters`** - lists the distinct users/models/kinds actually present in the
+  scoped set (same date range, no other filter - populating a dropdown from an already-filtered dropdown
+  would be circular), to drive the filter bar's dropdowns.
+
+The web page (`apps/web/src/pages/LlmUsage.tsx`) presents this as three views - Operations, Calls, and
+Summary - sharing one filter bar (default window: the last 7 days - a UI-chosen default, distinct from
+`LlmUsageQuery.Apply`'s own 30-day fallback for a caller that sends no `from` at all, since the page always
+sends an explicit preset), a totals row pinned to the bottom of the table, sortable column headers issuing a
+fresh server-side request per click, and a filtered-delete button whose native confirm dialog states the
+exact row count before anything is removed.
 
 ## Meeting notes (the user's own notes)
 

@@ -557,9 +557,16 @@ with no hidden HTTP cap underneath it. Raise it for a slow or large local model.
 - **LLM usage logging** (Platform Administrator, Settings → Model Settings): a master switch that turns
 capture of every outbound LLM call on or off, a retention window in days for how long the captured rows are
 kept before a nightly sweep deletes them (0 keeps everything), and a toggle to request token counts on
-streaming calls when the endpoint supports it (wired for a later release; has no effect yet). Captured rows
-hold only counts, sizes and identifiers - never prompt or completion content - and there is no admin viewer
-over them in this release.
+streaming calls when the endpoint supports it. Captured rows hold only counts, sizes and identifiers - never
+prompt or completion content. A Platform Administrator can browse the captured log at `/admin/llm-usage`
+(also linked from the Model Settings tab): three views - **Operations** (one row per user-facing action,
+with its turn count), **Calls** (every individual model call), and **Summary** (rolled up by any combination
+of user, model, and call type) - filterable by date range (last 7 days by default), user, call type, model,
+and outcome, with server-side sorting on every column. A totals row covers the whole filter, not just the
+visible page - calls, operations, duration, and prompt/completion/reasoning/total tokens - and each token
+total states how many of the calls in scope actually reported that figure, so a partial measurement is
+never shown as a complete one. Rows matching the current filter can be deleted, with a confirmation stating
+the exact count before anything is removed.
 - **Preferences**: a tabbed window with the everyday entries (Profile, Recordings, Formulas, Calendars) over an
 **Advanced** divider holding the exception settings (Integrations, Assistant).
 Each user can edit their **profile** — display name, job title, company, job/company descriptions, LinkedIn

@@ -201,7 +201,8 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
               </label>
 
               {/* LLM usage log: master switch, retention window (0 = keep forever), and whether streaming
-                  calls ask for token counts (not yet consumed - wired for a later release). */}
+                  calls ask for token counts (consumed since 0.217.0 to report real tokens/duration on
+                  streamed calls). */}
               <div className="border-t pt-3 dark:border-gray-700">
                 <label className="flex items-center gap-2 text-sm">
                   <input
@@ -236,6 +237,15 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                   <span className="font-medium text-gray-700 dark:text-gray-200">{t("llmStreamUsageLabel")}</span>
                 </label>
                 <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{t("llmStreamUsageHint")}</p>
+
+                <a
+                  href="/admin/llm-usage"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 inline-block text-xs text-indigo-600 hover:underline dark:text-indigo-400"
+                >
+                  {t("llmUsageViewLog")} →
+                </a>
               </div>
             </div>
           ) : tab === "quotas" ? (

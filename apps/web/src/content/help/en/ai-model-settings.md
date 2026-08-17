@@ -85,3 +85,18 @@ A Platform Administrator can also set a **global AI timeout** (see Response time
 per-user override), choose whether minutes generate with one
 call per section (better structure) or a single call (fewer tokens), and switch API access, Claude/MCP,
 and Automations on or off independently.
+
+## LLM usage log
+
+Model Settings also has an **LLM usage log**: a master switch, a retention window in days (0 keeps
+rows forever), and a toggle asking streaming replies for a token count. Every outbound call the platform
+makes to a model - summaries, minutes, chat, formulas, and the rest - is recorded here: who it was for,
+which model answered, how long it took, and how many tokens it used. The prompt and reply themselves are
+never stored, only counts and sizes.
+
+A **View usage log** link opens the log at `/admin/llm-usage`, Platform Administrator only. It has three
+views - **Operations** (one row per user-facing action, with how many model calls it took), **Calls**
+(every individual call), and **Summary** (rolled up by user, model, or call type) - with a filter bar for
+date range, user, call type, model, and outcome, and a totals row that always reflects the whole filter,
+not just what's on screen. Deleting rows there deletes them for good, and the confirmation tells you
+exactly how many rows are about to go before you commit to it.

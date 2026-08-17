@@ -1054,14 +1054,15 @@ tokens. See `Overall_Synopsis_of_Platform.md` for the auth flow.
 One row per outbound call to a model endpoint, written by `LlmTelemetryHandler` off the request path via a
 bounded in-memory channel and a background writer (`LlmUsageWriter`) - see
 `Overall_Synopsis_of_Platform.md` for the full capture contract. **Never stores prompt or completion
-content** - counts and sizes only, the same rule `SentryScrubber` enforces elsewhere. There is no viewer for
-this table yet; a later release adds one.
+content** - counts and sizes only, the same rule `SentryScrubber` enforces elsewhere. A Platform
+Administrator browses, filters, and deletes rows in this table via the admin usage viewer at
+`/admin/llm-usage` (`LlmUsageController`; see `Overall_Synopsis_of_Platform.md` for its endpoints).
 
 The `UserId`/`RecordingId`/`SectionId` links are each `ON DELETE SET NULL` and each paired with a
 **denormalized snapshot column** (`UserEmail`/`RecordingTitle`/`SectionName`) captured at write time, so a
 row stays readable - "who this was for", "which recording" - after the user, recording, or folder it
 pointed at is deleted. That is deliberate for an audit trail: erasure of this data is instead a filtered
-bulk delete on the (future) admin viewer, not a cascade off the subject's own deletion.
+bulk delete on the admin usage viewer, not a cascade off the subject's own deletion.
 
 | Column | Type | Notes |
 |---|---|---|

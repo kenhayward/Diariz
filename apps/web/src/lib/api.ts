@@ -86,6 +86,14 @@ import type {
   FeedbackDto,
   CreateWorkflowSignalBody,
   UpdateWorkflowSignalBody,
+  LlmUsageFilter,
+  LlmUsagePage,
+  LlmUsageCallRow,
+  LlmUsageOperationRow,
+  LlmUsageSummary,
+  LlmUsageGroupDimension,
+  LlmUsageSortKey,
+  LlmUsageFilterOptions,
 } from "./types";
 
 const TOKEN_KEY = "diariz.token";
@@ -1592,6 +1600,55 @@ export const api = {
 
   async deleteFeedback(id: string): Promise<void> {
     await http.delete(`/api/feedback/${id}`);
+  },
+
+  // ---- LLM usage log (Platform Administrator) ----
+  // Array filter fields (userIds/kinds/models) must serialize as repeated keys ("userIds=a&userIds=b"),
+  // not axios's default "userIds[]=a&userIds[]=b" - ASP.NET Core's [FromQuery] array binder does not
+  // recognise the bracketed form. `paramsSerializer: { indexes: null }` selects the repeated-key form.
+
+  /// List LlmCalls entries. mode=operations (default) collapses every call in one operation into a
+  /// single row; mode=calls returns one row per call - narrow the returned rows by the `mode` you passed.
+  /// `total`/`totals` both cover the whole filtered set, never just the returned page.
+  async getLlmUsage(params: LlmUsageFilter & {
+    mode?: "operations" | "calls";
+    sort?: LlmUsageSortKey;
+    desc?: boolean;
+    page?: number;
+    pageSize?: number;
+  }): Promise<LlmUsagePage<LlmUsageOperationRow | LlmUsageCallRow>> {
+    const { data } = await http.get<LlmUsagePage<LlmUsageOperationRow | LlmUsageCallRow>>(
+      "/api/admin/llm-usage",
+      { params, paramsSerializer: { indexes: null } },
+    );
+    return data;
+  },
+
+  /// Roll usage up by whichever of user/model/kind `groupBy` names (sent as a comma-separated list).
+  async getLlmUsageSummary(params: LlmUsageFilter & { groupBy: LlmUsageGroupDimension[] }): Promise<LlmUsageSummary> {
+    const { groupBy, ...filter } = params;
+    const { data } = await http.get<LlmUsageSummary>("/api/admin/llm-usage/summary", {
+      params: { ...filter, groupBy: groupBy.join(",") },
+      paramsSerializer: { indexes: null },
+    });
+    return data;
+  },
+
+  /// Permanently delete every LlmCalls row matching the filter. No undo - the usage log is the only
+  /// record a given LLM call ever happened. Returns how many rows were removed.
+  async deleteLlmUsage(params: LlmUsageFilter): Promise<{ deleted: number }> {
+    const { data } = await http.delete<{ deleted: number }>("/api/admin/llm-usage", {
+      params,
+      paramsSerializer: { indexes: null },
+    });
+    return data;
+  },
+
+  /// The distinct users, models and kinds present in the usage log within the given date window (default:
+  /// the same 30-day window every other endpoint here defaults to), for populating the viewer's filters.
+  async getLlmUsageFilters(params?: { from?: string | null; to?: string | null }): Promise<LlmUsageFilterOptions> {
+    const { data } = await http.get<LlmUsageFilterOptions>("/api/admin/llm-usage/filters", { params });
+    return data;
   },
 };
 
