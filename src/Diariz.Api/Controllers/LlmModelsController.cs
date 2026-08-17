@@ -1,0 +1,285 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Diariz.Api.Configuration;
+using Diariz.Api.Contracts;
+using Diariz.Api.Services;
+using Diariz.Api.Services.Llm;
+using Diariz.Domain;
+using Diariz.Domain.Entities;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+
+namespace Diariz.Api.Controllers;
+
+/// <summary>The models an administrator configures and points call groups at - the write side of what
+/// <see cref="LlmSettingsResolver"/> reads.
+///
+/// <c>[ManagePlatform]</c>, not the weaker <c>ReadAdminSettings</c> that Administrators also hold: these
+/// rows carry endpoint credentials and decide which model every user's calls go to.</summary>
+[ApiController]
+[Route("api/admin/llm-models")]
+[Authorize(Policy = "ManagePlatform")]
+public class LlmModelsController : ControllerBase
+{
+    private readonly DiarizDbContext _db;
+    private readonly IApiKeyProtector _protector;
+    private readonly SummarizationOptions _env;
+
+    public LlmModelsController(
+        DiarizDbContext db, IApiKeyProtector protector, IOptions<SummarizationOptions> env)
+    {
+        _db = db;
+        _protector = protector;
+        _env = env.Value;
+    }
+
+    [HttpGet]
+    public async Task<ActionResult<List<LlmModelDto>>> List()
+    {
+        var models = await _db.LlmModels
+            .Include(m => m.Parameters)
+            .OrderBy(m => m.Name)
+            .AsNoTracking()
+            .ToListAsync();
+
+        return models.Select(ToDto).ToList();
+    }
+
+    [HttpPost]
+    public async Task<ActionResult<LlmModelDto>> Create(LlmModelUpsert req)
+    {
+        if (Validate(req) is { } bad) return bad;
+        if (await _db.LlmModels.AnyAsync(m => m.Name == req.Name.Trim()))
+            return Conflict($"A model named '{req.Name.Trim()}' already exists.");
+
+        var model = new LlmModel
+        {
+            Id = Guid.NewGuid(),
+            Name = req.Name.Trim(),
+            ApiBase = req.ApiBase.Trim(),
+            ApiKeyEncrypted = _protector.Protect(req.ApiKey),
+            ContextLength = req.ContextLength,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+        };
+        _db.LlmModels.Add(model);
+        ReplaceParameters(model, req.Parameters);
+        await _db.SaveChangesAsync();
+
+        return ToDto(model);
+    }
+
+    [HttpPut("{id:guid}")]
+    public async Task<ActionResult<LlmModelDto>> Update(Guid id, LlmModelUpsert req)
+    {
+        if (Validate(req) is { } bad) return bad;
+
+        var model = await _db.LlmModels.Include(m => m.Parameters).FirstOrDefaultAsync(m => m.Id == id);
+        if (model is null) return NotFound();
+
+        if (await _db.LlmModels.AnyAsync(m => m.Name == req.Name.Trim() && m.Id != id))
+            return Conflict($"A model named '{req.Name.Trim()}' already exists.");
+
+        model.Name = req.Name.Trim();
+        model.ApiBase = req.ApiBase.Trim();
+        model.ContextLength = req.ContextLength;
+        model.UpdatedAt = DateTimeOffset.UtcNow;
+
+        // Three distinct meanings, and the middle one is why this is not a plain assignment: null keeps the
+        // stored key (the UI is never given it, so it cannot send it back), empty clears it for an endpoint
+        // that needs none, and a value replaces it.
+        if (req.ApiKey is not null)
+            model.ApiKeyEncrypted = _protector.Protect(req.ApiKey);
+
+        ReplaceParameters(model, req.Parameters);
+        await _db.SaveChangesAsync();
+
+        return ToDto(model);
+    }
+
+    /// <summary>Removes a model, refusing while anything still points at it.
+    ///
+    /// The checks below are the guard, NOT a nicety on top of the database. Both FKs are DELETE RESTRICT in
+    /// Postgres, but neither reliably stops this path: for an assignment EF throws at <c>Remove</c> before
+    /// any statement is sent, and for the platform default - whose FK is nullable - EF quietly issues
+    /// <c>SET DefaultLlmModelId = NULL</c> ahead of the DELETE, so the constraint never fires and the model
+    /// really is deleted. Verified against real Postgres in <c>LlmModelSchemaTests</c>.</summary>
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        var model = await _db.LlmModels.FirstOrDefaultAsync(m => m.Id == id);
+        if (model is null) return NotFound();
+
+        var groups = await _db.LlmCallAssignments
+            .Where(a => a.LlmModelId == id)
+            .Select(a => a.Group)
+            .ToListAsync();
+
+        if (groups.Count > 0)
+            return Conflict(
+                $"'{model.Name}' still serves {string.Join(", ", groups.OrderBy(g => g).Select(g => g.ToString()))}. " +
+                "Point those call types at another model first.");
+
+        if (await _db.PlatformSettings.AnyAsync(p => p.DefaultLlmModelId == id))
+            return Conflict($"'{model.Name}' is the default model. Choose a different default first.");
+
+        _db.LlmModels.Remove(model);
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpGet("assignments")]
+    public async Task<ActionResult<LlmAssignmentsDto>> GetAssignments()
+    {
+        var settings = await _db.PlatformSettings
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == PlatformSettings.SingletonId);
+
+        var assignments = await _db.LlmCallAssignments.AsNoTracking().ToListAsync();
+
+        return new LlmAssignmentsDto(
+            settings?.DefaultLlmModelId,
+            assignments.ToDictionary(a => a.Group.ToString(), a => a.LlmModelId));
+    }
+
+    [HttpPut("assignments")]
+    public async Task<IActionResult> UpdateAssignments(LlmAssignmentsDto req)
+    {
+        var parsed = new List<(LlmCallGroup Group, Guid ModelId)>();
+        foreach (var (name, modelId) in req.Assignments)
+        {
+            if (!Enum.TryParse<LlmCallGroup>(name, out var group))
+                return BadRequest($"Unknown call group '{name}'.");
+
+            // ModelBase names a parameter scope, not a call type: nothing is ever dispatched to it, so an
+            // assignment there would be silently inert.
+            if (group == LlmCallGroup.ModelBase)
+                return BadRequest("ModelBase is a parameter scope, not a call type, and cannot be assigned.");
+
+            if (!await _db.LlmModels.AnyAsync(m => m.Id == modelId))
+                return BadRequest($"No model with id {modelId}.");
+
+            parsed.Add((group, modelId));
+        }
+
+        if (req.DefaultModelId is { } defaultId && !await _db.LlmModels.AnyAsync(m => m.Id == defaultId))
+            return BadRequest($"No model with id {defaultId}.");
+
+        _db.LlmCallAssignments.RemoveRange(await _db.LlmCallAssignments.ToListAsync());
+        await _db.SaveChangesAsync();
+
+        foreach (var (group, modelId) in parsed)
+            _db.LlmCallAssignments.Add(new LlmCallAssignment { Group = group, LlmModelId = modelId });
+
+        var settings = await _db.PlatformSettings.FirstOrDefaultAsync(p => p.Id == PlatformSettings.SingletonId);
+        if (settings is null)
+        {
+            settings = new PlatformSettings { Id = PlatformSettings.SingletonId };
+            _db.PlatformSettings.Add(settings);
+        }
+        settings.DefaultLlmModelId = req.DefaultModelId;
+
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// <summary>Creates the first model from the endpoint already configured in the environment, so an
+    /// upgraded deployment has something to edit rather than a blank page.
+    ///
+    /// Refused once any model exists. It is a one-time migration aid, not an import button: re-running it
+    /// would resurrect a model an administrator had deliberately deleted - the same defect as a seeder that
+    /// keeps undoing a change on every boot.</summary>
+    [HttpPost("from-environment")]
+    public async Task<ActionResult<LlmModelDto>> CreateFromEnvironment()
+    {
+        if (await _db.LlmModels.AnyAsync())
+            return Conflict("Models are already configured. Add or edit one instead.");
+
+        if (string.IsNullOrWhiteSpace(_env.ApiBase))
+            return BadRequest("No endpoint is configured in the environment to import.");
+
+        var model = new LlmModel
+        {
+            Id = Guid.NewGuid(),
+            Name = string.IsNullOrWhiteSpace(_env.Model) ? "imported-model" : _env.Model.Trim(),
+            ApiBase = _env.ApiBase.Trim(),
+            ApiKeyEncrypted = _protector.Protect(_env.ApiKey),
+            ContextLength = new ChatOptions().ContextLength,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+        };
+        _db.LlmModels.Add(model);
+        await _db.SaveChangesAsync();
+
+        return ToDto(model);
+    }
+
+    // ---- helpers ----
+
+    private BadRequestObjectResult? Validate(LlmModelUpsert req)
+    {
+        if (string.IsNullOrWhiteSpace(req.Name)) return BadRequest("A model name is required.");
+        if (string.IsNullOrWhiteSpace(req.ApiBase)) return BadRequest("An endpoint URL is required.");
+        if (req.ContextLength <= 0) return BadRequest("The context length must be greater than zero.");
+
+        foreach (var (groupName, json) in req.Parameters)
+        {
+            if (!Enum.TryParse<LlmCallGroup>(groupName, out _))
+                return BadRequest($"Unknown parameter group '{groupName}'.");
+
+            JsonObject? parsed;
+            try
+            {
+                parsed = JsonNode.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json) as JsonObject;
+            }
+            catch (JsonException)
+            {
+                return BadRequest($"The parameters for '{groupName}' are not valid JSON.");
+            }
+
+            if (parsed is null) return BadRequest($"The parameters for '{groupName}' must be a JSON object.");
+
+            // An unrecognised key is rejected rather than stored: the layer merge ignores keys it does not
+            // know, so accepting a typo would show a saved setting that silently does nothing.
+            foreach (var (key, _) in parsed)
+                if (!LlmParameterLayers.ParameterNames.Contains(key))
+                    return BadRequest($"Unknown parameter '{key}' in '{groupName}'.");
+        }
+
+        return null;
+    }
+
+    /// <summary>Makes the model's stored rows match the request exactly - groups the request omits are
+    /// deleted, so clearing a group's overrides in the UI actually clears them.</summary>
+    private void ReplaceParameters(LlmModel model, Dictionary<string, string> parameters)
+    {
+        _db.LlmModelParameters.RemoveRange(model.Parameters);
+        model.Parameters.Clear();
+
+        foreach (var (groupName, json) in parameters)
+        {
+            var group = Enum.Parse<LlmCallGroup>(groupName);   // already validated
+            var text = string.IsNullOrWhiteSpace(json) ? "{}" : json;
+
+            // Re-serialise through JsonNode so what is stored is canonical: jsonb reformats anyway, and a
+            // byte comparison against the submitted text would never match on real Postgres.
+            var canonical = (JsonNode.Parse(text) as JsonObject)!.ToJsonString();
+
+            _db.LlmModelParameters.Add(new LlmModelParameters
+            {
+                Id = Guid.NewGuid(),
+                LlmModelId = model.Id,
+                Group = group,
+                ParametersJson = canonical,
+            });
+        }
+    }
+
+    private static LlmModelDto ToDto(LlmModel m) => new(
+        m.Id, m.Name, m.ApiBase,
+        HasApiKey: !string.IsNullOrEmpty(m.ApiKeyEncrypted),
+        m.ContextLength,
+        m.Parameters.ToDictionary(p => p.Group.ToString(), p => p.ParametersJson));
+}

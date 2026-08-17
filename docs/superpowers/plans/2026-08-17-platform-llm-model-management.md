@@ -1960,7 +1960,21 @@ public class LlmModelsControllerTests
 }
 ```
 
-`Http.Context` may not yet take a `platformAdmin` flag - check its signature in `Diariz.Api.TestSupport` and add the parameter there if needed, rather than constructing claims inline in this test.
+**CORRECTION - authorisation is not unit-testable here, and `Http.Context` needs no new flag.** The
+`List_refuses_a_user_who_is_not_a_platform_administrator` test above was written expecting a `ForbidResult`
+from a directly-constructed controller. That cannot work: the unit harness news up the controller itself, so
+an `[Authorize(Policy=...)]` attribute never executes and such an assertion would pass whether or not the
+attribute existed - a test that cannot fail. Adding a `platformAdmin` flag to `Http.Context` would only make
+the illusion more convincing.
+
+The house pattern is a **separate integration class over the real pipeline**: see `PlatformWebhooksAuthTests`
+and `WorkflowSignalsAuthTests`, both of which say so in their class comments. So:
+
+- `LlmModelsControllerTests` (unit) covers CRUD, validation, the key contract and the delete guard - no
+  authorisation assertions at all, and its class comment says why and points at the auth class.
+- `LlmModelsAuthTests` (integration, `DiarizWebAppFactory`) proves the `ManagePlatform` gate on a read, on a
+  create, and on the assignments write, plus one positive case for a Platform Administrator. Authority comes
+  from group membership (`Perms.Grant(db, id, Perms.PlatformAdministrator)`), not a role claim.
 
 - [ ] **Step 2: Run and watch them fail**
 
@@ -2000,7 +2014,13 @@ The build matters: a controller constructor change has a second construction sit
 
 - [ ] **Step 5: Mutation-verify the two authorisation-shaped assertions**
 
-Remove the platform-admin attribute and confirm `List_requires_a_platform_administrator` FAILS. Restore. Then return the key in the DTO and confirm `Never_returns_the_api_key` FAILS. Restore.
+Three mutations, all verified:
+
+1. Remove `[Authorize(Policy = "ManagePlatform")]` -> the three negative cases in `LlmModelsAuthTests` FAIL
+   (the positive one still passes, as it should).
+2. Leak the stored key into a returned field -> `Never_returns_the_api_key_only_whether_one_is_set` FAILS.
+3. Remove the `DefaultLlmModelId` check from `Delete` -> `Delete_of_the_platform_default_is_refused` FAILS.
+   This is the one that matters most: Postgres does not stop that delete, so without the check nothing does.
 
 - [ ] **Step 6: Commit**
 

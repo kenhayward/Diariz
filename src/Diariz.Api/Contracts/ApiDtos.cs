@@ -847,3 +847,24 @@ public record CreateFeedbackRequest(string Description, string Route, string Rel
 
 public record FeedbackDto(Guid Id, Guid UserId, string? UserEmail, DateTimeOffset CreatedAt,
     string Description, string Route, string Release, string TrailJson);
+
+// ---- Platform LLM models (the Models admin page) ----
+
+/// <summary>One configured model. <paramref name="Parameters"/> maps an <c>LlmCallGroup</c> NAME to that
+/// group's parameter-layer JSON, with <c>ModelBase</c> holding the model's own defaults - a group absent
+/// from the map has no override and inherits.
+///
+/// The key itself is never returned, only <paramref name="HasApiKey"/>: same write-only contract the
+/// per-user key had, so a stored secret cannot leak back out through the admin UI.</summary>
+public record LlmModelDto(Guid Id, string Name, string ApiBase, bool HasApiKey, int ContextLength,
+    Dictionary<string, string> Parameters);
+
+/// <summary>Create or replace a model. A null <c>ApiKey</c> on update means "keep the stored key" - the UI
+/// was never given it, so it cannot send it back.</summary>
+public record LlmModelUpsert(string Name, string ApiBase, string? ApiKey, int ContextLength,
+    Dictionary<string, string> Parameters);
+
+/// <summary>Which model serves which call group, plus the fallback for groups with no entry. Group names
+/// are <c>LlmCallGroup</c> members; <c>ModelBase</c> is rejected - it is a parameter scope, not a call
+/// type.</summary>
+public record LlmAssignmentsDto(Guid? DefaultModelId, Dictionary<string, Guid> Assignments);
