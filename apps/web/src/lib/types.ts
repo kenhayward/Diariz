@@ -503,26 +503,16 @@ export interface SetupValidation {
 }
 
 export interface UserSettings {
-  apiBase: string | null;
-  model: string | null;
-  hasApiKey: boolean;
-  /// Server-wide defaults, shown as placeholders (applied when the user leaves a field blank).
-  defaultApiBase: string | null;
-  defaultModel: string | null;
-  serverHasApiKey: boolean;
-  /// Per-user chat context-window override (tokens); null = use the server default.
-  contextWindow: number | null;
-  defaultContextWindow: number;
+  /// The context window (tokens) of the model serving chat, for the chat dial. READ-ONLY from 0.221.0:
+  /// LLM configuration is platform-wide and edited at /admin/llm-models.
+  contextWindow: number;
+  /// The model serving chat, for the dial's label before the first turn reports one. Read-only.
+  chatModel: string;
   /// Effective master switch for chat tool calling (user override ?? server default).
   toolsEnabled: boolean;
   defaultToolsEnabled: boolean;
   /// The catalog of built-in chat tools with their resolved on/off state.
   tools: ChatToolInfo[];
-  /// Effective reasoning toggle + level (user override ?? server default) for reasoning models.
-  reasoningEnabled: boolean;
-  reasoningEffort: string; // "low" | "medium" | "high"
-  defaultReasoningEnabled: boolean;
-  defaultReasoningEffort: string;
   /// Where a new recording lands in the user's Personal room (enum name on the wire).
   placementMode: RecordingPlacementMode;
   placementSectionId: string | null;
@@ -537,10 +527,6 @@ export interface UserSettings {
   calendarAutoStopAfterMinutes: number;
   /// Seconds of continuous silence that also ends such a recording.
   calendarSilenceStopSeconds: number;
-  /// Per-user override for how long to wait for the LLM between chunks of a reply; null = inherit.
-  llmTimeoutSeconds: number | null;
-  /// What applies when the user has no override (user ?? platform ?? server default).
-  defaultLlmTimeoutSeconds: number;
 }
 
 /// Where a new recording lands in the user's Personal room. Mirrors the server enum names.
@@ -951,22 +937,13 @@ export interface UpdateUserProfile {
 }
 
 export interface UpdateUserSettings {
-  /// Tri-state (like the others below): omit/null = leave unchanged, "" = clear the override, value = set.
-  /// The personal settings tabs save independently, so each sends only the fields it owns.
-  apiBase?: string | null;
-  model?: string | null;
-  /// Tri-state: undefined/null = leave unchanged, "" = clear, value = set.
-  apiKey?: string | null;
-  /// Context-window override; null/0 clears it (falls back to the server default).
-  contextWindow?: number | null;
+  /// The personal settings tabs save independently, so each sends only the fields it owns - omitting a
+  /// field always means "leave it unchanged", never "clear it".
+  ///
   /// Master switch for chat tool calling; omit to leave unchanged.
   toolsEnabled?: boolean;
   /// Explicit per-tool on/off overrides ({ name: enabled }); omit to leave unchanged.
   toolOverrides?: Record<string, boolean>;
-  /// Reasoning: send an OpenAI-style reasoning_effort on LLM requests; omit to leave unchanged.
-  reasoningEnabled?: boolean;
-  /// Reasoning level ("low"|"medium"|"high"); blank clears the per-user override.
-  reasoningEffort?: string;
   /// Where a new recording lands; omit to leave unchanged. A non-SpecificFolder mode clears any fixed folder.
   placementMode?: RecordingPlacementMode;
   placementSectionId?: string | null;

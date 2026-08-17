@@ -2029,9 +2029,6 @@ namespace Diariz.Domain.Migrations
                         .HasColumnType("integer")
                         .HasDefaultValue(30);
 
-                    b.Property<int?>("ChatContextWindow")
-                        .HasColumnType("integer");
-
                     b.Property<string>("ChatToolOverridesJson")
                         .HasColumnType("jsonb");
 
@@ -2069,19 +2066,10 @@ namespace Diariz.Domain.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<int?>("LlmTimeoutSeconds")
-                        .HasColumnType("integer");
-
                     b.Property<string>("NativeLanguage")
                         .HasColumnType("text");
 
                     b.Property<bool>("OutlookSyncEnabled")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("ReasoningEffort")
-                        .HasColumnType("text");
-
-                    b.Property<bool?>("ReasoningEnabled")
                         .HasColumnType("boolean");
 
                     b.Property<int>("RecordingPlacementMode")
@@ -2091,17 +2079,6 @@ namespace Diariz.Domain.Migrations
 
                     b.Property<Guid?>("RecordingPlacementSectionId")
                         .HasColumnType("uuid");
-
-                    b.Property<string>("SummaryApiBase")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<string>("SummaryApiKeyEncrypted")
-                        .HasColumnType("text");
-
-                    b.Property<string>("SummaryModel")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
 
                     b.Property<int>("Theme")
                         .ValueGeneratedOnAdd()

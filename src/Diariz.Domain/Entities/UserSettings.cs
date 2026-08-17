@@ -1,29 +1,15 @@
 namespace Diariz.Domain.Entities;
 
 /// <summary>Per-user preferences (1:1 with <see cref="ApplicationUser"/>, shared primary key).
-/// Currently holds the user's own OpenAI-compatible summarisation config; null fields fall back to
-/// the server defaults.</summary>
+///
+/// It used to carry the user's own LLM endpoint, key, model, context window, timeout and reasoning
+/// settings. Those moved to the platform in 0.221.0 (see <see cref="LlmModel"/>) - which model answers is
+/// no longer a per-user choice - and the columns were dropped rather than left unread, so nothing can
+/// quietly go on writing them.</summary>
 public class UserSettings
 {
     public Guid UserId { get; set; }
     public ApplicationUser? User { get; set; }
-
-    /// <summary>Base URL of the user's OpenAI-compatible endpoint, e.g. https://api.openai.com/v1.</summary>
-    public string? SummaryApiBase { get; set; }
-
-    /// <summary>API key, encrypted at rest (never returned to clients). Null = not set.</summary>
-    public string? SummaryApiKeyEncrypted { get; set; }
-
-    public string? SummaryModel { get; set; }
-
-    /// <summary>Chat model's context-window size in tokens, used by the context dial. Null falls back
-    /// to the server default (<c>Chat:ContextLength</c>).</summary>
-    public int? ChatContextWindow { get; set; }
-
-    /// <summary>Per-request LLM timeout in seconds, overriding the platform-wide admin setting. Null
-    /// inherits (PlatformSettings.LlmTimeoutSeconds, then the server option). A user points at their own
-    /// endpoint and model, so a slow local model is theirs to accommodate - the value is uncapped.</summary>
-    public int? LlmTimeoutSeconds { get; set; }
 
     /// <summary>Master switch for chat tool calling. Null falls back to the server default
     /// (<c>Chat:ToolsEnabled</c>).</summary>
@@ -40,14 +26,6 @@ public class UserSettings
 
     /// <summary>The language the app UI is shown in (BCP-47). Null = follow the browser / default.</summary>
     public string? UiLanguage { get; set; }
-
-    /// <summary>Send an OpenAI-style <c>reasoning_effort</c> on LLM requests (for reasoning models). Null
-    /// falls back to the server default (<c>Summarization:ReasoningEnabled</c>).</summary>
-    public bool? ReasoningEnabled { get; set; }
-
-    /// <summary>Reasoning effort level when enabled: <c>low</c> | <c>medium</c> | <c>high</c>. Null falls back
-    /// to the server default (<c>Summarization:ReasoningEffort</c>).</summary>
-    public string? ReasoningEffort { get; set; }
 
     /// <summary>Google OAuth refresh token (offline access to the user's Calendar), encrypted at rest —
     /// never returned to clients. Null = the user hasn't connected Google data access.</summary>

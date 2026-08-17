@@ -585,8 +585,6 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         builder.Entity<UserSettings>(e =>
         {
             e.HasKey(s => s.UserId);
-            e.Property(s => s.SummaryApiBase).HasMaxLength(512);
-            e.Property(s => s.SummaryModel).HasMaxLength(256);
             e.Property(s => s.GoogleCalendarGranted).HasDefaultValue(false);
             e.Property(s => s.Theme).HasDefaultValue(ThemePreference.Auto);
             e.Property(s => s.RecordingPlacementMode).HasDefaultValue(RecordingPlacementMode.SelectedFolder);

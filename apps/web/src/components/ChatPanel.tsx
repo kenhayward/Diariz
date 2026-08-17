@@ -220,10 +220,11 @@ export default function ChatPanel() {
 
   // Dial: show the configured context window from the start (used 0), then the live figures the
   // server reports on each turn via the meta/done events.
-  const totalContext = settings ? settings.contextWindow ?? settings.defaultContextWindow : 0;
-  const dialTotal = usage?.contextTotal || totalContext;
+  const dialTotal = usage?.contextTotal || settings?.contextWindow || 0;
   const dialUsed = usage?.contextUsed ?? 0;
-  const dialModel = usage?.model || settings?.model || settings?.defaultModel || "";
+  // The server's per-turn figure wins once a turn has run; before that, the model the platform assigns
+  // to chat (there is no per-user model any more).
+  const dialModel = usage?.model || settings?.chatModel || "";
 
   // Keep the thread scrolled to the newest message as tokens stream in.
   useEffect(() => {

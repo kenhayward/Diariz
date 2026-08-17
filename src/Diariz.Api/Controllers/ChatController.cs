@@ -178,7 +178,7 @@ public class ChatController : ControllerBase
         }
         var history = (req.Messages ?? []).Select(m => new ChatMessage(m.Role, m.Content)).ToList();
         var messages = ChatContextBuilder.BuildMessages(system, history);
-        var contextTotal = await _contextResolver.ResolveContextWindowAsync(UserId, ct);
+        var contextTotal = await _contextResolver.ResolveContextWindowAsync(ct);
         var promptTokens = messages.Sum(m => ChatContextMeter.EstimateTokens(m.Content));
         var toolContext = new ChatToolContext(UserId, scopeRecIds);
 

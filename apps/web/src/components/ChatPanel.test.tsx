@@ -97,7 +97,7 @@ describe("ChatPanel", () => {
     mock(api.listRecordings).mockResolvedValue([rec("rec-1", "Standup"), rec("rec-2", "Retro", "Summarized")]);
     mock(api.getUserSettings).mockResolvedValue({
       apiBase: null, model: "gpt-oss", hasApiKey: false, defaultApiBase: null, defaultModel: "gpt-oss",
-      serverHasApiKey: false, contextWindow: null, defaultContextWindow: 131072,
+      contextWindow: 131072, chatModel: "test-model",
     });
     mock(api.chatStream).mockImplementation(async (_body: any, h: any) => {
       h.onMeta?.({ model: "gpt-oss", contextUsed: 10, contextTotal: 100 });

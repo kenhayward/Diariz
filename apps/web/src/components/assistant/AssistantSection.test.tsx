@@ -42,33 +42,22 @@ describe("AssistantSection", () => {
     mock(api.updateUserSettings).mockResolvedValue(undefined);
   });
 
-  // ---- the model card ----
+  // ---- the model card is gone (0.221.0) ----
 
-  /// The point of collapsing the model override to one line: the usual question is "what am I actually
-  /// running?", and the answer is now on the card rather than behind a tab.
-  it("states the model in effect without opening anything", async () => {
-    mock(api.getUserSettings).mockResolvedValue(
-      settings({ defaultModel: "openai/gpt-oss-20b", defaultApiBase: "http://192.168.1.129:1234/v1", reasoningEnabled: true, reasoningEffort: "low" }),
-    );
+  /// Model configuration moved to /admin/llm-models. Leaving the card here would offer a user a control
+  /// over something they no longer decide - and the fields behind it no longer exist.
+  it("no longer offers a model override", async () => {
     renderSection();
+    await screen.findByText("Chat tools");
 
-    expect(await screen.findByText(/openai\/gpt-oss-20b at 192\.168\.1\.129:1234/)).toBeTruthy();
-    expect(screen.getByText(/reasoning on, low/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /change/i })).toBeNull();
+    expect(screen.queryByText(/platform default/i)).toBeNull();
   });
 
-  it("says whose model it is: the platform's, or an override", async () => {
+  it("still offers the tool selection", async () => {
+    // The tab is not being emptied - tools remain a per-user choice.
     renderSection();
-    expect(await screen.findByText("Platform default")).toBeTruthy();
-
-    mock(api.getUserSettings).mockResolvedValue(settings({ model: "mine", defaultModel: "theirs" }));
-    renderSection();
-    expect(await screen.findAllByText("Overridden")).toBeTruthy();
-  });
-
-  it("opens the model dialog from Change", async () => {
-    renderSection();
-    fireEvent.click(await screen.findByRole("button", { name: /change/i }));
-    expect(screen.getByRole("dialog", { name: /model settings/i })).toBeTruthy();
+    expect(await screen.findByText("Chat tools")).toBeTruthy();
   });
 
   // ---- the tools card ----

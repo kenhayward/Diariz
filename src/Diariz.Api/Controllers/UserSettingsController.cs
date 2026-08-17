@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Services;
+using Diariz.Api.Services.Llm;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -17,22 +18,22 @@ namespace Diariz.Api.Controllers;
 public class UserSettingsController : ControllerBase
 {
     private readonly DiarizDbContext _db;
-    private readonly IApiKeyProtector _protector;
-    private readonly SummarizationOptions _serverDefaults;
     private readonly ChatOptions _chatDefaults;
     private readonly IChatToolSettingsResolver _toolSettings;
+    private readonly IChatContextResolver _contextResolver;
+    private readonly ILlmSettingsResolver _llmSettings;
     private readonly DictationOptions _dictationDefaults;
 
     public UserSettingsController(
-        DiarizDbContext db, IApiKeyProtector protector, IOptions<SummarizationOptions> serverDefaults,
-        IOptions<ChatOptions> chatDefaults, IChatToolSettingsResolver toolSettings,
+        DiarizDbContext db, IOptions<ChatOptions> chatDefaults, IChatToolSettingsResolver toolSettings,
+        IChatContextResolver contextResolver, ILlmSettingsResolver llmSettings,
         IOptions<DictationOptions> dictationDefaults)
     {
         _db = db;
-        _protector = protector;
-        _serverDefaults = serverDefaults.Value;
         _chatDefaults = chatDefaults.Value;
         _toolSettings = toolSettings;
+        _contextResolver = contextResolver;
+        _llmSettings = llmSettings;
         _dictationDefaults = dictationDefaults.Value;
     }
 
@@ -58,22 +59,15 @@ public class UserSettingsController : ControllerBase
             .FirstOrDefaultAsync(p => p.Id == PlatformSettings.SingletonId);
         var tools = await _toolSettings.ResolveAsync(UserId);
         return new UserSettingsDto(
-            s?.SummaryApiBase, s?.SummaryModel, !string.IsNullOrEmpty(s?.SummaryApiKeyEncrypted),
-            DefaultApiBase: NullIfBlank(_serverDefaults.ApiBase),
-            DefaultModel: NullIfBlank(_serverDefaults.Model),
-            ServerHasApiKey: !string.IsNullOrEmpty(_serverDefaults.ApiKey),
-            ContextWindow: s?.ChatContextWindow,
-            DefaultContextWindow: _chatDefaults.ContextLength,
+            // Read-only from 0.221.0: the window belongs to the model the platform assigns to chat, so the
+            // dial still has a number to report against but the user has nothing to set.
+            ContextWindow: await _contextResolver.ResolveContextWindowAsync(),
+            ChatModel: (await _llmSettings.ResolveAsync(LlmCallKind.ChatMessage)).Model,
             ToolsEnabled: tools.MasterEnabled,
             DefaultToolsEnabled: _chatDefaults.ToolsEnabled,
             Tools: tools.Catalog
                 .Select(c => new ChatToolDto(c.Name, c.Title, c.Description, c.Enabled, c.DefaultEnabled))
                 .ToList(),
-            // Reasoning: effective (user override ?? server default) + the server default for the placeholder.
-            ReasoningEnabled: s?.ReasoningEnabled ?? _serverDefaults.ReasoningEnabled,
-            ReasoningEffort: NullIfBlank(s?.ReasoningEffort) ?? _serverDefaults.ReasoningEffort,
-            DefaultReasoningEnabled: _serverDefaults.ReasoningEnabled,
-            DefaultReasoningEffort: _serverDefaults.ReasoningEffort,
             PlacementMode: s?.RecordingPlacementMode ?? RecordingPlacementMode.SelectedFolder,
             PlacementSectionId: s?.RecordingPlacementSectionId,
             DictationServerAvailable: _dictationDefaults.Enabled,
@@ -82,12 +76,8 @@ public class UserSettingsController : ControllerBase
             CalendarAutoStopAfterMinutes:
                 s?.CalendarAutoStopAfterMinutes ?? UserSettings.DefaultCalendarAutoStopAfterMinutes,
             CalendarSilenceStopSeconds:
-                s?.CalendarSilenceStopSeconds ?? UserSettings.DefaultCalendarSilenceStopSeconds,
-            LlmTimeoutSeconds: s?.LlmTimeoutSeconds,
-            DefaultLlmTimeoutSeconds: ps?.LlmTimeoutSeconds ?? _serverDefaults.TimeoutSeconds);
+                s?.CalendarSilenceStopSeconds ?? UserSettings.DefaultCalendarSilenceStopSeconds);
     }
-
-    private static string? NullIfBlank(string? v) => string.IsNullOrWhiteSpace(v) ? null : v;
 
     [HttpPut]
     [EndpointSummary("Update your AI settings")]
@@ -113,34 +103,12 @@ public class UserSettingsController : ControllerBase
         "rejected with a 400 rather than silently coerced, since that is not a working timeout.")]
     public async Task<IActionResult> Update(UpdateUserSettingsRequest req)
     {
-        // Validated first, before touching `s` or the change tracker at all: the method assigns fields as
-        // it goes (one of them, OutlookSyncEnabled: false, queues a RemoveRange) and only calls
-        // SaveChangesAsync once at the end, so returning BadRequest never persists a partial write either
-        // way - but validating up front keeps every branch below this point simple ("we already know the
-        // value is usable") instead of each one having to guard against a value it might still reject.
-        if (req.LlmTimeoutSeconds is > 0 and < 5)
-            return BadRequest("An LLM timeout must be at least 5 seconds.");
-
         var s = await _db.UserSettings.FindAsync(UserId);
         if (s is null)
         {
             s = new UserSettings { UserId = UserId };
             _db.UserSettings.Add(s);
         }
-
-        // Text fields are tri-state: null leaves them unchanged (a settings tab that doesn't own the field
-        // omits it), "" (or whitespace) clears the override, a value sets it. The personal settings tabs now
-        // save independently, so a partial PUT must never wipe another tab's fields.
-        if (req.ApiBase is not null) s.SummaryApiBase = Blank(req.ApiBase);
-        if (req.Model is not null) s.SummaryModel = Blank(req.Model);
-
-        // Tri-state key: null leaves it unchanged, empty clears it, anything else replaces it.
-        if (req.ApiKey is not null)
-            s.SummaryApiKeyEncrypted = req.ApiKey.Length == 0 ? null : _protector.Protect(req.ApiKey);
-
-        // Context window: null leaves it unchanged; a positive value sets the override; <=0 clears it.
-        if (req.ContextWindow is not null)
-            s.ChatContextWindow = req.ContextWindow > 0 ? req.ContextWindow : null;
 
         // Tool calling: a value sets the master override; null leaves it unchanged.
         if (req.ToolsEnabled is not null) s.ChatToolsEnabled = req.ToolsEnabled;
@@ -150,11 +118,6 @@ public class UserSettingsController : ControllerBase
             s.ChatToolOverridesJson = req.ToolOverrides.Count > 0
                 ? System.Text.Json.JsonSerializer.Serialize(req.ToolOverrides)
                 : null;
-
-        // Reasoning: a value sets the master override (null leaves it unchanged); a blank effort clears the
-        // per-user level (server default applies).
-        if (req.ReasoningEnabled is not null) s.ReasoningEnabled = req.ReasoningEnabled;
-        if (req.ReasoningEffort is not null) s.ReasoningEffort = Blank(req.ReasoningEffort);
 
         // Placement: a mode replaces the preference; null leaves it unchanged. The fixed folder only applies in
         // SpecificFolder mode (cleared otherwise, so a stale id can't resurface if the user flips back).
@@ -188,12 +151,6 @@ public class UserSettingsController : ControllerBase
         if (req.CalendarSilenceStopSeconds is { } silence)
             s.CalendarSilenceStopSeconds =
                 silence > 0 ? silence : UserSettings.DefaultCalendarSilenceStopSeconds;
-
-        // Timeout: null leaves it unchanged; 0 clears the override; >=5 sets it (validated at the top of the
-        // method - the floor mirrors the admin field, since 1-4s is not a working timeout and coercing it
-        // silently would hide the mistake).
-        if (req.LlmTimeoutSeconds is not null)
-            s.LlmTimeoutSeconds = req.LlmTimeoutSeconds > 0 ? req.LlmTimeoutSeconds : null;
 
         await _db.SaveChangesAsync();
         return NoContent();

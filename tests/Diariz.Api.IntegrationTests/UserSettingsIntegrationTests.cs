@@ -24,7 +24,9 @@ public class UserSettingsIntegrationTests(ContainersFixture fx)
         var chat = new ChatOptions();
         var resolver = new ChatToolSettingsResolver(
             db, new Diariz.Api.Tools.ChatToolRegistry([]), Options.Create(chat));
-        return new(db, Protector, Options.Create(new SummarizationOptions()), Options.Create(chat), resolver,
+        return new(db, Options.Create(chat), resolver, new ChatContextResolver(db, Options.Create(chat)),
+            new LlmSettingsResolver(db, Options.Create(new LlmDefaultsOptions()),
+                Options.Create(new SummarizationOptions()), Protector),
             Options.Create(new DictationOptions()))
         { ControllerContext = Http.Context(userId) };
     }
@@ -39,20 +41,22 @@ public class UserSettingsIntegrationTests(ContainersFixture fx)
     }
 
     [Fact]
-    public async Task Settings_PersistAcrossContexts_AndKeyIsEncryptedAtRest()
+    public async Task Settings_PersistAcrossContexts()
     {
+        // Until 0.221.0 this also proved the user's own API key was ciphertext at rest. The key moved to
+        // the model row, and that round trip is proved by Resolver_DecryptsAModelsStoredKey_RoundTrip.
         var userId = await SeedUser();
 
         await using (var db = fx.CreateDbContext())
-            await Settings(db, userId).Update(new UpdateUserSettingsRequest("https://mine/v1", "my-model", "sk-real-secret"));
+            await Settings(db, userId).Update(new UpdateUserSettingsRequest(
+                ToolsEnabled: true,
+                ToolOverrides: new Dictionary<string, bool> { ["who_said_that"] = false }));
 
         await using (var verify = fx.CreateDbContext())
         {
             var stored = await verify.UserSettings.SingleAsync(s => s.UserId == userId);
-            Assert.Equal("https://mine/v1", stored.SummaryApiBase);
-            Assert.Equal("my-model", stored.SummaryModel);
-            Assert.NotNull(stored.SummaryApiKeyEncrypted);
-            Assert.DoesNotContain("sk-real-secret", stored.SummaryApiKeyEncrypted!); // real ciphertext
+            Assert.True(stored.ChatToolsEnabled);
+            Assert.Contains("who_said_that", stored.ChatToolOverridesJson!);
         }
     }
 
@@ -118,7 +122,7 @@ public class UserSettingsIntegrationTests(ContainersFixture fx)
     {
         var userId = await SeedUser();
         await using (var db = fx.CreateDbContext())
-            await Settings(db, userId).Update(new UpdateUserSettingsRequest("https://mine/v1", "m", "sk"));
+            await Settings(db, userId).Update(new UpdateUserSettingsRequest(ToolsEnabled: true));
 
         await using (var db = fx.CreateDbContext())
         {
@@ -170,20 +174,31 @@ public class UserSettingsIntegrationTests(ContainersFixture fx)
         }
     }
 
-    /// <summary>A freshly-inserted row (raw SQL bypasses the model default) has no timeout override - the
-    /// column default is NULL, so the user inherits the platform/server value. The in-memory provider can't
-    /// prove a real column default, hence real Postgres here.</summary>
+    /// <summary>The seven LLM columns are really gone from the table, not merely unmapped. An unmapped
+    /// column would keep the old data sitting in Postgres and let a future model change quietly resurrect
+    /// it; the in-memory provider cannot tell the two apart, which is why this reads information_schema.</summary>
     [Fact]
-    public async Task LlmTimeoutSeconds_DefaultsToNull_OnAFreshRow()
+    public async Task The_per_user_llm_columns_are_dropped()
     {
-        var userId = await SeedUser();
-
         await using var db = fx.CreateDbContext();
-        await db.Database.ExecuteSqlRawAsync(
-            """INSERT INTO "UserSettings" ("UserId") VALUES ({0})""", userId);
-        db.ChangeTracker.Clear();
+        var dropped = new[]
+        {
+            "SummaryApiBase", "SummaryApiKeyEncrypted", "SummaryModel", "ChatContextWindow",
+            "LlmTimeoutSeconds", "ReasoningEnabled", "ReasoningEffort",
+        };
 
-        var stored = await db.UserSettings.SingleAsync(s => s.UserId == userId);
-        Assert.Null(stored.LlmTimeoutSeconds);
+        var present = await db.Database
+            .SqlQuery<string>($"""
+                SELECT column_name AS "Value" FROM information_schema.columns
+                WHERE table_name = 'UserSettings'
+            """)
+            .ToListAsync();
+
+        foreach (var column in dropped)
+            Assert.DoesNotContain(column, present);
+
+        // A sibling column proves the query itself works - otherwise a typo in the table name would make
+        // every assertion above pass against an empty list.
+        Assert.Contains("ChatToolsEnabled", present);
     }
 }
