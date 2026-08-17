@@ -48,10 +48,20 @@ public class PlatformSettings
     /// authenticates until the Platform Administrator opts in.</summary>
     public bool ApiAccessEnabled { get; set; }
 
-    /// <summary>Per-request timeout (seconds) applied to every LLM call platform-wide. The single authority
-    /// for the request-level timeout - the HTTP clients themselves have no cap - so slow local models can be
-    /// given room. Admin-editable on the Model Settings tab.</summary>
+    /// <summary>OBSOLETE from 0.221.0: the request timeout is now a parameter on a model's set, edited at
+    /// /admin/llm-models.
+    ///
+    /// Kept rather than dropped because a migration cannot fold it into a model row - the endpoint lives in
+    /// configuration, not the database, so there is no row to fold it into - and dropping it would silently
+    /// reset a tuned production timeout to the app default. It is read only by the synthesized
+    /// environment-fallback model, and becomes unreachable once any LlmModel row exists. Removable in a
+    /// later release once every deployment has configured a model.</summary>
     public int LlmTimeoutSeconds { get; set; } = DefaultLlmTimeoutSeconds;
+
+    /// <summary>The model used by any call group with no explicit assignment. Null falls through to the
+    /// model synthesized from Summarization:ApiBase, so an upgrade with no rows keeps working unchanged.</summary>
+    public Guid? DefaultLlmModelId { get; set; }
+    public LlmModel? DefaultLlmModel { get; set; }
 
     /// <summary>Master switch for the MCP server + dz_mcp_ tokens. On by default (bounded by env Mcp:Enabled).
     /// Seeded true in the migration so shipping this never disables an existing connector.</summary>

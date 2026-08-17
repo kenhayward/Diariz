@@ -564,6 +564,81 @@ namespace Diariz.Domain.Migrations
                     b.ToTable("LlmCalls");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.LlmCallAssignment", b =>
+                {
+                    b.Property<int>("Group")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("LlmModelId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Group");
+
+                    b.HasIndex("LlmModelId");
+
+                    b.ToTable("LlmCallAssignments");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.LlmModel", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ApiBase")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("ApiKeyEncrypted")
+                        .HasColumnType("text");
+
+                    b.Property<int>("ContextLength")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("LlmModels");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.LlmModelParameters", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Group")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("LlmModelId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ParametersJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LlmModelId", "Group")
+                        .IsUnique();
+
+                    b.ToTable("LlmModelParameters");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.McpAccessToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1087,6 +1162,9 @@ namespace Diariz.Domain.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
+                    b.Property<Guid?>("DefaultLlmModelId")
+                        .HasColumnType("uuid");
+
                     b.Property<bool>("LlmStreamUsageEnabled")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -1125,6 +1203,8 @@ namespace Diariz.Domain.Migrations
                         .HasColumnType("boolean");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DefaultLlmModelId");
 
                     b.ToTable("PlatformSettings");
 
@@ -2703,6 +2783,28 @@ namespace Diariz.Domain.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.LlmCallAssignment", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.LlmModel", "Model")
+                        .WithMany()
+                        .HasForeignKey("LlmModelId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Model");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.LlmModelParameters", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.LlmModel", "Model")
+                        .WithMany("Parameters")
+                        .HasForeignKey("LlmModelId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Model");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.McpAccessToken", b =>
                 {
                     b.HasOne("Diariz.Domain.Entities.ApplicationUser", "User")
@@ -2843,6 +2945,16 @@ namespace Diariz.Domain.Migrations
                     b.Navigation("CreatedBy");
 
                     b.Navigation("LinkedUser");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.PlatformSettings", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.LlmModel", "DefaultLlmModel")
+                        .WithMany()
+                        .HasForeignKey("DefaultLlmModelId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("DefaultLlmModel");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.Recording", b =>
@@ -3241,6 +3353,11 @@ namespace Diariz.Domain.Migrations
                     b.Navigation("Recordings");
 
                     b.Navigation("Settings");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.LlmModel", b =>
+                {
+                    b.Navigation("Parameters");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.MeetingType", b =>

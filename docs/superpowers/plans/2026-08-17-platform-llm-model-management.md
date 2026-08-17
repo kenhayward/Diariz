@@ -1093,12 +1093,23 @@ git commit -m "feat(llm): add group-capable app defaults that reproduce today's 
 
 ### Task 6: Domain entities and the migration
 
+> **CORRECTED DURING EXECUTION - this task is ADDITIVE ONLY.** As originally written it also dropped the
+> seven `UserSettings` columns, but their consumers are not removed until Tasks 7 and 11, so the branch
+> would not build at the end of this task - violating the rule that every task ends independently
+> testable. The compiler puts the blast radius at exactly four files: `ChatContextResolver.cs`,
+> `EmbeddingSettingsResolver.cs`, `SummarizationSettingsResolver.cs` and `UserSettingsController.cs`.
+> **The column drops and their migration now belong to Task 11**, alongside the code that reads them.
+
 **Files:**
 - Create: `src/Diariz.Domain/Entities/LlmModel.cs`, `LlmModelParameters.cs`, `LlmCallAssignment.cs`
 - Modify: `src/Diariz.Domain/Entities/PlatformSettings.cs` (add `DefaultLlmModelId`, mark `LlmTimeoutSeconds` obsolete)
-- Modify: `src/Diariz.Domain/Entities/UserSettings.cs` (remove seven columns)
 - Modify: `src/Diariz.Domain/DiarizDbContext.cs`
 - Test: `tests/Diariz.Api.IntegrationTests/LlmModelSchemaTests.cs`
+
+Two things to know before starting. The `OnModelCreating` parameter is named `builder`, not `modelBuilder`.
+And `dotnet ef migrations add` will warn *"An operation was scaffolded that may result in the loss of
+data"* - that is EF being conservative about the new nullable FK column; verify it by confirming `Up`
+contains **zero** `DropColumn` calls, which it does.
 
 **Interfaces:**
 - Produces: the three entities and `DiarizDbContext.LlmModels`, `.LlmModelParameters`, `.LlmCallAssignments`. Used by Tasks 7 and 9.
@@ -2157,11 +2168,17 @@ git commit -m "feat(llm): admin page for models, parameters and assignments"
 
 ### Task 11: Remove the per-user model settings
 
+> **MOVED HERE FROM TASK 6:** dropping the seven `UserSettings` columns belongs in this task, because this
+> is where their consumers go. Doing it earlier leaves the branch unbuildable.
+
 **Files:**
+- Modify: `src/Diariz.Domain/Entities/UserSettings.cs` - remove `SummaryApiBase`, `SummaryApiKeyEncrypted`, `SummaryModel`, `ChatContextWindow`, `LlmTimeoutSeconds`, `ReasoningEnabled`, `ReasoningEffort`
+- Modify: `src/Diariz.Domain/DiarizDbContext.cs` - drop the two `HasMaxLength` lines for `SummaryApiBase` / `SummaryModel` in the `UserSettings` block
+- Create: a second migration dropping those seven columns (no `CurrentFormat` bump - restore runs `pg_restore --clean` then migrates up)
 - Modify: `apps/web/src/components/assistant/AssistantSection.tsx` (drop the Model card, keep Tools)
 - Delete: `apps/web/src/components/assistant/ModelDialog.tsx` and `ModelDialog.test.tsx`
-- Modify: the user-settings controller and DTO, `apps/web/src/lib/api.ts`, the four locale catalogues
-- Test: update `AssistantSection.test.tsx`
+- Modify: `ChatContextResolver.cs`, the user-settings controller and DTO, `apps/web/src/lib/api.ts`, the four locale catalogues
+- Test: update `AssistantSection.test.tsx`; move the dropped-columns `information_schema` assertion here from Task 6
 
 - [ ] **Step 1: Write the failing test**
 
