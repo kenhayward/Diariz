@@ -473,10 +473,12 @@ Expected: PASS.
 A syntax error here would only appear when the container starts, so check it directly:
 
 ```bash
-docker run --rm -v "$(pwd)/apps/web/nginx.conf:/etc/nginx/conf.d/default.conf:ro" nginx:alpine nginx -t
+docker run --rm --add-host api:127.0.0.1 -v "$(pwd)/apps/web/nginx.conf:/etc/nginx/conf.d/default.conf:ro" nginx:alpine nginx -t
 ```
 
-Expected: `syntax is ok` and `test is successful`. Run this from the repo root. If the `api` upstream cannot be resolved the test still passes - `nginx -t` does not resolve upstreams.
+Expected: `syntax is ok` and `test is successful`. Run this from the repo root.
+
+`--add-host` is required, not optional: `nginx -t` **does** resolve upstream hostnames at parse time, so without a stub for `api` it aborts with `host not found in upstream "api"` at the first `proxy_pass` - around line 56, which is *above* the blocks this task adds. The check would then report a failure that says nothing about your changes while silently never reaching them.
 
 - [ ] **Step 6: Commit**
 

@@ -140,3 +140,24 @@ describe("web app manifest", () => {
     expect(html).toContain("/manifest.webmanifest");
   });
 });
+
+describe("nginx serves the manifest correctly", () => {
+  const conf = () => readFileSync(join(WEB, "nginx.conf"), "utf8");
+
+  it("maps the .webmanifest extension, which the base image does not", () => {
+    // nginx:alpine's default mime.types has no `manifest` entry at all (verified on 1.31.2), so without
+    // this the file goes out as application/octet-stream. Vite's dev server gets it right, so this only
+    // ever breaks on a deployed box - which is why it is asserted here rather than left to be noticed.
+    expect(conf()).toMatch(/types\s*\{\s*application\/manifest\+json\s+webmanifest;\s*\}/);
+  });
+
+  it("revalidates the manifest, which names the icons", () => {
+    // Same argument the index.html block in that file makes at length: a document that names other
+    // assets must not be served from a heuristic cache, or a stale copy pins the app's identity.
+    expect(conf()).toMatch(/location = \/manifest\.webmanifest \{[^}]*no-cache/);
+  });
+
+  it("caches the icons hard, since the mark is stable", () => {
+    expect(conf()).toMatch(/location \/icons\/ \{[^}]*immutable/);
+  });
+});
