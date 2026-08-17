@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Diariz.Api.Contracts;
@@ -10,7 +11,7 @@ public interface ITagsClient
     /// the given prompt <paramref name="template"/>. Returns an empty list when the transcript is too thin
     /// to tag.</summary>
     Task<IReadOnlyList<ExtractedTag>> ExtractAsync(
-        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
+        LlmRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
         CancellationToken ct = default);
 }
 
@@ -23,17 +24,16 @@ public class TagsClient : ITagsClient
     public TagsClient(HttpClient http) => _http = http;
 
     public async Task<IReadOnlyList<ExtractedTag>> ExtractAsync(
-        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
+        LlmRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
         CancellationToken ct = default)
     {
         var messages = TagsPrompt.BuildMessages(template, segments, config.ContextCharBudget);
         var body = new Dictionary<string, object?>
         {
             ["model"] = config.Model,
-            ["temperature"] = 0.3,
             ["messages"] = messages.Select(m => new { role = m.Role, content = m.Content }).ToArray(),
         };
-        if (config.ReasoningEffort is not null) body["reasoning_effort"] = config.ReasoningEffort;
+        LlmRequestBody.Apply(body, config.Parameters);
 
         using var req = new HttpRequestMessage(HttpMethod.Post, $"{config.ApiBase.TrimEnd('/')}/chat/completions")
         {

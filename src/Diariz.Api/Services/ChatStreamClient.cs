@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
@@ -29,14 +30,14 @@ public interface IChatStreamClient
     /// <summary>Streams the assistant reply token-by-token from an OpenAI-compatible
     /// <c>/chat/completions</c> endpoint (SSE, <c>stream:true</c>), using a per-request config.</summary>
     IAsyncEnumerable<string> StreamAsync(
-        SummarizationRequestConfig config, IReadOnlyList<ChatMessage> messages, CancellationToken ct = default);
+        LlmRequestConfig config, IReadOnlyList<ChatMessage> messages, CancellationToken ct = default);
 
     /// <summary>Streams a turn that may use tools: yields content deltas, tool-call fragments and the finish
     /// reason. <paramref name="messages"/> are pre-shaped OpenAI message objects (so the caller can include
     /// assistant <c>tool_calls</c> and <c>tool</c> result messages); <paramref name="tools"/> is the tool spec
     /// array (null/empty = no tools offered).</summary>
     IAsyncEnumerable<ChatStreamDelta> StreamChunksAsync(
-        SummarizationRequestConfig config, IReadOnlyList<object> messages,
+        LlmRequestConfig config, IReadOnlyList<object> messages,
         IReadOnlyList<object>? tools, CancellationToken ct = default);
 }
 
@@ -48,7 +49,7 @@ public class ChatStreamClient : IChatStreamClient
     public ChatStreamClient(HttpClient http) => _http = http;
 
     public async IAsyncEnumerable<string> StreamAsync(
-        SummarizationRequestConfig config, IReadOnlyList<ChatMessage> messages,
+        LlmRequestConfig config, IReadOnlyList<ChatMessage> messages,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         // Send is split from the read loop so the try/catch around transport errors never wraps a yield.
@@ -94,18 +95,19 @@ public class ChatStreamClient : IChatStreamClient
     }
 
     public async IAsyncEnumerable<ChatStreamDelta> StreamChunksAsync(
-        SummarizationRequestConfig config, IReadOnlyList<object> messages,
+        LlmRequestConfig config, IReadOnlyList<object> messages,
         IReadOnlyList<object>? tools, [EnumeratorCancellation] CancellationToken ct = default)
     {
         var body = new Dictionary<string, object?>
         {
             ["model"] = config.Model,
-            ["temperature"] = 0.3,
             ["stream"] = true,
             ["messages"] = messages,
         };
-        if (tools is { Count: > 0 }) { body["tools"] = tools; body["tool_choice"] = "auto"; }
-        if (config.ReasoningEffort is not null) body["reasoning_effort"] = config.ReasoningEffort;
+        // A model that cannot do tool calling should not be asked to, however many tools the caller passed.
+        if (config.Parameters.ToolsSupported && tools is { Count: > 0 })
+        { body["tools"] = tools; body["tool_choice"] = "auto"; }
+        LlmRequestBody.Apply(body, config.Parameters);
 
         // Ask the server to append a final usage chunk after the content. Omitted entirely when off, so an
         // endpoint that rejects the unknown field can be recovered with a settings change, not a redeploy.
@@ -146,16 +148,15 @@ public class ChatStreamClient : IChatStreamClient
     }
 
     private async Task<HttpResponseMessage> SendAsync(
-        SummarizationRequestConfig config, IReadOnlyList<ChatMessage> messages, CancellationToken ct)
+        LlmRequestConfig config, IReadOnlyList<ChatMessage> messages, CancellationToken ct)
     {
         var body = new Dictionary<string, object?>
         {
             ["model"] = config.Model,
-            ["temperature"] = 0.3,
             ["stream"] = true,
             ["messages"] = messages.Select(m => new { role = m.Role, content = m.Content }).ToArray(),
         };
-        if (config.ReasoningEffort is not null) body["reasoning_effort"] = config.ReasoningEffort;
+        LlmRequestBody.Apply(body, config.Parameters);
 
         // Ask the server to append a final usage chunk after the content. Omitted entirely when off, so an
         // endpoint that rejects the unknown field can be recovered with a settings change, not a redeploy.
@@ -165,7 +166,7 @@ public class ChatStreamClient : IChatStreamClient
     }
 
     private async Task<HttpResponseMessage> SendRawAsync(
-        SummarizationRequestConfig config, object body, CancellationToken ct)
+        LlmRequestConfig config, object body, CancellationToken ct)
     {
         var req = new HttpRequestMessage(HttpMethod.Post, $"{config.ApiBase.TrimEnd('/')}/chat/completions")
         {

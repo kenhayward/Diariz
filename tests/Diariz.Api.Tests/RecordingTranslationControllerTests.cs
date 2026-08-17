@@ -1,5 +1,6 @@
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
@@ -12,12 +13,12 @@ namespace Diariz.Api.Tests;
 public class RecordingTranslationControllerTests
 {
     private static RecordingTranslationController Build(
-        DiarizDbContext db, Guid userId, ITranslationClient client, ISummarizationSettingsResolver? settings = null) =>
-        new(db, client, settings ?? new FakeSummarizationSettingsResolver())
+        DiarizDbContext db, Guid userId, ITranslationClient client, ILlmSettingsResolver? settings = null) =>
+        new(db, client, settings ?? new FakeLlmSettingsResolver())
         { ControllerContext = Http.Context(userId) };
 
-    private static FakeSummarizationSettingsResolver Disabled() =>
-        new() { Config = new SummarizationRequestConfig("", "", "m", 60) };
+    private static FakeLlmSettingsResolver Disabled() =>
+        new() { Config = new LlmRequestConfig("", "", "m", new LlmParameters { TimeoutSeconds = 60 }) };
 
     private static async Task<(Recording rec, Guid segId)> SeedTranscribed(
         DiarizDbContext db, Guid userId, bool withSummary = true, bool withAction = true)

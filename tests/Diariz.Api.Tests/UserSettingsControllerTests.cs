@@ -2,6 +2,7 @@ using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
 using Diariz.Api.Services;
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
@@ -20,200 +21,25 @@ public class UserSettingsControllerTests
         var chatOpts = chat ?? new ChatOptions();
         var registry = new Diariz.Api.Tools.ChatToolRegistry(tools ?? []);
         var toolResolver = new ChatToolSettingsResolver(db, registry, Options.Create(chatOpts));
-        return new(db, new FakeApiKeyProtector(), Options.Create(server ?? new SummarizationOptions()),
-            Options.Create(chatOpts), toolResolver, Options.Create(dictation ?? new DictationOptions()))
+        return new(db, Options.Create(chatOpts), toolResolver,
+            new ChatContextResolver(db, Options.Create(chatOpts)),
+            new LlmSettingsResolver(db, Options.Create(new LlmDefaultsOptions()),
+                Options.Create(server ?? new SummarizationOptions()), new FakeApiKeyProtector()),
+            Options.Create(dictation ?? new DictationOptions()))
         {
             ControllerContext = Http.Context(userId),
         };
     }
 
     [Fact]
-    public async Task Get_NoSettings_ReturnsEmpty()
+    public async Task Get_NoSettings_ReturnsTheDefaults()
     {
         using var db = TestDb.Create();
         var dto = await Build(db, Guid.NewGuid()).Get();
 
-        Assert.Null(dto.ApiBase);
-        Assert.Null(dto.Model);
-        Assert.False(dto.HasApiKey);
-    }
-
-    [Fact]
-    public async Task Put_CreatesSettings_AndGetReflectsThem_WithoutLeakingKey()
-    {
-        using var db = TestDb.Create();
-        var userId = Guid.NewGuid();
-
-        var put = await Build(db, userId).Update(
-            new UpdateUserSettingsRequest("https://llm.test/v1", "gpt-x", "sk-secret"));
-        Assert.IsType<NoContentResult>(put);
-
-        var dto = await Build(db, userId).Get();
-        Assert.Equal("https://llm.test/v1", dto.ApiBase);
-        Assert.Equal("gpt-x", dto.Model);
-        Assert.True(dto.HasApiKey);
-
-        // The key is stored via the protector (not raw), and the DTO must not expose it at all.
-        // Real-encryption-at-rest is asserted in the integration harness with actual Data Protection.
-        var stored = await db.UserSettings.SingleAsync(s => s.UserId == userId);
-        Assert.NotNull(stored.SummaryApiKeyEncrypted);
-        Assert.NotEqual("sk-secret", stored.SummaryApiKeyEncrypted);
-        Assert.DoesNotContain("sk-secret", System.Text.Json.JsonSerializer.Serialize(dto));
-    }
-
-    [Fact]
-    public async Task Put_NullApiKey_LeavesExistingKeyUnchanged()
-    {
-        using var db = TestDb.Create();
-        var userId = Guid.NewGuid();
-        await Build(db, userId).Update(new UpdateUserSettingsRequest("https://a", "m", "sk-keep"));
-
-        await Build(db, userId).Update(new UpdateUserSettingsRequest("https://b", "m2", ApiKey: null));
-
-        var dto = await Build(db, userId).Get();
-        Assert.Equal("https://b", dto.ApiBase);
-        Assert.True(dto.HasApiKey); // key preserved
-    }
-
-    [Fact]
-    public async Task Put_EmptyApiKey_ClearsKey()
-    {
-        using var db = TestDb.Create();
-        var userId = Guid.NewGuid();
-        await Build(db, userId).Update(new UpdateUserSettingsRequest("https://a", "m", "sk-clear-me"));
-
-        await Build(db, userId).Update(new UpdateUserSettingsRequest("https://a", "m", ApiKey: ""));
-
-        Assert.False((await Build(db, userId).Get()).HasApiKey);
-    }
-
-    [Fact]
-    public async Task Put_BlankEndpointAndModel_StoredAsNull()
-    {
-        using var db = TestDb.Create();
-        var userId = Guid.NewGuid();
-
-        await Build(db, userId).Update(new UpdateUserSettingsRequest("   ", "", null));
-
-        var dto = await Build(db, userId).Get();
-        Assert.Null(dto.ApiBase);
-        Assert.Null(dto.Model);
-    }
-
-    [Fact]
-    public async Task Get_ExposesServerDefaults_AsPlaceholders_WithoutTheServerKey()
-    {
-        using var db = TestDb.Create();
-        var server = new SummarizationOptions
-        {
-            ApiBase = "https://server/v1",
-            Model = "server-model",
-            ApiKey = "sk-server-secret",
-        };
-
-        var dto = await Build(db, Guid.NewGuid(), server).Get();
-
-        Assert.Equal("https://server/v1", dto.DefaultApiBase);
-        Assert.Equal("server-model", dto.DefaultModel);
-        Assert.True(dto.ServerHasApiKey);
-        // Server key must never be serialised to the client.
-        Assert.DoesNotContain("sk-server-secret", System.Text.Json.JsonSerializer.Serialize(dto));
-        // No per-user override set, so the user's own fields stay null.
-        Assert.Null(dto.ApiBase);
-        Assert.False(dto.HasApiKey);
-    }
-
-    [Fact]
-    public async Task Get_ExposesServerContextWindowDefault_WhenNoOverride()
-    {
-        using var db = TestDb.Create();
-        var dto = await Build(db, Guid.NewGuid(), chat: new ChatOptions { ContextLength = 131072 }).Get();
-
-        Assert.Null(dto.ContextWindow);
-        Assert.Equal(131072, dto.DefaultContextWindow);
-    }
-
-    [Fact]
-    public async Task Put_SetsContextWindowOverride_AndClearsOnNonPositive()
-    {
-        using var db = TestDb.Create();
-        var userId = Guid.NewGuid();
-
-        await Build(db, userId).Update(new UpdateUserSettingsRequest("https://a", "m", null, ContextWindow: 8000));
-        Assert.Equal(8000, (await Build(db, userId).Get()).ContextWindow);
-
-        // 0 (or null) clears the override → falls back to the server default.
-        await Build(db, userId).Update(new UpdateUserSettingsRequest("https://a", "m", null, ContextWindow: 0));
-        Assert.Null((await Build(db, userId).Get()).ContextWindow);
-    }
-
-    [Fact]
-    public async Task Reasoning_RoundTrips_AndExposesServerDefaults()
-    {
-        using var db = TestDb.Create();
-        var userId = Guid.NewGuid();
-        var server = new SummarizationOptions { ReasoningEnabled = false, ReasoningEffort = "medium" };
-
-        await Build(db, userId, server).Update(new UpdateUserSettingsRequest(
-            "https://a", "m", null, ReasoningEnabled: true, ReasoningEffort: "high"));
-
-        var dto = await Build(db, userId, server).Get();
-        Assert.True(dto.ReasoningEnabled);
-        Assert.Equal("high", dto.ReasoningEffort);
-        Assert.False(dto.DefaultReasoningEnabled);
-        Assert.Equal("medium", dto.DefaultReasoningEffort);
-    }
-
-    [Fact]
-    public async Task Reasoning_NoOverride_ReflectsServerDefaults()
-    {
-        using var db = TestDb.Create();
-        var server = new SummarizationOptions { ReasoningEnabled = true, ReasoningEffort = "low" };
-
-        var dto = await Build(db, Guid.NewGuid(), server).Get();
-        Assert.True(dto.ReasoningEnabled);
-        Assert.Equal("low", dto.ReasoningEffort);
-    }
-
-    [Fact]
-    public async Task Put_NullTextFields_LeaveExistingUnchanged()
-    {
-        // The three personal settings tabs now save independently (each PUTs only its own fields), so an
-        // update that omits apiBase/model/reasoningEffort (they arrive as null) must leave them untouched -
-        // not clear them. "" still clears; null now means "leave unchanged".
-        using var db = TestDb.Create();
-        var userId = Guid.NewGuid();
-        await Build(db, userId).Update(new UpdateUserSettingsRequest(
-            "https://keep/v1", "keep-model", "sk-keep", ReasoningEffort: "high"));
-
-        // A recordings-only save: everything else null.
-        await Build(db, userId).Update(new UpdateUserSettingsRequest(null, null, null,
-            PlacementMode: Diariz.Domain.Entities.RecordingPlacementMode.Ungrouped));
-
-        var dto = await Build(db, userId).Get();
-        Assert.Equal("https://keep/v1", dto.ApiBase);
-        Assert.Equal("keep-model", dto.Model);
-        Assert.Equal("high", dto.ReasoningEffort);
-        Assert.True(dto.HasApiKey);
-        Assert.Equal(Diariz.Domain.Entities.RecordingPlacementMode.Ungrouped, dto.PlacementMode);
-    }
-
-    [Fact]
-    public async Task Put_EmptyTextFields_ClearThem()
-    {
-        // Clearing is still possible - the Model Settings tab sends "" (not null) to drop an override.
-        using var db = TestDb.Create();
-        var userId = Guid.NewGuid();
-        await Build(db, userId).Update(new UpdateUserSettingsRequest(
-            "https://x/v1", "m", null, ReasoningEffort: "high"));
-
-        await Build(db, userId).Update(new UpdateUserSettingsRequest("", "", null, ReasoningEffort: ""));
-
-        var dto = await Build(db, userId).Get();
-        Assert.Null(dto.ApiBase);
-        Assert.Null(dto.Model);
-        // Effort falls back to the server default (empty override cleared).
-        Assert.Equal("medium", dto.ReasoningEffort);
+        Assert.False(dto.ToolsEnabled);
+        // The window is the serving model's, and with no model configured that is the server option.
+        Assert.Equal(new ChatOptions().ContextLength, dto.ContextWindow);
     }
 
     [Fact]
@@ -222,11 +48,9 @@ public class UserSettingsControllerTests
         using var db = TestDb.Create();
         var alice = Guid.NewGuid();
         var bob = Guid.NewGuid();
-        await Build(db, alice).Update(new UpdateUserSettingsRequest("https://alice", "m", "sk-a"));
+        await Build(db, alice).Update(new UpdateUserSettingsRequest(ToolsEnabled: true));
 
-        var bobDto = await Build(db, bob).Get();
-        Assert.Null(bobDto.ApiBase);
-        Assert.False(bobDto.HasApiKey);
+        Assert.False((await Build(db, bob).Get()).ToolsEnabled);
     }
 
     [Fact]
@@ -245,7 +69,7 @@ public class UserSettingsControllerTests
         var userId = Guid.NewGuid();
         var sectionId = Guid.NewGuid();
 
-        await Build(db, userId).Update(new UpdateUserSettingsRequest(null, null, null,
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(
             PlacementMode: Diariz.Domain.Entities.RecordingPlacementMode.SpecificFolder, PlacementSectionId: sectionId));
 
         var dto = await Build(db, userId).Get();
@@ -259,11 +83,11 @@ public class UserSettingsControllerTests
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var sectionId = Guid.NewGuid();
-        await Build(db, userId).Update(new UpdateUserSettingsRequest(null, null, null,
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(
             PlacementMode: Diariz.Domain.Entities.RecordingPlacementMode.SpecificFolder, PlacementSectionId: sectionId));
 
         // Flipping to SelectedFolder must drop the stale fixed folder.
-        await Build(db, userId).Update(new UpdateUserSettingsRequest(null, null, null,
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(
             PlacementMode: Diariz.Domain.Entities.RecordingPlacementMode.SelectedFolder, PlacementSectionId: sectionId));
 
         var dto = await Build(db, userId).Get();
@@ -306,7 +130,7 @@ public class UserSettingsControllerTests
         Users.Ensure(db, userId);
         await db.SaveChangesAsync();
 
-        await Build(db, userId).Update(new UpdateUserSettingsRequest(null, null, null, OutlookSyncEnabled: true));
+        await Build(db, userId).Update(new UpdateUserSettingsRequest( OutlookSyncEnabled: true));
 
         Assert.True((await db.UserSettings.SingleAsync(s => s.UserId == userId)).OutlookSyncEnabled);
     }
@@ -322,7 +146,7 @@ public class UserSettingsControllerTests
         db.UserSettings.Add(new Domain.Entities.UserSettings { UserId = userId, OutlookSyncEnabled = true });
         await db.SaveChangesAsync();
 
-        await Build(db, userId).Update(new UpdateUserSettingsRequest("http://llm.test/v1", null, null));
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(ToolsEnabled: true));
 
         Assert.True((await db.UserSettings.SingleAsync(s => s.UserId == userId)).OutlookSyncEnabled);
     }
@@ -349,7 +173,7 @@ public class UserSettingsControllerTests
         });
         await db.SaveChangesAsync();
 
-        await Build(db, userId).Update(new UpdateUserSettingsRequest(null, null, null, OutlookSyncEnabled: false));
+        await Build(db, userId).Update(new UpdateUserSettingsRequest( OutlookSyncEnabled: false));
 
         Assert.False((await db.UserSettings.SingleAsync(s => s.UserId == userId)).OutlookSyncEnabled);
         Assert.Empty(db.OutlookCalendarSources);
@@ -376,7 +200,7 @@ public class UserSettingsControllerTests
         });
         await db.SaveChangesAsync();
 
-        await Build(db, mine).Update(new UpdateUserSettingsRequest(null, null, null, OutlookSyncEnabled: false));
+        await Build(db, mine).Update(new UpdateUserSettingsRequest( OutlookSyncEnabled: false));
 
         var left = Assert.Single(db.OutlookCalendarSources);
         Assert.Equal(theirs, left.UserId);
@@ -401,7 +225,7 @@ public class UserSettingsControllerTests
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
 
-        await Build(db, userId).Update(new UpdateUserSettingsRequest(null, null, null,
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(
             CalendarAutoStopEnabled: true, CalendarAutoStopAfterMinutes: 10,
             CalendarSilenceStopSeconds: 90));
 
@@ -417,10 +241,10 @@ public class UserSettingsControllerTests
         // Same tri-state contract as every other field: a tab that doesn't own these omits them.
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        await Build(db, userId).Update(new UpdateUserSettingsRequest(null, null, null,
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(
             CalendarAutoStopEnabled: true, CalendarAutoStopAfterMinutes: 7, CalendarSilenceStopSeconds: 45));
 
-        await Build(db, userId).Update(new UpdateUserSettingsRequest("https://x/v1", "m", "sk-x"));
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(ToolsEnabled: true));
 
         var dto = await Build(db, userId).Get();
         Assert.True(dto.CalendarAutoStopEnabled);
@@ -438,7 +262,7 @@ public class UserSettingsControllerTests
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
 
-        await Build(db, userId).Update(new UpdateUserSettingsRequest(null, null, null,
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(
             CalendarAutoStopEnabled: true, CalendarAutoStopAfterMinutes: bad,
             CalendarSilenceStopSeconds: bad));
 
@@ -449,70 +273,4 @@ public class UserSettingsControllerTests
 
     // ---- LLM timeout override ----
 
-    [Fact]
-    public async Task Get_ReturnsTimeoutOverrideAndTheInheritedDefault()
-    {
-        using var db = TestDb.Create();
-        var userId = Guid.NewGuid();
-        db.UserSettings.Add(new UserSettings { UserId = userId, LlmTimeoutSeconds = 600 });
-        db.PlatformSettings.Add(new PlatformSettings { Id = PlatformSettings.SingletonId, LlmTimeoutSeconds = 300 });
-        await db.SaveChangesAsync();
-
-        var dto = await Build(db, userId).Get();
-
-        Assert.Equal(600, dto.LlmTimeoutSeconds);
-        // The companion is what applies when the user clears their own - the dialog shows it as a placeholder.
-        Assert.Equal(300, dto.DefaultLlmTimeoutSeconds);
-    }
-
-    [Fact]
-    public async Task Put_SetsClearsAndLeavesTheTimeoutUnchanged()
-    {
-        using var db = TestDb.Create();
-        var userId = Guid.NewGuid();
-        var c = Build(db, userId);
-
-        await c.Update(new UpdateUserSettingsRequest(null, null, null, LlmTimeoutSeconds: 600));
-        Assert.Equal(600, (await db.UserSettings.FindAsync(userId))!.LlmTimeoutSeconds);
-
-        // Absent means "another tab is saving, do not touch my field".
-        await c.Update(new UpdateUserSettingsRequest(null, null, null));
-        Assert.Equal(600, (await db.UserSettings.FindAsync(userId))!.LlmTimeoutSeconds);
-
-        // 0 clears the override, falling back to the platform/server value.
-        await c.Update(new UpdateUserSettingsRequest(null, null, null, LlmTimeoutSeconds: 0));
-        Assert.Null((await db.UserSettings.FindAsync(userId))!.LlmTimeoutSeconds);
-    }
-
-    [Fact]
-    public async Task Put_RejectsATimeoutBelowTheFloor()
-    {
-        using var db = TestDb.Create();
-        var c = Build(db, Guid.NewGuid());
-
-        // Mirrors the admin field's floor (PlatformSettingsController): 1-4s is not a working timeout,
-        // and silently coercing it would hide the mistake.
-        var result = await c.Update(new UpdateUserSettingsRequest(null, null, null, LlmTimeoutSeconds: 3));
-
-        Assert.IsType<BadRequestObjectResult>(result);
-    }
-
-    /// <summary>Pins the validation's placement, not just its outcome: a single request that carries both an
-    /// invalid timeout and another field's change must reject the whole request and write nothing at all - not
-    /// silently ignore the bad timeout while applying the rest. This would still pass if the floor check moved
-    /// below the field-assignment blocks and only skipped assigning the timeout itself; asserting that no
-    /// UserSettings row (and no sibling field) was written is what catches that regression.</summary>
-    [Fact]
-    public async Task Put_RejectsATimeoutBelowTheFloor_AndWritesNothingElseFromTheSameRequest()
-    {
-        using var db = TestDb.Create();
-        var userId = Guid.NewGuid();
-
-        var result = await Build(db, userId).Update(
-            new UpdateUserSettingsRequest(null, "should-not-be-saved", null, LlmTimeoutSeconds: 3));
-
-        Assert.IsType<BadRequestObjectResult>(result);
-        // No row was created at all - the sibling Model change never landed either.
-        Assert.Null(await db.UserSettings.FindAsync(userId));
-    }
 }

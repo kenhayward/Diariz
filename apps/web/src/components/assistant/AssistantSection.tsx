@@ -3,44 +3,26 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { api, apiErrorMessage } from "../../lib/api";
-import { GlobeIcon, SearchIcon } from "../icons";
+import { SearchIcon } from "../icons";
 import HelpButton from "../HelpButton";
-import SourceCard, { cardBtn } from "../SourceCard";
-import ModelDialog from "./ModelDialog";
+import SourceCard from "../SourceCard";
 import type { UserSettings } from "../../lib/types";
 
-const MODEL_TINT = "#7c3aed";
-const MODEL_TINT_DARK = "#c4b5fd";
 const TOOLS_TINT = "#16a34a";
 const TOOLS_TINT_DARK = "#4ade80";
 
-/// The Preferences "Assistant" tab: which model answers, and what it may look up. It replaces two nav
-/// entries - Model Settings and Chat Tools - that were both *exception* settings sitting near the top of
-/// the list where they read as routine. They now live under Advanced, as one tab.
+/// The Preferences "Assistant" tab: what the assistant may look up on the user's behalf.
 ///
-/// The model override collapses to a status line and a Change... button. That line is the point of the
-/// collapse: it states what is actually in effect, so the usual question ("what am I running?") is
-/// answered without opening anything.
+/// It used to carry a model card too. From 0.221.0 the model, endpoint, key, context window, timeout and
+/// reasoning settings are platform-wide and live at /admin/llm-models - a user no longer chooses which
+/// model answers them, so there is nothing here to state or change. Tools stay: which of their own
+/// recordings the assistant may search is genuinely their decision.
 export default function AssistantSection() {
   const { t } = useTranslation("account");
   const { data } = useQuery({ queryKey: ["user-settings"], queryFn: api.getUserSettings });
-  const [dialog, setDialog] = useState(false);
 
   // Render only once the settings have loaded, so an early edit can't be overwritten by the arriving values.
   if (!data) return null;
-
-  const overridden = Boolean(data.apiBase || data.model || data.hasApiKey);
-  // What is in effect: the user's override where set, otherwise the platform's.
-  const model = data.model || data.defaultModel;
-  const endpoint = data.apiBase || data.defaultApiBase;
-  const where = model && endpoint
-    ? t("assistantModelAt", { model, endpoint: hostOf(endpoint) })
-    : (model ?? t("assistantModelUnset"));
-  const reasoning = data.reasoningEnabled
-    ? t("assistantReasoningOn", {
-        level: t(data.reasoningEffort === "low" ? "reasoningLow" : data.reasoningEffort === "high" ? "reasoningHigh" : "reasoningMedium").toLowerCase(),
-      })
-    : t("assistantReasoningOff");
 
   return (
     <div>
@@ -49,38 +31,10 @@ export default function AssistantSection() {
         <p className="mt-0.5 max-w-[560px] text-xs text-gray-400 dark:text-gray-500">{t("assistantIntro")}</p>
       </div>
       <div className="flex flex-col gap-3">
-        {/* Header only - the whole card is one status row, which is all this setting is worth at rest. */}
-        <SourceCard
-          name={t("assistantModelName")}
-          meta={`${where} · ${reasoning}`}
-          tint={MODEL_TINT}
-          tintDark={MODEL_TINT_DARK}
-          glyph={GlobeIcon}
-          status={overridden ? t("assistantModelOverridden") : t("assistantModelDefault")}
-          statusTone="muted"
-          actions={
-            <button type="button" onClick={() => setDialog(true)} className={cardBtn}>
-              {t("assistantModelChange")}
-            </button>
-          }
-        />
-
         <ChatToolsCard data={data} />
       </div>
-
-      {dialog && <ModelDialog data={data} onClose={() => setDialog(false)} />}
     </div>
   );
-}
-
-/// The endpoint as host[:port] - the whole URL is long and its scheme and /v1 tail say nothing useful in
-/// a one-line summary. Falls back to the raw string for anything unparseable.
-function hostOf(url: string): string {
-  try {
-    return new URL(url).host;
-  } catch {
-    return url;
-  }
 }
 
 /// The tool list: a master switch in the header, one line per tool in the body.

@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 
@@ -10,7 +11,7 @@ public interface ITranslationClient
     /// original text when the model dropped/garbled that item (so callers never lose content). Blank inputs
     /// pass through untouched.</summary>
     Task<IReadOnlyList<string>> TranslateAsync(
-        SummarizationRequestConfig config, string targetLanguage, IReadOnlyList<string> texts,
+        LlmRequestConfig config, string targetLanguage, IReadOnlyList<string> texts,
         CancellationToken ct = default);
 }
 
@@ -27,7 +28,7 @@ public class TranslationClient : ITranslationClient
     public TranslationClient(HttpClient http) => _http = http;
 
     public async Task<IReadOnlyList<string>> TranslateAsync(
-        SummarizationRequestConfig config, string targetLanguage, IReadOnlyList<string> texts,
+        LlmRequestConfig config, string targetLanguage, IReadOnlyList<string> texts,
         CancellationToken ct = default)
     {
         // Default every slot to its source text; only non-blank items are sent and overwritten on success.
@@ -53,17 +54,16 @@ public class TranslationClient : ITranslationClient
     }
 
     private async Task TranslateBatchAsync(
-        SummarizationRequestConfig config, string targetLanguage,
+        LlmRequestConfig config, string targetLanguage,
         IReadOnlyList<(int Index, string Text)> batch, string[] result, CancellationToken ct)
     {
         var messages = TranslationPrompt.BuildMessages(targetLanguage, batch);
         var body = new Dictionary<string, object?>
         {
             ["model"] = config.Model,
-            ["temperature"] = 0.1,
             ["messages"] = messages.Select(m => new { role = m.Role, content = m.Content }).ToArray(),
         };
-        if (config.ReasoningEffort is not null) body["reasoning_effort"] = config.ReasoningEffort;
+        LlmRequestBody.Apply(body, config.Parameters);
 
         using var req = new HttpRequestMessage(HttpMethod.Post, $"{config.ApiBase.TrimEnd('/')}/chat/completions")
         {

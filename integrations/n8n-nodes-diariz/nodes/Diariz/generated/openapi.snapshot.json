@@ -4585,18 +4585,6 @@
       },
       "UpdateUserSettingsRequest": {
         "properties": {
-          "apiBase": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "apiKey": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
           "calendarAutoStopAfterMinutes": {
             "format": "int32",
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -4618,30 +4606,6 @@
             "type": [
               "null",
               "integer",
-              "string"
-            ]
-          },
-          "contextWindow": {
-            "format": "int32",
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ]
-          },
-          "llmTimeoutSeconds": {
-            "format": "int32",
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ]
-          },
-          "model": {
-            "type": [
-              "null",
               "string"
             ]
           },
@@ -4668,18 +4632,6 @@
               "string"
             ]
           },
-          "reasoningEffort": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "reasoningEnabled": {
-            "type": [
-              "null",
-              "boolean"
-            ]
-          },
           "toolOverrides": {
             "additionalProperties": {
               "type": "boolean"
@@ -4696,11 +4648,6 @@
             ]
           }
         },
-        "required": [
-          "apiBase",
-          "model",
-          "apiKey"
-        ],
         "type": "object"
       },
       "UpdateWebhookRequest": {
@@ -4858,12 +4805,6 @@
       },
       "UserSettingsDto": {
         "properties": {
-          "apiBase": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
           "calendarAutoStopAfterMinutes": {
             "default": 3,
             "format": "int32",
@@ -4886,73 +4827,22 @@
               "string"
             ]
           },
+          "chatModel": {
+            "type": "string"
+          },
           "contextWindow": {
             "format": "int32",
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
-              "null",
               "integer",
               "string"
             ]
-          },
-          "defaultApiBase": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "defaultContextWindow": {
-            "format": "int32",
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ]
-          },
-          "defaultLlmTimeoutSeconds": {
-            "default": 120,
-            "format": "int32",
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ]
-          },
-          "defaultModel": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "defaultReasoningEffort": {
-            "type": "string"
-          },
-          "defaultReasoningEnabled": {
-            "type": "boolean"
           },
           "defaultToolsEnabled": {
             "type": "boolean"
           },
           "dictationServerAvailable": {
             "type": "boolean"
-          },
-          "hasApiKey": {
-            "type": "boolean"
-          },
-          "llmTimeoutSeconds": {
-            "format": "int32",
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ]
-          },
-          "model": {
-            "type": [
-              "null",
-              "string"
-            ]
           },
           "outlookSyncEnabled": {
             "default": false,
@@ -4968,15 +4858,6 @@
               "string"
             ]
           },
-          "reasoningEffort": {
-            "type": "string"
-          },
-          "reasoningEnabled": {
-            "type": "boolean"
-          },
-          "serverHasApiKey": {
-            "type": "boolean"
-          },
           "tools": {
             "items": {
               "$ref": "#/components/schemas/ChatToolDto"
@@ -4988,21 +4869,11 @@
           }
         },
         "required": [
-          "apiBase",
-          "model",
-          "hasApiKey",
-          "defaultApiBase",
-          "defaultModel",
-          "serverHasApiKey",
           "contextWindow",
-          "defaultContextWindow",
+          "chatModel",
           "toolsEnabled",
           "defaultToolsEnabled",
           "tools",
-          "reasoningEnabled",
-          "reasoningEffort",
-          "defaultReasoningEnabled",
-          "defaultReasoningEffort",
           "placementMode",
           "placementSectionId",
           "dictationServerAvailable"

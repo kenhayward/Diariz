@@ -1,5 +1,6 @@
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Webhooks;
 using Diariz.Domain;
 using Microsoft.AspNetCore.SignalR;
@@ -21,7 +22,7 @@ namespace Diariz.Api.Services;
 public static class MeetingMinutesProcessor
 {
     public static async Task ProcessAsync(
-        DiarizDbContext db, IMeetingTypeMinutesGenerator generator, ISummarizationSettingsResolver resolver,
+        DiarizDbContext db, IMeetingTypeMinutesGenerator generator, ILlmSettingsResolver resolver,
         IHubContext<TranscriptionHub> hub, IJobQueue queue, MeetingMinutesJob job, ILogger logger,
         IWebhookPublisher webhooks, string publicUrl,
         CancellationToken ct = default)
@@ -63,7 +64,7 @@ public static class MeetingMinutesProcessor
             if (segs.Count == 0) throw new InvalidOperationException("Transcription has no segments for minutes.");
 
             // Use the recording owner's effective config (their endpoint/key/model, else server defaults).
-            var cfg = await resolver.ResolveAsync(rec.UserId, ct);
+            var cfg = await resolver.ResolveAsync(LlmCallKind.MeetingMinutes, ct);
             if (!cfg.Enabled) throw new InvalidOperationException("Summarisation is not configured.");
 
             var attendees = segs.Select(s => s.SpeakerDisplay).Distinct().ToList();

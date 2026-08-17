@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Text;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
@@ -22,11 +23,11 @@ public class ChatControllerTests
         var db = TestDb.Create();
         Users.Ensure(db, userId); // create paths mint the owner's personal room, which needs a real user row
         chat ??= new FakeChatStreamClient();
-        var settings = new FakeSummarizationSettingsResolver
+        var settings = new FakeLlmSettingsResolver
         {
             Config = llmEnabled
-                ? new SummarizationRequestConfig("https://llm.test/v1", "sk-test", "test-model", 60)
-                : new SummarizationRequestConfig("", "", "test-model", 60),
+                ? new LlmRequestConfig("https://llm.test/v1", "sk-test", "test-model", new LlmParameters { TimeoutSeconds = 60 })
+                : new LlmRequestConfig("", "", "test-model", new LlmParameters { TimeoutSeconds = 60 }),
         };
         var ctxResolver = new ChatContextResolver(db, Options.Create(new ChatOptions { ContextLength = 40000 }));
         var orchestrator = new ChatToolOrchestrator(chat);

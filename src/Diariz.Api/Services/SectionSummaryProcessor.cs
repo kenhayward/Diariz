@@ -1,5 +1,6 @@
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
+using Diariz.Api.Services.Llm;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.SignalR;
@@ -16,7 +17,7 @@ public static class SectionSummaryProcessor
 {
     public static async Task ProcessAsync(
         DiarizDbContext db, ISummarizationClient perRecording, IMeetingMinutesClient combiner,
-        ISummarizationSettingsResolver resolver, IHubContext<TranscriptionHub> hub,
+        ILlmSettingsResolver resolver, IHubContext<TranscriptionHub> hub,
         string perRecordingTemplate, string folderTemplate,
         SectionSummaryJob job, ILogger logger, CancellationToken ct = default)
     {
@@ -44,7 +45,7 @@ public static class SectionSummaryProcessor
 
         try
         {
-            var cfg = await resolver.ResolveAsync(section.UserId, ct);
+            var cfg = await resolver.ResolveAsync(LlmCallKind.SectionSummary, ct);
             if (!cfg.Enabled) throw new InvalidOperationException("Summarisation is not configured.");
 
             var items = new List<(string RecordingName, string Summary)>();
@@ -109,8 +110,8 @@ public static class SectionSummaryProcessor
     /// <summary>Returns the recording's current-transcription summary text, generating &amp; persisting it on
     /// that transcription first if missing. Recordings with no transcription/segments contribute nothing.</summary>
     private static async Task<string?> EnsureRecordingSummaryAsync(
-        DiarizDbContext db, ISummarizationClient client, ISummarizationSettingsResolver resolver,
-        SummarizationRequestConfig cfg, Guid recordingId, string template, CancellationToken ct)
+        DiarizDbContext db, ISummarizationClient client, ILlmSettingsResolver resolver,
+        LlmRequestConfig cfg, Guid recordingId, string template, CancellationToken ct)
     {
         var transcription = await db.Transcriptions
             .Include(t => t.Segments)

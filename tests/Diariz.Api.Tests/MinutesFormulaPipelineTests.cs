@@ -46,7 +46,7 @@ public class MinutesFormulaPipelineTests
 
     private static Task Run(DiarizDbContext db, FakeJobQueue queue, Recording rec, Transcription tr) =>
         MeetingMinutesProcessor.ProcessAsync(
-            db, new FakeMeetingTypeMinutesGenerator { Result = "# Minutes" }, new FakeSummarizationSettingsResolver(),
+            db, new FakeMeetingTypeMinutesGenerator { Result = "# Minutes" }, new FakeLlmSettingsResolver(),
             new FakeHubContext(), queue, new MeetingMinutesJob(rec.Id, tr.Id), NullLogger.Instance,
             new CapturingWebhookPublisher(), "");
 

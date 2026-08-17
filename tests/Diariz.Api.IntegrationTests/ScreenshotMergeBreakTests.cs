@@ -1,6 +1,7 @@
 using Diariz.Api.Configuration;
 using Diariz.Api.Controllers;
 using Diariz.Api.IntegrationTests.Infrastructure;
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain.Entities;
@@ -22,8 +23,9 @@ public class ScreenshotMergeBreakTests(ContainersFixture fx)
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Transcription:DefaultModel"] = "whisperx-large-v3" })
             .Build();
-        var resolver = new SummarizationSettingsResolver(
-            db, Options.Create(new SummarizationOptions { ApiBase = "http://llm.test/v1" }), new FakeApiKeyProtector());
+        var resolver = new LlmSettingsResolver(
+            db, Options.Create(new LlmDefaultsOptions()),
+            Options.Create(new SummarizationOptions { ApiBase = "http://llm.test/v1" }), new FakeApiKeyProtector());
         return new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config,
             resolver, new FakeEmailSender(), new FakeSpeakerIdentifier(), Options.Create(new UploadOptions()), new RoomScope(db),
             new PeopleDirectory(db), new CapturingWebhookPublisher(), Options.Create(new AppPublicOptions()))

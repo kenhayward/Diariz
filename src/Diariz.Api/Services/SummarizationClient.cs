@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Diariz.Api.Contracts;
@@ -10,7 +11,7 @@ public interface ISummarizationClient
     /// <paramref name="template"/>; when <paramref name="needName"/> is true, also asks the model for a short
     /// recording name.</summary>
     Task<SummaryResult> SummarizeAsync(
-        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, bool needName, string template,
+        LlmRequestConfig config, IReadOnlyList<SegmentDto> segments, bool needName, string template,
         CancellationToken ct = default);
 }
 
@@ -22,17 +23,16 @@ public class SummarizationClient : ISummarizationClient
     public SummarizationClient(HttpClient http) => _http = http;
 
     public async Task<SummaryResult> SummarizeAsync(
-        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, bool needName, string template,
+        LlmRequestConfig config, IReadOnlyList<SegmentDto> segments, bool needName, string template,
         CancellationToken ct = default)
     {
         var messages = SummarizationPrompt.BuildMessages(template, segments, needName, config.ContextCharBudget);
         var body = new Dictionary<string, object?>
         {
             ["model"] = config.Model,
-            ["temperature"] = 0.3,
             ["messages"] = messages.Select(m => new { role = m.Role, content = m.Content }).ToArray(),
         };
-        if (config.ReasoningEffort is not null) body["reasoning_effort"] = config.ReasoningEffort;
+        LlmRequestBody.Apply(body, config.Parameters);
 
         using var req = new HttpRequestMessage(HttpMethod.Post, $"{config.ApiBase.TrimEnd('/')}/chat/completions")
         {

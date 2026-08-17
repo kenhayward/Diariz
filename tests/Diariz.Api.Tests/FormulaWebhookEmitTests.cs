@@ -50,7 +50,7 @@ public class FormulaWebhookEmitTests
     }
 
     private static Task Run(
-        DiarizDbContext db, FakeChatStreamClient chat, FakeSummarizationSettingsResolver resolver,
+        DiarizDbContext db, FakeChatStreamClient chat, FakeLlmSettingsResolver resolver,
         FakeHubContext hub, FormulaRunJob job, CapturingWebhookPublisher publisher, string publicUrl = "") =>
         FormulaRunProcessor.ProcessAsync(
             db, chat, resolver, hub, job, NullLogger.Instance, publisher, publicUrl);
@@ -66,7 +66,7 @@ public class FormulaWebhookEmitTests
         var hub = new FakeHubContext();
         var publisher = new CapturingWebhookPublisher();
 
-        await Run(db, chat, new FakeSummarizationSettingsResolver(), hub,
+        await Run(db, chat, new FakeLlmSettingsResolver(), hub,
             new FormulaRunJob(rec.Id, null, result.Id, formula.Id, userId), publisher,
             publicUrl: "https://app.test");
 
@@ -97,7 +97,7 @@ public class FormulaWebhookEmitTests
         var hub = new FakeHubContext();
         var publisher = new CapturingWebhookPublisher();
 
-        await Run(db, chat, new FakeSummarizationSettingsResolver(), hub,
+        await Run(db, chat, new FakeLlmSettingsResolver(), hub,
             new FormulaRunJob(rec.Id, null, result.Id, formula.Id, userId), publisher, publicUrl: "");
 
         var (_, _, data, _, _, _) = publisher.Published.Single(p => p.EventType == WebhookEventTypes.FormulaResultCompleted);
@@ -117,7 +117,7 @@ public class FormulaWebhookEmitTests
         var hub = new FakeHubContext();
         var publisher = new CapturingWebhookPublisher();
 
-        await Run(db, chat, new FakeSummarizationSettingsResolver(), hub,
+        await Run(db, chat, new FakeLlmSettingsResolver(), hub,
             new FormulaRunJob(rec.Id, null, result.Id, formula.Id, userId), publisher);
 
         Assert.Contains(publisher.Published, p =>
@@ -155,7 +155,7 @@ public class FormulaWebhookEmitTests
 
         // No recordings in the folder -> the run fails ("No meetings with content..."), exercising the
         // section-scoped (null recordingId) Failed path.
-        await Run(db, chat, new FakeSummarizationSettingsResolver(), hub,
+        await Run(db, chat, new FakeLlmSettingsResolver(), hub,
             new FormulaRunJob(null, sectionId, result.Id, formula.Id, userId), publisher, publicUrl: "https://app.test");
 
         var (_, _, data, _, _, _) = publisher.Published.Single(p => p.EventType == WebhookEventTypes.FormulaResultFailed);
@@ -181,7 +181,7 @@ public class FormulaWebhookEmitTests
         var hub = new FakeHubContext();
         var publisher = new CapturingWebhookPublisher();
 
-        await Run(db, chat, new FakeSummarizationSettingsResolver(), hub,
+        await Run(db, chat, new FakeLlmSettingsResolver(), hub,
             new FormulaRunJob(rec.Id, null, result.Id, formula.Id, userId), publisher,
             publicUrl: "https://app.test");
 
@@ -225,7 +225,7 @@ public class FormulaWebhookEmitTests
 
         // The webhook publisher itself throws - this must not flip the just-persisted Ready result to Failed.
         await FormulaRunProcessor.ProcessAsync(
-            db, chat, new FakeSummarizationSettingsResolver(), hub,
+            db, chat, new FakeLlmSettingsResolver(), hub,
             new FormulaRunJob(rec.Id, null, result.Id, formula.Id, userId), NullLogger.Instance,
             new ThrowingWebhookPublisher(), "https://app.test");
 
@@ -251,7 +251,7 @@ public class FormulaWebhookEmitTests
         var hub = new FakeHubContext();
         var publisher = new CapturingWebhookPublisher();
 
-        await Run(db, chat, new FakeSummarizationSettingsResolver(), hub,
+        await Run(db, chat, new FakeLlmSettingsResolver(), hub,
             new FormulaRunJob(rec.Id, null, result.Id, formula.Id, userId), publisher);
 
         Assert.Contains(publisher.Published, p =>

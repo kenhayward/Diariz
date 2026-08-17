@@ -1,6 +1,7 @@
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Services;
 using Diariz.Api.Webhooks;
 using Diariz.Domain;
@@ -24,7 +25,7 @@ public class WorkerCallbackController : ControllerBase
     private readonly DiarizDbContext _db;
     private readonly IHubContext<TranscriptionHub> _hub;
     private readonly IJobQueue _queue;
-    private readonly ISummarizationSettingsResolver _summarization;
+    private readonly ILlmSettingsResolver _summarization;
     private readonly IEmbeddingSettingsResolver _embedding;
     private readonly ISpeakerIdentifier _identifier;
     private readonly WorkerOptions _opts;
@@ -33,7 +34,7 @@ public class WorkerCallbackController : ControllerBase
 
     public WorkerCallbackController(
         DiarizDbContext db, IHubContext<TranscriptionHub> hub, IJobQueue queue,
-        ISummarizationSettingsResolver summarization, IEmbeddingSettingsResolver embedding,
+        ILlmSettingsResolver summarization, IEmbeddingSettingsResolver embedding,
         ISpeakerIdentifier identifier, IOptions<WorkerOptions> opts,
         IWebhookPublisher webhooks, IOptions<AppPublicOptions> appOpts)
     {
@@ -130,7 +131,7 @@ public class WorkerCallbackController : ControllerBase
 
         // Continue the pipeline: when summarisation is configured for the owner, kick it off
         // automatically (which also auto-names the recording when it has no name yet).
-        var cfg = await _summarization.ResolveAsync(transcription.Recording.UserId);
+        var cfg = await _summarization.ResolveAsync(LlmCallKind.Summarize);
         var autoSummarise = cfg.Enabled;
         transcription.Recording.Status = autoSummarise ? RecordingStatus.Summarizing : RecordingStatus.Transcribed;
 
@@ -151,7 +152,7 @@ public class WorkerCallbackController : ControllerBase
         // Build/refresh the RAG index for this recording's latest transcription (status-neutral, independent of
         // summarisation — RAG can be on via a dedicated embeddings endpoint even when summarisation is off). The
         // processor no-ops if the owner has no endpoint, so only enqueue when embedding is actually configured.
-        var embedCfg = await _embedding.ResolveAsync(transcription.Recording.UserId);
+        var embedCfg = await _embedding.ResolveAsync();
         if (embedCfg.Enabled)
             await _queue.EnqueueEmbeddingAsync(new EmbeddingJob(transcription.RecordingId, transcription.Id));
 

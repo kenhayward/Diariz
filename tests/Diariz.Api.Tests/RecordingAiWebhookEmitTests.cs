@@ -52,7 +52,7 @@ public class RecordingAiWebhookEmitTests
 
         await SummarizationProcessor.ProcessAsync(
             db, new FakeSummarizationClient { Result = new SummaryResult("The key points.", "Ignored") },
-            new FakeSummarizationSettingsResolver(), new FakeHubContext(), new SummarizationJob(rec.Id, tr.Id),
+            new FakeLlmSettingsResolver(), new FakeHubContext(), new SummarizationJob(rec.Id, tr.Id),
             SummarizationPrompt.DefaultTemplate, NullLogger.Instance, publisher, "https://app.test");
 
         var published = Assert.Single(publisher.Published);
@@ -87,7 +87,7 @@ public class RecordingAiWebhookEmitTests
         var publisher = new CapturingWebhookPublisher();
 
         await SummarizationProcessor.ProcessAsync(
-            db, new FakeSummarizationClient(), new FakeSummarizationSettingsResolver(), new FakeHubContext(),
+            db, new FakeSummarizationClient(), new FakeLlmSettingsResolver(), new FakeHubContext(),
             new SummarizationJob(rec.Id, tr.Id), SummarizationPrompt.DefaultTemplate, NullLogger.Instance,
             publisher, "https://app.test");
 
@@ -105,7 +105,7 @@ public class RecordingAiWebhookEmitTests
 
         await SummarizationProcessor.ProcessAsync(
             db, new FakeSummarizationClient { ThrowOnCall = new InvalidOperationException("LLM down") },
-            new FakeSummarizationSettingsResolver(), new FakeHubContext(), new SummarizationJob(rec.Id, tr.Id),
+            new FakeLlmSettingsResolver(), new FakeHubContext(), new SummarizationJob(rec.Id, tr.Id),
             SummarizationPrompt.DefaultTemplate, NullLogger.Instance, publisher, "https://app.test");
 
         Assert.Empty(publisher.Published);
@@ -128,7 +128,7 @@ public class RecordingAiWebhookEmitTests
 
         await MeetingMinutesProcessor.ProcessAsync(
             db, new FakeMeetingTypeMinutesGenerator { Result = "# Cadence Call\n\nMinutes." },
-            new FakeSummarizationSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
+            new FakeLlmSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
             new MeetingMinutesJob(rec.Id, tr.Id), NullLogger.Instance, publisher, "https://app.test");
 
         var published = Assert.Single(publisher.Published);
@@ -154,7 +154,7 @@ public class RecordingAiWebhookEmitTests
 
         await MeetingMinutesProcessor.ProcessAsync(
             db, new FakeMeetingTypeMinutesGenerator { ThrowOnCall = new InvalidOperationException("LLM down") },
-            new FakeSummarizationSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
+            new FakeLlmSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
             new MeetingMinutesJob(rec.Id, tr.Id), NullLogger.Instance, publisher, "https://app.test");
 
         Assert.Empty(publisher.Published);
@@ -170,7 +170,7 @@ public class RecordingAiWebhookEmitTests
         var publisher = new CapturingWebhookPublisher();
 
         await ActionsProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
+            db, client, new FakeLlmSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
             new ActionsJob(rec.Id, tr.Id), ActionsPrompt.DefaultTemplate, NullLogger.Instance, publisher,
             "https://app.test");
 
@@ -200,7 +200,7 @@ public class RecordingAiWebhookEmitTests
         var publisher = new CapturingWebhookPublisher();
 
         await ActionsProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
+            db, client, new FakeLlmSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
             new ActionsJob(rec.Id, tr.Id), ActionsPrompt.DefaultTemplate, NullLogger.Instance, publisher,
             "https://app.test");
 
@@ -217,7 +217,7 @@ public class RecordingAiWebhookEmitTests
         var publisher = new CapturingWebhookPublisher();
 
         await TagsProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), new TagsJob(rec.Id, tr.Id),
+            db, client, new FakeLlmSettingsResolver(), new FakeHubContext(), new TagsJob(rec.Id, tr.Id),
             TagsPrompt.DefaultTemplate, NullLogger.Instance, publisher, "https://app.test");
 
         var published = Assert.Single(publisher.Published);
@@ -244,7 +244,7 @@ public class RecordingAiWebhookEmitTests
         var publisher = new CapturingWebhookPublisher();
 
         await TagsProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), new TagsJob(rec.Id, tr.Id),
+            db, client, new FakeLlmSettingsResolver(), new FakeHubContext(), new TagsJob(rec.Id, tr.Id),
             TagsPrompt.DefaultTemplate, NullLogger.Instance, publisher, "https://app.test");
 
         Assert.Empty(publisher.Published);

@@ -19,6 +19,7 @@ import CalendarEventDetail from "./pages/CalendarEventDetail";
 const ApiReference = lazy(() => import("./pages/ApiReference"));
 // Lazy-loaded: a Platform-Administrator-only page, no reason to ship it in the main bundle.
 const LlmUsage = lazy(() => import("./pages/LlmUsage"));
+const LlmModels = lazy(() => import("./pages/LlmModels"));
 import WorkspaceLayout from "./components/WorkspaceLayout";
 import RouteErrorBoundary from "./components/RouteErrorBoundary";
 import EmptyDetail from "./components/EmptyDetail";
@@ -90,6 +91,18 @@ export default function App() {
           <RequireAuth>
             <Suspense fallback={null}>
               <LlmUsage />
+            </Suspense>
+          </RequireAuth>
+        }
+      />
+      {/* Same arrangement: RequireAuth proves only that someone is signed in, and LlmModels renders a
+          refusal for anyone who is not a Platform Administrator. */}
+      <Route
+        path="/admin/llm-models"
+        element={
+          <RequireAuth>
+            <Suspense fallback={null}>
+              <LlmModels />
             </Suspense>
           </RequireAuth>
         }

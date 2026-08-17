@@ -71,7 +71,7 @@ public class FormulasIntegrationTests(ContainersFixture fx)
         var chat = new FakeChatStreamClient { Tokens = ["done"] };
         await using (var db = fx.CreateDbContext())
         {
-            var runner = new FormulaRunner(db, chat, new FakeSummarizationSettingsResolver());
+            var runner = new FormulaRunner(db, chat, new FakeLlmSettingsResolver());
             await runner.RunAsync(userId, recId, formulaId);
         }
 

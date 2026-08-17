@@ -1,4 +1,5 @@
 using Diariz.Api.Contracts;
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
@@ -49,7 +50,7 @@ public class FormulaRunProcessorTests
     }
 
     private static Task Run(
-        DiarizDbContext db, FakeChatStreamClient chat, FakeSummarizationSettingsResolver resolver,
+        DiarizDbContext db, FakeChatStreamClient chat, FakeLlmSettingsResolver resolver,
         FakeHubContext hub, FormulaRunJob job) =>
         FormulaRunProcessor.ProcessAsync(
             db, chat, resolver, hub, job, NullLogger.Instance, new CapturingWebhookPublisher(), "");
@@ -130,7 +131,7 @@ public class FormulaRunProcessorTests
         var chat = new FakeChatStreamClient { StreamRounds = ["MAP-A", "MAP-B", "REDUCE"] };
         var hub = new FakeHubContext();
 
-        await Run(db, chat, new FakeSummarizationSettingsResolver(), hub,
+        await Run(db, chat, new FakeLlmSettingsResolver(), hub,
             new FormulaRunJob(null, section.Id, result.Id, formula.Id, userId));
 
         // 2 map calls + 1 reduce call.
@@ -169,7 +170,7 @@ public class FormulaRunProcessorTests
         var chat = new FakeChatStreamClient { StreamRounds = ["ONLY"] };
         var hub = new FakeHubContext();
 
-        await Run(db, chat, new FakeSummarizationSettingsResolver(), hub,
+        await Run(db, chat, new FakeLlmSettingsResolver(), hub,
             new FormulaRunJob(null, section.Id, result.Id, formula.Id, userId));
 
         // A single meeting means one map call and NO reduce.
@@ -196,7 +197,7 @@ public class FormulaRunProcessorTests
         var chat = new FakeChatStreamClient();
         var hub = new FakeHubContext();
 
-        await Run(db, chat, new FakeSummarizationSettingsResolver(), hub,
+        await Run(db, chat, new FakeLlmSettingsResolver(), hub,
             new FormulaRunJob(null, section.Id, result.Id, formula.Id, userId));
 
         // The empty meeting must not consume a map call.
@@ -227,7 +228,7 @@ public class FormulaRunProcessorTests
         var chat = new FakeChatStreamClient { ThrowOnCall = new InvalidOperationException("LLM down") };
         var hub = new FakeHubContext();
 
-        await Run(db, chat, new FakeSummarizationSettingsResolver(), hub,
+        await Run(db, chat, new FakeLlmSettingsResolver(), hub,
             new FormulaRunJob(null, section.Id, result.Id, formula.Id, userId));
 
         var persisted = await db.SectionFormulaResults.FindAsync(result.Id);
@@ -249,7 +250,7 @@ public class FormulaRunProcessorTests
         var chat = new FakeChatStreamClient { Tokens = ["OUT", "PUT"] };
         var hub = new FakeHubContext();
 
-        await Run(db, chat, new FakeSummarizationSettingsResolver(), hub,
+        await Run(db, chat, new FakeLlmSettingsResolver(), hub,
             new FormulaRunJob(rec.Id, null, result.Id, formula.Id, userId));
 
         var persisted = await db.FormulaResults.FindAsync(result.Id);
@@ -287,7 +288,7 @@ public class FormulaRunProcessorTests
             observedUser = LlmCallScope.Active?.UserId;
         });
 
-        await Run(db, chat, new FakeSummarizationSettingsResolver(), new FakeHubContext(),
+        await Run(db, chat, new FakeLlmSettingsResolver(), new FakeHubContext(),
             new FormulaRunJob(rec.Id, null, result.Id, formula.Id, userId));
 
         Assert.Equal(LlmCallKind.FormulaRun, observedKind);
@@ -322,7 +323,7 @@ public class FormulaRunProcessorTests
             observedUser = LlmCallScope.Active?.UserId;
         });
 
-        await Run(db, chat, new FakeSummarizationSettingsResolver(), new FakeHubContext(),
+        await Run(db, chat, new FakeLlmSettingsResolver(), new FakeHubContext(),
             new FormulaRunJob(null, section.Id, result.Id, formula.Id, userId));
 
         Assert.Equal(LlmCallKind.FormulaRun, observedKind);
@@ -340,7 +341,7 @@ public class FormulaRunProcessorTests
         var chat = new FakeChatStreamClient { ThrowOnCall = new InvalidOperationException("LLM down") };
         var hub = new FakeHubContext();
 
-        await Run(db, chat, new FakeSummarizationSettingsResolver(), hub,
+        await Run(db, chat, new FakeLlmSettingsResolver(), hub,
             new FormulaRunJob(rec.Id, null, result.Id, formula.Id, userId));
 
         var persisted = await db.FormulaResults.FindAsync(result.Id);
@@ -359,7 +360,7 @@ public class FormulaRunProcessorTests
         var rec = await SeedRecordingWithTranscript(db, userId);
         var (formula, result) = await SeedFormulaAndResult(db, userId, rec.Id);
         var chat = new FakeChatStreamClient();
-        var resolver = new FakeSummarizationSettingsResolver { Config = new("", "", "m", 60) }; // disabled
+        var resolver = new FakeLlmSettingsResolver { Config = new("", "", "m", new LlmParameters { TimeoutSeconds = 60 }) }; // disabled
         var hub = new FakeHubContext();
 
         await Run(db, chat, resolver, hub, new FormulaRunJob(rec.Id, null, result.Id, formula.Id, userId));

@@ -1,5 +1,6 @@
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Webhooks;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
@@ -18,7 +19,7 @@ namespace Diariz.Api.Services;
 public static class SummarizationProcessor
 {
     public static async Task ProcessAsync(
-        DiarizDbContext db, ISummarizationClient client, ISummarizationSettingsResolver resolver,
+        DiarizDbContext db, ISummarizationClient client, ILlmSettingsResolver resolver,
         IHubContext<TranscriptionHub> hub, SummarizationJob job, string template, ILogger logger,
         IWebhookPublisher webhooks, string publicUrl,
         CancellationToken ct = default)
@@ -68,7 +69,7 @@ public static class SummarizationProcessor
             if (segs.Count == 0) throw new InvalidOperationException("Transcription has no segments to summarise.");
 
             // Use the recording owner's effective config (their endpoint/key/model, else server defaults).
-            var cfg = await resolver.ResolveAsync(rec.UserId, ct);
+            var cfg = await resolver.ResolveAsync(LlmCallKind.Summarize, ct);
             if (!cfg.Enabled) throw new InvalidOperationException("Summarisation is not configured.");
 
             var needName = string.IsNullOrWhiteSpace(rec.Name);

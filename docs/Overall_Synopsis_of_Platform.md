@@ -376,17 +376,50 @@ clobbering manual names.
 
 ## LLM-powered features (all via an OpenAI-compatible endpoint)
 
-The same per-user-or-server LLM config (`UserSettings` ?? server `Summarization` defaults, resolved by
-`SummarizationSettingsResolver`) powers four features. The API key is **encrypted at rest** (ASP.NET Data
-Protection, keyring on the `DataProtection:KeysPath` volume) and is **write-only** over the API (`GET` returns
-only `hasApiKey`). The resolved config also carries an optional **`reasoning_effort`** (`UserSettings.ReasoningEnabled`/
-`ReasoningEffort` ?? server `Summarization:ReasoningEnabled`/`ReasoningEffort`); when reasoning is on, every LLM
-client (summarise / actions / translation / chat) adds the field to its `/chat/completions` body, and when off the
-field is **omitted entirely** so non-reasoning endpoints aren't broken. The **per-request timeout** resolves in three
-steps - **`UserSettings.LlmTimeoutSeconds` ?? `PlatformSettings.LlmTimeoutSeconds` (default 120,
-Platform-Admin-editable on Settings → Model Settings) ?? the server option** - via the same resolver
-(`SummarizationSettingsResolver`; `EmbeddingSettingsResolver` mirrors the chain for the separate embeddings
-config), and is enforced via a linked `CancellationTokenSource` in each client. Every LLM `HttpClient`
+### Platform model configuration (0.221.0)
+
+LLM configuration is **platform-wide**, not per user. `ILlmSettingsResolver` (`LlmSettingsResolver`) answers
+one question - *which model serves a call of this kind, and with what parameters* - and every client goes
+through it.
+
+**Which model.** The call's `LlmCallKind` maps to an `LlmCallGroup` (`LlmCallGroups.GroupFor`); the group's
+`LlmCallAssignments` row wins, else `PlatformSettings.DefaultLlmModelId`, else a model **synthesized from the
+environment** (`Summarization:ApiBase`/`ApiKey`/`Model`). That fallback is built per call and **never
+persisted** - writing it would resurrect a model an administrator had deliberately deleted, the same defect
+as a seeder that undoes a change on every boot - and it is what makes an upgrade with no configured models
+behave exactly as before.
+
+**With what parameters.** Four layers, most specific first, merged by `LlmParameterLayers.Resolve`: the
+model's row for **this group**, the model's **`ModelBase`** row, the app defaults **for this group**, then
+the app **base** defaults. Each key is in one of three states, and the last two are different instructions:
+**absent** = keep looking down, **present and null** = omit the parameter from the request entirely, **present
+with a value** = use it. A sentinel could not express both, since `-1` is legal for `max_tokens` (unlimited)
+and `top_k` (disabled) on some servers.
+
+App defaults live in `LlmDefaultsOptions` and bind from configuration, so a deployment overrides them with
+`LlmDefaults__Temperature`, `LlmDefaults__Translation__Temperature` and so on. The shipped values reproduce
+the request bodies sent before this existed (0.3 everywhere, 0.1 for translation), which is what makes the
+move behaviour-preserving on an empty database - pinned by `RequestBodyCharacterisationTests`, which resolves
+its config through the real resolver rather than hand-building one.
+
+`LlmRequestBody.Apply` serialises the resolved set into every client's body, so adding a parameter later is
+one edit rather than seven. `ToolsSupported` gates `tools`/`tool_choice` in `ChatStreamClient` - a model that
+cannot do tool calling is not asked to.
+
+The API key is **encrypted at rest** on `LlmModels.ApiKeyEncrypted` (ASP.NET Data Protection, keyring on the
+`DataProtection:KeysPath` volume) and is **write-only** over the API (`GET` returns only `hasApiKey`).
+`EmbeddingSettingsResolver` takes `ILlmSettingsResolver` rather than re-deriving the chain: a dedicated
+`Embedding:ApiBase` wins and keeps its own timeout, otherwise embeddings share the platform model's endpoint,
+key and deadline. **Dictation is deliberately outside all of this** - it is speech-to-text on
+`/audio/transcriptions` with its own model, configured entirely by `DictationOptions`.
+
+Administration is `LlmModelsController` (`/api/admin/llm-models`, `ManagePlatform`) and the `/admin/llm-models`
+page. Deleting a model in use is refused **by the controller**, not by the FKs: both are `ON DELETE RESTRICT`,
+but EF refuses client-side at `Remove` for the required assignment FK, and for the nullable
+`DefaultLlmModelId` it nulls the column ahead of the DELETE so the constraint never fires. See
+`LlmModelSchemaTests` for the evidence.
+
+The resolved timeout is enforced via a linked `CancellationTokenSource` in each client. Every LLM `HttpClient`
 (`AddLlmClient` in `Program.cs`) is registered with `Timeout = InfiniteTimeSpan`, so the resolved value is the
 **single authority** for every LLM call - chat replies, chat tool rounds, chat title generation, and Formula
 runs included; without that, `HttpClient`'s own 100 s default silently capped them regardless of the configured
@@ -651,7 +684,7 @@ large folders silently rolled up only their first ~18 meetings. The old per-work
   call). Elsewhere (the desktop app, Safari, Firefox) it falls back to `POST /api/chat/transcribe`: a
   **JWT-authenticated** endpoint that forwards one recorded audio utterance to an OpenAI-compatible
   `/audio/transcriptions` endpoint and returns the transcribed text - it **persists nothing** (no recording,
-  no transcript row). This is a **server-level-only** config, separate from the per-user summarisation
+  no transcript row). This is a **server-level-only** config, separate from the platform summarisation
   settings: a new `Dictation` options section (`ApiBase`/`ApiKey`/`Model`/`TimeoutSeconds`) is optional, and
   an empty `ApiBase` disables the server-fallback path (the browser Web Speech path still works in
   Chrome/Edge regardless). The endpoint returns **400** when no `Dictation:ApiBase` is configured and **502**
@@ -744,7 +777,7 @@ large folders silently rolled up only their first ~18 meetings. The old per-work
   (consumer group `formula-runners`), and returns **202** immediately. The in-process **`FormulaRunWorker`**
   (`BackgroundService`, one stream per kind) `XREADGROUP`s the job, opens a DI scope, and dispatches to the
   static **`FormulaRunProcessor`**, which resolves the caller's per-user-or-server LLM config via
-  `ISummarizationSettingsResolver`, loads only the recording data the formula's context flags require (so a
+  `ILlmSettingsResolver`, loads only the recording data the formula's context flags require (so a
   Summary-only formula never pulls the full segment list), builds a single context blob
   (`FormulaContextBuilder`, a pure formatter), streams one completion through **`IChatStreamClient`** inside a
   timeout derived from the resolved config, and flips the row to **`Ready`** (with `Text`) or **`Failed`**

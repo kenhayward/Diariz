@@ -1,4 +1,5 @@
 using Diariz.Api.Contracts;
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Services;
 using Diariz.Api.Controllers;
 using Diariz.Api.Tests.Infrastructure;
@@ -14,8 +15,8 @@ namespace Diariz.Api.Tests;
 public class SectionPageControllerTests
 {
     private static SectionPageController Build(
-        DiarizDbContext db, Guid userId, FakeJobQueue? queue = null, FakeSummarizationSettingsResolver? resolver = null) =>
-        new(db, queue ?? new FakeJobQueue(), resolver ?? new FakeSummarizationSettingsResolver(), new FakeHubContext(),
+        DiarizDbContext db, Guid userId, FakeJobQueue? queue = null, FakeLlmSettingsResolver? resolver = null) =>
+        new(db, queue ?? new FakeJobQueue(), resolver ?? new FakeLlmSettingsResolver(), new FakeHubContext(),
             new RoomScope(db))
         { ControllerContext = Http.Context(userId) };
 
@@ -193,7 +194,7 @@ public class SectionPageControllerTests
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var section = await Section(db, userId);
-        var resolver = new FakeSummarizationSettingsResolver { Config = new("", "", "m", 60) };
+        var resolver = new FakeLlmSettingsResolver { Config = new("", "", "m", new LlmParameters { TimeoutSeconds = 60 }) };
 
         var result = await Build(db, userId, resolver: resolver).GenerateSummary(section.Id);
 

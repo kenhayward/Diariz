@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Text.Json;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
@@ -25,7 +26,7 @@ public class SummarizationClientTests
             ChatResponse("{\"summary\":\"Quick chat.\",\"name\":\"Greeting\"}"));
         var http = new HttpClient(handler);
         var client = new SummarizationClient(http);
-        var config = new SummarizationRequestConfig("http://llm.test/v1", "sk-secret", "local-model", 60);
+        var config = new LlmRequestConfig("http://llm.test/v1", "sk-secret", "local-model", new LlmParameters { TimeoutSeconds = 60 });
 
         var result = await client.SummarizeAsync(config, Segments, needName: true, SummarizationPrompt.DefaultTemplate);
 
@@ -42,7 +43,7 @@ public class SummarizationClientTests
     {
         var handler = new FakeHttpMessageHandler(ChatResponse("{\"summary\":\"x\"}"));
         var client = new SummarizationClient(new HttpClient(handler));
-        var config = new SummarizationRequestConfig("http://llm.test/v1", "k", "m", 60);
+        var config = new LlmRequestConfig("http://llm.test/v1", "k", "m", new LlmParameters { TimeoutSeconds = 60 });
 
         await client.SummarizeAsync(config, Segments, needName: false, SummarizationPrompt.DefaultTemplate);
 
@@ -55,7 +56,8 @@ public class SummarizationClientTests
     {
         var handler = new FakeHttpMessageHandler(ChatResponse("{\"summary\":\"x\"}"));
         var client = new SummarizationClient(new HttpClient(handler));
-        var config = new SummarizationRequestConfig("http://llm.test/v1", "k", "m", 60) { ReasoningEffort = "high" };
+        var config = new LlmRequestConfig("http://llm.test/v1", "k", "m",
+            new LlmParameters { TimeoutSeconds = 60, ReasoningEnabled = true, ReasoningEffort = "high" });
 
         await client.SummarizeAsync(config, Segments, needName: false, SummarizationPrompt.DefaultTemplate);
 

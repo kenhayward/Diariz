@@ -56,7 +56,7 @@ public class MeetingMinutesProcessorTests
         await db.SaveChangesAsync();
 
         var generator = new FakeMeetingTypeMinutesGenerator { Result = "# Cadence Call\n\nMinutes." };
-        var resolver = new FakeSummarizationSettingsResolver();
+        var resolver = new FakeLlmSettingsResolver();
         var hub = new FakeHubContext();
 
         await MeetingMinutesProcessor.ProcessAsync(
@@ -66,7 +66,7 @@ public class MeetingMinutesProcessorTests
         var minutes = await db.MeetingMinutes.SingleAsync(m => m.TranscriptionId == tr.Id);
         Assert.Equal("# Cadence Call\n\nMinutes.", minutes.Text);
         Assert.Equal("test-model", minutes.Model);                 // from the resolved config
-        Assert.Equal(userId, resolver.LastUserId);                 // resolved for the owner
+        Assert.Equal(LlmCallKind.MeetingMinutes, resolver.LastKind);   // resolved for the right call kind
         Assert.Equal(userId, generator.LastOwnerId);               // and passed to the generator
         Assert.Equal(typeId, generator.LastMeetingTypeId);         // the recording's chosen type
         Assert.Equal(resolver.Config, generator.LastConfig);       // the resolved config, straight through
@@ -101,7 +101,7 @@ public class MeetingMinutesProcessorTests
         });
 
         await MeetingMinutesProcessor.ProcessAsync(
-            db, generator, new FakeSummarizationSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
+            db, generator, new FakeLlmSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
             Job(rec, tr), NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         Assert.Equal(LlmCallKind.MeetingMinutes, observedKind);
@@ -121,7 +121,7 @@ public class MeetingMinutesProcessorTests
         await db.SaveChangesAsync();
 
         await MeetingMinutesProcessor.ProcessAsync(
-            db, new FakeMeetingTypeMinutesGenerator { Result = "# Fresh" }, new FakeSummarizationSettingsResolver(),
+            db, new FakeMeetingTypeMinutesGenerator { Result = "# Fresh" }, new FakeLlmSettingsResolver(),
             new FakeHubContext(), new FakeJobQueue(), Job(rec, tr), NullLogger.Instance,
             new CapturingWebhookPublisher(), "");
 
@@ -141,7 +141,7 @@ public class MeetingMinutesProcessorTests
         var generator = new FakeMeetingTypeMinutesGenerator { Result = "# LLM" };
 
         await MeetingMinutesProcessor.ProcessAsync(
-            db, generator, new FakeSummarizationSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
+            db, generator, new FakeLlmSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
             Job(rec, tr), NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         Assert.Equal("my edit", (await db.MeetingMinutes.SingleAsync(m => m.TranscriptionId == tr.Id)).Text);
@@ -156,7 +156,7 @@ public class MeetingMinutesProcessorTests
         var generator = new FakeMeetingTypeMinutesGenerator { ThrowOnCall = new InvalidOperationException("LLM down") };
 
         await MeetingMinutesProcessor.ProcessAsync(
-            db, generator, new FakeSummarizationSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
+            db, generator, new FakeLlmSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
             Job(rec, tr), NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         Assert.Empty(await db.MeetingMinutes.ToListAsync());
@@ -171,7 +171,7 @@ public class MeetingMinutesProcessorTests
         var generator = new FakeMeetingTypeMinutesGenerator();
 
         await MeetingMinutesProcessor.ProcessAsync(
-            db, generator, new FakeSummarizationSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
+            db, generator, new FakeLlmSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
             Job(rec, tr), NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         Assert.Equal(0, generator.Calls);

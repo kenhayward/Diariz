@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Text.Json;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
@@ -20,7 +21,7 @@ public class MeetingMinutesClientTests
     {
         var handler = new FakeHttpMessageHandler(ChatResponse("# Weekly Sync\n\n## Overview\n\nWe met."));
         var client = new MeetingMinutesClient(new HttpClient(handler));
-        var config = new SummarizationRequestConfig("http://llm.test/v1", "sk-secret", "local-model", 60);
+        var config = new LlmRequestConfig("http://llm.test/v1", "sk-secret", "local-model", new LlmParameters { TimeoutSeconds = 60 });
 
         var md = await client.GenerateAsync(config, Messages);
 
@@ -36,7 +37,7 @@ public class MeetingMinutesClientTests
     {
         var handler = new FakeHttpMessageHandler(ChatResponse("# x"));
         var client = new MeetingMinutesClient(new HttpClient(handler));
-        var config = new SummarizationRequestConfig("http://llm.test/v1", "k", "m", 60);
+        var config = new LlmRequestConfig("http://llm.test/v1", "k", "m", new LlmParameters { TimeoutSeconds = 60 });
 
         await client.GenerateAsync(config, Messages);
 
@@ -48,7 +49,8 @@ public class MeetingMinutesClientTests
     {
         var handler = new FakeHttpMessageHandler(ChatResponse("# x"));
         var client = new MeetingMinutesClient(new HttpClient(handler));
-        var config = new SummarizationRequestConfig("http://llm.test/v1", "k", "m", 60) { ReasoningEffort = "high" };
+        var config = new LlmRequestConfig("http://llm.test/v1", "k", "m",
+            new LlmParameters { TimeoutSeconds = 60, ReasoningEnabled = true, ReasoningEffort = "high" });
 
         await client.GenerateAsync(config, Messages);
 

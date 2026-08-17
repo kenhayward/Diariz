@@ -265,8 +265,8 @@ When a template substitutes the **attendees** field it names the identified peop
 **one LLM call per section** (best structure) or a **single call** (fewer tokens).
 - **Chat across one or more transcripts — a folder — or all your meetings at once** (an "All meetings" mode
 that searches your whole library on demand instead of pre-loading transcripts) — streaming
-replies, a context-usage dial, PDF/text attachments, and saved conversations — via a per-user (or
-server-default) OpenAI-compatible LLM endpoint, with the API key encrypted at rest. The chat's context is
+replies, a context-usage dial, PDF/text attachments, and saved conversations — via the **platform's**
+OpenAI-compatible LLM endpoint (see **AI models** below), with the API key encrypted at rest. The chat's context is
 **inferred from what you're viewing** rather than picked from a list: the label reads **Current Transcript**,
 **Current Folder**, or **Selected Transcripts** (2+ ticked in the list) and updates when you click into the
 box. When a **folder** is open, chat is about that folder — its roll-up **summary, minutes, and aggregated
@@ -570,6 +570,29 @@ the platform-wide rate in the totals row, so a single slow operation is visible 
 an operation's rate is measured against the time the model actually spent, not the wall-clock span, which
 for a multi-call turn includes the gaps between calls. Rows matching the current filter can be deleted, with a confirmation stating
 the exact count before anything is removed.
+- **AI models** (Platform Administrator, `/admin/llm-models`, reachable from Settings -> AI): every model the
+platform calls is configured here, and nowhere else. A model carries its **name** (sent verbatim as the
+`model` in each request), **endpoint**, an optional **API key** (encrypted at rest, write-only - it is never
+returned to the browser once saved) and its **context window**, which is what the chat context dial reports
+against. Every sampling parameter is then exposed per model: **temperature**, **top P**, **top K**,
+**repeat penalty**, **frequency** and **presence penalties**, **max tokens**, **max completion tokens**,
+**reasoning effort**, the request **timeout**, and whether the model supports **tool calling** or **image
+input**. Each parameter is one of three states - **Inherit** (the layer below decides), **Off** (the key is
+left out of the request entirely, which some endpoints require) or a **value** - and Off is genuinely
+different from Inherit: it suppresses what a lower layer would otherwise have supplied.
+  Parameters can differ by **what the model is doing**. Alongside the model's own defaults, each of **tag
+extraction**, **action extraction**, **summaries**, **minutes and formulas**, **translation** and **chat**
+takes its own optional overrides, resolved most-specific-first: the call type's override, then the model's
+defaults, then the application defaults. **Reasoning effort is free text**, not a fixed list, because models
+disagree about what they accept (gpt-oss takes low/medium/high, qwen3 also takes xhigh). A whole parameter
+set can be **copied from another model** as a starting point - parameters only, never the name, endpoint or
+key. Each call type can also be pointed at a **different model** entirely, with a **default model** serving
+anything unassigned; a model still in use cannot be deleted until the call types pointing at it are moved.
+  The application defaults are overridable per deployment through `LlmDefaults__*` environment variables
+(e.g. `LlmDefaults__Temperature`, `LlmDefaults__Translation__Temperature`), and the shipped values reproduce
+the request bodies Diariz sent before this was configurable. A server with **no models configured** keeps
+using the endpoint from its environment (`SUMMARY_API_BASE` and friends) unchanged, and the page offers to
+import that endpoint as the first model.
 - **Preferences**: a tabbed window with the everyday entries (Profile, Recordings, Formulas, Calendars) over an
 **Advanced** divider holding the exception settings (Integrations, Assistant).
 Each user can edit their **profile** — display name, job title, company, job/company descriptions, LinkedIn

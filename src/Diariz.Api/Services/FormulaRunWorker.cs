@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Text.Json;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
@@ -87,7 +88,7 @@ public class FormulaRunWorker : BackgroundService
                 using var scope = _scopes.CreateScope();
                 var ctx = scope.ServiceProvider.GetRequiredService<DiarizDbContext>();
                 var chat = scope.ServiceProvider.GetRequiredService<IChatStreamClient>();
-                var resolver = scope.ServiceProvider.GetRequiredService<ISummarizationSettingsResolver>();
+                var resolver = scope.ServiceProvider.GetRequiredService<ILlmSettingsResolver>();
                 var webhooks = scope.ServiceProvider.GetRequiredService<IWebhookPublisher>();
                 using var jobTx = JobTelemetry.Begin("formula-run");
                 await FormulaRunProcessor.ProcessAsync(

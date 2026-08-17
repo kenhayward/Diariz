@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Services;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
@@ -145,7 +146,9 @@ public class DatabaseIntegrationTests(ContainersFixture fx)
             .Build();
 
         await using var db = fx.CreateDbContext();
-        var resolver = new SummarizationSettingsResolver(db, Options.Create(new SummarizationOptions()), new FakeApiKeyProtector());
+        var resolver = new LlmSettingsResolver(
+            db, Options.Create(new LlmDefaultsOptions()), Options.Create(new SummarizationOptions()),
+            new FakeApiKeyProtector());
         var controller = new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config,
             resolver, new FakeEmailSender(), new FakeSpeakerIdentifier(), Options.Create(new UploadOptions()), new RoomScope(db),
             new PeopleDirectory(db), new CapturingWebhookPublisher(), Options.Create(new AppPublicOptions()))

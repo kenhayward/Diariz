@@ -94,6 +94,9 @@ import type {
   LlmUsageGroupDimension,
   LlmUsageSortKey,
   LlmUsageFilterOptions,
+  LlmModel,
+  LlmModelUpsert,
+  LlmAssignments,
 } from "./types";
 
 const TOKEN_KEY = "diariz.token";
@@ -1648,6 +1651,46 @@ export const api = {
   /// the same 30-day window every other endpoint here defaults to), for populating the viewer's filters.
   async getLlmUsageFilters(params?: { from?: string | null; to?: string | null }): Promise<LlmUsageFilterOptions> {
     const { data } = await http.get<LlmUsageFilterOptions>("/api/admin/llm-usage/filters", { params });
+    return data;
+  },
+
+  // ---- Platform LLM models ----
+
+  async listModels(): Promise<LlmModel[]> {
+    const { data } = await http.get<LlmModel[]>("/api/admin/llm-models");
+    return data;
+  },
+
+  async createModel(model: LlmModelUpsert): Promise<LlmModel> {
+    const { data } = await http.post<LlmModel>("/api/admin/llm-models", model);
+    return data;
+  },
+
+  /// Omit `apiKey` to keep the stored key, send "" to clear it, send a value to replace it. The client is
+  /// never given the key, so it cannot echo one back.
+  async updateModel(id: string, model: LlmModelUpsert): Promise<LlmModel> {
+    const { data } = await http.put<LlmModel>(`/api/admin/llm-models/${id}`, model);
+    return data;
+  },
+
+  /// 409 while any call group or the platform default still points at the model.
+  async deleteModel(id: string): Promise<void> {
+    await http.delete(`/api/admin/llm-models/${id}`);
+  },
+
+  async getLlmAssignments(): Promise<LlmAssignments> {
+    const { data } = await http.get<LlmAssignments>("/api/admin/llm-models/assignments");
+    return data;
+  },
+
+  async setLlmAssignments(assignments: LlmAssignments): Promise<void> {
+    await http.put("/api/admin/llm-models/assignments", assignments);
+  },
+
+  /// One-time migration aid: creates the first model from the endpoint already in the environment.
+  /// 409 once any model exists.
+  async createModelFromEnvironment(): Promise<LlmModel> {
+    const { data } = await http.post<LlmModel>("/api/admin/llm-models/from-environment");
     return data;
   },
 };

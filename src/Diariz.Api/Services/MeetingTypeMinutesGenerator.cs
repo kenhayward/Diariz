@@ -1,4 +1,5 @@
 using Diariz.Api.Contracts;
+using Diariz.Api.Services.Llm;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -15,7 +16,7 @@ public interface IMeetingTypeMinutesGenerator
         Guid recordingOwnerId, Guid? meetingTypeId, MeetingMinutesContext context,
         IReadOnlyList<SegmentDto> segments, IReadOnlyList<ExtractedAction> actions,
         IReadOnlyList<MeetingNoteDto> notes,
-        SummarizationRequestConfig config, CancellationToken ct = default);
+        LlmRequestConfig config, CancellationToken ct = default);
 }
 
 // No LlmCallScope.Push here (or in PerSectionMinutesStrategy/SingleCallMinutesStrategy below): every call this
@@ -43,7 +44,7 @@ public sealed class MeetingTypeMinutesGenerator : IMeetingTypeMinutesGenerator
         Guid recordingOwnerId, Guid? meetingTypeId, MeetingMinutesContext context,
         IReadOnlyList<SegmentDto> segments, IReadOnlyList<ExtractedAction> actions,
         IReadOnlyList<MeetingNoteDto> notes,
-        SummarizationRequestConfig config, CancellationToken ct = default)
+        LlmRequestConfig config, CancellationToken ct = default)
     {
         // The single platform-wide context budget, sized off the model's window - see LlmContextBudget.
         var charBudget = config.ContextCharBudget;

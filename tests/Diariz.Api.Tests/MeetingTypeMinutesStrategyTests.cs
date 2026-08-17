@@ -1,4 +1,5 @@
 using Diariz.Api.Contracts;
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 
@@ -11,7 +12,7 @@ public class MeetingTypeMinutesStrategyTests
     private static readonly IReadOnlyList<SegmentDto> Segments =
         [new(Guid.NewGuid(), "SPEAKER_00", "Alice", 0, 1000, "Hello")];
 
-    private static readonly SummarizationRequestConfig Config = new("https://llm.test/v1", "sk", "m", 60);
+    private static readonly LlmRequestConfig Config = new("https://llm.test/v1", "sk", "m", new LlmParameters { TimeoutSeconds = 60 });
 
     /// The user message is now the ASSEMBLED context (built from the primary formula's declared flags), not a
     /// transcript the strategy builds for itself.

@@ -79,7 +79,7 @@ public class SummarizationOptions
 }
 
 /// <summary>Meeting-minutes generation. The LLM endpoint/model/key/reasoning are shared with summarisation
-/// (resolved per-user via <c>ISummarizationSettingsResolver</c>), as is the context budget (see
+/// (resolved per-user via <c>ILlmSettingsResolver</c>), as is the context budget (see
 /// <c>LlmContextBudget</c>); only the stream is minutes-specific.</summary>
 public class MeetingMinutesOptions
 {

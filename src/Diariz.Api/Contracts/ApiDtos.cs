@@ -597,12 +597,18 @@ public record SaveCalendarSelectionRequest(IReadOnlyList<string> Ids);
 /// <summary>Settings returned to the client. The API key is never exposed — only whether one is set.
 /// The Default* fields are the server-wide values, shown as placeholders so the user can see what
 /// applies when they leave a field blank (without those defaults being persisted as their own).</summary>
+/// <summary>A user's own preferences.
+///
+/// The endpoint, key, model, context window, timeout and reasoning fields were removed in 0.221.0: LLM
+/// configuration is platform-wide, edited at /admin/llm-models. <paramref name="ContextWindow"/> survives
+/// as READ-ONLY - the chat dial still has to show a budget - but it is now the serving model's window
+/// rather than anything the user can set.</summary>
 public record UserSettingsDto(
-    string? ApiBase, string? Model, bool HasApiKey,
-    string? DefaultApiBase, string? DefaultModel, bool ServerHasApiKey,
-    int? ContextWindow, int DefaultContextWindow,
+    int ContextWindow,
+    /// <summary>The model serving chat, for the context dial's label before the first turn reports one.
+    /// Read-only: an administrator chooses it at /admin/llm-models.</summary>
+    string ChatModel,
     bool ToolsEnabled, bool DefaultToolsEnabled, IReadOnlyList<ChatToolDto> Tools,
-    bool ReasoningEnabled, string ReasoningEffort, bool DefaultReasoningEnabled, string DefaultReasoningEffort,
     // Where a new recording lands in the user's Personal room. The mode serialises as its enum name
     // ("SelectedFolder" etc.) via the global string-enum converter, same as MinutesGenerationMode.
     RecordingPlacementMode PlacementMode, Guid? PlacementSectionId,
@@ -617,12 +623,7 @@ public record UserSettingsDto(
     /// <summary>Minutes to keep recording past the invite's end time.</summary>
     int CalendarAutoStopAfterMinutes = UserSettings.DefaultCalendarAutoStopAfterMinutes,
     /// <summary>Seconds of continuous silence that also ends such a recording.</summary>
-    int CalendarSilenceStopSeconds = UserSettings.DefaultCalendarSilenceStopSeconds,
-    /// <summary>The user's own per-request LLM timeout in seconds, or null when they inherit.</summary>
-    int? LlmTimeoutSeconds = null,
-    /// <summary>What applies when they have no override: the platform-wide admin setting, else the server
-    /// option. Shown as the field's placeholder.</summary>
-    int DefaultLlmTimeoutSeconds = PlatformSettings.DefaultLlmTimeoutSeconds);
+    int CalendarSilenceStopSeconds = UserSettings.DefaultCalendarSilenceStopSeconds);
 
 /// <summary>A chat tool's state for the settings panel: whether it is on for this user
 /// (<paramref name="Enabled"/>) and its server-side default.</summary>
@@ -640,9 +641,7 @@ public record ChatToolDto(string Name, string Title, string Description, bool En
 /// LlmTimeoutSeconds: null leaves it unchanged; 0 clears the override; a value of 5 or more sets it; 1-4 is
 /// rejected rather than coerced.</summary>
 public record UpdateUserSettingsRequest(
-    string? ApiBase, string? Model, string? ApiKey, int? ContextWindow = null,
     bool? ToolsEnabled = null, IReadOnlyDictionary<string, bool>? ToolOverrides = null,
-    bool? ReasoningEnabled = null, string? ReasoningEffort = null,
     // PlacementMode: null leaves the placement preference unchanged; a value sets it (and, unless it is
     // SpecificFolder, clears PlacementSectionId).
     RecordingPlacementMode? PlacementMode = null, Guid? PlacementSectionId = null,
@@ -657,10 +656,7 @@ public record UpdateUserSettingsRequest(
     int? CalendarAutoStopAfterMinutes = null,
     /// <summary>Seconds of continuous silence that ends such a recording. Null leaves it unchanged; a
     /// non-positive value resets to the default.</summary>
-    int? CalendarSilenceStopSeconds = null,
-    /// <summary>Per-request LLM timeout in seconds. Null leaves it unchanged; 0 clears the override;
-    /// a value of 5 or more sets it. 1-4 is rejected rather than coerced.</summary>
-    int? LlmTimeoutSeconds = null);
+    int? CalendarSilenceStopSeconds = null);
 
 // ---- MCP access tokens ----
 /// <summary>A stored MCP token, listed in Preferences. The secret is never returned — only a short display
@@ -847,3 +843,24 @@ public record CreateFeedbackRequest(string Description, string Route, string Rel
 
 public record FeedbackDto(Guid Id, Guid UserId, string? UserEmail, DateTimeOffset CreatedAt,
     string Description, string Route, string Release, string TrailJson);
+
+// ---- Platform LLM models (the Models admin page) ----
+
+/// <summary>One configured model. <paramref name="Parameters"/> maps an <c>LlmCallGroup</c> NAME to that
+/// group's parameter-layer JSON, with <c>ModelBase</c> holding the model's own defaults - a group absent
+/// from the map has no override and inherits.
+///
+/// The key itself is never returned, only <paramref name="HasApiKey"/>: same write-only contract the
+/// per-user key had, so a stored secret cannot leak back out through the admin UI.</summary>
+public record LlmModelDto(Guid Id, string Name, string ApiBase, bool HasApiKey, int ContextLength,
+    Dictionary<string, string> Parameters);
+
+/// <summary>Create or replace a model. A null <c>ApiKey</c> on update means "keep the stored key" - the UI
+/// was never given it, so it cannot send it back.</summary>
+public record LlmModelUpsert(string Name, string ApiBase, string? ApiKey, int ContextLength,
+    Dictionary<string, string> Parameters);
+
+/// <summary>Which model serves which call group, plus the fallback for groups with no entry. Group names
+/// are <c>LlmCallGroup</c> members; <c>ModelBase</c> is rejected - it is a parameter scope, not a call
+/// type.</summary>
+public record LlmAssignmentsDto(Guid? DefaultModelId, Dictionary<string, Guid> Assignments);

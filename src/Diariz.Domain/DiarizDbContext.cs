@@ -35,6 +35,11 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<OutlookCalendarSource> OutlookCalendarSources => Set<OutlookCalendarSource>();
     public DbSet<OutlookCalendarEvent> OutlookCalendarEvents => Set<OutlookCalendarEvent>();
     public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
+
+    // ---- Platform LLM model management (0.221.0) ----
+    public DbSet<LlmModel> LlmModels => Set<LlmModel>();
+    public DbSet<LlmModelParameters> LlmModelParameters => Set<LlmModelParameters>();
+    public DbSet<LlmCallAssignment> LlmCallAssignments => Set<LlmCallAssignment>();
     public DbSet<McpAccessToken> McpAccessTokens => Set<McpAccessToken>();
     public DbSet<ApiAccessToken> ApiAccessTokens => Set<ApiAccessToken>();
     public DbSet<MeetingType> MeetingTypes => Set<MeetingType>();
@@ -580,8 +585,6 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         builder.Entity<UserSettings>(e =>
         {
             e.HasKey(s => s.UserId);
-            e.Property(s => s.SummaryApiBase).HasMaxLength(512);
-            e.Property(s => s.SummaryModel).HasMaxLength(256);
             e.Property(s => s.GoogleCalendarGranted).HasDefaultValue(false);
             e.Property(s => s.Theme).HasDefaultValue(ThemePreference.Auto);
             e.Property(s => s.RecordingPlacementMode).HasDefaultValue(RecordingPlacementMode.SelectedFolder);
@@ -608,6 +611,47 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
                 .HasForeignKey<UserSettings>(s => s.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
+
+        // ---- Platform LLM model management ----
+        // Only the jsonb column type sits behind the Npgsql guard; the entities themselves stay outside it
+        // so the in-memory provider can build the model for unit tests.
+        builder.Entity<LlmModel>(e =>
+        {
+            e.HasKey(m => m.Id);
+            e.HasIndex(m => m.Name).IsUnique();
+            e.Property(m => m.Name).IsRequired().HasMaxLength(256);
+            e.Property(m => m.ApiBase).IsRequired().HasMaxLength(512);
+        });
+
+        builder.Entity<LlmModelParameters>(e =>
+        {
+            e.HasKey(p => p.Id);
+            // Group is non-nullable with ModelBase = 0 precisely so this index works: Postgres treats NULLs
+            // as distinct, so a nullable "this is the base" marker would permit two base rows per model.
+            e.HasIndex(p => new { p.LlmModelId, p.Group }).IsUnique();
+            e.HasOne(p => p.Model)
+                .WithMany(m => m.Parameters)
+                .HasForeignKey(p => p.LlmModelId)
+                .OnDelete(DeleteBehavior.Cascade);
+            if (isNpgsql) e.Property(p => p.ParametersJson).HasColumnType("jsonb");
+        });
+
+        builder.Entity<LlmCallAssignment>(e =>
+        {
+            e.HasKey(a => a.Group);
+            // Restrict, not SetNull: deleting a model that is in use should fail loudly with the groups
+            // named, rather than silently re-routing those call types to the default model.
+            e.HasOne(a => a.Model)
+                .WithMany()
+                .HasForeignKey(a => a.LlmModelId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<PlatformSettings>()
+            .HasOne(p => p.DefaultLlmModel)
+            .WithMany()
+            .HasForeignKey(p => p.DefaultLlmModelId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         // Saved chat conversations. The thread + context are JSON blobs (jsonb on Postgres; plain text
         // under the in-memory test provider). Provider-agnostic shape stays outside the Npgsql guard.

@@ -16,7 +16,7 @@ public class SectionPageIntegrationTests(ContainersFixture fx)
     private static Task<Guid> RoomOf(Diariz.Domain.DiarizDbContext db, Guid owner) => new RoomScope(db).PersonalRoomIdAsync(owner);
 
     private SectionPageController Build(Diariz.Domain.DiarizDbContext db, Guid userId) =>
-        new(db, new FakeJobQueue(), new FakeSummarizationSettingsResolver(), new FakeHubContext(), new RoomScope(db))
+        new(db, new FakeJobQueue(), new FakeLlmSettingsResolver(), new FakeHubContext(), new RoomScope(db))
         { ControllerContext = Http.Context(userId) };
 
     /// <summary>Real Postgres enforces the Section/Recording → AspNetUsers FK, so tests seed a real user.</summary>

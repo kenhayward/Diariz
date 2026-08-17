@@ -2,6 +2,7 @@ using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
 using Diariz.Api.IntegrationTests.Infrastructure;
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
@@ -19,11 +20,11 @@ public class ChatIntegrationTests(ContainersFixture fx)
         DiarizDbContext db, Guid userId, IChatStreamClient? chat = null, bool llmEnabled = true,
         IReadOnlyList<Diariz.Api.Tools.IChatTool>? activeTools = null)
     {
-        var settings = new FakeSummarizationSettingsResolver
+        var settings = new FakeLlmSettingsResolver
         {
             Config = llmEnabled
-                ? new SummarizationRequestConfig("https://llm.test/v1", "sk", "test-model", 60)
-                : new SummarizationRequestConfig("", "", "test-model", 60),
+                ? new LlmRequestConfig("https://llm.test/v1", "sk", "test-model", new LlmParameters { TimeoutSeconds = 60 })
+                : new LlmRequestConfig("", "", "test-model", new LlmParameters { TimeoutSeconds = 60 }),
         };
         var streamClient = chat ?? new FakeChatStreamClient();
         var toolSettings = new FakeChatToolSettingsResolver

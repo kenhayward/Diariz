@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Linq.Expressions;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
@@ -47,9 +48,9 @@ public class FormulaRunner : IFormulaRunner
 {
     private readonly DiarizDbContext _db;
     private readonly IChatStreamClient _chat;
-    private readonly ISummarizationSettingsResolver _settings;
+    private readonly ILlmSettingsResolver _settings;
 
-    public FormulaRunner(DiarizDbContext db, IChatStreamClient chat, ISummarizationSettingsResolver settings)
+    public FormulaRunner(DiarizDbContext db, IChatStreamClient chat, ILlmSettingsResolver settings)
     {
         _db = db;
         _chat = chat;
@@ -81,7 +82,7 @@ public class FormulaRunner : IFormulaRunner
             && await _db.FormulaSubscriptions.AnyAsync(s => s.FormulaId == formula.Id && s.UserId == userId, ct);
         EnsureCanRun(formula, userId, subscribed);
 
-        var cfg = await _settings.ResolveAsync(userId, ct);
+        var cfg = await _settings.ResolveAsync(LlmCallKind.FormulaRun, ct);
         if (!cfg.Enabled)
             throw new FormulaNotConfiguredException("No LLM endpoint is configured for this user or server.");
 
@@ -91,7 +92,7 @@ public class FormulaRunner : IFormulaRunner
     public async Task<FormulaResult> RunAsync(Guid userId, Guid recordingId, Guid formulaId, CancellationToken ct = default)
     {
         var formula = await ValidateRecordingRunAsync(userId, recordingId, formulaId, ct);
-        var cfg = await _settings.ResolveAsync(userId, ct);
+        var cfg = await _settings.ResolveAsync(LlmCallKind.FormulaRun, ct);
 
         // Attribute this call's usage row: this is the SYNCHRONOUS run path (called directly from chat's
         // run_formula tool and, over MCP, with no enclosing operation at all). Without a scope of its own, an

@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Text.Json;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
@@ -95,7 +96,7 @@ public class TagsWorker : BackgroundService
                 using var scope = _scopes.CreateScope();
                 var ctx = scope.ServiceProvider.GetRequiredService<DiarizDbContext>();
                 var client = scope.ServiceProvider.GetRequiredService<ITagsClient>();
-                var resolver = scope.ServiceProvider.GetRequiredService<ISummarizationSettingsResolver>();
+                var resolver = scope.ServiceProvider.GetRequiredService<ILlmSettingsResolver>();
                 var webhooks = scope.ServiceProvider.GetRequiredService<IWebhookPublisher>();
                 // Read the (editable) template per job so edits apply without an API restart.
                 using var jobTx = JobTelemetry.Begin("tags");

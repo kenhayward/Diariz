@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Text.Json;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
@@ -95,7 +96,7 @@ public class ActionsWorker : BackgroundService
                 using var scope = _scopes.CreateScope();
                 var ctx = scope.ServiceProvider.GetRequiredService<DiarizDbContext>();
                 var client = scope.ServiceProvider.GetRequiredService<IActionsClient>();
-                var resolver = scope.ServiceProvider.GetRequiredService<ISummarizationSettingsResolver>();
+                var resolver = scope.ServiceProvider.GetRequiredService<ILlmSettingsResolver>();
                 var queue = scope.ServiceProvider.GetRequiredService<IJobQueue>();
                 var webhooks = scope.ServiceProvider.GetRequiredService<IWebhookPublisher>();
                 // Read the (editable) template per job so edits apply without an API restart. The processor

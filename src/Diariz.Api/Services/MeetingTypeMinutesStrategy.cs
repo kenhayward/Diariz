@@ -1,4 +1,5 @@
 using Diariz.Api.Contracts;
+using Diariz.Api.Services.Llm;
 using Diariz.Domain.Entities;
 
 namespace Diariz.Api.Services;
@@ -15,7 +16,7 @@ public record MinutesComposition(
     string Overview,
     Func<string, string?> ResolveField,
     string Context,
-    SummarizationRequestConfig Config,
+    LlmRequestConfig Config,
     string Preamble);
 
 /// <summary>Turns a <see cref="MinutesComposition"/> into the final Markdown. Two implementations differ only in

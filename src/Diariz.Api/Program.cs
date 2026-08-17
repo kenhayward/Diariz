@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Text;
 using Amazon.S3;
 using Amazon.Runtime;
@@ -31,6 +32,9 @@ builder.Services.Configure<StorageOptions>(builder.Configuration.GetSection(Stor
 builder.Services.Configure<JobQueueOptions>(builder.Configuration.GetSection(JobQueueOptions.Section));
 builder.Services.Configure<WorkerOptions>(builder.Configuration.GetSection(WorkerOptions.Section));
 builder.Services.Configure<SummarizationOptions>(builder.Configuration.GetSection(SummarizationOptions.Section));
+// The bottom of the LLM parameter layer stack. Its shipped values reproduce the request bodies that were
+// hardcoded before 0.221.0, so an instance with no configured models behaves exactly as it did.
+builder.Services.Configure<LlmDefaultsOptions>(builder.Configuration.GetSection(LlmDefaultsOptions.Section));
 builder.Services.Configure<MeetingMinutesOptions>(builder.Configuration.GetSection(MeetingMinutesOptions.Section));
 builder.Services.Configure<ActionsOptions>(builder.Configuration.GetSection(ActionsOptions.Section));
 builder.Services.Configure<TagsOptions>(builder.Configuration.GetSection(TagsOptions.Section));
@@ -314,7 +318,7 @@ AddLlmClient<ISummarizationClient, SummarizationClient>(NoHttpTimeout);
 AddLlmClient<IDictationClient, DictationClient>(NoHttpTimeout);
 AddLlmClient<IActionsClient, ActionsClient>(NoHttpTimeout);
 AddLlmClient<ITranslationClient, TranslationClient>(NoHttpTimeout);
-builder.Services.AddScoped<ISummarizationSettingsResolver, SummarizationSettingsResolver>();
+builder.Services.AddScoped<ILlmSettingsResolver, LlmSettingsResolver>();
 builder.Services.AddHostedService<SummarizationWorker>();
 builder.Services.AddScoped<IFormulaRunner, FormulaRunner>();
 

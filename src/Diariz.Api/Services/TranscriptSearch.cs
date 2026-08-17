@@ -173,7 +173,7 @@ public sealed class TranscriptSearch : ITranscriptSearch
     private async Task<IReadOnlyList<TranscriptHit>> SemanticSearchAsync(
         Guid userId, Guid[] roomIds, string phrase, Guid[]? scope, int limit, CancellationToken ct)
     {
-        var cfg = await _embeddingSettings.ResolveAsync(userId, ct);
+        var cfg = await _embeddingSettings.ResolveAsync(ct);
         if (!cfg.Enabled) return [];
 
         string queryLiteral;

@@ -30,7 +30,7 @@ public static class EmbeddingProcessor
             LlmCallKind.Embedding, rec.UserId, await OwnerEmailAsync(db, rec.UserId, ct),
             rec.Id, rec.Name ?? rec.Title);
 
-        var cfg = await resolver.ResolveAsync(rec.UserId, ct);
+        var cfg = await resolver.ResolveAsync(ct);
         if (!cfg.Enabled) return; // no endpoint → RAG off; leave retrieval lexical.
 
         var transcription = await db.Transcriptions

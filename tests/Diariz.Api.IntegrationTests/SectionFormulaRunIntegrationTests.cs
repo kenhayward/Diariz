@@ -107,7 +107,7 @@ public class SectionFormulaRunIntegrationTests(ContainersFixture fx)
         await using (var db = fx.CreateDbContext())
         {
             await FormulaRunProcessor.ProcessAsync(
-                db, chat, new FakeSummarizationSettingsResolver(), hub,
+                db, chat, new FakeLlmSettingsResolver(), hub,
                 new FormulaRunJob(null, parentId, resultId, formulaId, userId), NullLogger.Instance,
                 new CapturingWebhookPublisher(), "");
         }
