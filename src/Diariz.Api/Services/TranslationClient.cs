@@ -61,10 +61,9 @@ public class TranslationClient : ITranslationClient
         var body = new Dictionary<string, object?>
         {
             ["model"] = config.Model,
-            ["temperature"] = 0.1,
             ["messages"] = messages.Select(m => new { role = m.Role, content = m.Content }).ToArray(),
         };
-        if (config.ReasoningEffort is not null) body["reasoning_effort"] = config.ReasoningEffort;
+        LlmRequestBody.Apply(body, config.Parameters);
 
         using var req = new HttpRequestMessage(HttpMethod.Post, $"{config.ApiBase.TrimEnd('/')}/chat/completions")
         {

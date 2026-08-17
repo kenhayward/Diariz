@@ -32,8 +32,7 @@ public class WorkerCallbackControllerTests
         var summaryOpts = new SummarizationOptions { ApiBase = summarizationEnabled ? "http://llm.test/v1" : "" };
         var resolver = new LlmSettingsResolver(db, Options.Create(new LlmDefaultsOptions()), Options.Create(summaryOpts), new FakeApiKeyProtector());
         // Embeddings fall back to the summarisation endpoint, so they follow the same enable/disable toggle here.
-        var embedding = new EmbeddingSettingsResolver(
-            db, Options.Create(new EmbeddingOptions()), Options.Create(summaryOpts), new FakeApiKeyProtector());
+        var embedding = new EmbeddingSettingsResolver(db, Options.Create(new EmbeddingOptions()), resolver);
         var controller = new WorkerCallbackController(
             db, hub, queue, resolver, embedding, identifier ?? new FakeSpeakerIdentifier(),
             Options.Create(new WorkerOptions { CallbackSecret = Secret }),

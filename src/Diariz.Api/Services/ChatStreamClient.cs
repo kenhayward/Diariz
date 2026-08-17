@@ -101,12 +101,13 @@ public class ChatStreamClient : IChatStreamClient
         var body = new Dictionary<string, object?>
         {
             ["model"] = config.Model,
-            ["temperature"] = 0.3,
             ["stream"] = true,
             ["messages"] = messages,
         };
-        if (tools is { Count: > 0 }) { body["tools"] = tools; body["tool_choice"] = "auto"; }
-        if (config.ReasoningEffort is not null) body["reasoning_effort"] = config.ReasoningEffort;
+        // A model that cannot do tool calling should not be asked to, however many tools the caller passed.
+        if (config.Parameters.ToolsSupported && tools is { Count: > 0 })
+        { body["tools"] = tools; body["tool_choice"] = "auto"; }
+        LlmRequestBody.Apply(body, config.Parameters);
 
         // Ask the server to append a final usage chunk after the content. Omitted entirely when off, so an
         // endpoint that rejects the unknown field can be recovered with a settings change, not a redeploy.
@@ -152,11 +153,10 @@ public class ChatStreamClient : IChatStreamClient
         var body = new Dictionary<string, object?>
         {
             ["model"] = config.Model,
-            ["temperature"] = 0.3,
             ["stream"] = true,
             ["messages"] = messages.Select(m => new { role = m.Role, content = m.Content }).ToArray(),
         };
-        if (config.ReasoningEffort is not null) body["reasoning_effort"] = config.ReasoningEffort;
+        LlmRequestBody.Apply(body, config.Parameters);
 
         // Ask the server to append a final usage chunk after the content. Omitted entirely when off, so an
         // endpoint that rejects the unknown field can be recovered with a settings change, not a redeploy.

@@ -1,7 +1,10 @@
+using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Services.Llm;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
+using Diariz.Domain.Entities;
+using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.Tests.Llm;
 
@@ -28,16 +31,41 @@ public class RequestBodyCharacterisationTests
         "repeat_penalty", "frequency_penalty", "presence_penalty",
     ];
 
-    private static LlmRequestConfig Config() =>
-        new("http://llm.test/v1", "k", "test-model", new LlmParameters { TimeoutSeconds = 120 });
+    /// <summary>What the REAL resolver produces for this call kind against an empty database and the shipped
+    /// app defaults - which is exactly the configuration a deployment has before an administrator visits
+    /// /admin/llm-models.
+    ///
+    /// It resolves rather than hand-building a config on purpose. Before 0.221.0 the temperature was a
+    /// literal inside each client, so a hand-built config was enough to pin it. Now the client sends what it
+    /// is given, and the value comes from LlmDefaultsOptions - so a hand-built config with no parameters
+    /// would assert that the clients send nothing, which is true but proves nothing about production. Going
+    /// through the resolver keeps these tests pinning the bodies a real request carries.</summary>
+    private static async Task<LlmRequestConfig> Config(LlmCallKind kind = LlmCallKind.Summarize)
+    {
+        using var db = TestDb.Create();
+        var resolver = new LlmSettingsResolver(
+            db,
+            Options.Create(new LlmDefaultsOptions()),
+            Options.Create(new SummarizationOptions
+            {
+                ApiBase = "http://llm.test/v1", ApiKey = "k", Model = "test-model",
+            }),
+            new FakeApiKeyProtector(),
+            Options.Create(new ChatOptions()));
+
+        return await resolver.ResolveAsync(kind);
+    }
 
     /// <summary>The same config with reasoning turned on. Both halves are needed: an effort with reasoning
     /// off is deliberately not sent, which is what the paired omission test above pins.</summary>
-    private static LlmRequestConfig WithReasoning(string effort) =>
-        Config() with
+    private static async Task<LlmRequestConfig> WithReasoning(string effort)
+    {
+        var config = await Config();
+        return config with
         {
-            Parameters = Config().Parameters with { ReasoningEnabled = true, ReasoningEffort = effort },
+            Parameters = config.Parameters with { ReasoningEnabled = true, ReasoningEffort = effort },
         };
+    }
 
     private static IReadOnlyList<SegmentDto> Segments() =>
         [new SegmentDto(Guid.NewGuid(), "SPEAKER_00", "Alex", 0, 1000, "hello")];
@@ -76,8 +104,9 @@ public class RequestBodyCharacterisationTests
     [Fact]
     public async Task Summarization_sends_model_temperature_and_messages_only()
     {
+        var config = await Config();
         var handler = await Capture(h =>
-            new SummarizationClient(h).SummarizeAsync(Config(), Segments(), needName: false, template: "T"));
+            new SummarizationClient(h).SummarizeAsync(config, Segments(), needName: false, template: "T"));
 
         AssertOnlyTodaysParameters(handler, 0.3);
     }
@@ -85,8 +114,9 @@ public class RequestBodyCharacterisationTests
     [Fact]
     public async Task MeetingMinutes_sends_the_same_temperature_as_summarisation()
     {
+        var config = await Config(LlmCallKind.MeetingMinutes);
         var handler = await Capture(h =>
-            new MeetingMinutesClient(h).GenerateAsync(Config(), [new ChatMessage("user", "make minutes")]));
+            new MeetingMinutesClient(h).GenerateAsync(config, [new ChatMessage("user", "make minutes")]));
 
         AssertOnlyTodaysParameters(handler, 0.3);
     }
@@ -94,8 +124,9 @@ public class RequestBodyCharacterisationTests
     [Fact]
     public async Task Actions_sends_the_same_temperature_as_summarisation()
     {
+        var config = await Config(LlmCallKind.ExtractActions);
         var handler = await Capture(h =>
-            new ActionsClient(h).ExtractAsync(Config(), Segments(), "T", meetingDate: null));
+            new ActionsClient(h).ExtractAsync(config, Segments(), "T", meetingDate: null));
 
         AssertOnlyTodaysParameters(handler, 0.3);
     }
@@ -103,7 +134,8 @@ public class RequestBodyCharacterisationTests
     [Fact]
     public async Task Tags_sends_the_same_temperature_as_summarisation()
     {
-        var handler = await Capture(h => new TagsClient(h).ExtractAsync(Config(), Segments(), "T"));
+        var config = await Config(LlmCallKind.Tags);
+        var handler = await Capture(h => new TagsClient(h).ExtractAsync(config, Segments(), "T"));
 
         AssertOnlyTodaysParameters(handler, 0.3);
     }
@@ -113,7 +145,8 @@ public class RequestBodyCharacterisationTests
     {
         // The one deliberate exception in the codebase today, and the reason app defaults have to be
         // group-capable rather than a single flat set.
-        var handler = await Capture(h => new TranslationClient(h).TranslateAsync(Config(), "English", ["hola"]));
+        var config = await Config(LlmCallKind.Translation);
+        var handler = await Capture(h => new TranslationClient(h).TranslateAsync(config, "English", ["hola"]));
 
         AssertOnlyTodaysParameters(handler, 0.1);
     }
@@ -121,9 +154,10 @@ public class RequestBodyCharacterisationTests
     [Fact]
     public async Task Chat_stream_sends_stream_true_and_asks_for_usage()
     {
+        var config = await Config(LlmCallKind.ChatMessage);
         var handler = await Capture(async h =>
         {
-            await foreach (var _ in new ChatStreamClient(h).StreamAsync(Config(), [new ChatMessage("user", "hi")]))
+            await foreach (var _ in new ChatStreamClient(h).StreamAsync(config, [new ChatMessage("user", "hi")]))
             {
             }
         });
@@ -141,11 +175,12 @@ public class RequestBodyCharacterisationTests
     [Fact]
     public async Task Chat_stream_chunks_sends_tools_when_given_them()
     {
+        var config = await Config(LlmCallKind.ChatMessage);
         var tools = new List<object> { new { type = "function", function = new { name = "noop" } } };
         var handler = await Capture(async h =>
         {
             await foreach (var _ in new ChatStreamClient(h)
-                               .StreamChunksAsync(Config(), [new { role = "user", content = "hi" }], tools))
+                               .StreamChunksAsync(config, [new { role = "user", content = "hi" }], tools))
             {
             }
         });
@@ -159,20 +194,74 @@ public class RequestBodyCharacterisationTests
     [Fact]
     public async Task Reasoning_effort_is_sent_only_when_the_config_supplies_one()
     {
+        var config = await Config();
         var without = await Capture(h =>
-            new SummarizationClient(h).SummarizeAsync(Config(), Segments(), false, "T"));
+            new SummarizationClient(h).SummarizeAsync(config, Segments(), false, "T"));
         Assert.False(without.Has("reasoning_effort"));
 
+        var reasoning = await WithReasoning("high");
         var with = await Capture(h => new SummarizationClient(h)
-            .SummarizeAsync(WithReasoning("high"), Segments(), false, "T"));
+            .SummarizeAsync(reasoning, Segments(), false, "T"));
         Assert.Equal("high", with.LastBody.GetProperty("reasoning_effort").GetString());
+    }
+
+    // ---- What the clients do with a resolved parameter set (0.221.0) ----
+
+    [Fact]
+    public async Task Sends_the_parameters_the_resolver_decided()
+    {
+        var config = await Config() with
+        {
+            Parameters = new LlmParameters { Temperature = 0.75, MaxTokens = 900, TopK = 40 },
+        };
+
+        var handler = await Capture(h =>
+            new SummarizationClient(h).SummarizeAsync(config, Segments(), false, "T"));
+
+        var body = handler.LastBody;
+        Assert.Equal(0.75, body.GetProperty("temperature").GetDouble(), 3);
+        Assert.Equal(900, body.GetProperty("max_tokens").GetInt32());
+        Assert.Equal(40, body.GetProperty("top_k").GetInt32());
+    }
+
+    [Fact]
+    public async Task Omits_a_parameter_the_resolver_decided_not_to_send()
+    {
+        // Null means "leave the key out", not "send null" - a server that validates types 400s on
+        // "temperature": null.
+        var config = await Config() with { Parameters = new LlmParameters { Temperature = null, TopP = 0.9 } };
+
+        var handler = await Capture(h =>
+            new SummarizationClient(h).SummarizeAsync(config, Segments(), false, "T"));
+
+        Assert.False(handler.Has("temperature"));
+        Assert.Equal(0.9, handler.LastBody.GetProperty("top_p").GetDouble(), 3);
+    }
+
+    [Fact]
+    public async Task Chat_omits_tools_when_the_model_does_not_support_them()
+    {
+        var config = await Config() with { Parameters = new LlmParameters { ToolsSupported = false } };
+        var tools = new List<object> { new { type = "function", function = new { name = "noop" } } };
+
+        var handler = await Capture(async h =>
+        {
+            await foreach (var _ in new ChatStreamClient(h)
+                               .StreamChunksAsync(config, [new { role = "user", content = "hi" }], tools))
+            {
+            }
+        });
+
+        Assert.False(handler.Has("tools"));
+        Assert.False(handler.Has("tool_choice"));
     }
 
     [Fact]
     public async Task Every_client_posts_to_chat_completions_on_the_configured_base()
     {
+        var config = await Config();
         var handler = await Capture(h =>
-            new SummarizationClient(h).SummarizeAsync(Config(), Segments(), false, "T"));
+            new SummarizationClient(h).SummarizeAsync(config, Segments(), false, "T"));
 
         Assert.Equal("http://llm.test/v1/chat/completions", handler.LastRequestUri!.ToString());
     }

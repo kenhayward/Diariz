@@ -350,7 +350,7 @@ public sealed class FakeTranslationClient(Action? onCall = null) : ITranslationC
     }
 }
 
-/// <summary>Returns a fixed embedding config and records the resolved user id.</summary>
+/// <summary>Returns a fixed embedding config and counts how many times it was asked for one.</summary>
 public sealed class FakeEmbeddingSettingsResolver : IEmbeddingSettingsResolver
 {
     public EmbeddingRequestConfig Config { get; set; } =
@@ -359,11 +359,14 @@ public sealed class FakeEmbeddingSettingsResolver : IEmbeddingSettingsResolver
             QueryPrefix = "search_query: ",
             DocumentPrefix = "search_document: ",
         };
-    public Guid? LastUserId { get; private set; }
 
-    public Task<EmbeddingRequestConfig> ResolveAsync(Guid userId, CancellationToken ct = default)
+    /// <summary>Replaced a recorded user id when embedding configuration moved to the platform: there is no
+    /// longer a per-user answer to record, so the only thing worth observing is that it was consulted.</summary>
+    public int Calls { get; private set; }
+
+    public Task<EmbeddingRequestConfig> ResolveAsync(CancellationToken ct = default)
     {
-        LastUserId = userId;
+        Calls++;
         return Task.FromResult(Config);
     }
 }

@@ -152,7 +152,7 @@ public class WorkerCallbackController : ControllerBase
         // Build/refresh the RAG index for this recording's latest transcription (status-neutral, independent of
         // summarisation — RAG can be on via a dedicated embeddings endpoint even when summarisation is off). The
         // processor no-ops if the owner has no endpoint, so only enqueue when embedding is actually configured.
-        var embedCfg = await _embedding.ResolveAsync(transcription.Recording.UserId);
+        var embedCfg = await _embedding.ResolveAsync();
         if (embedCfg.Enabled)
             await _queue.EnqueueEmbeddingAsync(new EmbeddingJob(transcription.RecordingId, transcription.Id));
 

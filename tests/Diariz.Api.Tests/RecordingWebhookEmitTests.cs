@@ -34,8 +34,7 @@ public class RecordingWebhookEmitTests
         var queue = new FakeJobQueue();
         var summaryOpts = new SummarizationOptions { ApiBase = summarizationEnabled ? "http://llm.test/v1" : "" };
         var resolver = new LlmSettingsResolver(db, Options.Create(new LlmDefaultsOptions()), Options.Create(summaryOpts), new FakeApiKeyProtector());
-        var embedding = new EmbeddingSettingsResolver(
-            db, Options.Create(new EmbeddingOptions()), Options.Create(summaryOpts), new FakeApiKeyProtector());
+        var embedding = new EmbeddingSettingsResolver(db, Options.Create(new EmbeddingOptions()), resolver);
         var publisher = new CapturingWebhookPublisher();
         var controller = new WorkerCallbackController(
             db, hub, queue, resolver, embedding, new FakeSpeakerIdentifier(),

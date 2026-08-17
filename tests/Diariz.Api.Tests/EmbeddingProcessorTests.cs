@@ -48,7 +48,7 @@ public class EmbeddingProcessorTests
             Assert.Contains("Alice", c.SpeakerLabels);   // display name, not the raw SPEAKER_00 label
             Assert.Contains("Alice:", c.Text);
         });
-        Assert.Equal(userId, resolver.LastUserId);
+        Assert.Equal(1, resolver.Calls);   // the embedding config was resolved for this run
         Assert.Equal(chunks.Count, client.LastInputs!.Count); // one embed input per chunk
     }
 

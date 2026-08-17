@@ -1747,7 +1747,16 @@ In `ChatStreamClient.StreamChunksAsync`, gate the tools line on the flag:
 
 - [ ] **Step 4: Repoint the embedding endpoint fallback**
 
-In `EmbeddingSettingsResolver`, replace the branch that reads `s?.SummaryApiBase` and the user's encrypted key with the resolved default model's endpoint. Its `ResolveAsync` also loses its `userId` parameter. `DictationClient`'s config is built in `ChatController` around line 301 - point it at the same resolver.
+In `EmbeddingSettingsResolver`, replace the branch that reads `s?.SummaryApiBase` and the user's encrypted key with the resolved default model's endpoint. Its `ResolveAsync` also loses its `userId` parameter. Take `ILlmSettingsResolver` rather than `SummarizationOptions` + `IApiKeyProtector`: the fallback then inherits the whole chain (model endpoint, decrypted key, timeout) instead of re-deriving it. `Embedding` is a groupless kind, so it resolves the platform default and never a group override.
+
+Keep the dedicated-endpoint branch's own **timeout** as well as its endpoint and key - a separate embeddings service has its own deadline, and only the shared-endpoint case should inherit the model's.
+
+**CORRECTION - dictation needs no change.** This step originally said to point `DictationClient` at the same
+resolver. That is wrong. Dictation is **speech-to-text** (`/audio/transcriptions`, model `whisper-1`), a
+different service from the chat-completions endpoint, and its config is built purely from `DictationOptions`
+with no user-settings input - it was already platform-level, as its own endpoint description says. Pointing
+it at the LLM resolver would send the chat model's name to an STT service and break dictation. Verified: no
+occurrence of `UserSettings` anywhere in the dictation path.
 
 - [ ] **Step 5: Run the full unit suite**
 

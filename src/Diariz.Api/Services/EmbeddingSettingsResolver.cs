@@ -1,4 +1,5 @@
 using Diariz.Api.Configuration;
+using Diariz.Api.Services.Llm;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -6,10 +7,13 @@ using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.Services;
 
-/// <summary>Effective embedding config for one recording owner: a server-pinned model/dimension plus an
-/// endpoint/key resolved from (in order) the server <c>Embedding</c> block, else the owner's own
-/// summarisation endpoint, else the server summarisation defaults. Disabled when no endpoint resolves at
-/// any level - callers then skip embedding and retrieval stays lexical.</summary>
+/// <summary>Effective embedding config: a server-pinned model/dimension plus an endpoint/key resolved from
+/// the server <c>Embedding</c> block, else whatever model the platform uses for everything else. Disabled
+/// when no endpoint resolves at either level - callers then skip embedding and retrieval stays lexical.
+///
+/// The model and dimension stay server options rather than joining the platform model rows because the
+/// <c>vector(768)</c> column is dimension-pinned: changing them needs a migration and a re-index, which is
+/// not something an administrator should be able to do from a settings page.</summary>
 public record EmbeddingRequestConfig(
     string ApiBase, string ApiKey, string Model, int Dimension, int TimeoutSeconds, int BatchSize)
 {
@@ -26,65 +30,46 @@ public record EmbeddingRequestConfig(
 
 public interface IEmbeddingSettingsResolver
 {
-    Task<EmbeddingRequestConfig> ResolveAsync(Guid userId, CancellationToken ct = default);
+    Task<EmbeddingRequestConfig> ResolveAsync(CancellationToken ct = default);
 }
 
 public class EmbeddingSettingsResolver : IEmbeddingSettingsResolver
 {
-    private readonly DiarizDbContext _db;
     private readonly EmbeddingOptions _emb;
-    private readonly SummarizationOptions _summary;
-    private readonly IApiKeyProtector _protector;
+    private readonly ILlmSettingsResolver _llm;
 
     public EmbeddingSettingsResolver(
-        DiarizDbContext db, IOptions<EmbeddingOptions> emb, IOptions<SummarizationOptions> summary,
-        IApiKeyProtector protector)
+        DiarizDbContext db, IOptions<EmbeddingOptions> emb, ILlmSettingsResolver llm)
     {
-        _db = db;
         _emb = emb.Value;
-        _summary = summary.Value;
-        _protector = protector;
+        _llm = llm;
     }
 
-    public async Task<EmbeddingRequestConfig> ResolveAsync(Guid userId, CancellationToken ct = default)
+    public async Task<EmbeddingRequestConfig> ResolveAsync(CancellationToken ct = default)
     {
-        // Needed for the timeout chain regardless of which branch resolves the transport below.
-        var s = await _db.UserSettings.FindAsync([userId], ct);
-
         // The model + dimension are always the server's (the vector column is dimension-pinned). Only the
-        // transport (endpoint + key) can come from elsewhere.
-        string apiBase, apiKey;
-        if (!string.IsNullOrWhiteSpace(_emb.ApiBase))
-        {
-            // A dedicated embeddings endpoint is configured - use it (and its own key, even if blank).
-            apiBase = _emb.ApiBase.Trim();
-            apiKey = _emb.ApiKey;
-        }
-        else
-        {
-            // Reuse the owner's summarisation endpoint (their own value, else the server default).
-            apiBase = Coalesce(s?.SummaryApiBase, _summary.ApiBase);
-            apiKey = Coalesce(_protector.Unprotect(s?.SummaryApiKeyEncrypted), _summary.ApiKey);
-        }
+        // transport - endpoint, key and deadline - can come from elsewhere.
+        //
+        // Embedding is a groupless call kind, so this resolves the platform default model (or the
+        // environment endpoint when none is configured) and never any group's override.
+        var llm = await _llm.ResolveAsync(LlmCallKind.Embedding, ct);
 
-        // The request timeout is the user's override ?? the platform-wide admin setting ?? the embedding
-        // option. One chain, shared with summarisation, so embeddings never silently disagree.
-        var ps = await _db.PlatformSettings
-            .FirstOrDefaultAsync(p => p.Id == PlatformSettings.SingletonId, ct);
+        var dedicated = !string.IsNullOrWhiteSpace(_emb.ApiBase);
 
         return new EmbeddingRequestConfig(
-            ApiBase: apiBase,
-            ApiKey: apiKey,
+            // A dedicated embeddings endpoint wins, and brings its own key even when that key is blank.
+            ApiBase: dedicated ? _emb.ApiBase.Trim() : llm.ApiBase,
+            ApiKey: dedicated ? _emb.ApiKey : llm.ApiKey,
             Model: _emb.Model,
             Dimension: _emb.Dimension,
-            TimeoutSeconds: s?.LlmTimeoutSeconds ?? ps?.LlmTimeoutSeconds ?? _emb.TimeoutSeconds,
+            // A dedicated endpoint is its own service and keeps its own deadline; when embeddings share the
+            // platform model's endpoint they share its timeout too, or they quietly disagree with every
+            // other call to the same server.
+            TimeoutSeconds: dedicated ? _emb.TimeoutSeconds : llm.TimeoutSeconds,
             BatchSize: Math.Max(1, _emb.BatchSize))
         {
             QueryPrefix = _emb.QueryPrefix ?? "",
             DocumentPrefix = _emb.DocumentPrefix ?? "",
         };
     }
-
-    private static string Coalesce(string? user, string server) =>
-        string.IsNullOrWhiteSpace(user) ? server : user.Trim();
 }
