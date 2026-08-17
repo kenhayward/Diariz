@@ -102,6 +102,10 @@ services:
       # Reasoning models: send reasoning_effort on LLM requests. Off by default; per-user overridable in Settings.
       Summarization__ReasoningEnabled: ${SUMMARY_REASONING_ENABLED:-false}
       Summarization__ReasoningEffort: ${SUMMARY_REASONING_EFFORT:-medium}
+      # App-wide LLM parameter defaults (bottom of the layer stack, below any configured model).
+      LlmDefaults__Temperature: ${LLM_DEFAULT_TEMPERATURE:-0.3}
+      LlmDefaults__Translation__Temperature: ${LLM_DEFAULT_TRANSLATION_TEMPERATURE:-0.1}
+      LlmDefaults__TimeoutSeconds: ${LLM_DEFAULT_TIMEOUT_SECONDS:-120}
       # Chat voice dictation (server fallback for desktop/Safari/Firefox). Empty ApiBase disables it.
       Dictation__ApiBase: ${DICTATION_API_BASE:-}
       Dictation__ApiKey: ${DICTATION_API_KEY:-}

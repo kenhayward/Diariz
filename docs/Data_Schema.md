@@ -106,6 +106,8 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddUserLlmTimeout` | `UserSettings.LlmTimeoutSeconds` (int, nullable, no default = null) - a per-user override of the platform LLM timeout; null means inherit `PlatformSettings.LlmTimeoutSeconds`, which in turn falls back to the server option. Additive and nullable, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddLlmCalls` | `LlmCalls` (one row per outbound model call - kind, attribution, model/endpoint, timing, token counts, prompt size, success/error, streamed; `UserId`/`RecordingId`/`SectionId` FKs **`ON DELETE SET NULL`**, each paired with a denormalized snapshot column so a row stays readable after its subject is deleted; five indexes) - the LLM usage log's storage. Never stores prompt or completion content. New table, additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddLlmUsageSettings` | `PlatformSettings.LlmUsageLoggingEnabled` (bool, default **true**) + `LlmUsageRetentionDays` (int, default 90; 0 = keep forever) + `LlmStreamUsageEnabled` (bool, default true) - the three admin controls for the usage log, edited on Model Settings. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `PlatformLlmModels` | `LlmModels`, `LlmModelParameters` (`jsonb`), `LlmCallAssignments` + `PlatformSettings.DefaultLlmModelId` - platform-wide model configuration. Purely additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `DropPerUserLlmSettings` | **Drops** `UserSettings.SummaryApiBase`, `SummaryApiKeyEncrypted`, `SummaryModel`, `ChatContextWindow`, `LlmTimeoutSeconds`, `ReasoningEnabled`, `ReasoningEffort` - LLM configuration moved to the platform. Destructive, but **deliberately no `CurrentFormat` bump**: restore does `pg_restore --clean` then migrates forward, so an older backup restores its own columns and this migration drops them - the restore succeeds and the platform is left correct, and the only loss is per-user values this release discards by design |
 
 ### Entity-relationship overview
 
@@ -743,15 +745,8 @@ Per-user preferences (1:1 with the user via a **shared primary key** = `UserId`)
 | Column | Type | Notes |
 |---|---|---|
 | `UserId` | uuid PK + FK → AspNetUsers | cascade |
-| `SummaryApiBase` | varchar(512) null | user's OpenAI-compatible endpoint |
-| `SummaryApiKeyEncrypted` | text null | API key **encrypted at rest** (ASP.NET Data Protection); never returned to clients |
-| `SummaryModel` | varchar(256) null | |
-| `ChatContextWindow` | int null | per-user context-window override (tokens); null → server `Chat:ContextLength` |
 | `ChatToolsEnabled` | bool null | chat tool-calling master override; null → server `Chat:ToolsEnabled` |
 | `ChatToolOverridesJson` | jsonb null | explicit per-tool on/off map `{ "tool_name": bool }`; a tool absent follows the server default |
-| `ReasoningEnabled` | bool null | send `reasoning_effort` on LLM requests; null → server `Summarization:ReasoningEnabled` |
-| `ReasoningEffort` | text null | reasoning level (`low`/`medium`/`high`) when enabled; null → server `Summarization:ReasoningEffort` |
-| `LlmTimeoutSeconds` | int null | per-request LLM timeout override (seconds); null → `PlatformSettings.LlmTimeoutSeconds`, which itself falls back to the server option |
 | `NativeLanguage` | text null | the user's native language (BCP-47); default target when translating transcripts |
 | `UiLanguage` | text null | the language the app UI is shown in (BCP-47); null → follow the browser |
 | `GoogleRefreshTokenEncrypted` | text null | Google OAuth refresh token (offline Calendar access), **encrypted at rest** (Data Protection); never returned to clients |
@@ -783,9 +778,10 @@ Single seeded row (`Id = 1`), edited by the Platform Administrator.
 | `AudioRetentionDays` | int | audio older than this many days (by `Recording.CreatedAt`) is eligible for auto-deletion (default 30) |
 | `AudioDeletionTimeOfDay` | time | server-local time of day the nightly retention job runs (default 03:00) |
 | `ApiAccessEnabled` | bool | master switch for user API access (personal `dz_api_` tokens); default false = off |
-| `LlmTimeoutSeconds` | int | platform-wide default per-request timeout (seconds) for every LLM call; default 120. A user can override it via `UserSettings.LlmTimeoutSeconds`; the resolved value (user ?? platform ?? server option) is the single authority - the HTTP clients themselves have no cap |
 | `McpAccessEnabled` | bool | master switch for the `/mcp` server and personal `dz_mcp_` tokens; default **true** (seeded true in its migration so shipping this toggle never disables an already-connected MCP client) |
 | `WebhooksEnabled` | bool | master switch for outbound webhooks / user Automations; default false = off (enforced starting with the Phase 2 webhooks core) |
+| `DefaultLlmModelId` | uuid null | FK -> `LlmModels` **`ON DELETE RESTRICT`** - the model used by any call group with no explicit assignment. Null falls through to the model synthesized from `Summarization:ApiBase`, so an upgrade with no rows keeps working unchanged |
+| `LlmTimeoutSeconds` | int | **OBSOLETE from 0.221.0** - the timeout is now a parameter on a model's set. Kept rather than dropped because a migration cannot fold it into a model row (the endpoint lives in configuration, not the database), and dropping it would silently reset a tuned production timeout to the app default. Read only by the synthesized environment-fallback model, and unreachable once any `LlmModels` row exists |
 | `LlmUsageLoggingEnabled` | bool | master switch for the LLM usage log; default **true** (the log is the feature). Enforced by `LlmUsageWriter`, not the capture handler, so the LLM call path never pays for a settings lookup |
 | `LlmUsageRetentionDays` | int | usage log rows older than this many days are deleted by the nightly `LlmUsageRetentionWorker` sweep; default 90. `0` = keep forever |
 | `LlmStreamUsageEnabled` | bool | whether a streaming request asks the model for token counts via `stream_options.include_usage`; default true. A toggle rather than a constant so an endpoint that rejects the field is recoverable without a redeploy |
@@ -1050,6 +1046,69 @@ type, redirect URIs, permitted scopes/grant types, PKCE requirement); an `Author
 represent a user's granted, revocable connection. Revoking a connection deletes the authorization and its
 tokens. See `Overall_Synopsis_of_Platform.md` for the auth flow.
 
+#### `LlmModels`
+
+Every model the platform can call. Self-contained: pointing a call group at a model brings its connection
+with it, which is what lets a local LM Studio model and a cloud model coexist on one platform.
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid | PK |
+| `Name` | text | sent verbatim as `model` in each request, e.g. `openai/gpt-oss-20b`. **Unique** |
+| `ApiBase` | text | OpenAI-compatible endpoint, e.g. `http://localhost:1234/v1` |
+| `ApiKeyEncrypted` | text null | encrypted via `IApiKeyProtector` (same Data Protection keyring as the old per-user key); never returned to clients. Null = no key needed, normal for a local endpoint |
+| `ContextLength` | int | the model's context window in tokens - a fact about the model, which is why it lives here rather than in per-user settings where it used to be |
+| `CreatedAt` / `UpdatedAt` | timestamptz | |
+
+Indexes: unique on `Name`.
+
+#### `LlmModelParameters`
+
+One parameter layer per (model, group). `Group = ModelBase` (0) holds the model's own defaults; the other
+members hold that call group's overrides.
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid | PK |
+| `LlmModelId` | uuid | FK -> `LlmModels` **`ON DELETE CASCADE`** - a model's parameters are meaningless without it |
+| `Group` | int | `LlmCallGroup` (see below) |
+| `ParametersJson` | **`jsonb`** | the layer. Three states per key, and the last two differ: **absent** = inherit from the next layer down, **present and null** = omit the parameter from the request entirely, **present with a value** = use it. A sentinel could not express both - `-1` is legal for `max_tokens` (unlimited) and `top_k` (disabled) on some servers |
+
+Indexes: **unique on `(LlmModelId, Group)`**. `Group` is non-nullable with `ModelBase = 0` precisely because
+Postgres treats NULLs as distinct in a unique index, so a nullable "this is the base" marker would let two
+base rows through.
+
+#### `LlmCallAssignments`
+
+Which model serves which call group. At most six rows; a group with no row falls back to
+`PlatformSettings.DefaultLlmModelId`, and then to the environment endpoint.
+
+| Column | Type | Notes |
+|---|---|---|
+| `Group` | int | **PK** - `LlmCallGroup`, never `ModelBase` (the API rejects it: it is a parameter scope, not a call type) |
+| `LlmModelId` | uuid | FK -> `LlmModels` **`ON DELETE RESTRICT`** |
+
+**The RESTRICT is a backstop, not the guard.** EF's change tracking gets there first and behaves differently
+per FK: `LlmCallAssignment.LlmModelId` is required, so `DbSet.Remove` throws client-side before any statement
+is sent; `PlatformSettings.DefaultLlmModelId` is **nullable**, so with that row tracked EF issues
+`UPDATE PlatformSettings SET DefaultLlmModelId = NULL` ahead of the DELETE and the constraint never fires -
+the model really is deleted. `LlmModelsController.Delete` therefore checks both itself and returns 409.
+
+#### `LlmCallGroup`
+
+| Value | Member | Covers (`LlmCallKind`) |
+|---|---|---|
+| 0 | `ModelBase` | not a call type - the model's own default parameters |
+| 1 | `Tags` | `Tags` |
+| 2 | `Actions` | `ExtractActions` |
+| 3 | `Summaries` | `Summarize`, `SectionSummary` |
+| 4 | `MinutesAndFormulas` | `MeetingMinutes`, `SectionMinutes`, `MeetingTypeMinutes`, `FormulaRun` |
+| 5 | `Translation` | `Translation` |
+| 6 | `Chat` | `ChatMessage`, `ChatTitle` |
+
+`Embedding`, `SearchQuery` and `Dictation` map to **no group**: they send no sampling parameters (embeddings
+post `{model, input}`, dictation posts multipart audio), so there is nothing for a temperature to mean.
+
 #### `LlmCalls`
 One row per outbound call to a model endpoint, written by `LlmTelemetryHandler` off the request path via a
 bounded in-memory channel and a background writer (`LlmUsageWriter`) - see
@@ -1179,7 +1238,7 @@ in `Services/AudioStorage.cs`.
 In Docker Compose, MinIO data persists in the **`miniodata`** named volume (the S3 API is remapped to host
 **9002**; the console is not published). Companion volumes: **`pgdata`** (Postgres, reachable from the host
 on **5433** for external tooling), **`apikeys`** (the Data
-Protection keyring that decrypts `UserSettings.SummaryApiKeyEncrypted`, mounted at `/keys`), and
+Protection keyring that decrypts `LlmModels.ApiKeyEncrypted`, mounted at `/keys`), and
 **`workercache`** (model weights). Back up `pgdata` + `miniodata` together — a transcript row in Postgres is
-meaningless without its audio blob, and vice-versa, and losing `apikeys` makes stored per-user API keys
+meaningless without its audio blob, and vice-versa, and losing `apikeys` makes stored model API keys
 unrecoverable.
