@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Text;
 using Diariz.Api.Controllers;
 using Diariz.Api.Tests.Infrastructure;
@@ -34,7 +35,7 @@ public class RecordingsControllerTests
         return new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(),
             new ConfigurationBuilder().AddInMemoryCollection(
                 new Dictionary<string, string?> { ["Transcription:DefaultModel"] = "whisperx-large-v3" }).Build(),
-            new SummarizationSettingsResolver(db, Options.Create(new SummarizationOptions { ApiBase = "http://llm.test/v1" }),
+            new LlmSettingsResolver(db, Options.Create(new LlmDefaultsOptions()), Options.Create(new SummarizationOptions { ApiBase = "http://llm.test/v1" }),
                 new FakeApiKeyProtector()),
             new FakeEmailSender(), new FakeSpeakerIdentifier(), Options.Create(new UploadOptions()),
             new RoomScope(db), new PeopleDirectory(db), new CapturingWebhookPublisher(),
@@ -53,9 +54,9 @@ public class RecordingsControllerTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Transcription:DefaultModel"] = "whisperx-large-v3" })
             .Build();
-        var resolver = new SummarizationSettingsResolver(
+        var resolver = new LlmSettingsResolver(
             db,
-            Options.Create(new SummarizationOptions { ApiBase = summarizationEnabled ? "http://llm.test/v1" : "" }),
+            Options.Create(new LlmDefaultsOptions()), Options.Create(new SummarizationOptions { ApiBase = summarizationEnabled ? "http://llm.test/v1" : "" }),
             new FakeApiKeyProtector());
         return new RecordingsController(db, storage ?? new FakeAudioStorage(), queue, new FakeHubContext(), config,
             resolver, email ?? new FakeEmailSender(), identifier ?? new FakeSpeakerIdentifier(),
@@ -1941,14 +1942,25 @@ public class RecordingsControllerTests
     }
 
     [Fact]
-    public async Task Summarize_AllowedWhenUserConfigured_EvenIfServerEmpty()
+    public async Task Summarize_AllowedWhenAPlatformModelExists_EvenIfServerEmpty()
     {
+        // The platform-model path has to stand on its own: a deployment that configures models in the admin
+        // page and never sets Summarization__ApiBase must still be able to summarise. Until 0.221.0 the
+        // equivalent test configured a per-user endpoint, which no longer exists.
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var queue = new FakeJobQueue();
         var rec = await SeedRecording(db, userId, versions: 1);
-        // The user has their own endpoint configured even though the server default is empty.
-        db.UserSettings.Add(new Diariz.Domain.Entities.UserSettings { UserId = userId, SummaryApiBase = "https://mine/v1" });
+        var model = new LlmModel
+        {
+            Id = Guid.NewGuid(), Name = "platform-model", ApiBase = "https://mine/v1", ContextLength = 8192,
+            CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
+        };
+        db.LlmModels.Add(model);
+        db.PlatformSettings.Add(new PlatformSettings
+        {
+            Id = PlatformSettings.SingletonId, DefaultLlmModelId = model.Id,
+        });
         await db.SaveChangesAsync();
         var controller = Build(db, userId, queue, summarizationEnabled: false); // server ApiBase empty
 

@@ -45,7 +45,7 @@ public class FormulaTemplateGoldenTests
         await db.SaveChangesAsync();
 
         await FormulaRunProcessor.ProcessAsync(
-            db, chat, new FakeSummarizationSettingsResolver(), new FakeHubContext(),
+            db, chat, new FakeLlmSettingsResolver(), new FakeHubContext(),
             new FormulaRunJob(recordingId, null, result.Id, formula.Id, Guid.NewGuid()),
             NullLogger.Instance, new CapturingWebhookPublisher(), "");
 

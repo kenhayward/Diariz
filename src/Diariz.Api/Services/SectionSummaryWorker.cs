@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Text.Json;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
@@ -87,7 +88,7 @@ public class SectionSummaryWorker : BackgroundService
                 var ctx = scope.ServiceProvider.GetRequiredService<DiarizDbContext>();
                 var perRecording = scope.ServiceProvider.GetRequiredService<ISummarizationClient>();
                 var combiner = scope.ServiceProvider.GetRequiredService<IMeetingMinutesClient>();
-                var resolver = scope.ServiceProvider.GetRequiredService<ISummarizationSettingsResolver>();
+                var resolver = scope.ServiceProvider.GetRequiredService<ILlmSettingsResolver>();
                 var perRecTemplate = _prompts.Get("summarise", SummarizationPrompt.DefaultTemplate);
                 var folderTemplate = _prompts.Get(FolderSummaryPrompt.TemplateName, FolderSummaryPrompt.DefaultTemplate);
                 using var jobTx = JobTelemetry.Begin("section-summary");

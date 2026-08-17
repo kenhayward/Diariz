@@ -1,4 +1,5 @@
 using Diariz.Api.Contracts;
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
@@ -16,7 +17,7 @@ public class MeetingTypeMinutesGeneratorTests
 
     private static readonly IReadOnlyList<SegmentDto> Segments =
         [new(Guid.NewGuid(), "SPEAKER_00", "Alice", 0, 1000, "Hello")];
-    private static readonly SummarizationRequestConfig Config = new("https://llm.test/v1", "sk", "m", 60);
+    private static readonly LlmRequestConfig Config = new("https://llm.test/v1", "sk", "m", new LlmParameters { TimeoutSeconds = 60 });
     private static readonly MeetingMinutesContext Context =
         new(Guid.NewGuid(), new DateTimeOffset(2026, 3, 4, 9, 0, 0, TimeSpan.Zero), "Weekly Sync", ["Alice", "Bob"], 3_600_000);
 

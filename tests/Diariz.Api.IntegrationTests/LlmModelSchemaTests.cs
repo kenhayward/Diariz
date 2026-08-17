@@ -8,27 +8,21 @@ namespace Diariz.Api.IntegrationTests;
 /// <summary>Schema behaviour the in-memory provider does not model: unique indexes, FK delete behaviour,
 /// and jsonb round-trips. All of it is why these live here rather than in the unit project.
 ///
-/// UNRESOLVED (0.221.0): the two delete-refusal tests below are skipped, NOT because the guarantee is in
-/// doubt but because the harness behaves inconsistently and weakening an assertion until it passes would
-/// leave the guarantee untested. What is already established:
+/// <b>Where a model delete is actually refused, and where it is not.</b> Both FKs pointing at LlmModels are
+/// DELETE RESTRICT in Postgres, but EF's change tracking gets there first and behaves differently depending
+/// on whether the FK is nullable:
 ///
-///   * The database is correct. Querying information_schema.referential_constraints reports
-///     FK_LlmCallAssignments_LlmModels_LlmModelId => RESTRICT and
-///     FK_PlatformSettings_LlmModels_DefaultLlmModelId => RESTRICT
-///     (FK_LlmModelParameters_LlmModels_LlmModelId => CASCADE, also as intended).
-///   * A standalone probe class doing exactly what these tests do DID throw, client-side, with
-///     InvalidOperationException: "The association between entity types 'LlmModel' and
-///     'LlmCallAssignment' has been severed, but the relationship is ... required". So EF refuses before
-///     the statement reaches Postgres when the dependent is tracked.
-///   * Inside THIS class the same code throws nothing at all. Tried and rejected: ThrowsAnyAsync of
-///     DbUpdateException, then of Exception, then Record.ExceptionAsync - all report no exception, so it
-///     is not an exception-type mismatch. Do not simply try a fourth assertion form.
+///   * <c>LlmCallAssignment.LlmModelId</c> is <b>required</b>, so EF refuses as soon as the principal is
+///     marked deleted - <c>DbSet.Remove</c> itself throws InvalidOperationException ("the association ...
+///     has been severed"), because CascadeDeleteTiming defaults to Immediate. Nothing reaches Postgres, so
+///     an assertion has to wrap the Remove call and not just SaveChangesAsync.
+///   * <c>PlatformSettings.DefaultLlmModelId</c> is <b>nullable</b>, so when that row is tracked EF quietly
+///     issues <c>UPDATE PlatformSettings SET DefaultLlmModelId = NULL</c> ahead of the DELETE. The database
+///     constraint never fires and the model IS deleted. The RESTRICT only bites on the untracked path.
 ///
-/// Next step for whoever picks this up: find what differs between the probe class and this one rather
-/// than adjusting the assertion. Suspect shared-collection state or the entity being tracked differently
-/// once other tests in the class have run. `The_database_itself_refuses_to_delete_an_assigned_model`
-/// (untracked, attach-a-stub) is the variant that exercises the Postgres constraint directly and is the
-/// more valuable of the two to get green.</summary>
+/// The consequence for callers: <b>the database is a backstop, not the guard</b>. LlmModelsController must
+/// check for assignments and for the platform default itself and return 409 - it cannot rely on the delete
+/// failing.</summary>
 [Collection(IntegrationCollection.Name)]
 public class LlmModelSchemaTests(ContainersFixture fx)
 {
@@ -122,28 +116,37 @@ public class LlmModelSchemaTests(ContainersFixture fx)
         await Assert.ThrowsAnyAsync<DbUpdateException>(() => db.SaveChangesAsync());
     }
 
-    [Fact(Skip = "Unresolved harness behaviour - see the note above the class. The guarantee itself is " +
-                 "verified: information_schema reports DELETE RESTRICT on both FKs.")]
+    [Fact]
     public async Task Refuses_to_delete_a_model_an_assignment_points_at()
     {
         // Restrict, not SetNull: a delete that silently re-routed a call group to the default model would
         // change which model serves it with no sign to the administrator.
         //
-        // Asserts the GUARANTEE (the model survives), not which layer enforces it. Both layers do, and
-        // which one fires depends on whether the assignment happens to be tracked: EF refuses client-side
-        // with InvalidOperationException when it is, and Postgres refuses with DbUpdateException when it
-        // is not. Pinning one exception type would make this pass or fail on an irrelevant detail.
+        // Asserts the GUARANTEE (the model survives), not which layer enforces it - so Remove and
+        // SaveChangesAsync are BOTH inside the assertion. That is not tidiness: with the assignment tracked
+        // and its FK required, EF refuses at Remove and nothing reaches Postgres, so an assertion wrapped
+        // around SaveChangesAsync alone never sees the exception at all.
         await using var db = fx.CreateDbContext();
         var model = NewModel();
         db.LlmModels.Add(model);
         db.LlmCallAssignments.Add(new LlmCallAssignment { Group = LlmCallGroup.Chat, LlmModelId = model.Id });
         await db.SaveChangesAsync();
 
-        db.LlmModels.Remove(model);
-        Assert.NotNull(await Record.ExceptionAsync(() => db.SaveChangesAsync()));
+        try
+        {
+            Assert.NotNull(await Record.ExceptionAsync(async () =>
+            {
+                db.LlmModels.Remove(model);
+                await db.SaveChangesAsync();
+            }));
 
-        await using var read = fx.CreateDbContext();
-        Assert.True(await read.LlmModels.AnyAsync(m => m.Id == model.Id), "the in-use model was deleted");
+            await using var read = fx.CreateDbContext();
+            Assert.True(await read.LlmModels.AnyAsync(m => m.Id == model.Id), "the in-use model was deleted");
+        }
+        finally
+        {
+            await CleanUp(model.Id);
+        }
     }
 
     [Fact]
@@ -152,24 +155,94 @@ public class LlmModelSchemaTests(ContainersFixture fx)
         // The untracked path: nothing is loaded, so EF cannot refuse client-side and the statement really
         // does reach Postgres. This is what protects code that deletes a model without loading its
         // assignments - the case the test above cannot reach.
+        var id = Guid.NewGuid();
         await using (var seed = fx.CreateDbContext())
         {
             var m = NewModel();
+            m.Id = id;
             seed.LlmModels.Add(m);
-            seed.LlmCallAssignments.Add(new LlmCallAssignment { Group = LlmCallGroup.Summaries, LlmModelId = m.Id });
+            seed.LlmCallAssignments.Add(new LlmCallAssignment { Group = LlmCallGroup.Summaries, LlmModelId = id });
             await seed.SaveChangesAsync();
-            Assigned = m.Id;
         }
 
-        await using var db = fx.CreateDbContext();
-        var stub = new LlmModel { Id = Assigned };
-        db.LlmModels.Attach(stub);
-        db.LlmModels.Remove(stub);
+        try
+        {
+            await using var db = fx.CreateDbContext();
+            var stub = new LlmModel { Id = id };
+            db.LlmModels.Attach(stub);
+            db.LlmModels.Remove(stub);
 
-        await Assert.ThrowsAnyAsync<DbUpdateException>(() => db.SaveChangesAsync());
+            await Assert.ThrowsAnyAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        }
+        finally
+        {
+            await CleanUp(id);
+        }
     }
 
-    private static Guid Assigned;
+    [Fact]
+    public async Task Nulls_the_platform_default_client_side_rather_than_refusing_the_delete()
+    {
+        // Documents the gap the API has to close. The FK is nullable, so with the PlatformSettings row
+        // tracked EF issues UPDATE ... SET DefaultLlmModelId = NULL before the DELETE, and the RESTRICT it
+        // would otherwise hit never fires. If a future EF version or a change to the mapping makes this
+        // throw instead, that is an improvement - but this test failing is the signal to revisit the
+        // controller guard, not to delete the guard as redundant.
+        await using var db = fx.CreateDbContext();
+        var model = NewModel();
+        db.LlmModels.Add(model);
+        await db.SaveChangesAsync();
+
+        (await Settings(db)).DefaultLlmModelId = model.Id;
+        await db.SaveChangesAsync();
+
+        try
+        {
+            db.LlmModels.Remove(model);
+            Assert.Null(await Record.ExceptionAsync(() => db.SaveChangesAsync()));
+
+            await using var read = fx.CreateDbContext();
+            Assert.False(await read.LlmModels.AnyAsync(m => m.Id == model.Id));
+            Assert.Null((await Settings(read)).DefaultLlmModelId);
+        }
+        finally
+        {
+            await ClearDefaultAsync();
+            await CleanUp(model.Id);
+        }
+    }
+
+    [Fact]
+    public async Task The_database_refuses_to_delete_the_model_the_platform_default_points_at()
+    {
+        // The untracked path, where the constraint genuinely bites: nothing is loaded, so EF cannot null
+        // the FK first and the DELETE really does reach Postgres.
+        var id = Guid.NewGuid();
+        await using (var seed = fx.CreateDbContext())
+        {
+            var m = NewModel();
+            m.Id = id;
+            seed.LlmModels.Add(m);
+            await seed.SaveChangesAsync();
+            (await Settings(seed)).DefaultLlmModelId = id;
+            await seed.SaveChangesAsync();
+        }
+
+        try
+        {
+            await using var db = fx.CreateDbContext();
+            var stub = new LlmModel { Id = id };
+            db.LlmModels.Attach(stub);
+            db.LlmModels.Remove(stub);
+
+            await Assert.ThrowsAnyAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        }
+        finally
+        {
+            await ClearDefaultAsync();
+            await CleanUp(id);
+        }
+    }
 
     [Fact]
     public async Task Deletes_a_models_parameter_rows_with_it()
@@ -190,39 +263,34 @@ public class LlmModelSchemaTests(ContainersFixture fx)
         Assert.Empty(await read.LlmModelParameters.Where(p => p.LlmModelId == model.Id).ToListAsync());
     }
 
-    [Fact(Skip = "Unresolved harness behaviour - see the note above the class. The guarantee itself is " +
-                 "verified: information_schema reports DELETE RESTRICT on both FKs.")]
-    public async Task Refuses_to_delete_the_model_the_platform_default_points_at()
+    /// <summary>The singleton settings row, created if this database has not seen one yet.</summary>
+    private static async Task<PlatformSettings> Settings(Diariz.Domain.DiarizDbContext db)
+    {
+        var row = await db.PlatformSettings.FirstOrDefaultAsync(p => p.Id == PlatformSettings.SingletonId);
+        if (row is null)
+        {
+            row = new PlatformSettings { Id = PlatformSettings.SingletonId };
+            db.PlatformSettings.Add(row);
+        }
+        return row;
+    }
+
+    /// <summary>Puts the shared singleton back: every test in this collection sees the same database.</summary>
+    private async Task ClearDefaultAsync()
     {
         await using var db = fx.CreateDbContext();
-        var model = NewModel();
-        db.LlmModels.Add(model);
+        (await Settings(db)).DefaultLlmModelId = null;
         await db.SaveChangesAsync();
+    }
 
-        var settings = await db.PlatformSettings.FirstOrDefaultAsync(p => p.Id == PlatformSettings.SingletonId);
-        if (settings is null)
-        {
-            settings = new PlatformSettings { Id = PlatformSettings.SingletonId };
-            db.PlatformSettings.Add(settings);
-        }
-        settings.DefaultLlmModelId = model.Id;
+    /// <summary>Removes a model and anything pointing at it. LlmCallAssignment.Group is the primary key, so
+    /// a leaked assignment row makes the next test that uses the same group fail on a duplicate key.</summary>
+    private async Task CleanUp(Guid modelId)
+    {
+        await using var db = fx.CreateDbContext();
+        db.LlmCallAssignments.RemoveRange(db.LlmCallAssignments.Where(a => a.LlmModelId == modelId));
         await db.SaveChangesAsync();
-
-        db.LlmModels.Remove(model);
-        try
-        {
-            Assert.NotNull(await Record.ExceptionAsync(() => db.SaveChangesAsync()));
-
-            await using var read = fx.CreateDbContext();
-            Assert.True(await read.LlmModels.AnyAsync(m => m.Id == model.Id), "the default model was deleted");
-        }
-        finally
-        {
-            // Leave the shared singleton as it was: every test in this collection sees the same database.
-            await using var cleanup = fx.CreateDbContext();
-            var row = await cleanup.PlatformSettings.FirstAsync(p => p.Id == PlatformSettings.SingletonId);
-            row.DefaultLlmModelId = null;
-            await cleanup.SaveChangesAsync();
-        }
+        db.LlmModels.RemoveRange(db.LlmModels.Where(m => m.Id == modelId));
+        await db.SaveChangesAsync();
     }
 }

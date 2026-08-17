@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -152,21 +153,25 @@ public sealed class FixedPlatformSettings(Diariz.Domain.DiarizDbContext db) : IP
         Task.FromResult(db.PlatformSettings.First());
 }
 
-/// <summary>Returns a fixed summarisation config and records the resolved user id.</summary>
-public sealed class FakeSummarizationSettingsResolver : ISummarizationSettingsResolver
+/// <summary>Returns a fixed LLM config and records the call kind it was asked for.</summary>
+public sealed class FakeLlmSettingsResolver : ILlmSettingsResolver
 {
     /// <summary>Defaults to the budget a real resolver produces for the default context window, so tests
     /// exercise production sizing rather than the record's conservative floor.</summary>
-    public SummarizationRequestConfig Config { get; set; } =
-        new("https://llm.test/v1", "sk-test", "test-model", 60)
+    public LlmRequestConfig Config { get; set; } =
+        new("https://llm.test/v1", "sk-test", "test-model", new LlmParameters { TimeoutSeconds = 60 })
         {
             ContextCharBudget = LlmContextBudget.CharsFor(new ChatOptions().ContextLength),
         };
-    public Guid? LastUserId { get; private set; }
 
-    public Task<SummarizationRequestConfig> ResolveAsync(Guid userId, CancellationToken ct = default)
+    /// <summary>The kind of the last call resolved. It replaced a recorded user id when configuration moved
+    /// to the platform: which model serves a call now turns on the kind, so that is what callers must get
+    /// right.</summary>
+    public LlmCallKind? LastKind { get; private set; }
+
+    public Task<LlmRequestConfig> ResolveAsync(LlmCallKind kind, CancellationToken ct = default)
     {
-        LastUserId = userId;
+        LastKind = kind;
         return Task.FromResult(Config);
     }
 }
@@ -190,11 +195,11 @@ public sealed class FakeSummarizationClient(Action? onCall = null) : ISummarizat
     public Exception? ThrowOnCall { get; set; }
     public int Calls { get; private set; }
     public bool LastNeedName { get; private set; }
-    public SummarizationRequestConfig? LastConfig { get; private set; }
+    public LlmRequestConfig? LastConfig { get; private set; }
     public string? LastTemplate { get; private set; }
 
     public Task<SummaryResult> SummarizeAsync(
-        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, bool needName, string template,
+        LlmRequestConfig config, IReadOnlyList<SegmentDto> segments, bool needName, string template,
         CancellationToken ct = default)
     {
         onCall?.Invoke();
@@ -214,7 +219,7 @@ public sealed class FakeMeetingMinutesClient(Action? onCall = null) : IMeetingMi
     public string Result { get; set; } = "# Meeting\n\nMinutes body.";
     public Exception? ThrowOnCall { get; set; }
     public int Calls { get; private set; }
-    public SummarizationRequestConfig? LastConfig { get; private set; }
+    public LlmRequestConfig? LastConfig { get; private set; }
     public IReadOnlyList<ChatMessage>? LastMessages { get; private set; }
 
     /// <summary>Every call's messages, in call order (useful when a strategy makes several calls).</summary>
@@ -225,7 +230,7 @@ public sealed class FakeMeetingMinutesClient(Action? onCall = null) : IMeetingMi
     public Func<IReadOnlyList<ChatMessage>, string>? Responder { get; set; }
 
     public Task<string> GenerateAsync(
-        SummarizationRequestConfig config, IReadOnlyList<ChatMessage> messages, CancellationToken ct = default)
+        LlmRequestConfig config, IReadOnlyList<ChatMessage> messages, CancellationToken ct = default)
     {
         onCall?.Invoke();
         Calls++;
@@ -248,13 +253,13 @@ public sealed class FakeMeetingTypeMinutesGenerator(Action? onCall = null) : IMe
     public Guid? LastMeetingTypeId { get; private set; }
     public IReadOnlyList<ExtractedAction>? LastActions { get; private set; }
     public IReadOnlyList<MeetingNoteDto>? LastNotes { get; private set; }
-    public SummarizationRequestConfig? LastConfig { get; private set; }
+    public LlmRequestConfig? LastConfig { get; private set; }
 
     public Task<string> GenerateAsync(
         Guid recordingOwnerId, Guid? meetingTypeId, MeetingMinutesContext context,
         IReadOnlyList<SegmentDto> segments, IReadOnlyList<ExtractedAction> actions,
         IReadOnlyList<MeetingNoteDto> notes,
-        SummarizationRequestConfig config, CancellationToken ct = default)
+        LlmRequestConfig config, CancellationToken ct = default)
     {
         onCall?.Invoke();
         Calls++;
@@ -274,13 +279,13 @@ public sealed class FakeActionsClient(Action? onCall = null) : IActionsClient
     public List<ExtractedAction> Result { get; set; } = new();
     public Exception? ThrowOnCall { get; set; }
     public int Calls { get; private set; }
-    public SummarizationRequestConfig? LastConfig { get; private set; }
+    public LlmRequestConfig? LastConfig { get; private set; }
     public IReadOnlyList<SegmentDto>? LastSegments { get; private set; }
     public string? LastTemplate { get; private set; }
     public DateTimeOffset? LastMeetingDate { get; private set; }
 
     public Task<IReadOnlyList<ExtractedAction>> ExtractAsync(
-        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
+        LlmRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
         DateTimeOffset? meetingDate, CancellationToken ct = default)
     {
         onCall?.Invoke();
@@ -300,12 +305,12 @@ public sealed class FakeTagsClient(Action? onCall = null) : ITagsClient
     public List<ExtractedTag> Result { get; set; } = new();
     public Exception? ThrowOnCall { get; set; }
     public int Calls { get; private set; }
-    public SummarizationRequestConfig? LastConfig { get; private set; }
+    public LlmRequestConfig? LastConfig { get; private set; }
     public IReadOnlyList<SegmentDto>? LastSegments { get; private set; }
     public string? LastTemplate { get; private set; }
 
     public Task<IReadOnlyList<ExtractedTag>> ExtractAsync(
-        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
+        LlmRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
         CancellationToken ct = default)
     {
         onCall?.Invoke();
@@ -327,10 +332,10 @@ public sealed class FakeTranslationClient(Action? onCall = null) : ITranslationC
     public Exception? ThrowOnCall { get; set; }
     public int Calls { get; private set; }
     public string? LastLanguage { get; private set; }
-    public SummarizationRequestConfig? LastConfig { get; private set; }
+    public LlmRequestConfig? LastConfig { get; private set; }
 
     public Task<IReadOnlyList<string>> TranslateAsync(
-        SummarizationRequestConfig config, string targetLanguage, IReadOnlyList<string> texts,
+        LlmRequestConfig config, string targetLanguage, IReadOnlyList<string> texts,
         CancellationToken ct = default)
     {
         onCall?.Invoke();
@@ -442,7 +447,7 @@ public sealed class FakeChatStreamClient(Action? onCall = null) : IChatStreamCli
     public List<string> Tokens { get; set; } = ["Project", " Kickoff", " Recap"];
     public Exception? ThrowOnCall { get; set; }
     public int Calls { get; private set; }
-    public SummarizationRequestConfig? LastConfig { get; private set; }
+    public LlmRequestConfig? LastConfig { get; private set; }
     public List<ChatMessage>? LastMessages { get; private set; }
 
     /// <summary>Scripted token output per <see cref="StreamAsync"/> call, joined to form that call's completion
@@ -462,7 +467,7 @@ public sealed class FakeChatStreamClient(Action? onCall = null) : IChatStreamCli
     private int _chunkCall;
 
     public async IAsyncEnumerable<string> StreamAsync(
-        SummarizationRequestConfig config, IReadOnlyList<ChatMessage> messages,
+        LlmRequestConfig config, IReadOnlyList<ChatMessage> messages,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {
         onCall?.Invoke();
@@ -485,7 +490,7 @@ public sealed class FakeChatStreamClient(Action? onCall = null) : IChatStreamCli
     }
 
     public async IAsyncEnumerable<ChatStreamDelta> StreamChunksAsync(
-        SummarizationRequestConfig config, IReadOnlyList<object> messages,
+        LlmRequestConfig config, IReadOnlyList<object> messages,
         IReadOnlyList<object>? tools,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {

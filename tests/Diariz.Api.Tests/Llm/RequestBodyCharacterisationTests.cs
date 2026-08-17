@@ -1,4 +1,5 @@
 using Diariz.Api.Contracts;
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 
@@ -27,7 +28,16 @@ public class RequestBodyCharacterisationTests
         "repeat_penalty", "frequency_penalty", "presence_penalty",
     ];
 
-    private static SummarizationRequestConfig Config() => new("http://llm.test/v1", "k", "test-model", 120);
+    private static LlmRequestConfig Config() =>
+        new("http://llm.test/v1", "k", "test-model", new LlmParameters { TimeoutSeconds = 120 });
+
+    /// <summary>The same config with reasoning turned on. Both halves are needed: an effort with reasoning
+    /// off is deliberately not sent, which is what the paired omission test above pins.</summary>
+    private static LlmRequestConfig WithReasoning(string effort) =>
+        Config() with
+        {
+            Parameters = Config().Parameters with { ReasoningEnabled = true, ReasoningEffort = effort },
+        };
 
     private static IReadOnlyList<SegmentDto> Segments() =>
         [new SegmentDto(Guid.NewGuid(), "SPEAKER_00", "Alex", 0, 1000, "hello")];
@@ -154,7 +164,7 @@ public class RequestBodyCharacterisationTests
         Assert.False(without.Has("reasoning_effort"));
 
         var with = await Capture(h => new SummarizationClient(h)
-            .SummarizeAsync(Config() with { ReasoningEffort = "high" }, Segments(), false, "T"));
+            .SummarizeAsync(WithReasoning("high"), Segments(), false, "T"));
         Assert.Equal("high", with.LastBody.GetProperty("reasoning_effort").GetString());
     }
 

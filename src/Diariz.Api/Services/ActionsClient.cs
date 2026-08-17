@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Diariz.Api.Contracts;
@@ -10,7 +11,7 @@ public interface IActionsClient
     /// prompt <paramref name="template"/> (with the meeting date substituted). Returns an empty list when the
     /// transcript has none.</summary>
     Task<IReadOnlyList<ExtractedAction>> ExtractAsync(
-        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
+        LlmRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
         DateTimeOffset? meetingDate, CancellationToken ct = default);
 }
 
@@ -23,7 +24,7 @@ public class ActionsClient : IActionsClient
     public ActionsClient(HttpClient http) => _http = http;
 
     public async Task<IReadOnlyList<ExtractedAction>> ExtractAsync(
-        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
+        LlmRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
         DateTimeOffset? meetingDate, CancellationToken ct = default)
     {
         var messages = ActionsPrompt.BuildMessages(template, segments, meetingDate, config.ContextCharBudget);

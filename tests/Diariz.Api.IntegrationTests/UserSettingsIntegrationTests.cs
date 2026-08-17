@@ -2,6 +2,7 @@ using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
 using Diariz.Api.IntegrationTests.Infrastructure;
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain.Entities;
@@ -56,21 +57,60 @@ public class UserSettingsIntegrationTests(ContainersFixture fx)
     }
 
     [Fact]
-    public async Task Resolver_DecryptsStoredKey_RoundTrip()
+    public async Task Resolver_DecryptsAModelsStoredKey_RoundTrip()
     {
-        var userId = await SeedUser();
+        // Real Data Protection against real Postgres. The key moved from the user's settings to the model
+        // row in 0.221.0, but the round trip is the same guarantee: what is stored is ciphertext, and what
+        // reaches the endpoint is the original secret.
+        var modelId = Guid.NewGuid();
         await using (var db = fx.CreateDbContext())
-            await Settings(db, userId).Update(new UpdateUserSettingsRequest("https://mine/v1", "my-model", "sk-real-secret"));
+        {
+            db.LlmModels.Add(new LlmModel
+            {
+                Id = modelId,
+                Name = $"my-model-{modelId:N}",
+                ApiBase = "https://mine/v1",
+                ApiKeyEncrypted = Protector.Protect("sk-real-secret"),
+                ContextLength = 8192,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            });
+            db.LlmCallAssignments.Add(new LlmCallAssignment { Group = LlmCallGroup.Summaries, LlmModelId = modelId });
+            await db.SaveChangesAsync();
+        }
 
-        await using var ctx = fx.CreateDbContext();
-        var resolver = new SummarizationSettingsResolver(
-            ctx, Options.Create(new SummarizationOptions { ApiBase = "https://server", ApiKey = "sk-server", Model = "srv" }), Protector);
+        try
+        {
+            await using var verify = fx.CreateDbContext();
+            var stored = await verify.LlmModels.SingleAsync(m => m.Id == modelId);
+            Assert.DoesNotContain("sk-real-secret", stored.ApiKeyEncrypted!); // real ciphertext at rest
 
-        var cfg = await resolver.ResolveAsync(userId);
+            await using var ctx = fx.CreateDbContext();
+            var resolver = new LlmSettingsResolver(
+                ctx, Options.Create(new LlmDefaultsOptions()),
+                Options.Create(new SummarizationOptions
+                {
+                    ApiBase = "https://server", ApiKey = "sk-server", Model = "srv",
+                }),
+                Protector);
 
-        Assert.Equal("https://mine/v1", cfg.ApiBase);
-        Assert.Equal("my-model", cfg.Model);
-        Assert.Equal("sk-real-secret", cfg.ApiKey); // decrypted back to the original
+            var cfg = await resolver.ResolveAsync(LlmCallKind.Summarize);
+
+            Assert.Equal("https://mine/v1", cfg.ApiBase);
+            Assert.Equal(stored.Name, cfg.Model);
+            Assert.Equal("sk-real-secret", cfg.ApiKey); // decrypted back to the original
+        }
+        finally
+        {
+            // LlmCallAssignment.Group is the primary key, so a leaked row would collide with any later test
+            // in this collection that assigns the same group.
+            await using var cleanup = fx.CreateDbContext();
+            cleanup.LlmCallAssignments.RemoveRange(
+                cleanup.LlmCallAssignments.Where(a => a.LlmModelId == modelId));
+            await cleanup.SaveChangesAsync();
+            cleanup.LlmModels.RemoveRange(cleanup.LlmModels.Where(m => m.Id == modelId));
+            await cleanup.SaveChangesAsync();
+        }
     }
 
     [Fact]

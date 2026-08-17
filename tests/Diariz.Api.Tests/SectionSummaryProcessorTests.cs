@@ -1,4 +1,5 @@
 using Diariz.Api.Contracts;
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
@@ -53,7 +54,7 @@ public class SectionSummaryProcessorTests
     }
 
     private static Task Run(DiarizDbContext db, ISummarizationClient perRec, IMeetingMinutesClient combiner,
-        FakeSummarizationSettingsResolver resolver, FakeHubContext hub, Section section) =>
+        FakeLlmSettingsResolver resolver, FakeHubContext hub, Section section) =>
         SectionSummaryProcessor.ProcessAsync(db, perRec, combiner, resolver, hub,
             SummarizationPrompt.DefaultTemplate, FolderSummaryPrompt.DefaultTemplate,
             new SectionSummaryJob(section.Id), NullLogger.Instance);
@@ -78,7 +79,7 @@ public class SectionSummaryProcessorTests
 
         var combiner = new FakeMeetingMinutesClient();
         await Run(db, new FakeSummarizationClient(), combiner,
-            new FakeSummarizationSettingsResolver(), new FakeHubContext(), section);
+            new FakeLlmSettingsResolver(), new FakeHubContext(), section);
 
         var prompt = combiner.LastMessages![1].Content;
         for (var i = 0; i < meetings; i++)
@@ -123,7 +124,7 @@ public class SectionSummaryProcessorTests
         var perRec = new FakeSummarizationClient { Result = new SummaryResult("Grandchild summary.", null) };
         var combiner = new FakeMeetingMinutesClient();
 
-        await Run(db, perRec, combiner, new FakeSummarizationSettingsResolver(), new FakeHubContext(), customers);
+        await Run(db, perRec, combiner, new FakeLlmSettingsResolver(), new FakeHubContext(), customers);
 
         // The grandchild's recording was reached and summarized - before the fix this is 0 (only the direct
         // child "Acme" was visible to the old UserId/ParentId query, so Falcon's recording was invisible).
@@ -167,7 +168,7 @@ public class SectionSummaryProcessorTests
         var perRec = new FakeSummarizationClient { Result = new SummaryResult("Shared room summary.", null) };
         var combiner = new FakeMeetingMinutesClient();
 
-        await Run(db, perRec, combiner, new FakeSummarizationSettingsResolver(), new FakeHubContext(), folder);
+        await Run(db, perRec, combiner, new FakeLlmSettingsResolver(), new FakeHubContext(), folder);
 
         Assert.Equal(1, perRec.Calls);
         Assert.Contains("Shared room summary.", combiner.LastMessages![1].Content);
@@ -185,7 +186,7 @@ public class SectionSummaryProcessorTests
         var combiner = new FakeMeetingMinutesClient { Result = "Folder-level summary." };
         var hub = new FakeHubContext();
 
-        await Run(db, new FakeSummarizationClient(), combiner, new FakeSummarizationSettingsResolver(), hub, parent);
+        await Run(db, new FakeSummarizationClient(), combiner, new FakeLlmSettingsResolver(), hub, parent);
 
         var summary = await db.SectionSummaries.SingleAsync(x => x.SectionId == parent.Id);
         Assert.Equal("Folder-level summary.", summary.Text);
@@ -208,7 +209,7 @@ public class SectionSummaryProcessorTests
         await SeedRecording(db, userId, section.Id, name: "Missing"); // no summary yet
         var perRec = new FakeSummarizationClient { Result = new SummaryResult("Freshly generated.", null) };
 
-        await Run(db, perRec, new FakeMeetingMinutesClient(), new FakeSummarizationSettingsResolver(), new FakeHubContext(), section);
+        await Run(db, perRec, new FakeMeetingMinutesClient(), new FakeLlmSettingsResolver(), new FakeHubContext(), section);
 
         Assert.Equal(1, perRec.Calls); // only the recording missing a summary was (re)generated
         Assert.False(perRec.LastNeedName); // folder roll-up never renames the recording
@@ -232,7 +233,7 @@ public class SectionSummaryProcessorTests
         await db.SaveChangesAsync();
         var combiner = new FakeMeetingMinutesClient();
 
-        await Run(db, new FakeSummarizationClient(), combiner, new FakeSummarizationSettingsResolver(), new FakeHubContext(), section);
+        await Run(db, new FakeSummarizationClient(), combiner, new FakeLlmSettingsResolver(), new FakeHubContext(), section);
 
         var summary = await db.SectionSummaries.SingleAsync(x => x.SectionId == section.Id);
         Assert.Equal("my edit", summary.Text); // preserved
@@ -246,7 +247,7 @@ public class SectionSummaryProcessorTests
         var userId = Guid.NewGuid();
         var section = await SeedSection(db, userId);
         await SeedRecording(db, userId, section.Id, summaryText: "x");
-        var resolver = new FakeSummarizationSettingsResolver { Config = new("", "", "m", 60) }; // disabled
+        var resolver = new FakeLlmSettingsResolver { Config = new("", "", "m", new LlmParameters { TimeoutSeconds = 60 }) }; // disabled
         var hub = new FakeHubContext();
 
         await Run(db, new FakeSummarizationClient(), new FakeMeetingMinutesClient(), resolver, hub, section);
@@ -266,7 +267,7 @@ public class SectionSummaryProcessorTests
         await SeedRecording(db, userId, section.Id, summaryText: "x");
         var combiner = new FakeMeetingMinutesClient { ThrowOnCall = new InvalidOperationException("LLM down") };
 
-        await Run(db, new FakeSummarizationClient(), combiner, new FakeSummarizationSettingsResolver(), new FakeHubContext(), section);
+        await Run(db, new FakeSummarizationClient(), combiner, new FakeLlmSettingsResolver(), new FakeHubContext(), section);
 
         var summary = await db.SectionSummaries.SingleAsync(x => x.SectionId == section.Id);
         Assert.Equal(SectionGenerationStatus.Failed, summary.Status);
@@ -291,7 +292,7 @@ public class SectionSummaryProcessorTests
             observedUser = LlmCallScope.Active?.UserId;
         });
 
-        await Run(db, new FakeSummarizationClient(), combiner, new FakeSummarizationSettingsResolver(),
+        await Run(db, new FakeSummarizationClient(), combiner, new FakeLlmSettingsResolver(),
             new FakeHubContext(), section);
 
         Assert.Equal(LlmCallKind.SectionSummary, observedKind);
@@ -306,7 +307,7 @@ public class SectionSummaryProcessorTests
         var section = await SeedSection(db, Guid.NewGuid());
         var combiner = new FakeMeetingMinutesClient();
 
-        await Run(db, new FakeSummarizationClient(), combiner, new FakeSummarizationSettingsResolver(), new FakeHubContext(), section);
+        await Run(db, new FakeSummarizationClient(), combiner, new FakeLlmSettingsResolver(), new FakeHubContext(), section);
 
         var summary = await db.SectionSummaries.SingleAsync(x => x.SectionId == section.Id);
         Assert.Equal(SectionGenerationStatus.Ready, summary.Status);

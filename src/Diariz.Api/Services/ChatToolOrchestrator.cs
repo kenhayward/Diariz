@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -32,7 +33,7 @@ public interface IChatToolOrchestrator
     /// round cap is hit). Yields token/tool events in order. When <paramref name="tools"/> is empty this is a
     /// single plain streaming turn — identical to the no-tools chat path.</summary>
     IAsyncEnumerable<ChatEvent> RunAsync(
-        SummarizationRequestConfig cfg, IReadOnlyList<ChatMessage> seed,
+        LlmRequestConfig cfg, IReadOnlyList<ChatMessage> seed,
         IReadOnlyList<IChatTool> tools, ChatToolContext ctx, CancellationToken ct = default);
 }
 
@@ -49,7 +50,7 @@ public sealed class ChatToolOrchestrator : IChatToolOrchestrator
     public ChatToolOrchestrator(IChatStreamClient chat) => _chat = chat;
 
     public async IAsyncEnumerable<ChatEvent> RunAsync(
-        SummarizationRequestConfig cfg, IReadOnlyList<ChatMessage> seed,
+        LlmRequestConfig cfg, IReadOnlyList<ChatMessage> seed,
         IReadOnlyList<IChatTool> tools, ChatToolContext ctx,
         [EnumeratorCancellation] CancellationToken ct = default)
     {

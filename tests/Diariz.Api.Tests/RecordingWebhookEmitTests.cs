@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Text;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
@@ -32,7 +33,7 @@ public class RecordingWebhookEmitTests
         var hub = new FakeHubContext();
         var queue = new FakeJobQueue();
         var summaryOpts = new SummarizationOptions { ApiBase = summarizationEnabled ? "http://llm.test/v1" : "" };
-        var resolver = new SummarizationSettingsResolver(db, Options.Create(summaryOpts), new FakeApiKeyProtector());
+        var resolver = new LlmSettingsResolver(db, Options.Create(new LlmDefaultsOptions()), Options.Create(summaryOpts), new FakeApiKeyProtector());
         var embedding = new EmbeddingSettingsResolver(
             db, Options.Create(new EmbeddingOptions()), Options.Create(summaryOpts), new FakeApiKeyProtector());
         var publisher = new CapturingWebhookPublisher();
@@ -119,8 +120,8 @@ public class RecordingWebhookEmitTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Transcription:DefaultModel"] = "whisperx-large-v3" })
             .Build();
-        var resolver = new SummarizationSettingsResolver(
-            db, Options.Create(new SummarizationOptions()), new FakeApiKeyProtector());
+        var resolver = new LlmSettingsResolver(
+            db, Options.Create(new LlmDefaultsOptions()), Options.Create(new SummarizationOptions()), new FakeApiKeyProtector());
         publisher = new CapturingWebhookPublisher();
         return new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config,
             resolver, new FakeEmailSender(), new FakeSpeakerIdentifier(), Options.Create(new UploadOptions()),

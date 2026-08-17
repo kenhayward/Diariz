@@ -90,7 +90,7 @@ public class TranscriptFieldIntegrationTests(ContainersFixture fx)
         await using (var db = fx.CreateDbContext())
         {
             await FormulaRunProcessor.ProcessAsync(
-                db, chat, new FakeSummarizationSettingsResolver(), new FakeHubContext(),
+                db, chat, new FakeLlmSettingsResolver(), new FakeHubContext(),
                 new FormulaRunJob(recId, null, resultId, formulaId, userId), NullLogger.Instance,
                 new CapturingWebhookPublisher(), "");
         }

@@ -1965,6 +1965,21 @@ Expected: compile error.
 
 Follow `PlatformSettingsController` for the authorisation attribute and constructor shape. Validate parameter names against `LlmParameterLayers.ParameterNames` and return 400 naming the offending key. Return 409 with the group names on a delete that violates the FK.
 
+**The controller MUST check before deleting; it cannot rely on the database refusing.** Established in Task 7
+against real Postgres (`LlmModelSchemaTests`, and its class comment records the detail):
+
+- `LlmCallAssignment.LlmModelId` is required, so EF throws `InvalidOperationException` at `DbSet.Remove`
+  itself - before `SaveChangesAsync` - when the assignment is tracked. Catching `DbUpdateException` around
+  the save will not see it.
+- `PlatformSettings.DefaultLlmModelId` is **nullable**, so when that row is tracked EF issues
+  `UPDATE PlatformSettings SET DefaultLlmModelId = NULL` ahead of the DELETE and the RESTRICT never fires -
+  **the model is deleted and the platform default is silently cleared**. Verified directly: no exception,
+  model gone, default nulled.
+
+So `Delete` must query for assignments AND for `DefaultLlmModelId == id` and return 409 itself. Both FKs are
+`DELETE RESTRICT` in Postgres, but that only bites on the untracked path, which is a backstop for code that
+forgets - not the guard.
+
 - [ ] **Step 4: Run and watch them pass, then build the solution**
 
 ```bash

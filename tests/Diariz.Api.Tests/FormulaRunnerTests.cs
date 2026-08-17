@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
@@ -27,7 +28,7 @@ public class FormulaRunnerTests
     }
 
     private static FormulaRunner MakeRunner(
-        DiarizDbContext db, FakeChatStreamClient chat, FakeSummarizationSettingsResolver resolver) =>
+        DiarizDbContext db, FakeChatStreamClient chat, FakeLlmSettingsResolver resolver) =>
         new(db, chat, resolver);
 
     [Fact]
@@ -47,7 +48,7 @@ public class FormulaRunnerTests
         await db.SaveChangesAsync();
 
         var chat = new FakeChatStreamClient { Tokens = ["# Key", " Decisions\n", "- Did the thing"] };
-        var resolver = new FakeSummarizationSettingsResolver();
+        var resolver = new FakeLlmSettingsResolver();
         var runner = MakeRunner(db, chat, resolver);
 
         var result = await runner.RunAsync(userId, rec.Id, formula.Id);
@@ -86,7 +87,7 @@ public class FormulaRunnerTests
         db.Formulas.Add(formula);
         await db.SaveChangesAsync();
 
-        var runner = MakeRunner(db, new FakeChatStreamClient(), new FakeSummarizationSettingsResolver());
+        var runner = MakeRunner(db, new FakeChatStreamClient(), new FakeLlmSettingsResolver());
 
         var first = await runner.RunAsync(userId, rec.Id, formula.Id);
         var second = await runner.RunAsync(userId, rec.Id, formula.Id);
@@ -114,7 +115,7 @@ public class FormulaRunnerTests
         db.Formulas.AddRange(a, b);
         await db.SaveChangesAsync();
 
-        var runner = MakeRunner(db, new FakeChatStreamClient(), new FakeSummarizationSettingsResolver());
+        var runner = MakeRunner(db, new FakeChatStreamClient(), new FakeLlmSettingsResolver());
 
         var first = await runner.RunAsync(userId, rec.Id, a.Id);
         var second = await runner.RunAsync(userId, rec.Id, b.Id);
@@ -142,7 +143,7 @@ public class FormulaRunnerTests
         db.Formulas.Add(formula);
         await db.SaveChangesAsync();
 
-        var runner = MakeRunner(db, new FakeChatStreamClient(), new FakeSummarizationSettingsResolver());
+        var runner = MakeRunner(db, new FakeChatStreamClient(), new FakeLlmSettingsResolver());
 
         await Assert.ThrowsAsync<FormulaNotFoundException>(() => runner.RunAsync(userId, rec.Id, formula.Id));
     }
@@ -162,7 +163,7 @@ public class FormulaRunnerTests
         db.Formulas.Add(formula);
         await db.SaveChangesAsync();
 
-        var runner = MakeRunner(db, new FakeChatStreamClient(), new FakeSummarizationSettingsResolver());
+        var runner = MakeRunner(db, new FakeChatStreamClient(), new FakeLlmSettingsResolver());
 
         await Assert.ThrowsAsync<FormulaAccessException>(() => runner.RunAsync(userId, rec.Id, formula.Id));
     }
@@ -183,7 +184,7 @@ public class FormulaRunnerTests
         db.Formulas.Add(formula);
         await db.SaveChangesAsync();
 
-        var runner = MakeRunner(db, new FakeChatStreamClient(), new FakeSummarizationSettingsResolver());
+        var runner = MakeRunner(db, new FakeChatStreamClient(), new FakeLlmSettingsResolver());
 
         await Assert.ThrowsAsync<FormulaNotFoundException>(() => runner.RunAsync(callerId, rec.Id, formula.Id));
     }
@@ -195,7 +196,7 @@ public class FormulaRunnerTests
         var userId = Guid.NewGuid();
         var (rec, _) = await SeedRecordingWithTranscript(db, userId);
 
-        var runner = MakeRunner(db, new FakeChatStreamClient(), new FakeSummarizationSettingsResolver());
+        var runner = MakeRunner(db, new FakeChatStreamClient(), new FakeLlmSettingsResolver());
 
         await Assert.ThrowsAsync<FormulaNotFoundException>(
             () => runner.RunAsync(userId, rec.Id, Guid.NewGuid()));
@@ -214,7 +215,7 @@ public class FormulaRunnerTests
         db.Formulas.Add(formula);
         await db.SaveChangesAsync();
 
-        var runner = MakeRunner(db, new FakeChatStreamClient(), new FakeSummarizationSettingsResolver());
+        var runner = MakeRunner(db, new FakeChatStreamClient(), new FakeLlmSettingsResolver());
 
         await Assert.ThrowsAsync<FormulaNotFoundException>(
             () => runner.RunAsync(userId, Guid.NewGuid(), formula.Id));
@@ -241,7 +242,7 @@ public class FormulaRunnerTests
         });
         await db.SaveChangesAsync();
 
-        var runner = MakeRunner(db, new FakeChatStreamClient { Tokens = ["ok"] }, new FakeSummarizationSettingsResolver());
+        var runner = MakeRunner(db, new FakeChatStreamClient { Tokens = ["ok"] }, new FakeLlmSettingsResolver());
 
         var result = await runner.RunAsync(callerB, rec.Id, formula.Id);
 
@@ -265,7 +266,7 @@ public class FormulaRunnerTests
         db.Formulas.Add(formula);
         await db.SaveChangesAsync();
 
-        var runner = MakeRunner(db, new FakeChatStreamClient(), new FakeSummarizationSettingsResolver());
+        var runner = MakeRunner(db, new FakeChatStreamClient(), new FakeLlmSettingsResolver());
 
         await Assert.ThrowsAsync<FormulaNotFoundException>(() => runner.RunAsync(callerB, rec.Id, formula.Id));
     }
@@ -286,7 +287,7 @@ public class FormulaRunnerTests
         db.Formulas.Add(formula);
         await db.SaveChangesAsync();
 
-        var runner = MakeRunner(db, new FakeChatStreamClient(), new FakeSummarizationSettingsResolver());
+        var runner = MakeRunner(db, new FakeChatStreamClient(), new FakeLlmSettingsResolver());
 
         await Assert.ThrowsAsync<FormulaNotFoundException>(() => runner.RunAsync(callerB, rec.Id, formula.Id));
     }
@@ -327,7 +328,7 @@ public class FormulaRunnerTests
             observedRecording = LlmCallScope.Active?.RecordingId;
             observedEmail = LlmCallScope.Active?.UserEmail;
         });
-        var runner = MakeRunner(db, chat, new FakeSummarizationSettingsResolver());
+        var runner = MakeRunner(db, chat, new FakeLlmSettingsResolver());
 
         await runner.RunAsync(userId, rec.Id, formula.Id);
 
@@ -352,9 +353,9 @@ public class FormulaRunnerTests
         db.Formulas.Add(formula);
         await db.SaveChangesAsync();
 
-        var resolver = new FakeSummarizationSettingsResolver
+        var resolver = new FakeLlmSettingsResolver
         {
-            Config = new SummarizationRequestConfig("", "", "", 60), // empty ApiBase => disabled
+            Config = new LlmRequestConfig("", "", "", new LlmParameters { TimeoutSeconds = 60 }), // empty ApiBase => disabled
         };
         var runner = MakeRunner(db, new FakeChatStreamClient(), resolver);
 

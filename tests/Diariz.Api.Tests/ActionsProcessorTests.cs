@@ -1,4 +1,5 @@
 using Diariz.Api.Contracts;
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
@@ -44,7 +45,7 @@ public class ActionsProcessorTests
         var userId = Guid.NewGuid();
         var (rec, tr) = await Seed(db, userId);
         var client = new FakeActionsClient { Result = { new ExtractedAction("Send the report", "Bob", "Friday") } };
-        var resolver = new FakeSummarizationSettingsResolver();
+        var resolver = new FakeLlmSettingsResolver();
         var hub = new FakeHubContext();
         var queue = new FakeJobQueue();
 
@@ -55,7 +56,7 @@ public class ActionsProcessorTests
         Assert.Equal("Send the report", action.Text);
         Assert.Equal("Bob", action.Actor);
         Assert.Equal("Friday", action.Deadline);
-        Assert.Equal(userId, resolver.LastUserId);            // resolved for the owner
+        Assert.Equal(LlmCallKind.ExtractActions, resolver.LastKind);  // resolved for the right call kind
         Assert.Equal(resolver.Config, client.LastConfig);     // passed straight to the client
         Assert.Equal(rec.CreatedAt, client.LastMeetingDate);  // meeting date supplied for deadline resolution
 
@@ -90,7 +91,7 @@ public class ActionsProcessorTests
             observedUser = LlmCallScope.Active?.UserId;
         });
 
-        await ActionsProcessor.ProcessAsync(db, client, new FakeSummarizationSettingsResolver(),
+        await ActionsProcessor.ProcessAsync(db, client, new FakeLlmSettingsResolver(),
             new FakeHubContext(), new FakeJobQueue(), Job(rec, tr), Template, NullLogger.Instance,
             new CapturingWebhookPublisher(), "");
 
@@ -113,7 +114,7 @@ public class ActionsProcessorTests
         var queue = new FakeJobQueue();
 
         await ActionsProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), queue, Job(rec, tr), Template,
+            db, client, new FakeLlmSettingsResolver(), new FakeHubContext(), queue, Job(rec, tr), Template,
             NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         var action = await db.RecordingActions.SingleAsync(a => a.RecordingId == rec.Id);
@@ -129,7 +130,7 @@ public class ActionsProcessorTests
         var (rec, tr) = await Seed(db, Guid.NewGuid());
         var client = new FakeActionsClient { Result = { new ExtractedAction("x", "", "") } };
         // Empty ApiBase => Config.Enabled is false (no LLM endpoint at user or server level).
-        var resolver = new FakeSummarizationSettingsResolver { Config = new SummarizationRequestConfig("", "", "", 30) };
+        var resolver = new FakeLlmSettingsResolver { Config = new LlmRequestConfig("", "", "", new LlmParameters { TimeoutSeconds = 30 }) };
         var queue = new FakeJobQueue();
 
         await ActionsProcessor.ProcessAsync(db, client, resolver, new FakeHubContext(), queue, Job(rec, tr), Template,
@@ -149,7 +150,7 @@ public class ActionsProcessorTests
         var queue = new FakeJobQueue();
 
         await ActionsProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), queue, Job(rec, tr), Template,
+            db, client, new FakeLlmSettingsResolver(), new FakeHubContext(), queue, Job(rec, tr), Template,
             NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         Assert.Empty(await db.RecordingActions.ToListAsync());
@@ -168,7 +169,7 @@ public class ActionsProcessorTests
         var queue = new FakeJobQueue();
 
         await ActionsProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), queue, Job(rec, tr), Template,
+            db, client, new FakeLlmSettingsResolver(), new FakeHubContext(), queue, Job(rec, tr), Template,
             NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         Assert.Equal(0, client.Calls);

@@ -1,5 +1,6 @@
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Webhooks;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
@@ -22,7 +23,7 @@ namespace Diariz.Api.Services;
 public static class TagsProcessor
 {
     public static async Task ProcessAsync(
-        DiarizDbContext db, ITagsClient client, ISummarizationSettingsResolver resolver,
+        DiarizDbContext db, ITagsClient client, ILlmSettingsResolver resolver,
         IHubContext<TranscriptionHub> hub, TagsJob job, string template, ILogger logger,
         IWebhookPublisher webhooks, string publicUrl,
         CancellationToken ct = default)
@@ -66,7 +67,7 @@ public static class TagsProcessor
             if (segs.Count == 0) return; // nothing to tag (marker left null so a re-run can retry).
 
             // Use the recording owner's effective config (their endpoint/key/model, else server defaults).
-            var cfg = await resolver.ResolveAsync(rec.UserId, ct);
+            var cfg = await resolver.ResolveAsync(LlmCallKind.Tags, ct);
             if (!cfg.Enabled) return; // no LLM configured — marker stays null so the backfill retries later.
 
             var extracted = await client.ExtractAsync(cfg, segs, template, ct);

@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Api.Tools;
@@ -6,7 +7,7 @@ namespace Diariz.Api.Tests;
 
 public class ChatToolOrchestratorTests
 {
-    private static readonly SummarizationRequestConfig Cfg = new("https://llm.test/v1", "sk", "m", 60);
+    private static readonly LlmRequestConfig Cfg = new("https://llm.test/v1", "sk", "m", new LlmParameters { TimeoutSeconds = 60 });
     private static readonly IReadOnlyList<ChatMessage> Seed = [new("user", "who said budget?")];
 
     private static async Task<List<ChatEvent>> Run(

@@ -1,6 +1,7 @@
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
@@ -29,7 +30,7 @@ public class WorkerCallbackControllerTests
         var hub = new FakeHubContext();
         var queue = new FakeJobQueue();
         var summaryOpts = new SummarizationOptions { ApiBase = summarizationEnabled ? "http://llm.test/v1" : "" };
-        var resolver = new SummarizationSettingsResolver(db, Options.Create(summaryOpts), new FakeApiKeyProtector());
+        var resolver = new LlmSettingsResolver(db, Options.Create(new LlmDefaultsOptions()), Options.Create(summaryOpts), new FakeApiKeyProtector());
         // Embeddings fall back to the summarisation endpoint, so they follow the same enable/disable toggle here.
         var embedding = new EmbeddingSettingsResolver(
             db, Options.Create(new EmbeddingOptions()), Options.Create(summaryOpts), new FakeApiKeyProtector());

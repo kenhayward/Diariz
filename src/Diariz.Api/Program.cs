@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Text;
 using Amazon.S3;
 using Amazon.Runtime;
@@ -317,7 +318,7 @@ AddLlmClient<ISummarizationClient, SummarizationClient>(NoHttpTimeout);
 AddLlmClient<IDictationClient, DictationClient>(NoHttpTimeout);
 AddLlmClient<IActionsClient, ActionsClient>(NoHttpTimeout);
 AddLlmClient<ITranslationClient, TranslationClient>(NoHttpTimeout);
-builder.Services.AddScoped<ISummarizationSettingsResolver, SummarizationSettingsResolver>();
+builder.Services.AddScoped<ILlmSettingsResolver, LlmSettingsResolver>();
 builder.Services.AddHostedService<SummarizationWorker>();
 builder.Services.AddScoped<IFormulaRunner, FormulaRunner>();
 

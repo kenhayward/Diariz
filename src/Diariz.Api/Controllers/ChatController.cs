@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
@@ -58,7 +59,7 @@ public class ChatController : ControllerBase
 
     private readonly DiarizDbContext _db;
     private readonly IChatStreamClient _chat;
-    private readonly ISummarizationSettingsResolver _settings;
+    private readonly ILlmSettingsResolver _settings;
     private readonly IChatContextResolver _contextResolver;
     private readonly IAttachmentExtractor _extractor;
     private readonly IAudioStorage _storage;
@@ -70,7 +71,7 @@ public class ChatController : ControllerBase
     private readonly DictationOptions _dictationOptions;
 
     public ChatController(
-        DiarizDbContext db, IChatStreamClient chat, ISummarizationSettingsResolver settings,
+        DiarizDbContext db, IChatStreamClient chat, ILlmSettingsResolver settings,
         IChatContextResolver contextResolver, IAttachmentExtractor extractor,
         IAudioStorage storage, IUrlFetcher urlFetcher,
         IChatToolSettingsResolver toolSettings, IChatToolOrchestrator orchestrator, IRoomScope rooms,
@@ -112,7 +113,7 @@ public class ChatController : ControllerBase
         "is configured for you or the platform.")]
     public async Task<IActionResult> Stream(ChatStreamRequest req, CancellationToken ct)
     {
-        var cfg = await _settings.ResolveAsync(UserId, ct);
+        var cfg = await _settings.ResolveAsync(LlmCallKind.ChatMessage, ct);
         if (!cfg.Enabled)
             return BadRequest("Chat is not configured. Set an LLM endpoint in Settings.");
 
@@ -567,7 +568,7 @@ public class ChatController : ControllerBase
         var excerpt = Truncate((firstUser + "\n\n" + firstAssistant).Trim(), 1500);
         if (excerpt.Length == 0) return fallback;
 
-        var cfg = await _settings.ResolveAsync(UserId, ct);
+        var cfg = await _settings.ResolveAsync(LlmCallKind.ChatTitle, ct);
         if (!cfg.Enabled) return fallback;
 
         try

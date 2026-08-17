@@ -1,4 +1,5 @@
 using Diariz.Api.Contracts;
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
@@ -18,7 +19,7 @@ namespace Diariz.Api.Tests;
 /// It is pinned here so the change is deliberate and visible, not a silent drift.</para></summary>
 public class MinutesContextTests
 {
-    private static readonly SummarizationRequestConfig Config = new("https://llm.test/v1", "sk", "m", 60);
+    private static readonly LlmRequestConfig Config = new("https://llm.test/v1", "sk", "m", new LlmParameters { TimeoutSeconds = 60 });
 
     private static MeetingTypeMinutesGenerator Build(DiarizDbContext db, FakeMeetingMinutesClient client) =>
         new(db,

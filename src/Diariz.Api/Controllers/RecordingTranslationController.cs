@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Security.Claims;
 using Diariz.Api.Contracts;
 using Diariz.Api.Localization;
@@ -21,10 +22,10 @@ public class RecordingTranslationController : ControllerBase
 {
     private readonly DiarizDbContext _db;
     private readonly ITranslationClient _client;
-    private readonly ISummarizationSettingsResolver _settings;
+    private readonly ILlmSettingsResolver _settings;
 
     public RecordingTranslationController(
-        DiarizDbContext db, ITranslationClient client, ISummarizationSettingsResolver settings)
+        DiarizDbContext db, ITranslationClient client, ILlmSettingsResolver settings)
     {
         _db = db;
         _client = client;
@@ -76,7 +77,7 @@ public class RecordingTranslationController : ControllerBase
         var current = rec.Transcriptions.FirstOrDefault();
         if (current is null || current.Segments.Count == 0) return NotFound();
 
-        var cfg = await _settings.ResolveAsync(UserId);
+        var cfg = await _settings.ResolveAsync(LlmCallKind.Translation);
         if (!cfg.Enabled) return BadRequest("Translation needs an LLM endpoint. Set one in Settings.");
 
         var (name, error) = await ResolveTargetAsync(req.Language);
@@ -128,7 +129,7 @@ public class RecordingTranslationController : ControllerBase
         var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == recordingId && r.UserId == UserId);
         if (rec is null) return NotFound();
 
-        var cfg = await _settings.ResolveAsync(UserId);
+        var cfg = await _settings.ResolveAsync(LlmCallKind.Translation);
         if (!cfg.Enabled) return BadRequest("Translation needs an LLM endpoint. Set one in Settings.");
 
         var (name, error) = await ResolveTargetAsync(req.Language);
@@ -160,7 +161,7 @@ public class RecordingTranslationController : ControllerBase
         var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == recordingId && r.UserId == UserId);
         if (rec is null) return NotFound();
 
-        var cfg = await _settings.ResolveAsync(UserId);
+        var cfg = await _settings.ResolveAsync(LlmCallKind.Translation);
         if (!cfg.Enabled) return BadRequest("Translation needs an LLM endpoint. Set one in Settings.");
 
         var (name, error) = await ResolveTargetAsync(req.Language);

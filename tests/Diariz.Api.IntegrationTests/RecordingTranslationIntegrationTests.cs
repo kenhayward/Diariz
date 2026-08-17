@@ -13,7 +13,7 @@ namespace Diariz.Api.IntegrationTests;
 public class RecordingTranslationIntegrationTests(ContainersFixture fx)
 {
     private static RecordingTranslationController Build(DiarizDbContext db, Guid userId, FakeTranslationClient client) =>
-        new(db, client, new FakeSummarizationSettingsResolver()) { ControllerContext = Http.Context(userId) };
+        new(db, client, new FakeLlmSettingsResolver()) { ControllerContext = Http.Context(userId) };
 
     [Fact]
     public async Task TranslateRecording_TranslatesOnlyTheHighestVersion_OverPostgres()

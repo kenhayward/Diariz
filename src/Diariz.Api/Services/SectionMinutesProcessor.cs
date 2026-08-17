@@ -1,5 +1,6 @@
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
+using Diariz.Api.Services.Llm;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.SignalR;
@@ -17,7 +18,7 @@ public static class SectionMinutesProcessor
 {
     public static async Task ProcessAsync(
         DiarizDbContext db, IMeetingTypeMinutesGenerator generator, IMeetingMinutesClient combiner,
-        ISummarizationSettingsResolver resolver, IHubContext<TranscriptionHub> hub, string folderTemplate,
+        ILlmSettingsResolver resolver, IHubContext<TranscriptionHub> hub, string folderTemplate,
         SectionMinutesJob job, ILogger logger, CancellationToken ct = default)
     {
         var section = await db.Sections
@@ -42,7 +43,7 @@ public static class SectionMinutesProcessor
 
         try
         {
-            var cfg = await resolver.ResolveAsync(section.UserId, ct);
+            var cfg = await resolver.ResolveAsync(LlmCallKind.SectionMinutes, ct);
             if (!cfg.Enabled) throw new InvalidOperationException("Summarisation is not configured.");
 
             var items = new List<(string RecordingName, string Minutes)>();
@@ -88,7 +89,7 @@ public static class SectionMinutesProcessor
     /// <summary>Returns the recording's current-transcription minutes text, generating &amp; persisting it via
     /// the normal per-recording generator first if missing. Mirrors <see cref="MeetingMinutesProcessor"/>.</summary>
     private static async Task<string?> EnsureRecordingMinutesAsync(
-        DiarizDbContext db, IMeetingTypeMinutesGenerator generator, SummarizationRequestConfig cfg,
+        DiarizDbContext db, IMeetingTypeMinutesGenerator generator, LlmRequestConfig cfg,
         Guid recordingId, CancellationToken ct)
     {
         var rec = await db.Recordings.FirstOrDefaultAsync(r => r.Id == recordingId, ct);

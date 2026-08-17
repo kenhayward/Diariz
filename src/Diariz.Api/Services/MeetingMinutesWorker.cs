@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Text.Json;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
@@ -91,7 +92,7 @@ public class MeetingMinutesWorker : BackgroundService
                 using var scope = _scopes.CreateScope();
                 var ctx = scope.ServiceProvider.GetRequiredService<DiarizDbContext>();
                 var generator = scope.ServiceProvider.GetRequiredService<IMeetingTypeMinutesGenerator>();
-                var resolver = scope.ServiceProvider.GetRequiredService<ISummarizationSettingsResolver>();
+                var resolver = scope.ServiceProvider.GetRequiredService<ILlmSettingsResolver>();
                 var queue = scope.ServiceProvider.GetRequiredService<IJobQueue>();
                 var webhooks = scope.ServiceProvider.GetRequiredService<IWebhookPublisher>();
                 using var jobTx = JobTelemetry.Begin("minutes");

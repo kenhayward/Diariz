@@ -1,5 +1,6 @@
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
@@ -12,8 +13,8 @@ namespace Diariz.Api.Tests;
 public class RecordingActionsControllerTests
 {
     private static RecordingActionsController Build(
-        DiarizDbContext db, Guid userId, IActionsClient client, ISummarizationSettingsResolver? settings = null) =>
-        new(db, client, settings ?? new FakeSummarizationSettingsResolver(),
+        DiarizDbContext db, Guid userId, IActionsClient client, ILlmSettingsResolver? settings = null) =>
+        new(db, client, settings ?? new FakeLlmSettingsResolver(),
             new FilePromptTemplateProvider("nonexistent")) // no file → falls back to the built-in default
         { ControllerContext = Http.Context(userId) };
 
@@ -30,8 +31,8 @@ public class RecordingActionsControllerTests
         return rec;
     }
 
-    private static FakeSummarizationSettingsResolver Disabled() =>
-        new() { Config = new SummarizationRequestConfig("", "", "m", 60) };
+    private static FakeLlmSettingsResolver Disabled() =>
+        new() { Config = new LlmRequestConfig("", "", "m", new LlmParameters { TimeoutSeconds = 60 }) };
 
     [Fact]
     public async Task Extract_ReplacesActions_SetsFlag_AndReturnsOrderedList()

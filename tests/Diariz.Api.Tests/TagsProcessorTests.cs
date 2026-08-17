@@ -1,4 +1,5 @@
 using Diariz.Api.Contracts;
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
@@ -42,7 +43,7 @@ public class TagsProcessorTests
         {
             Result = { new ExtractedTag("Budget Planning", 0.9), new ExtractedTag("Vendor Selection", 0.4) }
         };
-        var resolver = new FakeSummarizationSettingsResolver();
+        var resolver = new FakeLlmSettingsResolver();
         var hub = new FakeHubContext();
 
         await TagsProcessor.ProcessAsync(db, client, resolver, hub, Job(rec, tr), Template, NullLogger.Instance,
@@ -55,7 +56,7 @@ public class TagsProcessorTests
         Assert.Equal(0, tags[0].Ordinal);
         Assert.Equal("Vendor-Selection", tags[1].Tag);
         Assert.Equal(1, tags[1].Ordinal);
-        Assert.Equal(userId, resolver.LastUserId);        // resolved for the owner
+        Assert.Equal(LlmCallKind.Tags, resolver.LastKind);  // resolved for the right call kind
         Assert.Equal(resolver.Config, client.LastConfig); // passed straight to the client
 
         var reloaded = await db.Recordings.FindAsync(rec.Id);
@@ -84,7 +85,7 @@ public class TagsProcessorTests
             observedUser = LlmCallScope.Active?.UserId;
         });
 
-        await TagsProcessor.ProcessAsync(db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(),
+        await TagsProcessor.ProcessAsync(db, client, new FakeLlmSettingsResolver(), new FakeHubContext(),
             Job(rec, tr), Template, NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         Assert.Equal(LlmCallKind.Tags, observedKind);
@@ -106,7 +107,7 @@ public class TagsProcessorTests
         var client = new FakeTagsClient { Result = { new ExtractedTag("Fresh Topic", 0.8) } };
 
         await TagsProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
+            db, client, new FakeLlmSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
             NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         var tag = await db.RecordingTags.SingleAsync(t => t.RecordingId == rec.Id);
@@ -121,7 +122,7 @@ public class TagsProcessorTests
         var client = new FakeTagsClient { Result = { new ExtractedTag("Roadmap", 0.9) } };
 
         await TagsProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
+            db, client, new FakeLlmSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
             NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         var tag = await db.RecordingTags.SingleAsync(t => t.RecordingId == rec.Id);
@@ -150,7 +151,7 @@ public class TagsProcessorTests
         var client = new FakeTagsClient { Result = { new ExtractedTag("Fresh", 0.7) } };
 
         await TagsProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
+            db, client, new FakeLlmSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
             NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         var byStatus = (await db.RecordingTags.Where(t => t.RecordingId == rec.Id).ToListAsync())
@@ -175,7 +176,7 @@ public class TagsProcessorTests
         var client = new FakeTagsClient { Result = { new ExtractedTag("Metadata", 0.9) } };
 
         await TagsProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
+            db, client, new FakeLlmSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
             NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         var tag = await db.RecordingTags.SingleAsync(t => t.RecordingId == rec.Id);
@@ -200,7 +201,7 @@ public class TagsProcessorTests
         var client = new FakeTagsClient { Result = { new ExtractedTag("Data Collection", 0.9) } };
 
         await TagsProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
+            db, client, new FakeLlmSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
             NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         // A raw-text comparison would miss that these are the same tag and re-suggest "Data Collection"
@@ -228,7 +229,7 @@ public class TagsProcessorTests
         var client = new FakeTagsClient { Result = { new ExtractedTag("Data Collection", 0.9) } };
 
         await TagsProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
+            db, client, new FakeLlmSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
             NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         // A raw-text comparison would miss that these are the same tag and resurrect "Data Collection" as a
@@ -251,7 +252,7 @@ public class TagsProcessorTests
         };
 
         await TagsProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
+            db, client, new FakeLlmSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
             NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         // Both candidates normalise to "Data-Collection" - inserting both would slip past the unique index
@@ -275,7 +276,7 @@ public class TagsProcessorTests
         var client = new FakeTagsClient { Result = { new ExtractedTag("boilerplate", 0.9) } };
 
         await TagsProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
+            db, client, new FakeLlmSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
             NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         var tag = await db.RecordingTags.SingleAsync(t => t.RecordingId == rec.Id);
@@ -289,7 +290,10 @@ public class TagsProcessorTests
         var (rec, tr) = await Seed(db, Guid.NewGuid());
         var client = new FakeTagsClient { Result = { new ExtractedTag("x", 0.5) } };
         // Empty ApiBase => Config.Enabled is false (no LLM endpoint at user or server level).
-        var resolver = new FakeSummarizationSettingsResolver { Config = new SummarizationRequestConfig("", "", "", 30) };
+        var resolver = new FakeLlmSettingsResolver
+        {
+            Config = new LlmRequestConfig("", "", "", new LlmParameters { TimeoutSeconds = 30 }),
+        };
         var hub = new FakeHubContext();
 
         await TagsProcessor.ProcessAsync(db, client, resolver, hub, Job(rec, tr), Template, NullLogger.Instance,
@@ -310,7 +314,7 @@ public class TagsProcessorTests
         var hub = new FakeHubContext();
 
         await TagsProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), hub, Job(rec, tr), Template, NullLogger.Instance,
+            db, client, new FakeLlmSettingsResolver(), hub, Job(rec, tr), Template, NullLogger.Instance,
             new CapturingWebhookPublisher(), "");
 
         Assert.Empty(await db.RecordingTags.ToListAsync());
@@ -325,7 +329,7 @@ public class TagsProcessorTests
         var client = new FakeTagsClient();
 
         await TagsProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(),
+            db, client, new FakeLlmSettingsResolver(), new FakeHubContext(),
             new TagsJob(Guid.NewGuid(), Guid.NewGuid()), Template, NullLogger.Instance,
             new CapturingWebhookPublisher(), "");
 
@@ -340,7 +344,7 @@ public class TagsProcessorTests
         var client = new FakeTagsClient();
 
         await TagsProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
+            db, client, new FakeLlmSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
             NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         Assert.Equal(0, client.Calls);
@@ -362,7 +366,7 @@ public class TagsProcessorTests
         var client = new FakeTagsClient { ThrowOnCall = new InvalidOperationException("LLM down") };
 
         await TagsProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
+            db, client, new FakeLlmSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
             NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         // A failed re-extract must not wipe the previous tags (RemoveRange only after a successful call).
@@ -388,7 +392,7 @@ public class TagsProcessorTests
         var client = new FakeTagsClient { Result = { new ExtractedTag("Stale Topic", 0.9) } };
 
         await TagsProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), Job(rec, v1), Template,
+            db, client, new FakeLlmSettingsResolver(), new FakeHubContext(), Job(rec, v1), Template,
             NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         Assert.Equal(0, client.Calls); // a slow/backfilled v1 job must not overwrite v2's tags

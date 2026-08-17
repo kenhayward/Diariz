@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -63,9 +64,9 @@ public class ChatStreamClientTests
     // carrying usage.completion_tokens_details.reasoning_tokens right before [DONE]. That final chunk has
     // an EMPTY choices array - the fourth test below guards that neither parser mishandles it.
 
-    private static readonly SummarizationRequestConfig cfg = new("http://llm.test/v1", "sk-x", "m", 60);
+    private static readonly LlmRequestConfig cfg = new("http://llm.test/v1", "sk-x", "m", new LlmParameters { TimeoutSeconds = 60 });
 
-    private static async Task<string> CaptureRequestBodyAsync(SummarizationRequestConfig config, bool useTools)
+    private static async Task<string> CaptureRequestBodyAsync(LlmRequestConfig config, bool useTools)
     {
         var handler = new FakeHttpMessageHandler("data: [DONE]\n");
         var client = new ChatStreamClient(new HttpClient(handler));
@@ -143,7 +144,7 @@ public class ChatStreamClientTests
             "");
         var handler = new FakeHttpMessageHandler(sse);
         var client = new ChatStreamClient(new HttpClient(handler));
-        var cfg = new Diariz.Api.Services.SummarizationRequestConfig("http://llm.test/v1", "sk-x", "m", 60);
+        var cfg = new LlmRequestConfig("http://llm.test/v1", "sk-x", "m", new LlmParameters { TimeoutSeconds = 60 });
 
         var tokens = new List<string>();
         await foreach (var t in client.StreamAsync(cfg, [new ChatMessage("user", "hi")], default))
@@ -160,7 +161,7 @@ public class ChatStreamClientTests
     {
         var handler = new FakeHttpMessageHandler("nope", HttpStatusCode.InternalServerError);
         var client = new ChatStreamClient(new HttpClient(handler));
-        var cfg = new Diariz.Api.Services.SummarizationRequestConfig("http://llm.test/v1", "", "m", 60);
+        var cfg = new LlmRequestConfig("http://llm.test/v1", "", "m", new LlmParameters { TimeoutSeconds = 60 });
 
         await Assert.ThrowsAsync<ChatStreamException>(async () =>
         {
@@ -173,8 +174,8 @@ public class ChatStreamClientTests
     // answer legitimately runs for minutes; a total-duration cap would abort exactly the case the
     // configured timeout exists to support.
 
-    private static SummarizationRequestConfig Config(int timeoutSeconds) =>
-        new("http://llm.test/v1", "sk-x", "m", timeoutSeconds);
+    private static LlmRequestConfig Config(int timeoutSeconds) =>
+        new("http://llm.test/v1", "sk-x", "m", new LlmParameters { TimeoutSeconds = timeoutSeconds });
 
     [Fact]
     public async Task StreamChunks_Throws_WhenTheUpstreamGoesSilent()

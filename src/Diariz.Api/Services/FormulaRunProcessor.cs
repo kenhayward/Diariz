@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Text;
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
@@ -19,11 +20,11 @@ namespace Diariz.Api.Services;
 public static class FormulaRunProcessor
 {
     public static async Task ProcessAsync(
-        DiarizDbContext db, IChatStreamClient chat, ISummarizationSettingsResolver settings,
+        DiarizDbContext db, IChatStreamClient chat, ILlmSettingsResolver settings,
         IHubContext<TranscriptionHub> hub, FormulaRunJob job, ILogger logger,
         IWebhookPublisher webhooks, string publicUrl, CancellationToken ct = default)
     {
-        var cfg = await settings.ResolveAsync(job.UserId, ct);
+        var cfg = await settings.ResolveAsync(LlmCallKind.FormulaRun, ct);
         if (!cfg.Enabled)
         {
             await FailAsync(db, hub, job, "No LLM endpoint is configured for this user or server.", webhooks, publicUrl, logger, ct);
@@ -214,7 +215,7 @@ public static class FormulaRunProcessor
     /// to exactly one call with that prompt - byte-identical to the pre-template behaviour. No special case needed:
     /// the degenerate template *is* the old behaviour.</summary>
     internal static async Task<string> RunOverRecordingAsync(
-        DiarizDbContext db, IChatStreamClient chat, SummarizationRequestConfig cfg,
+        DiarizDbContext db, IChatStreamClient chat, LlmRequestConfig cfg,
         Formula formula, Guid recordingId, CancellationToken ct)
     {
         var content = TemplateContent.Parse(formula.ContentJson);
@@ -225,7 +226,7 @@ public static class FormulaRunProcessor
 
     /// <summary>Compose a formula's template, answering each prompt block against <paramref name="context"/>.</summary>
     private static Task<string> ComposeAsync(
-        IChatStreamClient chat, SummarizationRequestConfig cfg, TemplateContent content,
+        IChatStreamClient chat, LlmRequestConfig cfg, TemplateContent content,
         Func<string, string?> resolveField, string context, CancellationToken ct) =>
         MeetingTypeMinutesComposer.ComposeAsync(
             content, resolveField, block => RunPromptAsync(chat, cfg, block.Text ?? "", context, ct));
@@ -287,7 +288,7 @@ public static class FormulaRunProcessor
     /// meetings (no context) are skipped so they neither consume a map call nor pollute the reduce. A single
     /// meeting returns its map output directly (no reduce call); zero meetings throw so the run is marked Failed.</summary>
     internal static async Task<string> RunOverSectionAsync(
-        DiarizDbContext db, IChatStreamClient chat, SummarizationRequestConfig cfg,
+        DiarizDbContext db, IChatStreamClient chat, LlmRequestConfig cfg,
         Formula formula, Guid sectionId, CancellationToken ct)
     {
         var section = await db.Sections.FirstOrDefaultAsync(s => s.Id == sectionId, ct);
@@ -373,7 +374,7 @@ public static class FormulaRunProcessor
     /// <paramref name="ct"/> still uncancelled (only the linked source fired) - callers distinguish a timeout
     /// from a genuine cancel by testing <c>!ct.IsCancellationRequested</c>.</summary>
     internal static async Task<string> RunPromptAsync(
-        IChatStreamClient chat, SummarizationRequestConfig cfg, string systemPrompt, string userContext,
+        IChatStreamClient chat, LlmRequestConfig cfg, string systemPrompt, string userContext,
         CancellationToken ct)
     {
         var messages = new[] { new ChatMessage("system", systemPrompt), new ChatMessage("user", userContext) };

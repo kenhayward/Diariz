@@ -1,0 +1,129 @@
+using Diariz.Api.Configuration;
+using Diariz.Domain;
+using Diariz.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+
+namespace Diariz.Api.Services.Llm;
+
+/// <summary>Everything one LLM call needs: where to send it, as whom, and with which parameters.
+///
+/// Platform-wide from 0.221.0 - it used to be resolved per user, and the rename from
+/// <c>SummarizationRequestConfig</c> reflects that it was never summarisation-specific.</summary>
+public sealed record LlmRequestConfig(string ApiBase, string ApiKey, string Model, LlmParameters Parameters)
+{
+    public bool Enabled => !string.IsNullOrWhiteSpace(ApiBase);
+
+    /// <summary>The request deadline. The HTTP clients have no cap of their own, so this is the only
+    /// authority.</summary>
+    public int TimeoutSeconds => Parameters.TimeoutSeconds;
+
+    /// <summary>The <c>reasoning_effort</c> to send, or null to omit the field entirely - so a
+    /// non-reasoning endpoint never sees it even when an effort is configured.</summary>
+    public string? ReasoningEffort => Parameters.ReasoningEnabled ? Parameters.ReasoningEffort : null;
+
+    /// <summary>Characters of context this request may inject - the <b>single</b> budget shared by every LLM
+    /// call site, derived from the context window of the model actually serving the call. The default keeps
+    /// hand-constructed configs (tests, fakes) at the floor rather than at zero.</summary>
+    public int ContextCharBudget { get; init; } = LlmContextBudget.MinimumChars;
+
+    /// <summary>Whether streamed requests ask the server for token counts via
+    /// <c>stream_options.include_usage</c>. A toggle rather than a constant because an OpenAI-compatible
+    /// endpoint that rejects the unknown field must be recoverable without a redeploy.</summary>
+    public bool IncludeStreamUsage { get; init; } = true;
+}
+
+public interface ILlmSettingsResolver
+{
+    /// <summary>Resolves the model and parameters for a call of this kind.
+    ///
+    /// The kind is a parameter rather than being read from the ambient <see cref="LlmCallScope"/>, even
+    /// though the scope already carries it. Ambient is fine for telemetry, where a missing scope logs
+    /// <c>Unknown</c> and is visible and fixable; it is not fine for behaviour, where a missing scope would
+    /// silently apply the wrong model. Every caller already knows its kind - it pushes the scope with it.</summary>
+    Task<LlmRequestConfig> ResolveAsync(LlmCallKind kind, CancellationToken ct = default);
+}
+
+public class LlmSettingsResolver : ILlmSettingsResolver
+{
+    private readonly DiarizDbContext _db;
+    private readonly LlmDefaultsOptions _defaults;
+    private readonly SummarizationOptions _summary;
+    private readonly IApiKeyProtector _protector;
+    private readonly ChatOptions _chat;
+
+    /// <param name="summary">The environment endpoint, used only to synthesize a fallback model when the
+    /// platform has none configured - which is what lets an upgrade keep working before an admin visits
+    /// /admin/llm-models.</param>
+    public LlmSettingsResolver(
+        DiarizDbContext db, IOptions<LlmDefaultsOptions> defaults, IOptions<SummarizationOptions> summary,
+        IApiKeyProtector protector, IOptions<ChatOptions>? chat = null)
+    {
+        _db = db;
+        _defaults = defaults.Value;
+        _summary = summary.Value;
+        _protector = protector;
+        _chat = chat?.Value ?? new ChatOptions();
+    }
+
+    public async Task<LlmRequestConfig> ResolveAsync(LlmCallKind kind, CancellationToken ct = default)
+    {
+        var group = LlmCallGroups.GroupFor(kind);
+        var ps = await _db.PlatformSettings
+            .FirstOrDefaultAsync(p => p.Id == PlatformSettings.SingletonId, ct);
+
+        var model = await ChooseModelAsync(group, ps, ct);
+
+        // Most specific first. A null layer is skipped, so a model with no override row for this group
+        // inherits rather than omitting everything.
+        var layers = new List<string?>
+        {
+            group is null || model is null ? null : ParametersFor(model, group.Value),
+            model is null ? null : ParametersFor(model, LlmCallGroup.ModelBase),
+            _defaults.LayerFor(group),
+            _defaults.BaseLayer,
+        };
+
+        var parameters = LlmParameterLayers.Resolve(layers);
+
+        // The environment fallback keeps the admin's tuned platform timeout, which a migration could not
+        // move into a model row - the endpoint lives in configuration, so there was no row to fold it into.
+        if (model is null && ps is not null)
+            parameters = parameters with { TimeoutSeconds = ps.LlmTimeoutSeconds };
+
+        return new LlmRequestConfig(
+            ApiBase: model?.ApiBase ?? _summary.ApiBase,
+            ApiKey: model is null ? _summary.ApiKey : _protector.Unprotect(model.ApiKeyEncrypted) ?? "",
+            Model: model?.Name ?? _summary.Model,
+            Parameters: parameters)
+        {
+            ContextCharBudget = LlmContextBudget.CharsFor(
+                model is not null ? model.ContextLength : _chat.ContextLength),
+            IncludeStreamUsage = ps?.LlmStreamUsageEnabled ?? true,
+        };
+    }
+
+    /// <summary>The group's assigned model, else the platform default, else null - which means fall back to
+    /// the environment endpoint. The fallback is synthesized per call and never persisted: writing it would
+    /// resurrect a row an admin had deliberately deleted.</summary>
+    private async Task<LlmModel?> ChooseModelAsync(LlmCallGroup? group, PlatformSettings? ps, CancellationToken ct)
+    {
+        Guid? id = null;
+
+        if (group is not null)
+            id = await _db.LlmCallAssignments
+                .Where(a => a.Group == group.Value)
+                .Select(a => (Guid?)a.LlmModelId)
+                .FirstOrDefaultAsync(ct);
+
+        id ??= ps?.DefaultLlmModelId;
+        if (id is null) return null;
+
+        return await _db.LlmModels
+            .Include(m => m.Parameters)
+            .FirstOrDefaultAsync(m => m.Id == id.Value, ct);
+    }
+
+    private static string? ParametersFor(LlmModel model, LlmCallGroup group) =>
+        model.Parameters.FirstOrDefault(p => p.Group == group)?.ParametersJson;
+}

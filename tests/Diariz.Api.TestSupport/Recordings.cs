@@ -1,5 +1,6 @@
 using Diariz.Api.Configuration;
 using Diariz.Api.Controllers;
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Services;
 using Diariz.Domain;
 using Microsoft.Extensions.Configuration;
@@ -21,8 +22,9 @@ public static class Recordings
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Transcription:DefaultModel"] = "whisperx-large-v3" })
             .Build();
-        var resolver = new SummarizationSettingsResolver(
-            db, Options.Create(new SummarizationOptions { ApiBase = "http://llm.test/v1" }), new FakeApiKeyProtector());
+        var resolver = new LlmSettingsResolver(
+            db, Options.Create(new LlmDefaultsOptions()),
+            Options.Create(new SummarizationOptions { ApiBase = "http://llm.test/v1" }), new FakeApiKeyProtector());
 
         return new RecordingsController(
             db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config,

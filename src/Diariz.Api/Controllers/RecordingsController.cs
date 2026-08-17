@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Security.Claims;
 using System.Text;
 using Diariz.Api.Configuration;
@@ -24,7 +25,7 @@ public class RecordingsController : ControllerBase
     private readonly IAudioStorage _storage;
     private readonly IJobQueue _queue;
     private readonly IHubContext<TranscriptionHub> _hub;
-    private readonly ISummarizationSettingsResolver _summarization;
+    private readonly ILlmSettingsResolver _summarization;
     private readonly IEmailSender _email;
     private readonly ISpeakerIdentifier _identifier;
     private readonly UploadOptions _uploads;
@@ -39,7 +40,7 @@ public class RecordingsController : ControllerBase
     public RecordingsController(
         DiarizDbContext db, IAudioStorage storage, IJobQueue queue,
         IHubContext<TranscriptionHub> hub, IConfiguration config,
-        ISummarizationSettingsResolver summarization, IEmailSender email, ISpeakerIdentifier identifier,
+        ILlmSettingsResolver summarization, IEmailSender email, ISpeakerIdentifier identifier,
         IOptions<UploadOptions> uploads, IRoomScope rooms, IPeopleDirectory people,
         IWebhookPublisher webhooks,
         IOptions<AppPublicOptions> appOpts, IExportLocalizer? exportLocalizer = null,
@@ -1058,7 +1059,7 @@ public class RecordingsController : ControllerBase
         var current = rec.Transcriptions.FirstOrDefault();
         if (current is null) return NotFound();
 
-        var cfg = await _summarization.ResolveAsync(UserId);
+        var cfg = await _summarization.ResolveAsync(LlmCallKind.Summarize);
         if (!cfg.Enabled)
             return BadRequest("Summarisation is not configured. Set an LLM endpoint in Settings.");
 
@@ -1136,7 +1137,7 @@ public class RecordingsController : ControllerBase
         var current = rec.Transcriptions.FirstOrDefault();
         if (current is null) return NotFound();
 
-        var cfg = await _summarization.ResolveAsync(UserId);
+        var cfg = await _summarization.ResolveAsync(LlmCallKind.MeetingMinutes);
         if (!cfg.Enabled)
             return BadRequest("Summarisation is not configured. Set an LLM endpoint in Settings.");
 
@@ -1173,7 +1174,7 @@ public class RecordingsController : ControllerBase
             !await _db.MeetingTypes.AnyAsync(t => t.Id == typeId && (t.UserId == null || t.UserId == UserId)))
             return NotFound();
 
-        var cfg = await _summarization.ResolveAsync(UserId);
+        var cfg = await _summarization.ResolveAsync(LlmCallKind.MeetingMinutes);
         if (!cfg.Enabled)
             return BadRequest("Summarisation is not configured. Set an LLM endpoint in Settings.");
 

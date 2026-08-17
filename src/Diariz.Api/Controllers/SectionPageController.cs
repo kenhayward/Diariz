@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Security.Claims;
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
@@ -23,12 +24,12 @@ public class SectionPageController : ControllerBase
 {
     private readonly DiarizDbContext _db;
     private readonly IJobQueue _queue;
-    private readonly ISummarizationSettingsResolver _summarization;
+    private readonly ILlmSettingsResolver _summarization;
     private readonly IHubContext<TranscriptionHub> _hub;
     private readonly IRoomScope _rooms;
 
     public SectionPageController(
-        DiarizDbContext db, IJobQueue queue, ISummarizationSettingsResolver summarization,
+        DiarizDbContext db, IJobQueue queue, ILlmSettingsResolver summarization,
         IHubContext<TranscriptionHub> hub, IRoomScope rooms)
     {
         _db = db;
@@ -187,7 +188,7 @@ public class SectionPageController : ControllerBase
         if (ToActionResult(error) is { } errorResult) return errorResult;
         var sec = section!;
 
-        var cfg = await _summarization.ResolveAsync(UserId);
+        var cfg = await _summarization.ResolveAsync(LlmCallKind.SectionSummary);
         if (!cfg.Enabled)
             return BadRequest("Summarisation is not configured. Set an LLM endpoint in Settings.");
 
@@ -249,7 +250,7 @@ public class SectionPageController : ControllerBase
             !await _db.MeetingTypes.AnyAsync(t => t.Id == typeId && (t.RoomId == null || t.RoomId == sec.RoomId)))
             return NotFound();
 
-        var cfg = await _summarization.ResolveAsync(UserId);
+        var cfg = await _summarization.ResolveAsync(LlmCallKind.SectionMinutes);
         if (!cfg.Enabled)
             return BadRequest("Summarisation is not configured. Set an LLM endpoint in Settings.");
 

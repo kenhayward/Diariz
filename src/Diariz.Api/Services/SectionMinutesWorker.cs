@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Text.Json;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
@@ -90,7 +91,7 @@ public class SectionMinutesWorker : BackgroundService
                 var ctx = scope.ServiceProvider.GetRequiredService<DiarizDbContext>();
                 var generator = scope.ServiceProvider.GetRequiredService<IMeetingTypeMinutesGenerator>();
                 var combiner = scope.ServiceProvider.GetRequiredService<IMeetingMinutesClient>();
-                var resolver = scope.ServiceProvider.GetRequiredService<ISummarizationSettingsResolver>();
+                var resolver = scope.ServiceProvider.GetRequiredService<ILlmSettingsResolver>();
                 var folderTemplate = _prompts.Get(FolderMinutesPrompt.TemplateName, FolderMinutesPrompt.DefaultTemplate);
                 using var jobTx = JobTelemetry.Begin("section-minutes");
                 await SectionMinutesProcessor.ProcessAsync(

@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Security.Claims;
 using Diariz.Api.Contracts;
 using Diariz.Api.Services;
@@ -19,11 +20,11 @@ public class RecordingActionsController : ControllerBase
 {
     private readonly DiarizDbContext _db;
     private readonly IActionsClient _client;
-    private readonly ISummarizationSettingsResolver _settings;
+    private readonly ILlmSettingsResolver _settings;
     private readonly IPromptTemplateProvider _prompts;
 
     public RecordingActionsController(
-        DiarizDbContext db, IActionsClient client, ISummarizationSettingsResolver settings,
+        DiarizDbContext db, IActionsClient client, ILlmSettingsResolver settings,
         IPromptTemplateProvider prompts)
     {
         _db = db;
@@ -83,7 +84,7 @@ public class RecordingActionsController : ControllerBase
         var current = rec.Transcriptions.FirstOrDefault();
         if (current is null || current.Segments.Count == 0) return NotFound();
 
-        var cfg = await _settings.ResolveAsync(UserId);
+        var cfg = await _settings.ResolveAsync(LlmCallKind.ExtractActions);
         if (!cfg.Enabled)
             return BadRequest("Action extraction needs an LLM endpoint. Set one in Settings.");
 

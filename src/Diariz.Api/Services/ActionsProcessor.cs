@@ -1,5 +1,6 @@
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Webhooks;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
@@ -26,7 +27,7 @@ namespace Diariz.Api.Services;
 public static class ActionsProcessor
 {
     public static async Task ProcessAsync(
-        DiarizDbContext db, IActionsClient client, ISummarizationSettingsResolver resolver,
+        DiarizDbContext db, IActionsClient client, ILlmSettingsResolver resolver,
         IHubContext<TranscriptionHub> hub, IJobQueue queue, ActionsJob job, string template, ILogger logger,
         IWebhookPublisher webhooks, string publicUrl,
         CancellationToken ct = default)
@@ -66,7 +67,7 @@ public static class ActionsProcessor
             if (segs.Count == 0) return; // nothing to extract from.
 
             // Use the recording owner's effective config (their endpoint/key/model, else server defaults).
-            var cfg = await resolver.ResolveAsync(rec.UserId, ct);
+            var cfg = await resolver.ResolveAsync(LlmCallKind.ExtractActions, ct);
             if (!cfg.Enabled) return; // no LLM configured — leave actions unextracted (a re-run can retry).
 
             // The meeting's own date anchors relative deadlines ("by next Friday"), so it must be when the

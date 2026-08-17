@@ -56,7 +56,7 @@ public class SectionMinutesProcessorTests
     }
 
     private static Task Run(DiarizDbContext db, IMeetingTypeMinutesGenerator gen, IMeetingMinutesClient combiner,
-        FakeSummarizationSettingsResolver resolver, FakeHubContext hub, Section section) =>
+        FakeLlmSettingsResolver resolver, FakeHubContext hub, Section section) =>
         SectionMinutesProcessor.ProcessAsync(db, gen, combiner, resolver, hub,
             FolderMinutesPrompt.DefaultTemplate, new SectionMinutesJob(section.Id), NullLogger.Instance);
 
@@ -91,7 +91,7 @@ public class SectionMinutesProcessorTests
 
         var combiner = new FakeMeetingMinutesClient { Result = "# Folder minutes" };
 
-        await Run(db, new FakeMeetingTypeMinutesGenerator(), combiner, new FakeSummarizationSettingsResolver(),
+        await Run(db, new FakeMeetingTypeMinutesGenerator(), combiner, new FakeLlmSettingsResolver(),
             new FakeHubContext(), folder);
 
         var minutes = await db.SectionMinutes.SingleAsync(x => x.SectionId == folder.Id);
@@ -112,7 +112,7 @@ public class SectionMinutesProcessorTests
         var combiner = new FakeMeetingMinutesClient { Result = "# Folder minutes" };
         var hub = new FakeHubContext();
 
-        await Run(db, new FakeMeetingTypeMinutesGenerator(), combiner, new FakeSummarizationSettingsResolver(), hub, parent);
+        await Run(db, new FakeMeetingTypeMinutesGenerator(), combiner, new FakeLlmSettingsResolver(), hub, parent);
 
         var minutes = await db.SectionMinutes.SingleAsync(x => x.SectionId == parent.Id);
         Assert.Equal("# Folder minutes", minutes.Text);
@@ -132,7 +132,7 @@ public class SectionMinutesProcessorTests
         await SeedRecording(db, userId, section.Id); // no minutes yet
         var gen = new FakeMeetingTypeMinutesGenerator { Result = "# Fresh minutes" };
 
-        await Run(db, gen, new FakeMeetingMinutesClient(), new FakeSummarizationSettingsResolver(), new FakeHubContext(), section);
+        await Run(db, gen, new FakeMeetingMinutesClient(), new FakeLlmSettingsResolver(), new FakeHubContext(), section);
 
         Assert.Equal(1, gen.Calls); // only the recording missing minutes was generated
         Assert.Equal(2, await db.MeetingMinutes.CountAsync());
@@ -151,7 +151,7 @@ public class SectionMinutesProcessorTests
         await SeedRecording(db, userId, section.Id, minutesText: "# R\nBody.");
         var combiner = new FakeMeetingMinutesClient();
 
-        await Run(db, new FakeMeetingTypeMinutesGenerator(), combiner, new FakeSummarizationSettingsResolver(), new FakeHubContext(), section);
+        await Run(db, new FakeMeetingTypeMinutesGenerator(), combiner, new FakeLlmSettingsResolver(), new FakeHubContext(), section);
 
         Assert.Contains("Meeting type: Retro", combiner.LastMessages![0].Content);
         Assert.Contains("What went well", combiner.LastMessages![0].Content);
@@ -172,7 +172,7 @@ public class SectionMinutesProcessorTests
         await db.SaveChangesAsync();
         var combiner = new FakeMeetingMinutesClient();
 
-        await Run(db, new FakeMeetingTypeMinutesGenerator(), combiner, new FakeSummarizationSettingsResolver(), new FakeHubContext(), section);
+        await Run(db, new FakeMeetingTypeMinutesGenerator(), combiner, new FakeLlmSettingsResolver(), new FakeHubContext(), section);
 
         Assert.Equal("hand edit", (await db.SectionMinutes.SingleAsync(x => x.SectionId == section.Id)).Text);
         Assert.Equal(0, combiner.Calls);
@@ -196,7 +196,7 @@ public class SectionMinutesProcessorTests
             observedUser = LlmCallScope.Active?.UserId;
         });
 
-        await Run(db, new FakeMeetingTypeMinutesGenerator(), combiner, new FakeSummarizationSettingsResolver(),
+        await Run(db, new FakeMeetingTypeMinutesGenerator(), combiner, new FakeLlmSettingsResolver(),
             new FakeHubContext(), section);
 
         Assert.Equal(LlmCallKind.SectionMinutes, observedKind);
@@ -213,7 +213,7 @@ public class SectionMinutesProcessorTests
         await SeedRecording(db, userId, section.Id, minutesText: "x");
         var combiner = new FakeMeetingMinutesClient { ThrowOnCall = new InvalidOperationException("boom") };
 
-        await Run(db, new FakeMeetingTypeMinutesGenerator(), combiner, new FakeSummarizationSettingsResolver(), new FakeHubContext(), section);
+        await Run(db, new FakeMeetingTypeMinutesGenerator(), combiner, new FakeLlmSettingsResolver(), new FakeHubContext(), section);
 
         var minutes = await db.SectionMinutes.SingleAsync(x => x.SectionId == section.Id);
         Assert.Equal(SectionGenerationStatus.Failed, minutes.Status);
