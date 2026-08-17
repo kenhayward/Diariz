@@ -142,13 +142,24 @@ Two additions to `apps/web/nginx.conf`.
 docker run --rm nginx:alpine sh -c "grep -n 'manifest' /etc/nginx/mime.types"
 ```
 
-returns nothing on nginx 1.31.2 - the default `mime.types` has no `manifest` entry, so the file would be
-served as `application/octet-stream`. Vite's dev server resolves `.webmanifest` correctly, so this is a
-divergence that appears only on a deployed box. Fixed with an explicit `types` block in the `server`:
+returns nothing on nginx 1.31.2 - the default `mime.types` has no `manifest` entry, so the extension is
+undetermined and the file would be served as `application/octet-stream`. Vite's dev server resolves
+`.webmanifest` correctly, so this is a divergence that appears only on a deployed box. Fixed with a
+`default_type` inside the manifest's own `location`:
 
 ```
-types { application/manifest+json webmanifest; }
+location = /manifest.webmanifest {
+    default_type application/manifest+json;
+    ...
+}
 ```
+
+**Not a `types { ... }` block.** This was tried first and is wrong in a way that passes every check short of
+a real HTTP request: a `types` block **replaces** the inherited MIME map rather than extending it, so naming
+this one extension turned `index.html`, the JS bundle, and every PNG into `application/octet-stream` - a
+completely unusable app - while `nginx -t` still reported the configuration as valid. `default_type` governs
+exactly the case at hand (an extension absent from the map) and is scoped to the one location, so nothing
+else moves. `manifest.test.ts` carries a regression guard asserting no `types` block is ever reintroduced.
 
 **2. Explicit caching for the manifest and icons.** Files in `public/` land at the web root, not under
 `/assets/`, so they fall through to `location /` with no `Cache-Control` - which is the heuristic-freshness

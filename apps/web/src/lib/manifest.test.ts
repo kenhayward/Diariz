@@ -144,11 +144,19 @@ describe("web app manifest", () => {
 describe("nginx serves the manifest correctly", () => {
   const conf = () => readFileSync(join(WEB, "nginx.conf"), "utf8");
 
-  it("maps the .webmanifest extension, which the base image does not", () => {
-    // nginx:alpine's default mime.types has no `manifest` entry at all (verified on 1.31.2), so without
-    // this the file goes out as application/octet-stream. Vite's dev server gets it right, so this only
-    // ever breaks on a deployed box - which is why it is asserted here rather than left to be noticed.
-    expect(conf()).toMatch(/types\s*\{\s*application\/manifest\+json\s+webmanifest;\s*\}/);
+  it("gives the manifest its MIME type, which the base image does not know", () => {
+    // nginx:alpine's default mime.types has no `manifest` entry at all (verified on 1.31.2), so the
+    // extension is undetermined and `default_type` is what governs it. Vite's dev server resolves
+    // .webmanifest on its own, so getting this wrong only ever shows up on a deployed box.
+    expect(conf()).toMatch(/location = \/manifest\.webmanifest \{[^}]*default_type application\/manifest\+json;/);
+  });
+
+  it("never declares a `types` block, which would replace the whole inherited map", () => {
+    // Regression guard for a real bug caught only by curling the running container: a `types { ... }`
+    // block does NOT extend nginx's MIME table, it REPLACES it. Adding one to map .webmanifest turned
+    // index.html, the JS bundle and every PNG into application/octet-stream - a completely broken app -
+    // and `nginx -t` reported the config as valid. Use `default_type` in a location instead.
+    expect(conf()).not.toMatch(/^\s*types\s*\{/m);
   });
 
   it("revalidates the manifest, which names the icons", () => {

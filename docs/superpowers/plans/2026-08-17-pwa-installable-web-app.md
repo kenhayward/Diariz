@@ -430,23 +430,17 @@ Expected: the three new tests FAIL - `application/manifest+json` and both `locat
 
 - [ ] **Step 3: Add the MIME type and caching blocks**
 
-In `apps/web/nginx.conf`, inside the `server { }` block, immediately after the `index index.html;` line:
+**Do NOT add a `types { ... }` block.** It looks like the obvious fix and is wrong: a `types` block *replaces* nginx's inherited MIME map rather than extending it, so naming `.webmanifest` there turns `index.html`, the JS bundle, and every PNG into `application/octet-stream` - a completely unusable app - and `nginx -t` still calls the config valid. The `default_type` in the manifest's own location below is the correct mechanism: the extension is absent from the map, which is exactly the case `default_type` governs, and it is scoped to that one location.
 
-```nginx
-    # nginx's bundled mime.types has no `manifest` entry (verified on nginx 1.31.2: `grep manifest
-    # /etc/nginx/mime.types` returns nothing), so a .webmanifest would go out as the default_type,
-    # application/octet-stream. Vite's dev server resolves the extension correctly, which is what makes
-    # this a deploy-only failure and worth stating explicitly rather than discovering.
-    types { application/manifest+json webmanifest; }
-```
-
-Then, immediately before the existing `location = /index.html` block:
+Immediately before the existing `location = /index.html` block:
 
 ```nginx
     # The web app manifest, revalidated on every load for the same reason index.html is below it: it is
     # the document that NAMES the icons and the start URL, so a heuristically-cached copy pins the
     # installed app's identity to a previous build. It is a few hundred bytes, so the usual answer is a 304.
+    # default_type, not a types block - see the warning above.
     location = /manifest.webmanifest {
+        default_type application/manifest+json;
         add_header Cache-Control "no-cache";
     }
 
@@ -1052,13 +1046,24 @@ The SPA is then at http://localhost:8081, which counts as a secure context for i
 curl -sI http://localhost:8081/manifest.webmanifest
 ```
 
-Expected: `200`, `Content-Type: application/manifest+json`, and `Cache-Control: no-cache`. If the type is `application/octet-stream` the `types` block did not take effect. Then check an icon:
+Expected: `200`, `Content-Type: application/manifest+json`, and `Cache-Control: no-cache`.
+
+**Check every other asset type too, not just the manifest** - this is where the `types`-block bug hid, and checking the manifest alone would have declared it fixed:
 
 ```bash
-curl -sI http://localhost:8081/icons/icon-512.png
+JS=$(curl -s http://localhost:8081/ | grep -o '/assets/index-[^"]*\.js' | head -1)
+for u in "/" "$JS" "/manifest.webmanifest" "/icons/icon-512.png" "/favicon.svg"; do printf "%-28s " "$u"; curl -sI "http://localhost:8081$u" | grep -i "^content-type" | tr -d '\r'; done
 ```
 
-Expected: `200`, `Content-Type: image/png`, and `Cache-Control: public, max-age=31536000, immutable`.
+Expected, in order: `text/html`, `application/javascript`, `application/manifest+json`, `image/png`, `image/svg+xml`. **Any `application/octet-stream` here is a broken app**, not a cosmetic issue - a module script served as octet-stream is refused by the browser outright.
+
+Then the caching, remembering that `curl -sI | head -8` can truncate `Cache-Control` off the bottom and make a correct config look broken - grep for it instead:
+
+```bash
+for u in "/" "/manifest.webmanifest" "/icons/icon-512.png"; do printf "%-28s " "$u"; curl -sI "http://localhost:8081$u" | grep -i "^cache-control" | tr -d '\r'; done
+```
+
+Expected: `no-cache`, `no-cache`, `public, max-age=31536000, immutable`.
 
 - [ ] **Step 3: Check Chromium's own verdict**
 

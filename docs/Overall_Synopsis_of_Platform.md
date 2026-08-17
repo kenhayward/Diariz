@@ -105,9 +105,13 @@ are content-hashed. `/assets/` also stops falling through to the SPA fallback, s
 `/manifest.webmanifest` gets `no-cache` for exactly the reason `index.html` does - it is the document that
 names the icons and the `start_url`, so a heuristically-cached copy pins an *installed* app's identity to a
 previous build - while `/icons/` gets `immutable, max-age=1y` like `/assets/`. The third rule is the MIME
-type: nginx's bundled `mime.types` has no `manifest` entry at all (verified on nginx 1.31.2), so without an
-explicit `types { application/manifest+json webmanifest; }` the file goes out as `application/octet-stream`.
-Vite's dev server resolves the extension on its own, which makes this a **deploy-only** failure, and any
+type: nginx's bundled `mime.types` has no `manifest` entry at all (verified on nginx 1.31.2), so the
+extension is undetermined and the file would go out as `application/octet-stream`. The fix is
+`default_type application/manifest+json;` **inside the manifest's own `location`** - deliberately not a
+`types { ... }` block, which REPLACES the inherited MIME map rather than extending it: adding one to name
+this single extension turned `index.html`, the JS bundle and every PNG into `application/octet-stream`, a
+completely unusable app, while `nginx -t` still reported the configuration as valid. Vite's dev server
+resolves the extension on its own, which makes this a **deploy-only** failure, and any
 replacement front end or alternative web server in this position needs the same mapping. There is
 deliberately **no service worker**: it would put a second caching layer in front of the shell, which is the
 hazard this whole section is about, and Chromium has not required one for installability since version 112
