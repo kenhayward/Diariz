@@ -410,6 +410,8 @@
   "llmUsageColCompletionTokens": "Jetons de réponse",
   "llmUsageColReasoningTokens": "Jetons de raisonnement",
   "llmUsageColTotalTokens": "Jetons totaux",
+  "llmUsageColTokensPerSecond": "Jetons/s",
+  "llmUsageTokensPerSecondValue": "{{rate}}/s",
   "llmUsageColOutcome": "Résultat",
   "llmUsageNoRecording": "Aucun enregistrement",
   "llmUsageNotMeasured": "-",

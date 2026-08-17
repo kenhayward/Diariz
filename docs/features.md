@@ -565,7 +565,10 @@ of user, model, and call type) - filterable by date range (last 7 days by defaul
 and outcome, with server-side sorting on every column. A totals row covers the whole filter, not just the
 visible page - calls, operations, duration, and prompt/completion/reasoning/total tokens - and each token
 total states how many of the calls in scope actually reported that figure, so a partial measurement is
-never shown as a complete one. Rows matching the current filter can be deleted, with a confirmation stating
+never shown as a complete one. Every line carries its own generation rate in tokens per second, alongside
+the platform-wide rate in the totals row, so a single slow operation is visible without averaging it away;
+an operation's rate is measured against the time the model actually spent, not the wall-clock span, which
+for a multi-call turn includes the gaps between calls. Rows matching the current filter can be deleted, with a confirmation stating
 the exact count before anything is removed.
 - **Preferences**: a tabbed window with the everyday entries (Profile, Recordings, Formulas, Calendars) over an
 **Advanced** divider holding the exception settings (Integrations, Assistant).

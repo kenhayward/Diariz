@@ -1365,6 +1365,10 @@ export interface LlmUsageCallRow {
   success: boolean;
   statusCode: number | null;
   errorKind: string | null;
+  /// This call's own generation rate, completionTokens over durationMs. Null when the server reported no
+  /// completion tokens or the duration was zero - never 0 (which would read as "generated nothing") and
+  /// never Infinity. A measured zero IS 0, not null.
+  tokensPerSecond: number | null;
 }
 
 /// One operation - every LlmCalls row sharing an operationId, collapsed to a single row, as returned by
@@ -1387,6 +1391,14 @@ export interface LlmUsageOperationRow {
   reasoningTokens: number | null;
   totalTokens: number | null;
   success: boolean;
+  /// Time the model actually spent on this operation: the SUM of its calls' durations. Deliberately NOT
+  /// the wall-clock span between startedAt and completedAt, which for a multi-call operation includes the
+  /// gaps between calls (tool execution in a chat turn). It is the denominator of tokensPerSecond, shown
+  /// so the rate reconciles with something visible on the same line.
+  durationMs: number;
+  /// SUM(completionTokens) / SUM(durationMs) across this operation's calls - the same formula the totals
+  /// row and the summary use, never an average of the calls' own rates.
+  tokensPerSecond: number | null;
 }
 
 /// One page of `TRow`, plus totals over the WHOLE filtered set (not just the page - see LlmUsageTotals)

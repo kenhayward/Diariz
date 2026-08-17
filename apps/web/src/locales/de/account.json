@@ -410,6 +410,8 @@
   "llmUsageColCompletionTokens": "Antwort-Token",
   "llmUsageColReasoningTokens": "Denk-Token",
   "llmUsageColTotalTokens": "Token gesamt",
+  "llmUsageColTokensPerSecond": "Token/s",
+  "llmUsageTokensPerSecondValue": "{{rate}}/s",
   "llmUsageColOutcome": "Ergebnis",
   "llmUsageNoRecording": "Keine Aufnahme",
   "llmUsageNotMeasured": "-",
