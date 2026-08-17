@@ -561,7 +561,7 @@ streaming calls when the endpoint supports it. Captured rows hold only counts, s
 prompt or completion content. A Platform Administrator can browse the captured log at `/admin/llm-usage`
 (also linked from the Model Settings tab): three views - **Operations** (one row per user-facing action,
 with its turn count), **Calls** (every individual model call), and **Summary** (rolled up by any combination
-of user, model, and call type) - filterable by date range (last 30 days by default), user, call type, model,
+of user, model, and call type) - filterable by date range (last 7 days by default), user, call type, model,
 and outcome, with server-side sorting on every column. A totals row covers the whole filter, not just the
 visible page - calls, operations, duration, and prompt/completion/reasoning/total tokens - and each token
 total states how many of the calls in scope actually reported that figure, so a partial measurement is

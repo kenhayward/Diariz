@@ -110,6 +110,11 @@ public class LlmUsageController : ControllerBase
             return BadRequest($"Unknown sort key '{sort}'.");
         }
 
+        // Same discipline as sort/mode: an unrecognised outcome must be rejected, not silently widened to
+        // "no filter" - see TryResolveOutcome's doc comment for why that specifically matters here.
+        if (!LlmUsageQuery.TryResolveOutcome(outcome))
+            return BadRequest($"Unknown outcome '{outcome}'. Expected 'ok', 'failed', or 'all'.");
+
         // page/pageSize are clamped rather than rejected, unlike sort/mode above: any integer is a
         // meaningful request ("give me a page of this size") that clamping can satisfy without changing
         // what the response MEANS - a caller who asked for pageSize=10000 still gets a valid, correctly
@@ -119,6 +124,14 @@ public class LlmUsageController : ControllerBase
         if (page < 1) page = 1;
         if (pageSize < 1) pageSize = DefaultPageSize;
         if (pageSize > MaxPageSize) pageSize = MaxPageSize;
+        // Clamp page so (page - 1) * pageSize below can never overflow int32. An astronomically large page
+        // (e.g. int.MaxValue) times even a small pageSize wraps the multiplication negative in unchecked
+        // int arithmetic - a negative Skip either becomes an invalid negative OFFSET in calls mode (a 500)
+        // or misbehaves in operations mode's in-memory Skip, instead of the well-defined "past the last
+        // page" empty result an ordinary large page number should produce. pageSize is already >= 1 here,
+        // so this division is safe.
+        var maxPage = int.MaxValue / pageSize;
+        if (page > maxPage) page = maxPage;
 
         var filter = new LlmUsageFilter(from, to, userIds, kinds, models, outcome, recordingId, sectionId);
         var filtered = LlmUsageQuery.Apply(_db.LlmCalls.AsNoTracking(), filter, DateTimeOffset.UtcNow);
@@ -244,12 +257,22 @@ public class LlmUsageController : ControllerBase
         // and operations mode must not silently use two different string collations for the same column.
         // Tiebreak direction is fixed (always ascending) regardless of `desc`: only totality/uniqueness
         // matters for correctness, not which direction the tiebreak itself runs.
+        //
+        // `useDescendingOrder` is a SEPARATE knob from `desc` (the request's own direction) - the three
+        // nullable token columns below pass `useDescendingOrder: false` together with a
+        // NullsLastComparer(desc) primary comparer, because .NET's OrderByDescending negates whatever the
+        // comparer returns to implement "descending" - so a comparer that already places nulls last for
+        // ascending would end up placing them FIRST once OrderByDescending negates it again. Baking the
+        // requested direction into the comparer itself and always sorting with the ascending OrderBy
+        // sidesteps that double-negation, which is exactly what keeps nulls last in BOTH directions (see
+        // NullsLastComparer's own doc comment). Every other column has no null to worry about, so it keeps
+        // the plain `desc ? OrderByDescending : OrderBy` switch, same as before.
         IOrderedEnumerable<T> RankBy<T, TKey>(
-            IEnumerable<T> source, Func<T, TKey> primary, IComparer<TKey>? comparer,
+            IEnumerable<T> source, Func<T, TKey> primary, IComparer<TKey>? comparer, bool useDescendingOrder,
             Func<T, Guid> operationId, Func<T, LlmCallKind> kind, Func<T, Guid?> userId, Func<T, string> userEmail,
             Func<T, Guid?> recordingId, Func<T, string?> recordingTitle, Func<T, Guid?> sectionId,
             Func<T, string?> sectionName, Func<T, string> model) =>
-            (desc ? source.OrderByDescending(primary, comparer) : source.OrderBy(primary, comparer))
+            (useDescendingOrder ? source.OrderByDescending(primary, comparer) : source.OrderBy(primary, comparer))
                 .ThenBy(operationId)
                 .ThenBy(kind)
                 .ThenBy(userId)
@@ -279,28 +302,30 @@ public class LlmUsageController : ControllerBase
 
         var rankedCandidates = sortColumn switch
         {
-            nameof(LlmCall.DurationMs) => RankBy(corrected, x => x.CompletedAt - x.StartedAt, null,
+            nameof(LlmCall.DurationMs) => RankBy(corrected, x => x.CompletedAt - x.StartedAt, null, desc,
                 x => x.OperationId, x => x.Kind, x => x.UserId, x => x.UserEmail,
                 x => x.RecordingId, x => x.RecordingTitle, x => x.SectionId, x => x.SectionName, x => x.Model),
-            nameof(LlmCall.PromptTokens) => RankBy(corrected, x => x.PromptTokens, null,
+            // NullsLast, useDescendingOrder: false - the direction is baked into the comparer itself (see
+            // RankBy's doc comment for why), never into a real OrderByDescending call, for these three.
+            nameof(LlmCall.PromptTokens) => RankBy(corrected, x => x.PromptTokens, NullsLastComparer(desc), false,
                 x => x.OperationId, x => x.Kind, x => x.UserId, x => x.UserEmail,
                 x => x.RecordingId, x => x.RecordingTitle, x => x.SectionId, x => x.SectionName, x => x.Model),
-            nameof(LlmCall.CompletionTokens) => RankBy(corrected, x => x.CompletionTokens, null,
+            nameof(LlmCall.CompletionTokens) => RankBy(corrected, x => x.CompletionTokens, NullsLastComparer(desc), false,
                 x => x.OperationId, x => x.Kind, x => x.UserId, x => x.UserEmail,
                 x => x.RecordingId, x => x.RecordingTitle, x => x.SectionId, x => x.SectionName, x => x.Model),
-            nameof(LlmCall.TotalTokens) => RankBy(corrected, x => x.TotalTokens, null,
+            nameof(LlmCall.TotalTokens) => RankBy(corrected, x => x.TotalTokens, NullsLastComparer(desc), false,
                 x => x.OperationId, x => x.Kind, x => x.UserId, x => x.UserEmail,
                 x => x.RecordingId, x => x.RecordingTitle, x => x.SectionId, x => x.SectionName, x => x.Model),
-            nameof(LlmCall.Kind) => RankBy(corrected, x => x.Kind, null,
+            nameof(LlmCall.Kind) => RankBy(corrected, x => x.Kind, null, desc,
                 x => x.OperationId, x => x.Kind, x => x.UserId, x => x.UserEmail,
                 x => x.RecordingId, x => x.RecordingTitle, x => x.SectionId, x => x.SectionName, x => x.Model),
-            nameof(LlmCall.Model) => RankBy(corrected, x => x.Model, StringComparer.Ordinal,
+            nameof(LlmCall.Model) => RankBy(corrected, x => x.Model, StringComparer.Ordinal, desc,
                 x => x.OperationId, x => x.Kind, x => x.UserId, x => x.UserEmail,
                 x => x.RecordingId, x => x.RecordingTitle, x => x.SectionId, x => x.SectionName, x => x.Model),
-            nameof(LlmCall.UserEmail) => RankBy(corrected, x => x.UserEmail, StringComparer.Ordinal,
+            nameof(LlmCall.UserEmail) => RankBy(corrected, x => x.UserEmail, StringComparer.Ordinal, desc,
                 x => x.OperationId, x => x.Kind, x => x.UserId, x => x.UserEmail,
                 x => x.RecordingId, x => x.RecordingTitle, x => x.SectionId, x => x.SectionName, x => x.Model),
-            _ /* StartedAt */ => RankBy(corrected, x => x.StartedAt, null,
+            _ /* StartedAt */ => RankBy(corrected, x => x.StartedAt, null, desc,
                 x => x.OperationId, x => x.Kind, x => x.UserId, x => x.UserEmail,
                 x => x.RecordingId, x => x.RecordingTitle, x => x.SectionId, x => x.SectionName, x => x.Model),
         };
@@ -348,6 +373,9 @@ public class LlmUsageController : ControllerBase
                 : $"Unknown groupBy value '{groupBy}'. Expected a comma-separated list of 'user', " +
                   "'model', and/or 'kind'.");
 
+        if (!LlmUsageQuery.TryResolveOutcome(outcome))
+            return BadRequest($"Unknown outcome '{outcome}'. Expected 'ok', 'failed', or 'all'.");
+
         // Reuse LlmUsageQuery.Apply for the filter, exactly as List does above, so the summary and the
         // detail view can never silently disagree about what is "in scope" for the same query string.
         var filter = new LlmUsageFilter(from, to, userIds, kinds, models, outcome, recordingId, sectionId);
@@ -389,6 +417,13 @@ public class LlmUsageController : ControllerBase
         [FromQuery] Guid? sectionId = null,
         CancellationToken ct = default)
     {
+        // Same discipline as List/Summary: an unrecognised outcome must be rejected, not silently widened
+        // to "no filter" - most dangerous here of all three endpoints, since this one deletes rows.
+        // ?outcome=Failed (capital F) must never silently become "delete everything matching the rest of
+        // the filter, outcome unfiltered" instead of a 400.
+        if (!LlmUsageQuery.TryResolveOutcome(outcome))
+            return BadRequest($"Unknown outcome '{outcome}'. Expected 'ok', 'failed', or 'all'.");
+
         var filter = new LlmUsageFilter(from, to, userIds, kinds, models, outcome, recordingId, sectionId);
         var filtered = LlmUsageQuery.Apply(_db.LlmCalls.AsNoTracking(), filter, DateTimeOffset.UtcNow);
 
@@ -468,6 +503,15 @@ public class LlmUsageController : ControllerBase
     /// pages or on neither as new data is written between one page request and the next. <c>Id</c> is
     /// unique, so appending it makes the order total and paging stable.
     ///
+    /// NULLS LAST, REGARDLESS OF DIRECTION, for the three nullable token columns. A plain Postgres
+    /// <c>ORDER BY</c> defaults to NULLS LAST on ascending but NULLS FIRST on descending - so without this,
+    /// sorting ascending by (say) prompt tokens would put every call that never reported a prompt-token
+    /// count at the very TOP, reading as if those were the cheapest calls on the platform, which is
+    /// backwards: "not measured" has no rank and must never masquerade as the smallest (or, descending,
+    /// the largest) real value. Achieved by ordering on the nullability check FIRST (false/non-null
+    /// sorts before true/null, unconditionally) and the real value second - not by a Postgres-specific
+    /// <c>NULLS LAST</c> clause, since that has no portable LINQ spelling.
+    ///
     /// STRING COLLATION: <c>Model</c>/<c>UserEmail</c> here sort under whatever collation the
     /// <c>LlmCalls</c> table/database uses (an ordinary Postgres <c>ORDER BY</c> - not chosen or
     /// controlled by this method). <c>List</c>'s operations-mode path sorts the same two columns in C#
@@ -482,9 +526,15 @@ public class LlmUsageController : ControllerBase
         IOrderedQueryable<LlmCall> primary = column switch
         {
             nameof(LlmCall.DurationMs) => desc ? source.OrderByDescending(c => c.DurationMs) : source.OrderBy(c => c.DurationMs),
-            nameof(LlmCall.PromptTokens) => desc ? source.OrderByDescending(c => c.PromptTokens) : source.OrderBy(c => c.PromptTokens),
-            nameof(LlmCall.CompletionTokens) => desc ? source.OrderByDescending(c => c.CompletionTokens) : source.OrderBy(c => c.CompletionTokens),
-            nameof(LlmCall.TotalTokens) => desc ? source.OrderByDescending(c => c.TotalTokens) : source.OrderBy(c => c.TotalTokens),
+            nameof(LlmCall.PromptTokens) => desc
+                ? source.OrderBy(c => c.PromptTokens == null).ThenByDescending(c => c.PromptTokens)
+                : source.OrderBy(c => c.PromptTokens == null).ThenBy(c => c.PromptTokens),
+            nameof(LlmCall.CompletionTokens) => desc
+                ? source.OrderBy(c => c.CompletionTokens == null).ThenByDescending(c => c.CompletionTokens)
+                : source.OrderBy(c => c.CompletionTokens == null).ThenBy(c => c.CompletionTokens),
+            nameof(LlmCall.TotalTokens) => desc
+                ? source.OrderBy(c => c.TotalTokens == null).ThenByDescending(c => c.TotalTokens)
+                : source.OrderBy(c => c.TotalTokens == null).ThenBy(c => c.TotalTokens),
             nameof(LlmCall.Kind) => desc ? source.OrderByDescending(c => c.Kind) : source.OrderBy(c => c.Kind),
             nameof(LlmCall.Model) => desc ? source.OrderByDescending(c => c.Model) : source.OrderBy(c => c.Model),
             nameof(LlmCall.UserEmail) => desc ? source.OrderByDescending(c => c.UserEmail) : source.OrderBy(c => c.UserEmail),
@@ -492,4 +542,26 @@ public class LlmUsageController : ControllerBase
         };
         return desc ? primary.ThenByDescending(c => c.Id) : primary.ThenBy(c => c.Id);
     }
+
+    /// <summary>A <c>long?</c> comparer for <c>List</c>'s operations-mode <c>RankBy</c> that keeps nulls
+    /// LAST regardless of the requested direction - the in-memory equivalent of <see cref="OrderCalls"/>'s
+    /// nulls-last handling for calls mode.
+    ///
+    /// MUST be paired with <c>RankBy</c>'s <c>useDescendingOrder: false</c> (a plain ascending
+    /// <c>OrderBy</c>, never <c>OrderByDescending</c>) - .NET's <c>OrderByDescending</c> negates whatever
+    /// a comparer returns to implement "descending", so a comparer that places nulls last for ascending
+    /// would end up placing them FIRST once <c>OrderByDescending</c> negated it again (the exact bug this
+    /// fixes, just relocated). Calling this with a plain ascending <c>OrderBy</c> instead means the
+    /// comparer is the ONLY thing controlling order, so both halves of it can be written directly: a null
+    /// unconditionally compares as "after" a real value (the <c>1</c>/<c>-1</c> branches, never negated),
+    /// and <paramref name="desc"/> flips only the real-value-vs-real-value comparison (<c>-cmp</c>) to get
+    /// descending order for the values that DO exist.</summary>
+    private static IComparer<long?> NullsLastComparer(bool desc) => Comparer<long?>.Create((x, y) =>
+    {
+        if (x is null && y is null) return 0;
+        if (x is null) return 1; // x (null) sorts after y (a real value), in EITHER direction
+        if (y is null) return -1;
+        var cmp = x.Value.CompareTo(y.Value);
+        return desc ? -cmp : cmp;
+    });
 }

@@ -63,4 +63,32 @@ describe("api client: array query params serialize as repeated keys, not bracket
     expect(url).toContain(`userIds=${userIds[0]}&userIds=${userIds[1]}`);
     expect(url).not.toContain("%5B%5D");
   });
+
+  it("getLlmUsageSummary sends a multi-value array filter as repeated keys", async () => {
+    mock.onGet("/api/admin/llm-usage/summary").reply(200, {
+      groups: [],
+      totals: {
+        calls: 0,
+        operations: 0,
+        durationMs: 0,
+        promptTokens: null,
+        completionTokens: null,
+        reasoningTokens: null,
+        totalTokens: null,
+        tokenMeasuredCalls: 0,
+        promptTokensMeasured: 0,
+        completionTokensMeasured: 0,
+        reasoningTokensMeasured: 0,
+        totalTokensMeasured: 0,
+        failedCalls: 0,
+        tokensPerSecond: null,
+      },
+    });
+
+    await api.getLlmUsageSummary({ userIds, groupBy: ["kind"] });
+
+    const url = axios.getUri(mock.history.get[0]);
+    expect(url).toContain(`userIds=${userIds[0]}&userIds=${userIds[1]}`);
+    expect(url).not.toContain("%5B%5D");
+  });
 });

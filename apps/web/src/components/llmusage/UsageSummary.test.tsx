@@ -84,7 +84,7 @@ describe("UsageSummary", () => {
     expect(within(row).getByText("3")).toBeTruthy();
   });
 
-  it("never renders a null token field as 0 on a group row, and captions it with the group's own measured count", async () => {
+  it("never renders a null token field as 0 on a group row", async () => {
     render(
       <UsageSummary
         summary={summary([group({ reasoningTokens: null, tokenMeasuredCalls: 3, calls: 4 })], totals())}
@@ -97,7 +97,30 @@ describe("UsageSummary", () => {
 
     const row = await screen.findByTestId("llm-usage-summary-row-0");
     expect(within(row).getByText("-")).toBeTruthy();
-    expect(row.textContent).toContain("measured on 3 of 4 calls");
+  });
+
+  it("does not caption a group row's token cells with a per-column measured count - tokenMeasuredCalls is an any-column figure, not a per-column one", async () => {
+    // A group where 40 of 40 calls reported prompt tokens but only 2 reported reasoning tokens: the API
+    // gives no per-column count at group granularity, only the coarser any-column tokenMeasuredCalls (40).
+    // Captioning every token cell with that one figure would falsely claim "measured on 40 of 40 calls"
+    // under the reasoning-tokens column too, which is not true for that column specifically.
+    render(
+      <UsageSummary
+        summary={summary(
+          [group({ promptTokens: 400, completionTokens: 400, reasoningTokens: 4, totalTokens: 804, tokenMeasuredCalls: 40, calls: 40 })],
+          totals(),
+        )}
+        isLoading={false}
+        isError={false}
+        groupBy={["kind"]}
+        onGroupByChange={vi.fn()}
+      />,
+    );
+
+    const row = await screen.findByTestId("llm-usage-summary-row-0");
+    // No per-column "measured on N of M calls" caption anywhere in a group row - the group level simply
+    // does not have that figure to report truthfully per column.
+    expect(row.textContent).not.toMatch(/measured on \d+ of \d+ calls/);
   });
 
   it("renders the totals row from summary.totals using each column's own measured count, not the coarse any-column figure or a fold over the groups", async () => {

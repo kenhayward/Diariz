@@ -244,9 +244,13 @@ function TotalCell({ value, measured, total }: { value: number | null; measured:
 }
 
 /// One roll-up row. `tokenMeasuredCalls` is the only measured-count `LlmUsageSummaryGroup` carries (there
-/// is no per-column breakdown at group granularity), so every token cell here is captioned with that same
-/// coarser figure - unlike the totals row above, this is not a misuse of a coarser number in place of a
-/// finer one, it is the only number the API gives at this level.
+/// is no per-column breakdown at group granularity) - unlike the totals row above, which captions each
+/// token cell with that column's OWN measured count, a group row's token cells render bare (no caption):
+/// captioning all four with the one any-column figure would state something false about at least three of
+/// them whenever a group's columns are unevenly measured (e.g. 40 of 40 calls reported prompt tokens but
+/// only 2 reported reasoning tokens - "measured on 40 of 40 calls" under the reasoning column would be a
+/// lie). The four per-column counts aren't on the wire at group granularity to caption with instead; adding
+/// them to `LlmUsageSummaryGroup` is a follow-up, not this fix.
 function SummaryRow({ group, dims, testId }: { group: LlmUsageSummaryGroup; dims: LlmUsageGroupDimension[]; testId: string }) {
   const { t } = useTranslation("account");
   return (
@@ -260,24 +264,19 @@ function SummaryRow({ group, dims, testId }: { group: LlmUsageSummaryGroup; dims
       <td className="px-2 py-1 text-right">{group.operations.toLocaleString()}</td>
       <td className="px-2 py-1 text-right">{group.averageTurnsPerOperation.toFixed(1)}</td>
       <td className="px-2 py-1 text-right">{group.maxTurnsPerOperation}</td>
-      <GroupTokenCell value={group.promptTokens} measured={group.tokenMeasuredCalls} total={group.calls} />
-      <GroupTokenCell value={group.completionTokens} measured={group.tokenMeasuredCalls} total={group.calls} />
-      <GroupTokenCell value={group.reasoningTokens} measured={group.tokenMeasuredCalls} total={group.calls} />
-      <GroupTokenCell value={group.totalTokens} measured={group.tokenMeasuredCalls} total={group.calls} />
+      <GroupTokenCell value={group.promptTokens} />
+      <GroupTokenCell value={group.completionTokens} />
+      <GroupTokenCell value={group.reasoningTokens} />
+      <GroupTokenCell value={group.totalTokens} />
       <td className="px-2 py-1 text-right">{group.tokensPerSecond === null ? t("llmUsageNotMeasured") : group.tokensPerSecond.toFixed(1)}</td>
       <td className="px-2 py-1 text-right">{group.failedCalls.toLocaleString()}</td>
     </tr>
   );
 }
 
-function GroupTokenCell({ value, measured, total }: { value: number | null; measured: number; total: number }) {
+/// Unlike the totals row's `TotalCell`, this renders no "measured on N of M calls" caption - see
+/// `SummaryRow`'s doc comment for why a group row has no truthful per-column figure to caption with.
+function GroupTokenCell({ value }: { value: number | null }) {
   const { t } = useTranslation("account");
-  return (
-    <td className="px-2 py-1 text-right">
-      <div>{value === null ? t("llmUsageNotMeasured") : value.toLocaleString()}</div>
-      {value !== null && (
-        <div className="text-[10px] font-normal text-gray-400 dark:text-gray-500">{t("llmUsageMeasuredOn", { measured, total })}</div>
-      )}
-    </td>
-  );
+  return <td className="px-2 py-1 text-right">{value === null ? t("llmUsageNotMeasured") : value.toLocaleString()}</td>;
 }

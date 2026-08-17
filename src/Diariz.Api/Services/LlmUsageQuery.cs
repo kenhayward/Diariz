@@ -87,6 +87,17 @@ public static class LlmUsageQuery
         return source;
     }
 
+    /// <summary>Validates an <c>outcome</c> query-string value the same way <see cref="TryResolveSort"/>
+    /// and <see cref="TryResolveGroupBy"/> validate theirs - null (meaning "no filter on outcome", same
+    /// as the caller writing nothing) or an exact, case-sensitive match for <c>"ok"</c>/<c>"failed"</c>/
+    /// <c>"all"</c> pass; anything else (a typo, wrong case, a stray value) is rejected. <see cref="Apply"/>
+    /// used to fall through an unrecognised value to "no filter" instead - the one filter in this feature
+    /// that widened silently instead of erroring, unlike every other whitelisted token here. That is most
+    /// dangerous on <c>Delete</c>: <c>?outcome=Failed</c> (capital F) would have silently deleted
+    /// successes too, not just failures, because the switch in <see cref="Apply"/> could not tell "Failed"
+    /// from "all" or from no value at all.</summary>
+    public static bool TryResolveOutcome(string? outcome) => outcome is null or "ok" or "failed" or "all";
+
     /// <summary>Resolves a query-string sort key to its canonical column name via whitelist lookup.
     /// False for anything not in <see cref="SortWhitelist"/>, including null and empty.</summary>
     public static bool TryResolveSort(string? sort, out string column)

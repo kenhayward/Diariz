@@ -919,9 +919,11 @@ whole platform, not just platform configuration):
   would be circular), to drive the filter bar's dropdowns.
 
 The web page (`apps/web/src/pages/LlmUsage.tsx`) presents this as three views - Operations, Calls, and
-Summary - sharing one filter bar (default window: the last 30 days), a totals row pinned to the bottom of
-the table, sortable column headers issuing a fresh server-side request per click, and a filtered-delete
-button whose native confirm dialog states the exact row count before anything is removed.
+Summary - sharing one filter bar (default window: the last 7 days - a UI-chosen default, distinct from
+`LlmUsageQuery.Apply`'s own 30-day fallback for a caller that sends no `from` at all, since the page always
+sends an explicit preset), a totals row pinned to the bottom of the table, sortable column headers issuing a
+fresh server-side request per click, and a filtered-delete button whose native confirm dialog states the
+exact row count before anything is removed.
 
 ## Meeting notes (the user's own notes)
 

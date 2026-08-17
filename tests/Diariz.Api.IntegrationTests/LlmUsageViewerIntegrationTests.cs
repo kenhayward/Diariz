@@ -264,6 +264,39 @@ public class LlmUsageViewerIntegrationTests(ContainersFixture fx)
     }
 
     [Fact]
+    public async Task AnAstronomicallyLargePage_IsClamped_NotAnOverflowingNegativeOffset_CallsMode()
+    {
+        // (page - 1) * pageSize is unchecked int arithmetic - a huge page wraps the multiplication
+        // negative, which used to become an invalid negative OFFSET against real Postgres (a 500), not a
+        // well-defined "past the last page" empty result.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        db.LlmCalls.Add(Row(marker));
+        await db.SaveChangesAsync();
+
+        var result = OkValue<LlmUsagePage<LlmUsageCallRow>>(
+            await Build(db).List(mode: "calls", models: [marker.ToString()], page: int.MaxValue, pageSize: 50));
+
+        Assert.Empty(result.Rows);
+        Assert.Equal(1, result.Total); // totals still cover the real filtered set, unaffected by the clamp
+    }
+
+    [Fact]
+    public async Task AnAstronomicallyLargePage_IsClamped_NotAnOverflowingNegativeOffset_OperationsMode()
+    {
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        db.LlmCalls.Add(Row(marker));
+        await db.SaveChangesAsync();
+
+        var result = OkValue<LlmUsagePage<LlmUsageOperationRow>>(
+            await Build(db).List(mode: "operations", models: [marker.ToString()], page: int.MaxValue, pageSize: 50));
+
+        Assert.Empty(result.Rows);
+        Assert.Equal(1, result.Total);
+    }
+
+    [Fact]
     public async Task UnrecognisedSort_IsRejectedWith400_NotSilentlyIgnored()
     {
         // Silently ignoring it would show the administrator data ordered differently from what they
@@ -274,6 +307,50 @@ public class LlmUsageViewerIntegrationTests(ContainersFixture fx)
         var result = await Build(db).List(mode: "calls", models: [marker.ToString()], sort: "notARealColumn");
 
         Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task UnrecognisedOutcome_IsRejectedWith400_OnList_NotSilentlyWidened()
+    {
+        // outcome is the one filter whose Apply-level switch falls through an unrecognised value to "no
+        // filter" instead of erroring - this proves the endpoint itself now rejects it before that switch
+        // is ever reached, matching mode/sort/groupBy's discipline.
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+
+        var result = await Build(db).List(mode: "calls", models: [marker.ToString()], outcome: "Failed");
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task UnrecognisedOutcome_IsRejectedWith400_OnSummary_NotSilentlyWidened()
+    {
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+
+        var result = await Build(db).Summary(groupBy: "kind", models: [marker.ToString()], outcome: "Failed");
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task UnrecognisedOutcome_IsRejectedWith400_OnDelete_NotSilentlyDeletingEverything()
+    {
+        // The one that actually matters most: on the destructive endpoint, a caller who meant to delete
+        // only failures but mistyped the case must get a 400, never a delete that silently ran with
+        // outcome unfiltered (deleting successes too).
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var row = Row(marker, success: false);
+        db.LlmCalls.Add(row);
+        await db.SaveChangesAsync();
+
+        var result = await Build(db).Delete(models: [marker.ToString()], outcome: "Failed");
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        await using var verifyDb = fx.CreateDbContext();
+        Assert.True(await verifyDb.LlmCalls.AnyAsync(c => c.Id == row.Id)); // nothing deleted
     }
 
     [Fact]
@@ -560,6 +637,95 @@ public class LlmUsageViewerIntegrationTests(ContainersFixture fx)
         var desc = OkValue<LlmUsagePage<LlmUsageOperationRow>>(
             await Build(db).List(mode: "operations", models: models, sort: sortKey, desc: true));
         Assert.Equal(expectedAscending.Reverse(), desc.Rows.Select(r => r.OperationId).ToArray());
+    }
+
+    // ---- NULL token values sort LAST regardless of direction, in both modes (final review finding 3) ----
+    //
+    // BuildOrderableTriple above deliberately sets every token column non-null (PromptTokens = (i+1)*10,
+    // etc.), so the ascending/descending-reverse theory above cannot see how a NULL token value is
+    // actually placed - exactly the gap this review pass found. Calls mode orders nulls via a plain
+    // Postgres ORDER BY (NULLS LAST ascending, NULLS FIRST descending, Postgres's own default); operations
+    // mode orders in C# via Comparer<long?>.Default (nulls FIRST ascending, LAST descending) - the exact
+    // opposite of calls mode for the SAME column. Both are wrong: UsageSummary.tsx's own client-side sort
+    // (the third sort implementation in this feature) already gets this right and documents why - "not
+    // measured" has no rank and must never sort as if it were the smallest (ascending) or largest
+    // (descending) real value, in EITHER direction. These tests pin both server-side implementations to
+    // that same rule: nulls sort LAST, unconditionally, regardless of direction.
+    private static LlmCall[] BuildTripleWithANullTokenRow(Guid marker, out string[] models)
+    {
+        var baseTime = DateTimeOffset.UtcNow.AddMinutes(-30);
+        var modelValues = Enumerable.Range(0, 3).Select(i => $"{marker}-{i}").ToArray();
+        models = modelValues;
+        return new[]
+        {
+            new LlmCall
+            {
+                Id = Guid.NewGuid(), OperationId = Guid.NewGuid(), Sequence = 1, Kind = LlmCallKind.Summarize,
+                UserEmail = $"{marker}-u0@x.test", Model = modelValues[0], Endpoint = "http://x/v1",
+                StartedAt = baseTime, CompletedAt = baseTime.AddMilliseconds(100), DurationMs = 1000,
+                PromptTokens = 10, CompletionTokens = 20, TotalTokens = 30, Success = true,
+            },
+            new LlmCall
+            {
+                Id = Guid.NewGuid(), OperationId = Guid.NewGuid(), Sequence = 1, Kind = LlmCallKind.Summarize,
+                UserEmail = $"{marker}-u1@x.test", Model = modelValues[1], Endpoint = "http://x/v1",
+                StartedAt = baseTime.AddSeconds(1), CompletedAt = baseTime.AddSeconds(1).AddMilliseconds(200), DurationMs = 2000,
+                PromptTokens = 20, CompletionTokens = 40, TotalTokens = 60, Success = true,
+            },
+            new LlmCall
+            {
+                // The row under test: reports NO usage at all on any of the three nullable, sortable
+                // token columns - the case neither BuildOrderableTriple nor BuildOrderableTripleWithAMultiCallOperation
+                // ever exercises.
+                Id = Guid.NewGuid(), OperationId = Guid.NewGuid(), Sequence = 1, Kind = LlmCallKind.Summarize,
+                UserEmail = $"{marker}-u2@x.test", Model = modelValues[2], Endpoint = "http://x/v1",
+                StartedAt = baseTime.AddSeconds(2), CompletedAt = baseTime.AddSeconds(2).AddMilliseconds(300), DurationMs = 3000,
+                PromptTokens = null, CompletionTokens = null, TotalTokens = null, Success = true,
+            },
+        };
+    }
+
+    public static IEnumerable<object[]> NullableTokenSortKeys() =>
+        new[] { "promptTokens", "completionTokens", "totalTokens" }.Select(k => new object[] { k });
+
+    [Theory]
+    [MemberData(nameof(NullableTokenSortKeys))]
+    public async Task NullTokenValue_SortsLast_RegardlessOfDirection_CallsMode(string sortKey)
+    {
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var rows = BuildTripleWithANullTokenRow(marker, out var models);
+        db.LlmCalls.AddRange(rows);
+        await db.SaveChangesAsync();
+        var nullRowId = rows[2].Id;
+
+        var asc = OkValue<LlmUsagePage<LlmUsageCallRow>>(
+            await Build(db).List(mode: "calls", models: models, sort: sortKey, desc: false));
+        Assert.Equal(nullRowId, asc.Rows.Last().Id); // nulls last ascending
+
+        var desc = OkValue<LlmUsagePage<LlmUsageCallRow>>(
+            await Build(db).List(mode: "calls", models: models, sort: sortKey, desc: true));
+        Assert.Equal(nullRowId, desc.Rows.Last().Id); // nulls last descending too - not first
+    }
+
+    [Theory]
+    [MemberData(nameof(NullableTokenSortKeys))]
+    public async Task NullTokenValue_SortsLast_RegardlessOfDirection_OperationsMode(string sortKey)
+    {
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var rows = BuildTripleWithANullTokenRow(marker, out var models);
+        db.LlmCalls.AddRange(rows);
+        await db.SaveChangesAsync();
+        var nullOperationId = rows[2].OperationId;
+
+        var asc = OkValue<LlmUsagePage<LlmUsageOperationRow>>(
+            await Build(db).List(mode: "operations", models: models, sort: sortKey, desc: false));
+        Assert.Equal(nullOperationId, asc.Rows.Last().OperationId); // nulls last ascending - NOT first
+
+        var desc = OkValue<LlmUsagePage<LlmUsageOperationRow>>(
+            await Build(db).List(mode: "operations", models: models, sort: sortKey, desc: true));
+        Assert.Equal(nullOperationId, desc.Rows.Last().OperationId); // nulls last descending too
     }
 
     // ---- Deterministic tiebreak so paging can't lose or duplicate rows (finding 4) ----

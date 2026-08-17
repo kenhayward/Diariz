@@ -201,7 +201,8 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
               </label>
 
               {/* LLM usage log: master switch, retention window (0 = keep forever), and whether streaming
-                  calls ask for token counts (not yet consumed - wired for a later release). */}
+                  calls ask for token counts (consumed since 0.217.0 to report real tokens/duration on
+                  streamed calls). */}
               <div className="border-t pt-3 dark:border-gray-700">
                 <label className="flex items-center gap-2 text-sm">
                   <input

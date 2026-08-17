@@ -137,6 +137,31 @@ public class LlmUsageQueryTests
     }
 
     [Theory]
+    [InlineData(null)]
+    [InlineData("ok")]
+    [InlineData("failed")]
+    [InlineData("all")]
+    public void TryResolveOutcome_AcceptsNullOrAWhitelistedValue(string? outcome)
+    {
+        Assert.True(LlmUsageQuery.TryResolveOutcome(outcome));
+    }
+
+    [Theory]
+    [InlineData("Failed")] // wrong case - must not silently widen to "no filter" on the destructive Delete path
+    [InlineData("OK")]
+    [InlineData("ALL")]
+    [InlineData("")]
+    [InlineData("nonsense")]
+    [InlineData("ok; DROP TABLE \"LlmCalls\"")]
+    public void TryResolveOutcome_RejectsAnythingElse(string outcome)
+    {
+        // Unlike Apply's own switch (which folds an unrecognised value into "no filter" for backward
+        // compatibility of the query builder itself), the endpoint-level gate must reject it - the same
+        // discipline TryResolveSort/TryResolveGroupBy already apply to their own query-string tokens.
+        Assert.False(LlmUsageQuery.TryResolveOutcome(outcome));
+    }
+
+    [Theory]
     [InlineData("startedAt")]
     [InlineData("durationMs")]
     [InlineData("totalTokens")]
