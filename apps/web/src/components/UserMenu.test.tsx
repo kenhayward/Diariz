@@ -25,6 +25,10 @@ const authState: {
 };
 
 vi.mock("../auth", () => ({ useAuth: () => authState }));
+
+// Controllable per test: the real hook depends on a browser event jsdom never fires.
+const installState = { canInstall: false, install: vi.fn() };
+vi.mock("../lib/installPrompt", () => ({ useInstallPrompt: () => installState }));
 vi.mock("../lib/api", () => ({
   api: {
     getPlatformSettings: vi.fn().mockResolvedValue({
@@ -173,5 +177,35 @@ describe("UserMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: /account/i }));
     fireEvent.click(screen.getByRole("menuitem", { name: /^about$/i }));
     expect(screen.getByRole("dialog", { name: /about diariz/i })).toBeTruthy();
+  });
+});
+
+// A sibling describe rather than a nested one: the block above resets authState and calls
+// vi.clearAllMocks() in its own beforeEach, which would clear the install spy set up here.
+describe("UserMenu install row", () => {
+  beforeEach(() => {
+    installState.canInstall = false;
+    installState.install = vi.fn();
+  });
+
+  it("is absent when the browser has not offered to install", () => {
+    renderMenu();
+    fireEvent.click(screen.getByRole("button", { name: /account/i }));
+    expect(screen.queryByRole("menuitem", { name: /install app/i })).toBeNull();
+  });
+
+  it("appears when the browser has offered", () => {
+    installState.canInstall = true;
+    renderMenu();
+    fireEvent.click(screen.getByRole("button", { name: /account/i }));
+    expect(screen.getByRole("menuitem", { name: /install app/i })).toBeTruthy();
+  });
+
+  it("triggers the install when clicked", () => {
+    installState.canInstall = true;
+    renderMenu();
+    fireEvent.click(screen.getByRole("button", { name: /account/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /install app/i }));
+    expect(installState.install).toHaveBeenCalledTimes(1);
   });
 });

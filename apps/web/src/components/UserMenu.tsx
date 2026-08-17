@@ -6,6 +6,7 @@ import { api } from "../lib/api";
 import { useTour } from "../lib/tour";
 import { formatBytes, storagePercent } from "../lib/format";
 import { transcriptionTimeParts } from "../lib/transcriptionTime";
+import { useInstallPrompt } from "../lib/installPrompt";
 import { useHubPopover } from "./hub/hubPopovers";
 import HubPopover from "./hub/HubPopover";
 import Avatar from "./Avatar";
@@ -70,6 +71,7 @@ export default function UserMenu() {
   const { initials, pictureUrl, email, fullName, isAdmin, isPlatformAdmin, canManageFormulas, canManagePeople, logout } = useAuth();
   const tour = useTour();
   const { data: storage } = useQuery({ queryKey: ["user-storage"], queryFn: api.getUserStorage });
+  const { canInstall, install } = useInstallPrompt();
   const { isOpen, toggle, close } = useHubPopover();
   const open = isOpen("acct");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -203,6 +205,10 @@ export default function UserMenu() {
               label={t("help:title")}
               onSelect={run(() => window.open("/help", "_blank", "noopener"))}
             />
+            {/* Only when the browser has actually offered - see installPrompt.ts. Chromium's own install
+                icon in the omnibox is easy to miss, and on Linux the installed window is the only thing
+                standing in for a desktop app. */}
+            {canInstall && <MenuRow label={t("installApp")} onSelect={run(install)} />}
             <MenuRow label={t("about")} onSelect={run(() => setAboutOpen(true))} />
             <MenuRow label={t("provideFeedback")} onSelect={run(() => setFeedbackOpen(true))} />
           </div>

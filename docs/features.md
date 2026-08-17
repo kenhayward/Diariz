@@ -604,6 +604,15 @@ automation carrying it is badged as such in the list - there is no edit form, so
 the setting is visible after creation. Feedback Received is offered to **platform** automations only; the
 personal picker does not list it, and the server refuses it on a personal subscription. Screenshots are not
 part of this release - they need a desktop-shell change and are a deferred follow-up.
+- **Install it as an app.** From a Chromium browser (Chrome, Edge), Diariz can be installed as an
+application in its own right - a launcher entry and icon alongside your other apps, opening in its own
+window with no tabs or address bar. An **Install app** entry appears in the account menu whenever the
+browser offers it, so the small install icon in the address bar is not the only way to find it. This is
+what gives **Linux** an app-like Diariz: there is no Linux installer, and system audio there is already
+handled by the PipeWire drop-in (see **Capture**), so the window was the last piece missing. It works on
+Windows and macOS too, though the Electron desktop app remains the fuller option on those platforms - an
+installed window has no tray presence, no pop-out notes window, and no screenshots, and offline it shows
+the browser's own error page rather than working offline. Firefox does not install web apps.
 - **Help and documentation.** A browsable help section at **`/help`**: a fixed header, a resizable
 left-hand tree of articles grouped into Getting started / Working with recordings / Asking questions /
 Settings and sharing, and the selected article rendered on the right. A **search box** above the tree
