@@ -66,7 +66,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.221.0",
     date: "2026-08-17",
-    pr: 0,
+    pr: 536,
     headline: "AI models are managed by your administrator",
     summary:
       "Choosing which AI model answers you, and where it lives, has moved out of personal Preferences and into a new **AI models** page for Platform Administrators. Each person no longer sets their own endpoint, key, model, context window, timeout or reasoning level - one place now decides them for everyone, which is what makes it possible to run this properly rather than hoping every account happens to be pointed somewhere sensible.\n\n" +
