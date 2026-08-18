@@ -105,6 +105,8 @@ export default function NotesPopout() {
                 relay to the host over the channel rather than reaching the shell directly. */}
             <CaptureControls
               captureAreaSet={state.captureAreaSet}
+              autoCapture={state.autoCapture}
+              onToggleAutoCapture={state.canAutoCapture ? () => client?.toggleAutoCapture() : undefined}
               // A dead channel means a click would travel nowhere. Icon-only buttons cannot be silently
               // greyed out, so the row is told why - the banner above says the same thing at length.
               unavailableReason={live ? undefined : t("notesPopoutOffline")}

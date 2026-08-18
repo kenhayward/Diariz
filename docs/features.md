@@ -115,6 +115,17 @@ double-click, keyboard shortcuts, drag once zoomed in) let a dense capture be re
 scrolled around instead of downloading it. The Notes tab also lists a recording's captures in a collapsed
 Screenshots section. A note or screenshot sitting between two turns by the same speaker now stops those
 turns from being merged past it.
+- **Auto-capture (desktop app).** A sticky toggle beside the capture buttons: while it is on, Diariz watches
+the capture area and takes a screenshot **every time the screen settles on something new**, which captures a
+presentation slide by slide without anyone touching the keyboard. It watches once a second and only keeps a
+frame once the content has held still, so a mouse cursor drifting over a slide, a blinking caret, a
+half-drawn animation, or a video playing inside the deck do not produce captures - an embedded video simply
+yields nothing until the deck settles again. Going **back** to a slide already captured does not file a
+second copy of it. Each capture is timestamped with the moment its slide **appeared**, not the moment it was
+confirmed, so it lands in the transcript beside the sentence that introduced it. Auto-capture pauses with
+the recording, stops on its own when the meeting reaches its screenshot limit or the captured display goes
+away, and always ends with the recording - it is never remembered into the next one. Manual captures, the
+hotkey and the tray item all keep working while it runs.
 - **User API access.** When a Platform Administrator enables it (Settings → Integration), generate a **personal
 API token** (Preferences → Integrations) to call the Diariz **REST API** directly as yourself — acting with your own
 permissions, over your own data — and browse a **built-in API reference**, opened as a panel from Preferences -> Integrations or Settings ->

@@ -84,9 +84,10 @@ the Python worker only ever sees an audio blob. So:
    the **settled image** (grabbed at commit). We record the former as `capturedAtMs` and use the latter as
    the image. This is strictly better than the brief's compromise and costs almost nothing (§4.5).
 2. **Sample rate vs. stability window.** The brief's defaults (2 fps, `stable_samples=3`) mean 1.5 s of
-   stability. We sample at 1 Hz, at which `stable_samples=3` becomes a 3 s dwell requirement - and any
-   slide shown for under 3 s is **missed entirely**, silently. At 1 Hz the default must be
-   `stableSamples = 2`. See §6 for the tunables and the tradeoff.
+   stability. At 1 Hz, `stable_samples=3` becomes a 3 s dwell requirement - and any slide shown for under
+   3 s is **missed entirely**, silently. This spec originally lowered the default to 2 to compensate;
+   B1's tests then showed 2 admits mid-transition frames, so the stability window stays at **3** and the
+   sample interval is what has to come down instead. See §6 and §14.
 3. **Commit-time races.** The brief's content is static by construction because it re-reads a file. Live, the
    screen can change between the sampling tick that triggered the commit and the full-resolution grab that
    follows it. That needs an explicit confirm step (§4.4), which the brief has no reason to describe.
@@ -404,7 +405,7 @@ native 1080p capture.
 | `hashSize` | `16` | The brief's value - a 256-bit dHash. |
 | `changeThreshold` | `24` | Brief's value, at the same hash size. **Calibrate.** |
 | `stabilityThreshold` | `12` | Brief's value. **Calibrate.** |
-| `stableSamples` | `2` | **Changed from the brief's 3.** At 1 Hz, 3 means a 3 s dwell requirement and any slide shown for under 3 s is silently missed. 2 gives a 2 s commit latency and catches a briskly-paced deck. If calibration shows 2 admits mid-transition frames, prefer dropping `sampleIntervalMs` to 500 ms and raising `stableSamples` to 3 over reverting to a 3 s dwell. |
+| `stableSamples` | `3` | **Was 2; corrected by B1's tests, which showed 2 admits mid-transition frames exactly as §6 warned it might.** A cross-fade does not drift smoothly through the hash space - dHash records the *sign* of each horizontal comparison and those signs flip together around the midpoint, so 25% and 50% through a fade produce the *same* digest. Two samples of one intermediate is all a streak of 2 needs, and a half-drawn frame commits. The cost is dwell time (a slide must hold for `stableSamples` x the sample interval), which is an argument for sampling faster than 1 Hz, not for lowering this. Both behaviours are pinned in `slideDetector.test.js`. |
 | `dedupeThreshold` | `10` | Brief's value. Stricter than `changeThreshold` on purpose: a false dedupe silently loses a slide. |
 | `maxCaptures` | `200` | Mirrors `MAX_LIVE_SCREENSHOTS`. See §7.3. |
 
@@ -793,3 +794,176 @@ tested against a real deck; if the sweep moves them, update the table and say so
 3. **Threshold defaults** (B12). Expected to move. Cheap to fix, and the §8.1 tests assert fixture
    behaviour rather than specific distances, so tuning does not invalidate them.
 4. **`title` on an `aria-disabled` button** (A6). Verified by hand, because jsdom cannot see it.
+
+---
+
+## 14. B0 findings - the frame source has to change
+
+**Measured on a three-display Windows machine (1920x1080 @1.25, 1920x1200 @1.25, 3840x2160 @2.5),
+Electron 43.** Twenty interleaved samples, after a warm-up grab:
+
+| Call | Mean | p50 | p90 |
+|---|---|---|---|
+| `getSources` @320px long edge (detection) | **428.4 ms** | 426.8 | 464.7 |
+| `getSources` @2560px long edge (commit) | **442.5 ms** | 425.3 | 527.6 |
+| `resize` to 17x16 + read bitmap | 0.2 ms | 0.2 | 0.3 |
+
+A follow-up probe isolates the cause. Requesting a **1x1** thumbnail costs **445.7 ms** - the same as a
+full-resolution one:
+
+| Request | Sources returned | Mean |
+|---|---|---|
+| `types: ["screen"]` @1x1 | 3 | 445.7 ms |
+| `types: ["screen"]` @320px | 3 | 485.7 ms |
+| `types: ["screen"]` @full | 3 | 466.9 ms |
+| `types: ["window"]` @320px | 24 | 2282.2 ms |
+
+### What this invalidates
+
+**§4.3's central optimisation does not exist.** `desktopCapturer.getSources()` composites and captures
+*every* screen on each call; `thumbnailSize` only governs a final downscale, which is free. Sampling
+small is therefore exactly as expensive as grabbing full resolution, and the sample/extract split saves
+nothing.
+
+At ~430 ms per call, a 1 Hz ticker costs **~43% of one core, continuously, for the length of the
+meeting** - against acceptance criterion 3's budget of 5%. Slowing the tick does not rescue it either:
+even one sample every 5 seconds is ~8.6% of a core, and a 5 s interval misses slides outright. **The
+per-call cost has to go, not the call rate.**
+
+### The direction that does work
+
+Stop re-initiating a capture per sample and **hold one warm capture session**: a `getDisplayMedia` video
+stream on the chosen display, opened when auto-capture engages and closed when it disengages, sampled
+via `drawImage` onto a small canvas. The shell already auto-grants sources through
+`setDisplayMediaRequestHandler` (that is how system-audio loopback works), so the existing capture-area
+picker can still choose the display and hand the stream over without a second picker.
+
+That relocates detection from the main process to the renderer, which **inverts §4.1** - but the reason
+§4.1 gave for the main process (do not push a full-resolution PNG per second across IPC) is satisfied
+even better there, because the frames never cross IPC at all. It also collapses three later steps:
+
+- **§4.5's `ageMs` hint becomes unnecessary.** The renderer owns the pause-aware recorded clock, so it
+  can stamp the candidate's first-seen moment directly. B6's IPC widening and B7's subtraction both go.
+- **§7.2's `paused` cross-boundary flag becomes unnecessary.** The renderer already knows it is paused.
+- **§4.4's commit-time confirm gets cheaper**, because the sample and the full-resolution frame come from
+  the same video element rather than from two independent captures. The confirm is still wanted (the
+  screen can change between frames) but the same-downsample-chain trap in B5 largely disappears.
+
+### B0 round two - the persistent stream, measured
+
+Same machine, same Electron. CPU is summed across every Electron process (`app.getAppMetrics()`), as a
+percentage of one core:
+
+| Phase | Mean | Peak |
+|---|---|---|
+| baseline, no stream | 0.1% | 0.1% |
+| stream @1fps held open, idle | 0.1% | 0.4% |
+| stream @1fps + 1 Hz detection sampling | **0.2%** | 0.7% |
+| stream @30fps held open, idle (reference) | 0.6% | 1.3% |
+
+| Operation | Mean | Max |
+|---|---|---|
+| detection draw (video to 17x16 canvas + read back) | 11.9 ms | 33.1 ms |
+| commit grab (full-res PNG + 320px JPEG thumbnail) | **32.8 ms** | 61.0 ms |
+
+**Roughly 400x cheaper than the per-sample `getSources` design**, and comfortably inside criterion 3's
+5% budget with room to sample faster than 1 Hz. Even the commit grab is ~13x faster than a single
+`getSources` call. The `frameRate: { max: 1 }` constraint is honoured - the 30fps stream costs six times
+the 1fps one, which is also the evidence that the measurement is sensitive enough to trust.
+
+**Occlusion, the scenario that actually matters.** During a presentation the Diariz window is behind the
+slides or minimised, and a renderer that stops compositing would silently stop capturing - the worst
+failure available, because nothing looks wrong. Tested against a deliberately animated on-screen stage,
+so that "no change detected" could be distinguished from "the capture froze":
+
+| Window state | Video clock | Distinct frames | |
+|---|---|---|---|
+| visible | +4.02 s | 4/8 | live |
+| **minimised** | +5.01 s | **5/8** | **live** |
+| restored | +5.00 s | 6/8 | live |
+| hidden (`win.hide()`, separate run) | +3.02 s | 2/5 | live |
+
+The stream keeps delivering in every state. `backgroundThrottling: false` is set on the window, and
+should be treated as load-bearing rather than incidental.
+
+**Still unmeasured:** whether Windows shows a persistent screen-sharing indicator while the stream is
+held, and the behaviour on macOS (where Screen Recording permission and its menu-bar indicator apply).
+Neither blocks the design; both need to be seen before release.
+
+### What survives unchanged
+
+**§4.2, the detector, is independent of where frames come from** and is built (B1). Its tests assert
+"how many slides came out of this footage", not distances or timings, so a change of frame source does
+not touch them.
+
+One correction it did need: `dhash` now takes a `pixelOrder`. Frames arrive from two worlds with two
+byte orders - Electron's `nativeImage` is **BGRA**, a canvas `ImageData` is **RGBA** - and reading one as
+the other still produces a working hash, which is what makes it dangerous. It simply applies the luma
+weights to the wrong channels, so a red-on-black chart and a blue-on-black one come out far more alike
+than a viewer would call them. Pinned by a test.
+
+---
+
+## 15. Revised architecture and plan (supersedes §4.1-§4.5, §7.2, and Phase B of §13)
+
+Detection moves to the **renderer**, driven by one warm `getDisplayMedia` stream.
+
+### 15.1 Shape
+
+- **The shell** still owns *which* display is captured. The capture-area picker is unchanged; on engage,
+  the shell resolves the chosen display to a `desktopCapturer` source and grants it through
+  `setDisplayMediaRequestHandler` (`useSystemPicker: false`) - the same mechanism already used for
+  system-audio loopback. It also keeps the tray toggle.
+- **The renderer** opens the stream at the display's full resolution with `frameRate: { max: 2 }`, holds
+  it for as long as auto-capture is engaged, and runs the whole loop: sample to a 17x16 canvas, `dhash`
+  (`pixelOrder: "rgba"`), feed `slideDetector`, and on commit draw the same video element to a
+  full-resolution canvas for the PNG plus a 320px JPEG thumbnail.
+- **The capture area** (a rectangle within the display) becomes the source rectangle of `drawImage`
+  rather than a crop of a grabbed bitmap - plain canvas maths in the renderer.
+
+### 15.2 What this deletes
+
+| Previously specified | Now |
+|---|---|
+| §4.5 `ageMs` hint on the IPC payload | **Gone.** The renderer owns the pause-aware recorded clock, so it stamps the candidate's first-seen moment directly. |
+| §7.2 `paused` flag on `RecorderState` | **Gone.** The renderer already knows it is paused; no cross-boundary contract change. |
+| §4.4's "same downsample chain" trap | **Largely gone.** Sample and commit frames come from one video element. The confirm step stays (the screen can still change between frames) but both hashes now come from the same canvas path. |
+| §4.3 small-vs-full grab distinction | **Gone.** One stream serves both; only the destination canvas size differs. |
+| B2 `cropRectForSize` in `captureTarget.js` | **Not needed.** Cropping is a `drawImage` source rect. |
+| B6 IPC widening for captured frames | **Not needed.** Frames never cross IPC. |
+
+### 15.3 Revised Phase B steps
+
+B0 and B1 are done. What remains:
+
+- **B2. Stream grant (shell).** On engage, resolve the capture target's display to a source and install
+  the display-media handler; revoke on disengage. Pure part - picking the right source for a display id,
+  including the "display went away" case - goes in a testable helper beside `captureTarget.js`.
+- **B3. Tray descriptors.** Unchanged from the original plan (§8.2): the auto-capture checkbox in
+  `trayScreenshotItems`, test first.
+- **B4. `autoCapture` bridge.** `preload.js` + `trayScreenshots.ts`: `toggleAutoCapture()`,
+  `onAutoCaptureChanged()`, mirroring the existing capture-area pair. Optional-chained, so a browser and
+  an older shell stay no-ops.
+- **B5. The capture loop (renderer).** A new `apps/web/src/lib/slideCapture.ts` owning the stream, the
+  ticker, the canvases and the commit. (The detector move is **done**: `slideDetector.ts` now lives in
+  `apps/web/src/lib/` with its 27 tests as vitest, and the desktop copy is gone.)
+- **B6. `Recorder` wiring.** Engage/disengage, the `maxCaptures` self-disable, suspend on pause, and
+  feeding commits into the existing `addLiveShot` - which needs no change, since a commit produces
+  exactly the `{ full, thumb, width, height }` shape it already takes.
+- **B7. `notesChannel`.** Unchanged from the original plan: `autoCapture` state plus a
+  `toggle-auto-capture` message.
+- **B8. The third button.** Unchanged: extend `CaptureControls` and its test, then pass through from both
+  hosts.
+- **B9. Release checklist**, **B10. Verify**, **B11. Calibrate.** As before, minus the
+  `Overall_Synopsis_of_Platform.md` edit for the `paused` contract (no longer changing) plus a new one
+  for the stream-based capture path.
+
+### 15.4 New risks
+
+1. ~~The detector has to move to the web app.~~ **Done** - ported to `apps/web/src/lib/slideDetector.ts`,
+   tests carried across to vitest, desktop copy removed. It stayed pure, so the port was mechanical.
+2. **A screen-sharing indicator** may appear while the stream is held (unmeasured). If Windows or macOS
+   shows one for the whole meeting, that is a user-visible surprise and needs to be in the help text
+   rather than discovered.
+3. **`backgroundThrottling: false`** is load-bearing for the minimised case. It is already set on the
+   main window; it must not be removed, and that deserves a comment where it is set.

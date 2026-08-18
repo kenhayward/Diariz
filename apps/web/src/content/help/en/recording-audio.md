@@ -175,6 +175,33 @@ and stops accepting new lines. That is deliberate - a note typed with nowhere to
 saved when it was not. Bring the main window back and it picks up where it left off. Everything you
 had already typed is safe.
 
+## Capturing slides automatically
+
+If you are sitting in a presentation, you do not have to take a screenshot of every slide yourself. Turn
+on **Auto-capture** - the first of the three small buttons beside the screenshot count in the notes
+panel, or the tray item of the same name - and Diariz watches the capture area and takes a screenshot
+each time the screen settles on something new.
+
+It only keeps a frame once the content has held still, which is what stops it filling your transcript
+with everything that crossed the screen. A mouse pointer moving over a slide does not count as a new
+slide, and neither does a blinking cursor, a half-drawn animation, or a fade between two slides. A video
+playing inside the deck produces nothing at all until the deck settles again. If the presenter goes back
+to a slide you already have, it is not captured twice.
+
+A slide has to stay up for about three seconds to be captured. A deck being flicked through faster than
+that will not be caught - that is deliberate, because the alternative is a transcript full of
+half-finished transitions. You can always take a capture by hand at any moment; the hotkey, the tray item
+and the capture button all keep working while auto-capture is running.
+
+Each capture is timestamped from the moment its slide appeared rather than the moment Diariz decided it
+had settled, so it sits in the transcript beside what was being said as it went up.
+
+Auto-capture needs a capture area first, so if you have not chosen one the button waits and says so.
+It pauses when you pause the recording, stops on its own if the meeting reaches its screenshot limit or
+the screen it was watching is unplugged, and always switches off when the recording ends - it is never
+left running into your next meeting. Changing the capture area stops it too, so turn it back on once you
+have picked the new area.
+
 ## From the desktop app
 
 The tray or menu-bar menu can start and stop recording without bringing the window forward, including

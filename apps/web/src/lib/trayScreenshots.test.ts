@@ -4,6 +4,9 @@ import {
   onScreenshotCaptured,
   requestCapture,
   requestChangeArea,
+  requestToggleAutoCapture,
+  onAutoCaptureChanged,
+  canAutoCapture,
 } from "./trayScreenshots";
 
 declare global {
@@ -71,5 +74,62 @@ describe("trayScreenshots", () => {
 
     expect(captureScreenshot).toHaveBeenCalledOnce();
     expect(changeCaptureArea).toHaveBeenCalledOnce();
+  });
+});
+
+describe("auto-capture", () => {
+  it("does nothing in a plain browser rather than throwing", () => {
+    expect(() => requestToggleAutoCapture()).not.toThrow();
+  });
+
+  it("asks the shell to toggle auto-capture", () => {
+    const toggleAutoCapture = vi.fn();
+    window.diariz = { canCaptureScreenshot: true, toggleAutoCapture };
+
+    requestToggleAutoCapture();
+
+    expect(toggleAutoCapture).toHaveBeenCalledTimes(1);
+  });
+
+  // Auto-capture stops without the user asking - the recording ends, or the capture area's display is
+  // unplugged - so the renderer is told rather than left showing a lit toggle over a dead loop.
+  it("relays the shell's start and stop, with the area to capture", () => {
+    let emit: ((payload: unknown) => void) | null = null;
+    window.diariz = {
+      canCaptureScreenshot: true,
+      onAutoCaptureChanged: (cb: (payload: unknown) => void) => {
+        emit = cb;
+        return () => {};
+      },
+    };
+    const seen: unknown[] = [];
+
+    onAutoCaptureChanged((state) => seen.push(state));
+    const area = { displayWidth: 1920, displayHeight: 1200, crop: null };
+    emit?.({ active: true, area });
+    emit?.({ active: false });
+
+    expect(seen).toEqual([{ active: true, area }, { active: false }]);
+  });
+
+  // An older shell has no auto-capture bridge at all. The web app must degrade to "this build cannot do
+  // it" rather than throwing on a missing method - the desktop app updates on its own schedule, so a new
+  // web app against an old shell is a normal state, not an error.
+  it("subscribing against an older shell is a no-op that still returns an unsubscribe", () => {
+    window.diariz = { canCaptureScreenshot: true };
+
+    const unsubscribe = onAutoCaptureChanged(() => {});
+
+    expect(() => unsubscribe()).not.toThrow();
+  });
+
+  it("reports whether this shell can auto-capture at all", () => {
+    expect(canAutoCapture()).toBe(false);
+
+    window.diariz = { canCaptureScreenshot: true };
+    expect(canAutoCapture()).toBe(false);
+
+    window.diariz = { canCaptureScreenshot: true, toggleAutoCapture: () => {} };
+    expect(canAutoCapture()).toBe(true);
   });
 });

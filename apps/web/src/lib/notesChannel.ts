@@ -27,6 +27,11 @@ export interface NotesState {
   /// bridge, and the host is the authority either way.
   canCapture: boolean;
   captureAreaSet: boolean;
+  /// Whether auto-capture is running, and whether this shell offers it at all. The pop-out renders the
+  /// same control row as the main window, so it needs both - a shell predating the feature shows no
+  /// toggle rather than a dead one.
+  autoCapture: boolean;
+  canAutoCapture: boolean;
   recording: boolean;
 }
 
@@ -40,6 +45,7 @@ type ClientMessage =
   | { type: "delete"; id: string }
   | { type: "deleteShot"; id: string }
   | { type: "capture" }
+  | { type: "toggle-auto-capture" }
   | { type: "changeArea" }
   | { type: "closing" };
 
@@ -67,6 +73,7 @@ export interface NotesHostHandlers {
   onDelete(id: string): void;
   onDeleteShot(id: string): void;
   onCapture(): void;
+  onToggleAutoCapture(): void;
   onChangeArea(): void;
   /// The pop-out window is going away; restore the inline popover. Must be idempotent - it arrives from
   /// the client's own `closing` message AND from the shell noticing the window was destroyed, and
@@ -115,6 +122,9 @@ export function createNotesHost(
       case "deleteShot":
         handlers.onDeleteShot(m.id);
         break;
+      case "toggle-auto-capture":
+        handlers.onToggleAutoCapture();
+        break;
       case "capture":
         handlers.onCapture();
         break;
@@ -152,6 +162,7 @@ export interface NotesClient {
   remove(id: string): void;
   removeShot(id: string): void;
   capture(): void;
+  toggleAutoCapture(): void;
   changeArea(): void;
   /// Tell the host this window is going away.
   close(): void;
@@ -200,6 +211,7 @@ export function createNotesClient(
     remove: (id) => send({ type: "delete", id }),
     removeShot: (id) => send({ type: "deleteShot", id }),
     capture: () => send({ type: "capture" }),
+    toggleAutoCapture: () => send({ type: "toggle-auto-capture" }),
     changeArea: () => send({ type: "changeArea" }),
     close: () => send({ type: "closing" }),
     dispose: () => {

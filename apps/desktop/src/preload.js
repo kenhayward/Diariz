@@ -60,6 +60,24 @@ contextBridge.exposeInMainWorld("diariz", {
     return () => ipcRenderer.removeListener("screenshot:area-changed", listener);
   },
 
+  /// Turn auto-capture (capture each time the screen changes) on or off. With no capture area chosen
+  /// yet, main opens the picker first - same as `captureScreenshot`.
+  toggleAutoCapture: () => ipcRenderer.invoke("screenshot:toggle-auto-capture"),
+
+  /// Subscribe to auto-capture starting and stopping. `cb` receives
+  /// `{ active, area }`, where `area` (present only while active) describes what to capture:
+  /// `{ displayWidth, displayHeight, crop }` in the target display's physical pixels, `crop` being null
+  /// for a whole screen. The renderer opens its own getDisplayMedia stream - main has already granted the
+  /// chosen display for it - so the frames never cross IPC. Returns an unsubscribe function.
+  ///
+  /// Auto-capture can stop without the user asking (the capture area's display went away, the recording
+  /// ended), which is why this is an event rather than something the renderer polls.
+  onAutoCaptureChanged: (cb) => {
+    const listener = (_event, payload) => cb(payload);
+    ipcRenderer.on("screenshot:auto-capture-changed", listener);
+    return () => ipcRenderer.removeListener("screenshot:auto-capture-changed", listener);
+  },
+
   /// Subscribe to captured images. `cb` receives { full, thumb, width, height } where
   /// `full` and `thumb` are Uint8Arrays (PNG and JPEG) - Electron's structured-clone IPC
   /// turns the main process's Node Buffers into Uint8Array on arrival here, not

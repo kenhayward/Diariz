@@ -38,4 +38,16 @@ function resizeDims(width, height, maxLongEdge) {
   return { width: Math.round(width * ratio), height: Math.round(height * ratio) };
 }
 
-module.exports = { clampRect, cropRectFor, resizeDims };
+/// The desktopCapturer source for a given display, or null when none of them claims it.
+///
+/// `display_id` is not contractually populated by desktopCapturer across platforms, and the two sides
+/// disagree on type: `screen.getAllDisplays()` gives a number, desktopCapturer a string. Hence the string
+/// comparison - and hence returning null rather than falling back to `sources[0]`, which would grab
+/// whichever screen happened to come first and then treat it as the target display. That failure is
+/// invisible: the capture looks perfectly fine and is of somewhere else.
+function sourceForDisplay(sources, displayId) {
+  const wanted = String(displayId);
+  return (sources || []).find((s) => s.display_id !== "" && String(s.display_id) === wanted) ?? null;
+}
+
+module.exports = { clampRect, cropRectFor, resizeDims, sourceForDisplay };

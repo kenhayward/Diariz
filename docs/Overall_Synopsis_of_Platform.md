@@ -1145,6 +1145,37 @@ crash never loses an unattached capture, and uploads it to `POST /api/recordings
 recording row exists (an attach failure keeps the capture durable behind a retry banner, exactly like the
 notes stash).
 
+**Auto-capture** (a sticky toggle beside the capture buttons, plus a tray checkbox) captures the screen each
+time it settles on something new - a presentation captured slide by slide with no keypresses. It is a
+**second, separate capture path**, and the split between the two processes is the opposite way round:
+
+- **Main** owns which display is captured and the on/off state (`autoCapture`, written only through
+  `setAutoCapture` so the tray and renderer cannot disagree). It grants the chosen display through the
+  window's existing `setDisplayMediaRequestHandler`, which now serves **two callers told apart by whether
+  audio was requested**: system-audio recording asks for both and does not care which screen it gets (the
+  renderer discards the video track), while auto-capture asks for video only and must have the picked
+  display - answering it with `sources[0]` would yield a stream of good screenshots of the wrong monitor.
+- **The renderer** runs the whole loop (`lib/slideCapture.ts` over `lib/displayMediaFrames.ts`): it holds
+  **one `getDisplayMedia` stream open** for as long as auto-capture runs and samples it onto canvases. It
+  detects changes with a **256-bit dHash** (`lib/slideDetector.ts`) requiring the content to hold still for
+  several consecutive samples before committing, which is what suppresses cursor movement, blinking carets,
+  half-drawn animations and embedded video; a slide already captured is recognised and not filed twice.
+
+The frame source is a held-open stream rather than a grab per sample because
+`desktopCapturer.getSources()` costs **~430 ms per call whatever thumbnail size is asked for** (it captures
+every screen each time; a 1x1 request measured the same as a full-resolution one), against ~12 ms to sample
+a warm stream - 43% of a core versus 0.2%. The stream keeps delivering while the window is hidden or
+minimised, which is the normal state during a presentation; `backgroundThrottling: false` on the main window
+is load-bearing for that.
+
+Detection running in the renderer is also what lets a capture be stamped with the moment its slide
+**appeared** rather than the moment it was confirmed - only that side knows the pause-aware recorded clock -
+so a slide lands beside the sentence that introduced it instead of a few seconds later. Auto-capture pauses
+with the recording (the stream stays open; the loop just stops sampling), stops itself at the recording's
+screenshot cap or after repeated grab failures, is cleared whenever the capture gate closes (recording
+ended, renderer reloaded, display unplugged) or the capture area changes, and is never remembered into the
+next recording.
+
 **IPC channels** (main ⇄ renderer/picker/hotkey windows, `contextBridge`-exposed, never raw `ipcRenderer` in
 the web app):
 
@@ -1155,6 +1186,8 @@ the web app):
 | `screenshot:has-area` | renderer → main (invoke) | none → `boolean`: whether this recording has a capture area yet (the renderer's starting value) |
 | `screenshot:area-changed` | main → renderer (event) | `boolean` - the area was chosen (`true`) or cleared (`false`: new recording, re-pick, or a display that went away) |
 | `screenshot:captured` | main → renderer (event) | `{ full, thumb, width, height }` (PNG/JPEG bytes as `Uint8Array`) |
+| `screenshot:toggle-auto-capture` | renderer → main (invoke) | none - starts/stops auto-capture; opens the picker first if this recording has no target yet |
+| `screenshot:auto-capture-changed` | main → renderer (event) | `{ active, area? }` - `area` is `{ displayWidth, displayHeight, crop }` in the target display's **physical pixels**, present only while active |
 | `picker:choose` | picker window → main (send) | the user's selection (`{ displayId, selection }` or a whole-monitor pick) |
 | `picker:cancel` | picker window → main (send) | none - the overlay was dismissed (Escape) without a choice |
 | `picker:reset` | main → picker window (event) | none - the overlay has been put away; clear its one-shot choose/cancel guard so the pooled window can serve the next pick |

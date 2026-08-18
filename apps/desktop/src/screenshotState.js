@@ -25,13 +25,25 @@ function canCapture(state) {
 }
 
 /// The dynamic screenshot menu items for the current phase, as plain descriptors
-/// ({ id, label, enabled }). `main.js` maps each `id` to a click handler. Capture only
+/// ({ id, label, enabled, ... }). `main.js` maps each `id` to a click handler. Capture only
 /// makes sense mid-recording with a ready renderer to receive it - not, for example,
 /// during a mid-recording renderer reload, where a click would send into a void.
+///
+/// Deliberately NOT gated on a capture area, unlike the in-app buttons. The tray capture item has always
+/// picked-then-captured when no area is set, and auto-capture does the same - because a tray menu has no
+/// hover text, so a greyed item there can never say why it is greyed. That is exactly the failure the
+/// in-app icon buttons carry `disabledReason` to avoid, and it has no equivalent cure here.
 function trayScreenshotItems(state) {
   if (!canCapture(state)) return [];
   return [
     { id: "capture", label: "Capture Screenshot", enabled: true },
+    {
+      id: "auto-capture",
+      label: "Auto-capture",
+      type: "checkbox",
+      checked: state.autoCapture === true,
+      enabled: true,
+    },
     { id: "change-area", label: "Change Capture Area…", enabled: true },
   ];
 }
