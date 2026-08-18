@@ -125,8 +125,11 @@ describe("NotesPopout", () => {
 
     // Capturing with no area opens the picker and then sits inert until it settles, which reads as the
     // window having frozen - so "set the area" stays the visible first step, exactly as in the popover.
+    // (How that is expressed - inert but hoverable, so the button can say why - is CaptureControls' own
+    // test; here we only care that this window passes the gate down.)
     act(() => handlers.onState(state({ canCapture: true, captureAreaSet: false })));
-    expect((screen.getByRole("button", { name: /capture screenshot/i }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: /capture screenshot/i }));
+    expect(client.capture).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: /change capture area/i }));
     expect(client.changeArea).toHaveBeenCalledTimes(1);

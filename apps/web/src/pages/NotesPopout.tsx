@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import NotesSection from "../components/NotesSection";
 import ShotStrip from "../components/hub/ShotStrip";
+import CaptureControls from "../components/hub/CaptureControls";
 import { createNotesClient, type NotesClient, type NotesState } from "../lib/notesChannel";
 
 /**
@@ -42,17 +43,6 @@ export default function NotesPopout() {
 
   const client = clientRef.current;
   const live = state !== null && !lost;
-
-  const smallButton = {
-    fontFamily: "system-ui",
-    fontWeight: 500,
-    fontSize: 12,
-    padding: "2px 6px",
-    borderRadius: 6,
-    border: "1px solid var(--hub-border)",
-    background: "transparent",
-    color: "var(--hub-text-2)",
-  } as const;
 
   return (
     <div
@@ -110,27 +100,17 @@ export default function NotesPopout() {
             <span style={{ fontFamily: "system-ui", fontWeight: 600, fontSize: 12, color: "var(--hub-text-2)" }}>
               {t("screenshots")} ({state.shots.length})
             </span>
-            <div style={{ display: "flex", gap: 6 }}>
-              <button
-                type="button"
-                onClick={() => client?.capture()}
-                // Same gate as the popover's capture button: with no area chosen this opens the picker
-                // and then sits inert until it settles, which reads as the window having frozen.
-                disabled={!live || !state.captureAreaSet}
-                title={state.captureAreaSet ? undefined : t("screenshotCaptureNeedsArea")}
-                style={{ ...smallButton, cursor: live && state.captureAreaSet ? "pointer" : "not-allowed" }}
-              >
-                {t("screenshotCaptureButton")}
-              </button>
-              <button
-                type="button"
-                onClick={() => client?.changeArea()}
-                disabled={!live}
-                style={{ ...smallButton, cursor: live ? "pointer" : "not-allowed" }}
-              >
-                {t("screenshotCaptureArea")}
-              </button>
-            </div>
+            {/* The same controls the main window's notes popover shows, sharing one component so the two
+                cannot drift again (they already had: this window additionally gates on `live`). Clicks
+                relay to the host over the channel rather than reaching the shell directly. */}
+            <CaptureControls
+              captureAreaSet={state.captureAreaSet}
+              // A dead channel means a click would travel nowhere. Icon-only buttons cannot be silently
+              // greyed out, so the row is told why - the banner above says the same thing at length.
+              unavailableReason={live ? undefined : t("notesPopoutOffline")}
+              onCapture={() => client?.capture()}
+              onChangeArea={() => client?.changeArea()}
+            />
           </div>
           <ShotStrip shots={state.shots} onDelete={(id) => client?.removeShot(id)} />
         </div>

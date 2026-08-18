@@ -24,6 +24,10 @@ const baseProps: NotesPopoverProps = {
   onDeleteShot: () => {},
 };
 
+// The desktop shell's half of the props: both capture handlers arrive together (Recorder gates them on
+// one canCaptureScreenshots() check), so tests that want the screenshot section supply the pair.
+const shell = { onChangeCaptureArea: () => {}, onCapture: () => {} };
+
 function renderPopover(overrides: Partial<NotesPopoverProps> = {}) {
   return render(<NotesPopover {...baseProps} {...overrides} />);
 }
@@ -45,27 +49,27 @@ describe("NotesPopover screenshots", () => {
   });
 
   it("shows one thumbnail per capture taken so far", () => {
-    renderPopover({ shots: [shot(1_000), shot(2_000)], onChangeCaptureArea: () => {} });
+    renderPopover({ shots: [shot(1_000), shot(2_000)], ...shell });
 
     expect(screen.getAllByRole("img")).toHaveLength(2);
   });
 
   it("gives each thumbnail alt text distinguishing it from the others", () => {
-    renderPopover({ shots: [shot(1_000), shot(65_000)], onChangeCaptureArea: () => {} });
+    renderPopover({ shots: [shot(1_000), shot(65_000)], ...shell });
 
     const images = screen.getAllByRole("img");
     expect(images[0].getAttribute("alt")).not.toBe(images[1].getAttribute("alt"));
   });
 
   it("rolls a capture's alt-text stamp over into h:mm:ss past one hour, matching the transcript/strip format", () => {
-    renderPopover({ shots: [shot(3_904_000)], onChangeCaptureArea: () => {} }); // 1h 05m 04s
+    renderPopover({ shots: [shot(3_904_000)], ...shell }); // 1h 05m 04s
 
     expect(screen.getByRole("img").getAttribute("alt")).toContain("1:05:04");
   });
 
   it("offers changing the capture area", () => {
     const onChangeCaptureArea = vi.fn();
-    renderPopover({ shots: [shot(1_000)], onChangeCaptureArea });
+    renderPopover({ shots: [shot(1_000)], ...shell, onChangeCaptureArea });
 
     fireEvent.click(screen.getByRole("button", { name: /change capture area/i }));
 
@@ -81,46 +85,47 @@ describe("NotesPopover screenshots", () => {
 
   it("offers capturing a screenshot without leaving the popover", () => {
     const onCapture = vi.fn();
-    renderPopover({ shots: [], onChangeCaptureArea: () => {}, onCapture });
+    renderPopover({ shots: [], ...shell, onCapture });
 
     fireEvent.click(screen.getByRole("button", { name: /capture screenshot/i }));
 
     expect(onCapture).toHaveBeenCalledTimes(1);
   });
 
-  it("hides the capture button when onCapture is not provided", () => {
+  // The two handlers arrive together or not at all, so a half-supplied pair hides the section rather than
+  // rendering a row with a gap in it.
+  it("hides the whole screenshot section when only one capture handler is supplied", () => {
     renderPopover({ shots: [], onChangeCaptureArea: () => {}, onCapture: undefined });
 
     expect(screen.queryByRole("button", { name: /capture screenshot/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /change capture area/i })).toBeNull();
   });
 
   // Capturing with no area chosen opens the area picker and leaves BOTH buttons inert until it is
-  // dismissed, which reads as "the buttons stopped working". Capture stays disabled until an area exists.
-  it("disables the capture button until a capture area has been set", () => {
+  // dismissed, which reads as "the buttons stopped working". Capture waits until an area exists. The
+  // detail of how that is expressed (inert but hoverable, so it can say why) lives in CaptureControls'
+  // own tests; here we only care that the popover passes the gate down.
+  it("does not capture until a capture area has been set", () => {
     const onCapture = vi.fn();
-    renderPopover({ shots: [], onChangeCaptureArea: () => {}, onCapture, captureAreaSet: false });
+    renderPopover({ shots: [], ...shell, onCapture, captureAreaSet: false });
 
-    const button = screen.getByRole<HTMLButtonElement>("button", { name: /capture screenshot/i });
-    expect(button.disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: /capture screenshot/i }));
 
-    fireEvent.click(button);
     expect(onCapture).not.toHaveBeenCalled();
   });
 
-  it("enables the capture button once a capture area is set", () => {
+  it("captures once a capture area is set", () => {
     const onCapture = vi.fn();
-    renderPopover({ shots: [], onChangeCaptureArea: () => {}, onCapture, captureAreaSet: true });
+    renderPopover({ shots: [], ...shell, onCapture, captureAreaSet: true });
 
-    const button = screen.getByRole<HTMLButtonElement>("button", { name: /capture screenshot/i });
-    expect(button.disabled).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: /capture screenshot/i }));
 
-    fireEvent.click(button);
     expect(onCapture).toHaveBeenCalledTimes(1);
   });
 
   it("keeps setting the capture area available while capture is disabled", () => {
     const onChangeCaptureArea = vi.fn();
-    renderPopover({ shots: [], onChangeCaptureArea, onCapture: () => {}, captureAreaSet: false });
+    renderPopover({ shots: [], ...shell, onChangeCaptureArea, captureAreaSet: false });
 
     fireEvent.click(screen.getByRole("button", { name: /capture area/i }));
 
@@ -128,7 +133,7 @@ describe("NotesPopover screenshots", () => {
   });
 
   it("renders the strip with no captures yet, without a stray thumbnail", () => {
-    renderPopover({ shots: [], onChangeCaptureArea: () => {} });
+    renderPopover({ shots: [], ...shell });
 
     expect(screen.queryByRole("img")).toBeNull();
     expect(screen.getByRole("button", { name: /change capture area/i })).toBeTruthy();
@@ -137,7 +142,7 @@ describe("NotesPopover screenshots", () => {
   it("deletes the capture under the clicked button, naming it rather than its position", () => {
     const onDeleteShot = vi.fn();
     const shots = [shot(1_000), shot(2_000), shot(3_000)];
-    renderPopover({ shots, onChangeCaptureArea: () => {}, onDeleteShot });
+    renderPopover({ shots, ...shell, onDeleteShot });
 
     const deleteButtons = screen.getAllByRole("button", { name: /delete screenshot/i });
     fireEvent.click(deleteButtons[1]);
@@ -147,17 +152,17 @@ describe("NotesPopover screenshots", () => {
   });
 
   it("revokes the previous object URLs when the capture set changes", () => {
-    const { rerender } = renderPopover({ shots: [shot(1_000)], onChangeCaptureArea: () => {} });
+    const { rerender } = renderPopover({ shots: [shot(1_000)], ...shell });
     expect(createSpy).toHaveBeenCalledTimes(1);
 
-    rerender(<NotesPopover {...baseProps} shots={[shot(1_000), shot(2_000)]} onChangeCaptureArea={() => {}} />);
+    rerender(<NotesPopover {...baseProps} shots={[shot(1_000), shot(2_000)]} {...shell} />);
 
     expect(revokeSpy).toHaveBeenCalledWith("blob:mock-0");
     expect(createSpy).toHaveBeenCalledTimes(3);
   });
 
   it("revokes object URLs on unmount", () => {
-    const { unmount } = renderPopover({ shots: [shot(1_000), shot(2_000)], onChangeCaptureArea: () => {} });
+    const { unmount } = renderPopover({ shots: [shot(1_000), shot(2_000)], ...shell });
 
     unmount();
 
