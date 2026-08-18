@@ -17,6 +17,12 @@ export type HubIconButtonProps = {
   disabledReason?: string;
   /** Whether the button controls an open popover (sets aria-expanded + aria-haspopup). */
   expanded?: boolean;
+  /**
+   * For a sticky control - one that stays on until pressed again. Sets aria-pressed and tints the
+   * button, so "this is running right now" is legible both to a screen reader and at a glance. Omit
+   * entirely for an ordinary button; `false` makes it a toggle that is currently off.
+   */
+  pressed?: boolean;
   /** 44px in the command hub (default); 28px inside a popover, where several share one row. */
   size?: "lg" | "sm";
   children: ReactNode;
@@ -42,6 +48,7 @@ export default function HubIconButton({
   disabled,
   disabledReason,
   expanded,
+  pressed,
   size = "lg",
   children,
 }: HubIconButtonProps) {
@@ -62,6 +69,7 @@ export default function HubIconButton({
       disabled={!inert && disabled}
       aria-label={label}
       aria-disabled={inert ? true : undefined}
+      aria-pressed={pressed}
       title={disabledReason ?? title ?? label}
       {...(expanded !== undefined ? { "aria-haspopup": "dialog" as const, "aria-expanded": expanded } : {})}
       style={{
@@ -72,9 +80,9 @@ export default function HubIconButton({
         alignItems: "center",
         justifyContent: "center",
         borderRadius: radius,
-        background: "transparent",
-        border: "1px solid var(--hub-border)",
-        color: "var(--hub-text-2)",
+        background: pressed ? "var(--hub-surface-hover)" : "transparent",
+        border: `1px solid ${pressed ? "var(--hub-red)" : "var(--hub-border)"}`,
+        color: pressed ? "var(--hub-text)" : "var(--hub-text-2)",
         cursor: unavailable ? "not-allowed" : "pointer",
         opacity: unavailable ? 0.5 : 1,
       }}
@@ -82,7 +90,7 @@ export default function HubIconButton({
         if (!unavailable) e.currentTarget.style.background = "var(--hub-surface-hover)";
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.background = "transparent";
+        e.currentTarget.style.background = pressed ? "var(--hub-surface-hover)" : "transparent";
       }}
     >
       {children}

@@ -23,7 +23,7 @@ const { trayRecorderItems, trayTooltip, notificationFor } = require("./recorderS
 const { updateRestartItem, notificationForUpdate, isNewerVersion } = require("./updateState");
 const { documentLoadOptions, trayReloadItem } = require("./documentLoad");
 const { buildStartUrl, codeFromArgv, notificationForAuthError } = require("./desktopAuth");
-const { cropRectFor, resizeDims, clampRect } = require("./captureTarget");
+const { cropRectFor, resizeDims, clampRect, sourceForDisplay } = require("./captureTarget");
 const { reconcilePool } = require("./pickerPool");
 const { RENDERER_INVALIDATING_EVENTS } = require("./rendererReadiness");
 const { notesWindowBounds } = require("./notesWindowState");
@@ -101,14 +101,28 @@ function createMainWindow(url) {
     },
   });
 
-  // Grant system-audio (loopback) capture for getDisplayMedia. On Windows,
-  // `audio: 'loopback'` records what the system is playing; a screen video source
-  // must be supplied even though the renderer discards the video track.
+  // One handler, two callers, told apart by whether audio was asked for.
+  //
+  //   - System-audio recording asks for BOTH. On Windows `audio: 'loopback'` records what the system is
+  //     playing; a screen video source must be supplied even though the renderer discards the video track,
+  //     so which screen it is does not matter.
+  //   - Auto-capture asks for video ONLY, and which screen it is matters entirely: it must be the display
+  //     the user picked. Answering that request with `sources[0]` would silently auto-capture the wrong
+  //     monitor - a stream of perfectly good screenshots of somewhere else.
+  //
+  // Both grant without a picker: the user has already chosen, either by starting a system-audio recording
+  // or by picking a capture area.
   mainWindow.webContents.session.setDisplayMediaRequestHandler(
-    (_request, callback) => {
+    (request, callback) => {
+      const wantsScreenOnly = request.audioRequested === false;
       desktopCapturer
         .getSources({ types: ["screen"] })
-        .then((sources) => callback({ video: sources[0], audio: "loopback" }))
+        .then((sources) => {
+          if (!wantsScreenOnly) return callback({ video: sources[0], audio: "loopback" });
+          const source = captureTarget ? sourceForDisplay(sources, captureTarget.displayId) : null;
+          // No target, or its display has gone: deny rather than hand over a different screen.
+          callback(source ? { video: source } : {});
+        })
         .catch(() => callback({}));
     },
     { useSystemPicker: false },
@@ -373,6 +387,7 @@ function applyRecorderState(next) {
   if (next.phase === "error") recorder.phase = "idle";
   applyShortcut();
   syncPickerWarmth();
+  syncAutoCapture();
   refreshTray();
 }
 
@@ -384,6 +399,7 @@ function setRecorderReady(ready) {
   // next phase report. The overlay pool follows the same gate.
   applyShortcut();
   syncPickerWarmth();
+  syncAutoCapture();
   refreshTray();
 }
 
@@ -795,6 +811,12 @@ let pickerPromise = null;
 let captureInFlight = false;
 let lastCaptureAt = 0;
 
+// Whether auto-capture is running for the current recording. The LOOP itself lives in the renderer (see
+// apps/web/src/lib/slideCapture.ts): sampling a warm getDisplayMedia stream costs ~12ms against ~430ms
+// for a desktopCapturer grab, and only the renderer knows the pause-aware recording clock. The shell
+// owns which display is captured, the on/off state, and the tray item.
+let autoCapture = false;
+
 /// Every write to `captureTarget` goes through here so the renderer can mirror the state: the web app
 /// disables its capture button until an area exists (capturing without one opens the picker and leaves the
 /// buttons inert until it settles, which reads as a frozen popover). Assigning the variable directly would
@@ -804,6 +826,62 @@ function setCaptureTarget(next) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("screenshot:area-changed", captureTarget !== null);
   }
+  // A changed area invalidates the stream the renderer is holding - it was granted for the old display
+  // and cropped for the old rectangle. Stop rather than quietly capture the wrong thing; the user just
+  // told us what they want to capture, so this is also the moment they are looking.
+  if (autoCapture) setAutoCapture(false);
+}
+
+/// What the renderer needs to open its own stream: the target display's physical size, and the chosen
+/// rectangle within it (null for a whole screen). Physical pixels, because that is what `cropRectFor`
+/// produces and what the stream is requested at.
+function autoCaptureArea() {
+  if (!captureTarget) return null;
+  const display = screen.getAllDisplays().find((d) => d.id === captureTarget.displayId);
+  if (!display) return null;
+  const scale = display.scaleFactor || 1;
+  return {
+    displayWidth: Math.round(display.bounds.width * scale),
+    displayHeight: Math.round(display.bounds.height * scale),
+    crop: cropRectFor(display, captureTarget.selection),
+  };
+}
+
+/// Every write to `autoCapture` goes through here, for the same reason `setCaptureTarget` exists: the
+/// renderer and the tray both mirror this, and a direct assignment would leave one of them lying about
+/// whether the screen is being captured.
+function setAutoCapture(next) {
+  const area = next ? autoCaptureArea() : null;
+  // Asked to start with no usable area (the display was unplugged between picking and starting): stay off
+  // rather than start a loop with nothing to point at.
+  autoCapture = next && area !== null;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(
+      "screenshot:auto-capture-changed",
+      autoCapture ? { active: true, area } : { active: false },
+    );
+  }
+  refreshTray();
+}
+
+/// Toggle auto-capture, picking a capture area first if this recording has not chosen one - the same
+/// pick-then-act flow the tray's manual capture item has always had. A tray menu cannot explain a greyed
+/// item, so the item stays enabled and this does the explaining by simply working.
+async function toggleAutoCapture() {
+  if (autoCapture) return setAutoCapture(false);
+  if (!canCapture(recorder)) return;
+
+  if (!captureTarget) {
+    try {
+      setCaptureTarget(await openPicker());
+    } catch {
+      notifyCaptureFailed("error");
+      return;
+    }
+    // Cancelled, or the recording ended while the picker was open.
+    if (!captureTarget || !canCapture(recorder)) return;
+  }
+  setAutoCapture(true);
 }
 
 function livePickers() {
@@ -911,6 +989,15 @@ function teardownPickers() {
 function syncPickerWarmth() {
   if (canCapture(recorder)) warmPickers();
   else teardownPickers();
+}
+
+/// Auto-capture cannot outlive the gate that permits capturing at all. A recording that ends or a
+/// renderer that reloads takes the loop with it either way; without this the flag would survive, leaving
+/// the tray checkbox ticked over a loop that no longer exists. Driven off the same `canCapture` gate as
+/// everything else here, and off the capture area still having a display to point at.
+function syncAutoCapture() {
+  if (!autoCapture) return;
+  if (!canCapture(recorder) || autoCaptureArea() === null) setAutoCapture(false);
 }
 
 /// Show `win` over its display. The cursor's display is shown focused because the
@@ -1111,6 +1198,12 @@ ipcMain.handle("screenshot:capture", () => {
   if (pickerPromise) return void openPicker();
   return captureScreenshot();
 });
+ipcMain.handle("screenshot:toggle-auto-capture", () => {
+  // A picker is already waiting on a choice, so this would bail and the click would do nothing visible.
+  // Re-surface the overlay instead, exactly as screenshot:capture does.
+  if (pickerPromise) return void openPicker();
+  return toggleAutoCapture();
+});
 ipcMain.handle("screenshot:change-area", () => changeCaptureArea());
 // The renderer's starting value; every later change arrives on "screenshot:area-changed". A renderer that
 // reloads mid-recording re-asks rather than assuming no area is set.
@@ -1256,11 +1349,13 @@ function refreshTray() {
     },
   }));
 
-  const shotItems = trayScreenshotItems(recorder).map((item) => ({
+  const shotItems = trayScreenshotItems({ ...recorder, autoCapture }).map((item) => ({
     label: item.label,
     enabled: item.enabled,
+    ...(item.type ? { type: item.type, checked: item.checked } : {}),
     click: () => {
       if (item.id === "capture") void captureScreenshot();
+      else if (item.id === "auto-capture") void toggleAutoCapture();
       else if (item.id === "change-area") void changeCaptureArea();
     },
   }));
@@ -1395,7 +1490,10 @@ if (!app.requestSingleInstanceLock()) {
     // pool would leave a screen unpickable or float an overlay over the wrong geometry.
     // (`screen` is only usable once the app is ready, hence registering here.)
     for (const event of ["display-added", "display-removed", "display-metrics-changed"]) {
-      screen.on(event, () => syncPickerWarmth());
+      screen.on(event, () => {
+        syncPickerWarmth();
+        syncAutoCapture();
+      });
     }
 
     setupAutoUpdater();

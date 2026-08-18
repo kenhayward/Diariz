@@ -15,6 +15,11 @@ export type CaptureControlsProps = {
    * rather than inventing it.
    */
   unavailableReason?: string;
+  /// Whether auto-capture is currently running.
+  autoCapture?: boolean;
+  /// Absent when the shell cannot auto-capture at all - an installed desktop app predating this feature,
+  /// which is a normal state rather than an error - and the toggle simply does not appear.
+  onToggleAutoCapture?: () => void;
   onCapture: () => void;
   onChangeArea: () => void;
 };
@@ -33,6 +38,24 @@ const IconCapture = () => (
   <Glyph>
     <path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z" />
     <circle cx="12" cy="13" r="3.2" />
+  </Glyph>
+);
+
+/// A stack of frames with a corner dot: many captures over time. Deliberately NOT a camera with a loop
+/// on it - at 16px that is indistinguishable from the camera next to it. The dot doubles as the running
+/// indicator, which blinks while the loop is live.
+const IconAutoCapture = ({ running }: { running: boolean }) => (
+  <Glyph>
+    <rect x="3" y="7" width="12" height="11" rx="1.5" />
+    <path d="M7 7V5.5A1.5 1.5 0 0 1 8.5 4H19a1.5 1.5 0 0 1 1.5 1.5V16" />
+    <circle
+      cx="19"
+      cy="19"
+      r="2"
+      fill="currentColor"
+      stroke="none"
+      style={running ? { animation: "blink 1.2s infinite" } : undefined}
+    />
   </Glyph>
 );
 
@@ -57,19 +80,39 @@ const IconCaptureArea = () => (
 export default function CaptureControls({
   captureAreaSet,
   unavailableReason,
+  autoCapture = false,
+  onToggleAutoCapture,
   onCapture,
   onChangeArea,
 }: CaptureControlsProps) {
   const { t } = useTranslation("workspace");
 
-  // Both buttons go inert when the host is unreachable; only capture additionally waits on the area.
+  // Every button goes inert when the host is unreachable; the two capture actions additionally wait on
+  // an area to point at.
+  const needsArea = captureAreaSet ? undefined : t("screenshotCaptureNeedsArea");
+
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      {onToggleAutoCapture && (
+        <HubIconButton
+          size="sm"
+          label={autoCapture ? t("screenshotAutoCaptureOn") : t("screenshotAutoCapture")}
+          title={autoCapture ? t("screenshotAutoCaptureOnHint") : t("screenshotAutoCaptureHint")}
+          // Unlike the tray item - which picks an area then starts, because a menu cannot explain a
+          // greyed entry - this one waits and says why. A popover that throws a full-screen picker up
+          // under the user's cursor is the worse surprise.
+          disabledReason={unavailableReason ?? needsArea}
+          pressed={autoCapture}
+          onClick={onToggleAutoCapture}
+        >
+          <IconAutoCapture running={autoCapture} />
+        </HubIconButton>
+      )}
       <HubIconButton
         size="sm"
         label={t("screenshotCaptureButton")}
         title={t("screenshotCaptureButtonHint")}
-        disabledReason={unavailableReason ?? (captureAreaSet ? undefined : t("screenshotCaptureNeedsArea"))}
+        disabledReason={unavailableReason ?? needsArea}
         onClick={onCapture}
       >
         <IconCapture />

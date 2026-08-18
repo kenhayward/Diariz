@@ -42,6 +42,7 @@ export function useNotesPopout({
       onDeleteShot: (id) => handlersRef.current.onDeleteShot(id),
       onCapture: () => handlersRef.current.onCapture(),
       onChangeArea: () => handlersRef.current.onChangeArea(),
+      onToggleAutoCapture: () => handlersRef.current.onToggleAutoCapture(),
       // Idempotent on purpose: this arrives from the client's own `closing` message AND from the shell
       // noticing the window was destroyed, and either may be first, or missing entirely.
       onClientClosed: () => setPoppedOut(false),

@@ -119,6 +119,35 @@ describe("HubIconButton", () => {
     });
   });
 
+  // A sticky control - one that stays on until pressed again - has to say so, or the only evidence it is
+  // running is a background tint that a screen reader cannot see.
+  describe("pressed", () => {
+    it("is not a toggle unless told to be", () => {
+      render(<HubIconButton label="Auto-capture" onClick={() => {}}><Glyph /></HubIconButton>);
+
+      expect(screen.getByRole("button").getAttribute("aria-pressed")).toBe(null);
+    });
+
+    it("reports its state once it is a toggle", () => {
+      const { rerender } = render(
+        <HubIconButton label="Auto-capture" pressed={false} onClick={() => {}}><Glyph /></HubIconButton>,
+      );
+      expect(screen.getByRole("button").getAttribute("aria-pressed")).toBe("false");
+
+      rerender(<HubIconButton label="Auto-capture" pressed onClick={() => {}}><Glyph /></HubIconButton>);
+      expect(screen.getByRole("button").getAttribute("aria-pressed")).toBe("true");
+    });
+
+    it("stays clickable while pressed, so it can be turned off again", () => {
+      const onClick = vi.fn();
+      render(<HubIconButton label="Auto-capture" pressed onClick={onClick}><Glyph /></HubIconButton>);
+
+      fireEvent.click(screen.getByRole("button"));
+
+      expect(onClick).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe("size", () => {
     it("is a 44px command-hub button by default", () => {
       render(<HubIconButton label="Upload" onClick={() => {}}><Glyph /></HubIconButton>);

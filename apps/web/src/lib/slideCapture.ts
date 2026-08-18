@@ -57,6 +57,10 @@ export interface SlideCaptureOptions {
   frames: SlideCaptureFrames;
   /// The recorded, pause-aware clock.
   nowMs: () => number;
+  /// Whether sampling should be skipped for now - a paused recording. Not a stop: the stream stays open
+  /// (it costs ~0.1% of a core) so resuming needs no fresh getDisplayMedia grant, and the detector keeps
+  /// its committed slide, so the slide that was on screen before the pause is not filed twice.
+  isSuspended?: () => boolean;
   /// Ceiling on captures filed by this loop, mirroring the recording's screenshot limit.
   maxCaptures: number;
   onCapture: (slide: CapturedSlide) => void;
@@ -86,6 +90,7 @@ export function createSlideCapture(options: SlideCaptureOptions): SlideCapture {
   const {
     frames,
     nowMs,
+    isSuspended,
     maxCaptures,
     onCapture,
     onStopped,
@@ -118,6 +123,10 @@ export function createSlideCapture(options: SlideCaptureOptions): SlideCapture {
 
   async function tick(): Promise<void> {
     if (!running || inFlight) return;
+    // A paused recording freezes its clock, so a capture taken now would be filed at an offset that never
+    // advances - every slide during the pause stacked onto one moment in the transcript - and would be of
+    // a screen the user has stepped away from.
+    if (isSuspended?.()) return;
 
     const bytes = frames.sample();
     // No frame yet - the stream is still coming up. Not a failure, and not something to count.

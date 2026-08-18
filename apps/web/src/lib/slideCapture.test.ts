@@ -90,7 +90,7 @@ interface Harness {
   capture: ReturnType<typeof createSlideCapture>;
 }
 
-function harness(overrides: { maxCaptures?: number; initial?: Pattern } = {}): Harness {
+function harness(overrides: { maxCaptures?: number; initial?: Pattern; suspended?: () => boolean } = {}): Harness {
   const frames = fakeFrames(overrides.initial ?? SLIDE_A);
   const captures: Harness["captures"] = [];
   const stopped: string[] = [];
@@ -99,6 +99,7 @@ function harness(overrides: { maxCaptures?: number; initial?: Pattern } = {}): H
   const capture = createSlideCapture({
     frames,
     nowMs: () => clock,
+    isSuspended: overrides.suspended,
     maxCaptures: overrides.maxCaptures ?? 200,
     onCapture: (shot) => captures.push({ capturedAtMs: shot.capturedAtMs, width: shot.width, height: shot.height }),
     onStopped: (reason) => stopped.push(reason),
@@ -329,5 +330,65 @@ describe("slideCapture", () => {
       release?.();
       await Promise.all(inFlight);
     });
+  });
+});
+
+// Pausing a recording freezes its clock. Left running, auto-capture would keep filing slides at an
+// offset that never advances - stacking every capture taken during the pause onto one moment in the
+// transcript - and would go on capturing a screen the user has stepped away from.
+describe("while the recording is paused", () => {
+  it("captures nothing", async () => {
+    let paused = true;
+    const h = harness({ suspended: () => paused });
+
+    await run(h, 10);
+
+    expect(h.captures).toHaveLength(0);
+    void paused;
+  });
+
+  it("does not even sample, so a paused meeting costs nothing", async () => {
+    const h = harness({ suspended: () => true });
+    const spy = vi.spyOn(h.frames, "sample");
+
+    await run(h, 5);
+
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("picks up again on resume", async () => {
+    let paused = true;
+    const h = harness({ suspended: () => paused });
+
+    await run(h, 5);
+    paused = false;
+    await run(h, 5, 5);
+
+    expect(h.captures).toHaveLength(1);
+  });
+
+  // The stream stays open across a pause rather than being torn down and re-granted: re-opening would
+  // need a fresh getDisplayMedia grant, and it is held for 0.1% of a core.
+  it("keeps the screen capture open, ready to resume", async () => {
+    const h = harness({ suspended: () => true });
+
+    await run(h, 5);
+
+    expect(h.frames.closed).toBe(false);
+  });
+
+  // A slide that went up before the pause and is still there after it is the same slide. Resuming must
+  // not re-file it just because the loop stopped watching for a while.
+  it("does not re-capture the slide that was already on screen", async () => {
+    let paused = false;
+    const h = harness({ suspended: () => paused });
+
+    await run(h, 5);
+    paused = true;
+    await run(h, 10, 5);
+    paused = false;
+    await run(h, 5, 15);
+
+    expect(h.captures).toHaveLength(1);
   });
 });

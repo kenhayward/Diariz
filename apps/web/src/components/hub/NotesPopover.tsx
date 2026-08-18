@@ -41,6 +41,10 @@ export type NotesPopoverProps = {
   /// stays disabled until the area is set, making "set the area" the visible first step. Defaults to true:
   /// callers that know nothing about the shell's area state (a plain browser, older tests) must not be gated.
   captureAreaSet?: boolean;
+  /// Whether auto-capture is running, and the toggle for it. Absent in a plain browser and on a desktop
+  /// shell predating the feature, which is what hides the control.
+  autoCapture?: boolean;
+  onToggleAutoCapture?: () => void;
   /// Detach the notes into their own always-on-top window. Absent in a plain browser, which is what
   /// hides the control - only the desktop shell can pin a window above a full-screen call.
   onPopOut?: () => void;
@@ -64,6 +68,8 @@ export default function NotesPopover({
   onChangeCaptureArea,
   onCapture,
   captureAreaSet = true,
+  autoCapture,
+  onToggleAutoCapture,
   onPopOut,
 }: NotesPopoverProps) {
   const { t } = useTranslation("workspace");
@@ -150,6 +156,8 @@ export default function NotesPopover({
               </span>
               <CaptureControls
                 captureAreaSet={captureAreaSet}
+                autoCapture={autoCapture}
+                onToggleAutoCapture={onToggleAutoCapture}
                 onCapture={onCapture}
                 onChangeArea={onChangeCaptureArea}
               />

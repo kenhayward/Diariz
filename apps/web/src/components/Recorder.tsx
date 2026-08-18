@@ -73,11 +73,16 @@ import {
   canCaptureScreenshots,
   hasCaptureArea,
   onCaptureAreaChanged,
+  canAutoCapture,
+  onAutoCaptureChanged,
+  requestToggleAutoCapture,
   onScreenshotCaptured,
   requestCapture,
   requestChangeArea,
   type CapturedShot,
 } from "../lib/trayScreenshots";
+import { createSlideCapture, type SlideCapture } from "../lib/slideCapture";
+import { openDisplayMediaFrames } from "../lib/displayMediaFrames";
 import {
   addPendingScreenshot,
   loadPendingScreenshots,
@@ -692,14 +697,18 @@ export default function Recorder({
   /// IndexedDB - not a rewrite of the whole growing array (see MAX_LIVE_SCREENSHOTS's comment for why
   /// that used to be an O(n^2) write-churn bug). The id is assigned here (like note lines' ids) so the
   /// stash write can happen fire-and-forget without racing the synchronous state update.
-  function addLiveShot(shot: CapturedShot) {
+  /// `capturedAtMs` overrides the stamp for a caller that knows better. Auto-capture does: it files the
+  /// moment its slide APPEARED, which is several samples before the capture was confirmed, so stamping
+  /// on arrival here would place every slide after the sentence that introduced it. A manual capture
+  /// omits it - the moment it arrives IS the moment it was taken.
+  function addLiveShot(shot: CapturedShot, capturedAtMs?: number) {
     if (liveShotsRef.current.length >= MAX_LIVE_SCREENSHOTS) {
       setNotice(t("screenshotLimitReached", { max: MAX_LIVE_SCREENSHOTS }));
       return;
     }
     const stamped: PendingShot = {
       id: crypto.randomUUID(),
-      capturedAtMs: timing.elapsedMs(timingRef.current, Date.now()),
+      capturedAtMs: capturedAtMs ?? timing.elapsedMs(timingRef.current, Date.now()),
       width: shot.width,
       height: shot.height,
       full: shot.full,
@@ -795,6 +804,73 @@ export default function Recorder({
     };
   }, []);
 
+  // ---- Auto-capture (desktop shell only) ----
+  //
+  // The shell owns which display is captured and the on/off state; the LOOP runs here, because sampling a
+  // held-open getDisplayMedia stream costs ~12ms against ~430ms for a desktopCapturer grab, and because
+  // only this side knows the pause-aware recording clock a capture has to be stamped with.
+
+  const [autoCapture, setAutoCapture] = useState(false);
+  // The running loop, if any. A ref rather than state: it is torn down from effects and callbacks that
+  // must see the current one, never a value captured at render time.
+  const slideCaptureRef = useRef<SlideCapture | null>(null);
+  // Read inside the loop's tick, which outlives any single render, so both go through refs.
+  const pausedRef = useRef(false);
+  pausedRef.current = paused;
+  const timingForCaptureRef = useRef(timingRef);
+  timingForCaptureRef.current = timingRef;
+
+  const stopSlideCapture = useCallback(() => {
+    slideCaptureRef.current?.stop();
+    slideCaptureRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (!canAutoCapture()) return;
+
+    const unsubscribe = onAutoCaptureChanged((state) => {
+      stopSlideCapture();
+      setAutoCapture(state.active);
+      if (!state.active || !state.area) return;
+
+      void openDisplayMediaFrames(state.area)
+        .then((frames) => {
+          // The shell can have turned auto-capture off again while the stream was opening (the recording
+          // ended, the area changed). Opening one and immediately abandoning it would leave the screen
+          // captured with nothing reading it.
+          if (!recordingRef.current) return frames.close();
+          const capture = createSlideCapture({
+            frames,
+            nowMs: () => timing.elapsedMs(timingForCaptureRef.current.current, Date.now()),
+            isSuspended: () => pausedRef.current,
+            maxCaptures: MAX_LIVE_SCREENSHOTS,
+            onCapture: (slide) => addLiveShot(slide, slide.capturedAtMs),
+            onStopped: (reason) => {
+              slideCaptureRef.current = null;
+              setNotice(
+                reason === "cap-reached"
+                  ? t("screenshotAutoCaptureStopped", { max: MAX_LIVE_SCREENSHOTS })
+                  : t("screenshotAutoCaptureFailed"),
+              );
+              // Tell the shell, so the tray checkbox and the in-app toggle stop showing it as running.
+              requestToggleAutoCapture();
+            },
+          });
+          slideCaptureRef.current = capture;
+          capture.start();
+        })
+        .catch(() => {
+          setNotice(t("screenshotAutoCaptureFailed"));
+          requestToggleAutoCapture();
+        });
+    });
+
+    return () => {
+      unsubscribe();
+      stopSlideCapture();
+    };
+  }, []);
+
   // ---- Pop-out notes window (desktop shell only) ----
 
   const shellBridge = (window as unknown as { diariz?: TrayBridge }).diariz;
@@ -806,6 +882,8 @@ export default function Recorder({
     shots: liveShots.map((s) => ({ id: s.id, capturedAtMs: s.capturedAtMs, thumb: s.thumb })),
     canCapture: canCaptureScreenshots(),
     captureAreaSet,
+    autoCapture,
+    canAutoCapture: canAutoCapture(),
     recording,
   };
 
@@ -819,6 +897,7 @@ export default function Recorder({
       onDeleteShot: deleteLiveShot,
       onCapture: requestCapture,
       onChangeArea: requestChangeArea,
+      onToggleAutoCapture: requestToggleAutoCapture,
     },
   });
 
@@ -1448,6 +1527,8 @@ export default function Recorder({
               onChangeCaptureArea={canCaptureScreenshots() ? requestChangeArea : undefined}
               onCapture={canCaptureScreenshots() ? requestCapture : undefined}
               captureAreaSet={captureAreaSet}
+              autoCapture={autoCapture}
+              onToggleAutoCapture={canAutoCapture() ? requestToggleAutoCapture : undefined}
               // Only the shell can pin a window above a full-screen call, so a plain browser gets no
               // control at all rather than one that opens a tab it cannot float.
               onPopOut={shellBridge?.openNotesPopout ? popOut : undefined}
