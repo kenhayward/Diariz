@@ -945,10 +945,8 @@ B0 and B1 are done. What remains:
   `onAutoCaptureChanged()`, mirroring the existing capture-area pair. Optional-chained, so a browser and
   an older shell stay no-ops.
 - **B5. The capture loop (renderer).** A new `apps/web/src/lib/slideCapture.ts` owning the stream, the
-  ticker, the canvases and the commit. The detector itself is required from the shell side today, so it
-  needs to be reachable from the web app - simplest is to port `slideDetector.js` to a small TS module
-  under `apps/web/src/lib/` and delete the desktop copy, carrying its tests across as vitest. **Decide
-  this before writing B5**; duplicating the detector in two languages is not an option.
+  ticker, the canvases and the commit. (The detector move is **done**: `slideDetector.ts` now lives in
+  `apps/web/src/lib/` with its 27 tests as vitest, and the desktop copy is gone.)
 - **B6. `Recorder` wiring.** Engage/disengage, the `maxCaptures` self-disable, suspend on pause, and
   feeding commits into the existing `addLiveShot` - which needs no change, since a commit produces
   exactly the `{ full, thumb, width, height }` shape it already takes.
@@ -962,9 +960,8 @@ B0 and B1 are done. What remains:
 
 ### 15.4 New risks
 
-1. **The detector has to move to the web app** (B5). It is pure and its tests are portable, but it is a
-   real port, and having it in the desktop package while the caller lives in the web package is not
-   tenable.
+1. ~~The detector has to move to the web app.~~ **Done** - ported to `apps/web/src/lib/slideDetector.ts`,
+   tests carried across to vitest, desktop copy removed. It stayed pure, so the port was mechanical.
 2. **A screen-sharing indicator** may appear while the stream is held (unmeasured). If Windows or macOS
    shows one for the whole meeting, that is a user-visible surprise and needs to be in the help text
    rather than discovered.
