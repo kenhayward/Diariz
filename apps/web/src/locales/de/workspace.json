@@ -697,5 +697,8 @@
   "extendKeep": "Termin verlängern",
   "extendStopNow": "Jetzt beenden",
   "extendEndingIn": "Endet in {{seconds}} s",
-  "extendNotifyTitle": "Weiter aufnehmen?"
+  "extendNotifyTitle": "Weiter aufnehmen?",
+  "spokenLanguage": "Gesprochene Sprache",
+  "spokenLanguageAuto": "- Automatisch erkennen -",
+  "spokenLanguageHint": "Stellen Sie dies ein, wenn das Transkript in der falschen Sprache erstellt wurde. Die Erkennung liest den Anfang der Aufnahme, ein leiser Beginn kann also falsch gedeutet werden."
 }

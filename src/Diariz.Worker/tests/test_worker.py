@@ -18,7 +18,7 @@ def test_handle_forwards_speaker_hints_to_transcribe(monkeypatch, tmp_path):
 
     captured = {}
 
-    def fake_transcribe(path, min_s=None, max_s=None):
+    def fake_transcribe(path, min_s=None, max_s=None, language=None):
         captured.update(min=min_s, max=max_s)
         return {"language": "en", "segments": [], "speakers": []}
 
@@ -36,7 +36,7 @@ def test_handle_success_posts_result_and_removes_temp_file(monkeypatch, tmp_path
     audio.write_text("fake")
     monkeypatch.setattr(worker.storage, "download", lambda key: str(audio))
     monkeypatch.setattr(worker.pipeline, "transcribe",
-                        lambda path, min_s=None, max_s=None: {"language": "en", "segments": [{"Text": "hi"}],
+                        lambda path, min_s=None, max_s=None, language=None: {"language": "en", "segments": [{"Text": "hi"}],
                                       "speakers": [{"Speaker": "SPEAKER_00", "Embedding": [0.1]}]})
 
     posted = {}
@@ -62,7 +62,7 @@ def test_handle_transcribe_failure_reports_failure_and_cleans_temp(monkeypatch, 
     audio.write_text("fake")
     monkeypatch.setattr(worker.storage, "download", lambda key: str(audio))
 
-    def boom(path, min_s=None, max_s=None):
+    def boom(path, min_s=None, max_s=None, language=None):
         raise RuntimeError("model exploded")
 
     monkeypatch.setattr(worker.pipeline, "transcribe", boom)
@@ -310,7 +310,7 @@ def test_handle_runs_inside_a_telemetry_transaction(monkeypatch, tmp_path):
     audio.write_text("fake")
     monkeypatch.setattr(worker.storage, "download", lambda key: str(audio))
     monkeypatch.setattr(worker.pipeline, "transcribe",
-                        lambda path, min_s=None, max_s=None: {"language": "en", "segments": [], "speakers": []})
+                        lambda path, min_s=None, max_s=None, language=None: {"language": "en", "segments": [], "speakers": []})
     monkeypatch.setattr(worker.callback, "post_result", lambda *a, **k: None)
 
     names = []
@@ -334,7 +334,7 @@ def test_handle_reports_a_failure_and_still_cleans_up(monkeypatch, tmp_path):
     audio.write_text("fake")
     monkeypatch.setattr(worker.storage, "download", lambda key: str(audio))
 
-    def boom(path, min_s=None, max_s=None):
+    def boom(path, min_s=None, max_s=None, language=None):
         raise RuntimeError("model load failed")
 
     monkeypatch.setattr(worker.pipeline, "transcribe", boom)
@@ -354,3 +354,43 @@ def test_handle_reports_a_failure_and_still_cleans_up(monkeypatch, tmp_path):
     # And the exception is now also reported.
     assert len(captured) == 1
     assert isinstance(captured[0], RuntimeError)
+
+
+def test_handle_forwards_the_pinned_transcription_language(monkeypatch, tmp_path):
+    """The job's Language is the owner's pinned transcription language (null = auto-detect), resolved
+    by the API. It has to reach the pipeline or the pin does nothing."""
+    audio = tmp_path / "audio.wav"
+    audio.write_text("fake")
+    monkeypatch.setattr(worker.storage, "download", lambda key: str(audio))
+
+    captured = {}
+
+    def fake_transcribe(path, min_s=None, max_s=None, language=None):
+        captured["language"] = language
+        return {"language": language or "en", "segments": [], "speakers": []}
+
+    monkeypatch.setattr(worker.pipeline, "transcribe", fake_transcribe)
+    monkeypatch.setattr(worker.callback, "post_result", lambda *a, **k: None)
+
+    worker.handle(_job("tid-lang", Language="en"))
+
+    assert captured["language"] == "en"
+
+
+def test_handle_leaves_the_language_unset_when_the_job_does_not_pin_one(monkeypatch, tmp_path):
+    audio = tmp_path / "audio.wav"
+    audio.write_text("fake")
+    monkeypatch.setattr(worker.storage, "download", lambda key: str(audio))
+
+    captured = {}
+
+    def fake_transcribe(path, min_s=None, max_s=None, language=None):
+        captured["language"] = language
+        return {"language": "en", "segments": [], "speakers": []}
+
+    monkeypatch.setattr(worker.pipeline, "transcribe", fake_transcribe)
+    monkeypatch.setattr(worker.callback, "post_result", lambda *a, **k: None)
+
+    worker.handle(_job("tid-auto"))
+
+    assert captured["language"] is None

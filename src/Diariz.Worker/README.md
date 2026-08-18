@@ -19,7 +19,11 @@ Without `HF_TOKEN` the worker raises a clear error and the job is marked failed.
 
 The worker is GPU-first. On each job it loads **Whisper large-v3**, a **wav2vec2** alignment
 model, the **pyannote 3.1** diarizer, and (optionally) the **SpeechBrain ECAPA** voiceprint model,
-and keeps them resident across jobs (lazy-loaded + cached). You need an **NVIDIA GPU with CUDA**;
+and keeps them resident across jobs (lazy-loaded + cached). The **alignment model is per language and
+optional**: whisperx ships one for 37 languages against Whisper's ~99, so for the rest `_get_align`
+returns `None` (cached, so the failed load is not retried per job) and the pipeline keeps the ASR's own
+segment timings rather than failing the job. A job may also carry a `Language`, which pins Whisper's
+language instead of letting it detect one from the opening of the audio. You need an **NVIDIA GPU with CUDA**;
 the host also needs the **NVIDIA Container Toolkit** for the Dockerised worker (the `worker` service
 in `docker-compose.yml` requests the GPU). CPU-only works but is far slower — see the end.
 

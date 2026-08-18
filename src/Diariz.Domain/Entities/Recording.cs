@@ -52,6 +52,12 @@ public class Recording
     /// Null = automatic. Used to split two people the diarizer lumped into one (set <see cref="MinSpeakers"/>
     /// = 2). Applied on the next (re-)transcription.</summary>
     public int? MinSpeakers { get; set; }
+
+    /// <summary>The spoken language to transcribe this recording in (BCP-47, from the platform's supported
+    /// list). Null = fall back to the owner's default, and failing that let Whisper detect it. Pinning
+    /// exists because detection reads the opening of the audio before any speech is known to be there, so a
+    /// short or quiet recording can be detected as a language nobody spoke.</summary>
+    public string? TranscriptionLanguage { get; set; }
     public int? MaxSpeakers { get; set; }
 
     // The folder a recording is filed under is now a property of its RoomRecording placement (the folder within

@@ -27,6 +27,12 @@ public class UserSettings
     /// <summary>The language the app UI is shown in (BCP-47). Null = follow the browser / default.</summary>
     public string? UiLanguage { get; set; }
 
+    /// <summary>The default spoken language for this user's recordings (BCP-47). Null = let Whisper detect
+    /// it per recording. Deliberately separate from <see cref="NativeLanguage"/>: that is the user's own
+    /// language and the default translation target, and plenty of people record meetings in a language
+    /// that is not their own.</summary>
+    public string? TranscriptionLanguage { get; set; }
+
     /// <summary>Google OAuth refresh token (offline access to the user's Calendar), encrypted at rest —
     /// never returned to clients. Null = the user hasn't connected Google data access.</summary>
     public string? GoogleRefreshTokenEncrypted { get; set; }

@@ -3614,4 +3614,158 @@ public class RecordingsControllerTests
             .ApplyMeetingType(recId, new ApplyMeetingTypeRequest(null));
         Assert.IsType<NotFoundResult>(result);
     }
+
+    // ---- Pinned transcription language ----
+    //
+    // Whisper detects the spoken language from the opening of the audio. A short or quiet recording can
+    // come back as a language nobody spoke - a 2 m English test recording was detected as Welsh - and the
+    // transcript is then aligned (or not) for the wrong language. Pinning it removes the guess.
+
+    [Fact]
+    public async Task Retranscribe_WithLanguage_PersistsItAndCarriesItInTheJob()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var controller = Build(db, userId, queue);
+
+        await controller.Retranscribe(rec.Id, new RetranscribeRequest(Model: null, Language: new LanguageChoice("en")));
+
+        Assert.Equal("en", (await db.Recordings.FindAsync(rec.Id))!.TranscriptionLanguage);
+        Assert.Equal("en", Assert.Single(queue.Enqueued).Language);
+    }
+
+    /// <summary>The job carries a Whisper code, not the platform's BCP-47 tag: the worker passes it
+    /// straight to Whisper, which would not recognise "pt-BR".</summary>
+    [Fact]
+    public async Task Retranscribe_WithRegionalLanguage_SendsTheWhisperCodeToTheWorker()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var rec = await SeedRecording(db, userId, versions: 1);
+
+        await Build(db, userId, queue)
+            .Retranscribe(rec.Id, new RetranscribeRequest(Model: null, Language: new LanguageChoice("pt-BR")));
+
+        Assert.Equal("pt-BR", (await db.Recordings.FindAsync(rec.Id))!.TranscriptionLanguage); // stored as chosen
+        Assert.Equal("pt", Assert.Single(queue.Enqueued).Language);                            // sent as Whisper knows it
+    }
+
+    /// <summary>Tri-state, like the speaker hints: a present choice with a null code means "go back to
+    /// auto-detect", which is how a user undoes a wrong pin.</summary>
+    [Fact]
+    public async Task Retranscribe_WithNullLanguageCode_ClearsThePinAndAutoDetects()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        rec.TranscriptionLanguage = "de";
+        await db.SaveChangesAsync();
+
+        await Build(db, userId, queue)
+            .Retranscribe(rec.Id, new RetranscribeRequest(Model: null, Language: new LanguageChoice(null)));
+
+        Assert.Null((await db.Recordings.FindAsync(rec.Id))!.TranscriptionLanguage);
+        Assert.Null(Assert.Single(queue.Enqueued).Language);
+    }
+
+    [Fact]
+    public async Task Retranscribe_WithoutLanguage_PreservesTheExistingPin()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        rec.TranscriptionLanguage = "de";
+        await db.SaveChangesAsync();
+
+        // No Language object - the list/menu re-transcribe must not wipe the recording's pin.
+        await Build(db, userId, queue).Retranscribe(rec.Id, new RetranscribeRequest(Model: null));
+
+        Assert.Equal("de", (await db.Recordings.FindAsync(rec.Id))!.TranscriptionLanguage);
+        Assert.Equal("de", Assert.Single(queue.Enqueued).Language);
+    }
+
+    [Fact]
+    public async Task Retranscribe_WithUnsupportedLanguage_ReturnsBadRequest()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var rec = await SeedRecording(db, userId, versions: 1);
+
+        var result = await Build(db, userId, queue)
+            .Retranscribe(rec.Id, new RetranscribeRequest(Model: null, Language: new LanguageChoice("cy")));
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Empty(queue.Enqueued);
+        Assert.Null((await db.Recordings.FindAsync(rec.Id))!.TranscriptionLanguage);
+    }
+
+    /// <summary>A user who always records in one language sets it once in their preferences; every
+    /// recording they make is then pinned without touching each one.</summary>
+    [Fact]
+    public async Task Enqueue_UsesTheOwnersDefaultLanguage_WhenTheRecordingHasNoPin()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        db.UserSettings.Add(new UserSettings { UserId = userId, TranscriptionLanguage = "de" });
+        await db.SaveChangesAsync();
+
+        await Build(db, userId, queue).Retranscribe(rec.Id, new RetranscribeRequest(Model: null));
+
+        Assert.Equal("de", Assert.Single(queue.Enqueued).Language);
+        // The default is not copied onto the recording: changing the preference later must still apply.
+        Assert.Null((await db.Recordings.FindAsync(rec.Id))!.TranscriptionLanguage);
+    }
+
+    [Fact]
+    public async Task Enqueue_PrefersTheRecordingsOwnLanguageOverTheOwnersDefault()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        rec.TranscriptionLanguage = "fr";
+        db.UserSettings.Add(new UserSettings { UserId = userId, TranscriptionLanguage = "de" });
+        await db.SaveChangesAsync();
+
+        await Build(db, userId, queue).Retranscribe(rec.Id, new RetranscribeRequest(Model: null));
+
+        Assert.Equal("fr", Assert.Single(queue.Enqueued).Language);
+    }
+
+    [Fact]
+    public async Task Enqueue_LeavesTheLanguageUnsetWhenNeitherTheRecordingNorTheOwnerPinsOne()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var rec = await SeedRecording(db, userId, versions: 1);
+
+        await Build(db, userId, queue).Retranscribe(rec.Id, new RetranscribeRequest(Model: null));
+
+        Assert.Null(Assert.Single(queue.Enqueued).Language);
+    }
+
+    /// <summary>The detail payload has to report the pin, or the re-transcribe dialog cannot show what is
+    /// currently set and would silently offer "auto-detect" over a pinned recording.</summary>
+    [Fact]
+    public async Task Get_ReportsThePinnedTranscriptionLanguage()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        rec.TranscriptionLanguage = "es";
+        await db.SaveChangesAsync();
+
+        var res = await Build(db, userId, new FakeJobQueue()).Get(rec.Id);
+
+        Assert.Equal("es", res.Value!.TranscriptionLanguage);
+    }
 }

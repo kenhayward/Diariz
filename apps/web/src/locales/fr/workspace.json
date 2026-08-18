@@ -697,5 +697,8 @@
   "extendKeep": "Prolonger cette réunion",
   "extendStopNow": "Arrêter maintenant",
   "extendEndingIn": "Fin dans {{seconds}} s",
-  "extendNotifyTitle": "Continuer l'enregistrement ?"
+  "extendNotifyTitle": "Continuer l'enregistrement ?",
+  "spokenLanguage": "Langue parlee",
+  "spokenLanguageAuto": "- Detecter automatiquement -",
+  "spokenLanguageHint": "Definissez-la quand la transcription revient dans la mauvaise langue. La detection lit le debut de l'enregistrement, un demarrage silencieux peut donc etre mal interprete."
 }

@@ -471,12 +471,12 @@ export default function RecordingDetail() {
   }
 
   // Re-transcribe with the (optional) speaker-count hints chosen in the modal.
-  async function retranscribe(min: number | null, max: number | null) {
+  async function retranscribe(min: number | null, max: number | null, language: string | null) {
     setActionError(null);
     setActionInfo(null);
     setRequeuing(true);
     try {
-      await api.retranscribe(id, { speakers: { min, max } });
+      await api.retranscribe(id, { speakers: { min, max }, language: { code: language } });
       setRetranscribeOpen(false);
       // Progress shows in the status bar only (not a banner). The transient "retranscribing" push (the requeuing
       // effect) hands off to the recordings-list pipeline (Queued -> Transcribing) once the requeue is accepted.
@@ -1851,6 +1851,8 @@ export default function RecordingDetail() {
         <RetranscribeModal
           initialMin={rec.minSpeakers}
           initialMax={rec.maxSpeakers}
+          initialLanguage={rec.transcriptionLanguage}
+          languages={languages}
           hasRevisions={!!rec.current && hasRevisions(rec.current.segments)}
           busy={requeuing}
           onCancel={() => setRetranscribeOpen(false)}

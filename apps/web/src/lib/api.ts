@@ -1395,15 +1395,21 @@ export const api = {
     await http.delete(`/api/chat/conversations/${id}`);
   },
 
-  /// Re-transcribe. `speakers` is tri-state: omit to keep the recording's existing diarization hints,
-  /// or pass an object (null bounds = automatic) to set them.
+  /// Re-transcribe. `speakers` and `language` are both tri-state: omit one to keep whatever the recording
+  /// already has, or pass an object to set it (null bounds = automatic diarization; a null `code` = let
+  /// Whisper detect the language again).
   async retranscribe(
     id: string,
-    opts?: { model?: string | null; speakers?: { min: number | null; max: number | null } },
+    opts?: {
+      model?: string | null;
+      speakers?: { min: number | null; max: number | null };
+      language?: { code: string | null };
+    },
   ): Promise<void> {
     await http.post(`/api/recordings/${id}/retranscribe`, {
       model: opts?.model ?? null,
       speakers: opts?.speakers ?? null,
+      language: opts?.language ?? null,
     });
   },
 

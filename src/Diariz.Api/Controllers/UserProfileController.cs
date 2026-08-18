@@ -70,6 +70,7 @@ public class UserProfileController : ControllerBase
             JobTitle: s?.JobTitle, CompanyName: s?.CompanyName, JobDescription: s?.JobDescription,
             CompanyDescription: s?.CompanyDescription, LinkedIn: s?.LinkedIn,
             Theme: ThemeToString(s?.Theme ?? ThemePreference.Auto),
+            TranscriptionLanguage: s?.TranscriptionLanguage,
             ApiAccessEnabled: apiAccessEnabled,
             WebhooksEnabled: webhooksEnabled,
             McpAccessEnabled: mcpAccessEnabled,
@@ -92,10 +93,13 @@ public class UserProfileController : ControllerBase
 
         var native = Blank(req.NativeLanguage);
         var ui = Blank(req.UiLanguage);
+        var transcription = Blank(req.TranscriptionLanguage);
         if (native is not null && !SupportedLanguages.IsSupported(native))
             return BadRequest("Unknown native language.");
         if (ui is not null && !SupportedLanguages.IsSupported(ui))
             return BadRequest("Unknown UI language.");
+        if (transcription is not null && !SupportedLanguages.IsSupported(transcription))
+            return BadRequest("Unknown transcription language.");
 
         user.FullName = Blank(req.FullName);
         await _users.UpdateAsync(user);
@@ -112,6 +116,7 @@ public class UserProfileController : ControllerBase
         }
         s.NativeLanguage = native;
         s.UiLanguage = ui;
+        s.TranscriptionLanguage = transcription;
         s.JobTitle = Blank(req.JobTitle);
         s.CompanyName = Blank(req.CompanyName);
         s.JobDescription = Blank(req.JobDescription);

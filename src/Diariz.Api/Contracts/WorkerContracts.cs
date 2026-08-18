@@ -1,14 +1,17 @@
 namespace Diariz.Api.Contracts;
 
 /// <summary>Job payload enqueued onto the Redis stream and consumed by the Python worker.
-/// <paramref name="MinSpeakers"/>/<paramref name="MaxSpeakers"/> are optional pyannote hints (null = auto).</summary>
+/// <paramref name="MinSpeakers"/>/<paramref name="MaxSpeakers"/> are optional pyannote hints (null = auto).
+/// <paramref name="Language"/> pins the spoken language as a <b>Whisper</b> code ("en", "pt" - not the
+/// platform's BCP-47 tag, which Whisper would not recognise); null lets Whisper detect it.</summary>
 public record TranscriptionJob(
     Guid RecordingId,
     Guid TranscriptionId,
     string BlobKey,
     string Model,
     int? MinSpeakers = null,
-    int? MaxSpeakers = null);
+    int? MaxSpeakers = null,
+    string? Language = null);
 
 /// <summary>Job payload for async summarisation, consumed by the API's SummarizationWorker.</summary>
 public record SummarizationJob(

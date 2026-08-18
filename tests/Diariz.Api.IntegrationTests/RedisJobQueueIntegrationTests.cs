@@ -40,6 +40,28 @@ public class RedisJobQueueIntegrationTests(ContainersFixture fx)
         Assert.Contains("\"BlobKey\"", json);
     }
 
+    /// <summary>The pinned language crosses the .NET -> Python boundary by name: nothing else pairs the
+    /// key this side writes with the one <c>worker.handle</c> reads (<c>job.get("Language")</c>), so a
+    /// rename on either side would silently go back to auto-detecting every recording.</summary>
+    [Fact]
+    public async Task EnqueueAsync_CarriesThePinnedLanguageUnderThePascalCaseKeyTheWorkerReads()
+    {
+        using var mux = await ConnectionMultiplexer.ConnectAsync(fx.RedisConnectionString);
+        var opts = Options.Create(new JobQueueOptions { StreamKey = $"jobs-{Guid.NewGuid()}" });
+        var queue = new RedisJobQueue(mux, opts, Options.Create(new SummarizationOptions()),
+            Options.Create(new MeetingMinutesOptions()), Options.Create(new ActionsOptions()), Options.Create(new EmbeddingOptions()),
+            Options.Create(new TagsOptions()), Options.Create(new SectionSummaryOptions()), Options.Create(new SectionMinutesOptions()),
+            Options.Create(new FormulaRunOptions()));
+
+        await queue.EnqueueAsync(new TranscriptionJob(
+            Guid.NewGuid(), Guid.NewGuid(), "user/blob.webm", "whisperx-large-v3", Language: "pt"));
+
+        var entries = await mux.GetDatabase().StreamRangeAsync(opts.Value.StreamKey, "-", "+");
+        var json = Assert.Single(entries).Values.Single(v => v.Name == "job").Value.ToString();
+
+        Assert.Contains("\"Language\":\"pt\"", json);
+    }
+
     [Fact]
     public async Task EnqueueSummarizationAsync_AddsJsonJobToSummarizationStream()
     {

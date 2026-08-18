@@ -338,12 +338,25 @@ three-second window the case for that work is weak.
        disk before forwarding a byte - doubling the wall-clock wait and needing scratch space equal to the
        file. (Note the distinction from the `/mcp` requirement further down: that one disables **response**
        buffering, `proxy_buffering`, for a different reason.)
-   - Job payload is JSON with **PascalCase** keys: `{ RecordingId, TranscriptionId, BlobKey, Model, MinSpeakers?, MaxSpeakers? }` —
-     produced by .NET, consumed by Python.
+   - Job payload is JSON with **PascalCase** keys: `{ RecordingId, TranscriptionId, BlobKey, Model, MinSpeakers?, MaxSpeakers?, Language? }` —
+     produced by .NET, consumed by Python. `Language` is a **Whisper** code ("en", "pt"), resolved by the API from
+     `Recording.TranscriptionLanguage` ?? `UserSettings.TranscriptionLanguage` and mapped from the platform's BCP-47
+     tag by `SupportedLanguages.ToWhisperCode` (Whisper does not know "pt-BR"); null = let Whisper detect it.
 3. **Transcribe.** The worker `XREADGROUP`s a job, downloads the blob from MinIO to a temp file, then runs
    **WhisperX (large-v3)** → **word-alignment** → **pyannote 3.1 diarization** (honouring optional
    min/max speaker hints) → optional **ECAPA per-speaker voiceprints** (SpeechBrain, 192-d, L2-normalised).
    It measures duration and rejects audio over `MAX_AUDIO_SECONDS`.
+   - **Language.** A job's `Language` is passed to Whisper and skips its auto-detection. Detection reads the
+     opening of the audio before any speech is known to be there, so a short or quiet recording can be
+     detected as a language nobody spoke (a 2 m English recording came back as `cy`).
+   - **Alignment is optional.** whisperx ships align models for **37** languages against Whisper's ~99, so
+     `load_align_model` raises `ValueError: No default align-model for language: X` for the rest. That used to
+     fail the whole job and discard a transcript the ASR had already produced; `pipeline._get_align` now returns
+     `None` for such a language (cached, so it is not re-attempted per job) and the pipeline keeps the ASR's own
+     segment timings. Nothing downstream needs the words - `_shape_segments` stores segment-level
+     start/end/text/speaker either way, and `assign_word_speakers` guards its word loop with `if 'words' in seg`,
+     so speakers are still assigned. Only that `ValueError` is swallowed: a failed download or broken checkpoint
+     still fails the job rather than silently costing every transcript its alignment.
 4. **Callback.** The worker `POST`s to **`internal/transcriptions/result`**, authenticated by the shared
    header **`X-Worker-Secret`** (= `CALLBACK_SECRET`), not JWT. Body (PascalCase) carries
    `{ TranscriptionId, Language, DurationMs, ProcessingMs, Segments[], Speakers[] }`, where each `Speaker`

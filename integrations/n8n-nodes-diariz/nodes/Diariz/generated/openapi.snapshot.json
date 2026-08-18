@@ -1534,6 +1534,20 @@
         ],
         "type": "object"
       },
+      "LanguageChoice": {
+        "properties": {
+          "code": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "type": "object"
+      },
       "LanguageDto": {
         "properties": {
           "code": {
@@ -2787,6 +2801,12 @@
           },
           "title": {
             "type": "string"
+          },
+          "transcriptionLanguage": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         },
         "required": [
@@ -3178,6 +3198,16 @@
       },
       "RetranscribeRequest": {
         "properties": {
+          "language": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LanguageChoice"
+              }
+            ]
+          },
           "model": {
             "type": [
               "null",
@@ -4569,6 +4599,12 @@
               "string"
             ]
           },
+          "transcriptionLanguage": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "uiLanguage": {
             "type": [
               "null",
@@ -4783,6 +4819,12 @@
           "theme": {
             "default": "auto",
             "type": "string"
+          },
+          "transcriptionLanguage": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "uiLanguage": {
             "type": [
@@ -8989,7 +9031,7 @@
     },
     "/api/recordings/{id}/retranscribe": {
       "post": {
-        "description": "Queues a fresh transcription and returns 202 immediately. This creates a **new transcription version** rather than replacing the old one; the recording then reports the new version as its current transcript, and any manual segment edits on the previous version stay with that version. Speaker display names you have set are preserved.\n\nSend `speakers` to set the diarization hints (minimum and maximum speaker count; null means automatic); omit it entirely to reuse whatever the recording already has.\n\nThe job reads the original audio, so a recording whose audio has been deleted is still accepted here but the transcription itself then fails - check `hasAudio` before offering this.",
+        "description": "Queues a fresh transcription and returns 202 immediately. This creates a **new transcription version** rather than replacing the old one; the recording then reports the new version as its current transcript, and any manual segment edits on the previous version stay with that version. Speaker display names you have set are preserved.\n\nSend `speakers` to set the diarization hints (minimum and maximum speaker count; null means automatic); omit it entirely to reuse whatever the recording already has.\n\nSend `language` to pin the spoken language (a supported language code; a null `code` inside it means auto-detect); omit it entirely to reuse the recording's current choice. Pin it when a recording came back in the wrong language - detection reads the opening of the audio, so a recording that starts quiet can be detected as a language nobody spoke.\n\nThe job reads the original audio, so a recording whose audio has been deleted is still accepted here but the transcription itself then fails - check `hasAudio` before offering this.",
         "parameters": [
           {
             "in": "path",

@@ -9,6 +9,20 @@ Transcription runs on the server and takes a few minutes depending on the length
 busy the worker is. The meeting's status shows the progress, and the page updates on its own when the
 transcript is ready.
 
+## The spoken language
+
+Diariz works out what language a recording is in by listening to the start of it. That is usually right,
+but it decides before it knows whether anyone is speaking yet, so a recording that opens with a few quiet
+seconds can be read as a language nobody in the meeting spoke.
+
+If a transcript comes back in the wrong language, **re-transcribe** it and set the **Spoken language** in
+the dialog. If your recordings are nearly always in the same language, set it once instead: Preferences,
+then Profile, then **Transcription language**. Every new recording follows that unless you say otherwise
+on the recording itself. Leaving either on **Detect automatically** keeps the old behaviour.
+
+Word-level timing is only available for some languages. In the others you still get the full transcript
+with its speakers - the start and end of each segment is just slightly less precise.
+
 ## Speakers
 
 The transcription step separates voices and labels them `SPEAKER_00`, `SPEAKER_01`, and so on. It does

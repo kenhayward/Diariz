@@ -4,6 +4,7 @@ using System.Text;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
+using Diariz.Api.Localization;
 using Diariz.Api.Services;
 using Diariz.Api.Webhooks;
 using Diariz.Domain;
@@ -273,7 +274,7 @@ public class RecordingsController : ControllerBase
             rec.Status, rec.Error, rec.CreatedAt, rec.MinSpeakers, rec.MaxSpeakers, names, speakers, tDto, sDto,
             mDto, actions, rec.ActionsExtractedAt != null, rec.HasAudio, ToLinkDto(rec.CalendarLink),
             rec.MeetingTypeId, rec.AudioProtectedAt, rec.AudioDeletedAt, scheduledDeletion,
-            rec.UserId, recordedByName, visibleRooms, rec.StartedAt, rec.EndedAt, adoptedTags, suggestedTags,
+            rec.TranscriptionLanguage, rec.UserId, recordedByName, visibleRooms, rec.StartedAt, rec.EndedAt, adoptedTags, suggestedTags,
             canEditTags);
     }
 
@@ -434,6 +435,10 @@ public class RecordingsController : ControllerBase
         "display names you have set are preserved.\n\n" +
         "Send `speakers` to set the diarization hints (minimum and maximum speaker count; null means " +
         "automatic); omit it entirely to reuse whatever the recording already has.\n\n" +
+        "Send `language` to pin the spoken language (a supported language code; a null `code` inside it means " +
+        "auto-detect); omit it entirely to reuse the recording's current choice. Pin it when a recording came " +
+        "back in the wrong language - detection reads the opening of the audio, so a recording that starts " +
+        "quiet can be detected as a language nobody spoke.\n\n" +
         "The job reads the original audio, so a recording whose audio has been deleted is still accepted here " +
         "but the transcription itself then fails - check `hasAudio` before offering this.")]
     public async Task<IActionResult> Retranscribe(Guid id, RetranscribeRequest req)
@@ -450,6 +455,16 @@ public class RecordingsController : ControllerBase
                 return BadRequest("Minimum speakers can't exceed the maximum.");
             rec.MinSpeakers = hints.Min;
             rec.MaxSpeakers = hints.Max;
+        }
+
+        // Same tri-state for the spoken language: a present choice sets it (null code = auto-detect, which
+        // is how a user undoes a wrong pin), an absent one leaves whatever the recording already has.
+        if (req.Language is { } choice)
+        {
+            var code = string.IsNullOrWhiteSpace(choice.Code) ? null : choice.Code.Trim();
+            if (code is not null && !SupportedLanguages.IsSupported(code))
+                return BadRequest("Unknown transcription language.");
+            rec.TranscriptionLanguage = code;
         }
 
         await EnqueueTranscriptionAsync(rec, req.Model);
@@ -2058,9 +2073,16 @@ public class RecordingsController : ControllerBase
         };
         _db.Transcriptions.Add(transcription);
 
+        // The spoken language: this recording's own pin, else the owner's default, else auto-detect. The
+        // default is read per job rather than copied onto the recording, so changing the preference applies
+        // to everything that has not overridden it. Mapped to a Whisper code here - the worker hands it
+        // straight to the model, which does not know the platform's regional tags ("pt-BR").
+        var chosenLanguage = rec.TranscriptionLanguage
+            ?? (await _db.UserSettings.FindAsync(rec.UserId))?.TranscriptionLanguage;
+
         rec.Status = RecordingStatus.Queued;
         await _queue.EnqueueAsync(new TranscriptionJob(rec.Id, transcription.Id, rec.BlobKey, transcription.Model,
-            rec.MinSpeakers, rec.MaxSpeakers));
+            rec.MinSpeakers, rec.MaxSpeakers, SupportedLanguages.ToWhisperCode(chosenLanguage)));
         await _hub.NotifyStatusAsync(rec.UserId, rec.Id, rec.Status.ToString());
     }
 

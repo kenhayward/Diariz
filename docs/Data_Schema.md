@@ -108,6 +108,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddLlmUsageSettings` | `PlatformSettings.LlmUsageLoggingEnabled` (bool, default **true**) + `LlmUsageRetentionDays` (int, default 90; 0 = keep forever) + `LlmStreamUsageEnabled` (bool, default true) - the three admin controls for the usage log, edited on Model Settings. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `PlatformLlmModels` | `LlmModels`, `LlmModelParameters` (`jsonb`), `LlmCallAssignments` + `PlatformSettings.DefaultLlmModelId` - platform-wide model configuration. Purely additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddLlmCallFinishReason` | `LlmCalls.FinishReason` (text, nullable) - the model's reason for stopping, so a reply cut off by a token cap is distinguishable from one that had nothing to say. Additive and nullable, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddTranscriptionLanguage` | `Recording.TranscriptionLanguage` + `UserSettings.TranscriptionLanguage` (both text, nullable) - the spoken language to transcribe in, per recording and as a per-user default; null on both means Whisper detects it. Additive and nullable, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `DropPerUserLlmSettings` | **Drops** `UserSettings.SummaryApiBase`, `SummaryApiKeyEncrypted`, `SummaryModel`, `ChatContextWindow`, `LlmTimeoutSeconds`, `ReasoningEnabled`, `ReasoningEffort` - LLM configuration moved to the platform. Destructive, but **deliberately no `CurrentFormat` bump**: restore does `pg_restore --clean` then migrates forward, so an older backup restores its own columns and this migration drops them - the restore succeeds and the platform is left correct, and the only loss is per-user values this release discards by design |
 
 ### Entity-relationship overview
@@ -180,6 +181,7 @@ The owned audio recording.
 | `Status` | int | `RecordingStatus`: 0 Uploaded, 1 Queued, 2 Transcribing, 3 Transcribed, 4 Summarized, 5 Failed, 6 Summarizing, 7 Merging |
 | `Error` | text null | last failure message |
 | `MinSpeakers` / `MaxSpeakers` | int null | diarization hints (null = automatic) |
+| `TranscriptionLanguage` | text null | the spoken language to transcribe in (BCP-47, from the supported-language list). Null = fall back to `UserSettings.TranscriptionLanguage`, then to Whisper's own detection |
 | `MeetingTypeId` | uuid FK → MeetingTypes null | chosen minutes template; null = the seeded General default; **SetNull** on type delete |
 | `Position` | int | manual sort order within its group |
 | `ActionsExtractedAt` | timestamptz null | non-null once action extraction has run (drives the by-exception Actions panel) |
@@ -750,6 +752,7 @@ Per-user preferences (1:1 with the user via a **shared primary key** = `UserId`)
 | `ChatToolOverridesJson` | jsonb null | explicit per-tool on/off map `{ "tool_name": bool }`; a tool absent follows the server default |
 | `NativeLanguage` | text null | the user's native language (BCP-47); default target when translating transcripts |
 | `UiLanguage` | text null | the language the app UI is shown in (BCP-47); null → follow the browser |
+| `TranscriptionLanguage` | text null | the default spoken language for this user's recordings (BCP-47); null → let Whisper detect it per recording. Deliberately **not** `NativeLanguage`: that is the translation target, and people record in languages that are not their own. A recording's own `TranscriptionLanguage` overrides it |
 | `GoogleRefreshTokenEncrypted` | text null | Google OAuth refresh token (offline Calendar access), **encrypted at rest** (Data Protection); never returned to clients |
 | `GoogleCalendarGranted` | bool | user granted Google Calendar read access |
 | `OutlookSyncEnabled` | bool | opt-in to mirroring a desktop Outlook calendar; **default false**. Gates storing meeting bodies and attendee addresses server-side, so an installed desktop app changes nothing until it is set. Deliberately separate from the per-device `OutlookCalendarSources.Enabled` plumbing flag; turning it off purges every source and, by cascade, every stored event |
