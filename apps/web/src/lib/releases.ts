@@ -65,6 +65,25 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.226.0",
+    date: "2026-08-18",
+    pr: 541,
+    headline: "Stay in the app, and type the number you meant",
+    summary:
+      "Two things were wrong with the new AI models page, and both were the kind you only find by using it.\n\n" +
+      "**Temperature would not accept 0.3.** Every numeric field parsed what you typed on each keystroke, so the moment you pressed the decimal point it parsed to a whole number, redrew the box without it, and ate the keystroke. Fractional values - which is every temperature worth setting - were simply unreachable. The fields now keep what you have typed until you leave them, and only the finished number is stored.\n\n" +
+      "While fixing that, the documented ranges got a look too. **Max tokens and Top K accept -1 again**, which several endpoints read as \"no cap\" and \"disabled\" - the lower bound of 0 was flagging a deliberate, documented choice as a mistake. Ranges are now shown rather than enforced: a value outside the usual one says so under the field and is still sent, because Diariz cannot know what any particular endpoint accepts and quietly clamping a considered decision is worse than saying nothing.\n\n" +
+      "**The AI models page and the usage log open inside the app now.** They were links that opened a new browser tab, which is fine in a browser and wrong everywhere else: from the installed app or the desktop shell it left Diariz entirely for the system browser, where you are not signed in - so viewing the usage log meant logging in again and finding your way back to Settings. Both now open as panels over Settings, and \"Open in usage log\" on a test result switches between them without leaving. The addresses still work if you have one bookmarked or pasted.",
+    fixed: [
+      "Numeric parameters accept decimals. Typing 0.3 no longer loses the decimal point.",
+      "Max tokens, Max completion tokens and Top K accept -1, which endpoints read as no cap or disabled.",
+      "The AI models page and the LLM usage log open inside the app instead of a new browser tab, which in the installed app and the desktop shell meant signing in again.",
+    ],
+    changed: [
+      "A parameter outside its usual range now says so under the field, and is still sent - the endpoint is the authority on what it accepts, not Diariz.",
+    ],
+  },
+  {
     version: "0.225.0",
     date: "2026-08-18",
     pr: 540,

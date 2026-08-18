@@ -21,11 +21,14 @@ interface Props {
   apiBase: string;
   modelName: string;
   onFix: (fix: { key: string; value: ParameterValue }) => void;
+  onOpenUsageLog?: (query: string) => void;
 }
 
 /// The drawer's right-hand column: run a real call, see what came back, and see the exact body that would
 /// be sent as it is typed.
-export default function TestRail({ group, preview, test, onRun, onFix, apiBase, modelName }: Props) {
+export default function TestRail({
+  group, preview, test, onRun, onFix, apiBase, modelName, onOpenUsageLog,
+}: Props) {
   const { t } = useTranslation("account");
 
   const runLabel =
@@ -77,6 +80,7 @@ export default function TestRail({ group, preview, test, onRun, onFix, apiBase, 
             apiBase={apiBase}
             modelName={modelName}
             onRetry={() => onRun?.()}
+            onOpenUsageLog={onOpenUsageLog}
           />
         )}
 

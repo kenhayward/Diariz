@@ -993,7 +993,14 @@ generating. It is now recorded when the stream ends (see the capture contract ab
 `CompletionTokens`/`ReasoningTokens`/`TotalTokens` parsed from the trailing `usage` chunk `stream_options`
 asked the endpoint to send, and `TimeToFirstTokenMs` populated for the first time.
 
-**Admin usage viewer (`/admin/llm-usage`).** The page hydrates its filter **once** from the query string
+**Admin usage viewer (`/admin/llm-usage`).** Rendered in two places from one component: its own route, and
+a panel inside the settings modal (`AdminPanelModal`, z-[60] - the layer this codebase uses for a dialog
+opened from a dialog; the model drawer inside goes to z-[65], below the help popover's z-[70]). The
+`embedded` prop only drops the page chrome the host provides. The in-app path deliberately does not
+navigate: these were `<a target="_blank">` links, which in the installed PWA and the desktop shell leave
+the app for the system browser and an unauthenticated session. Embedded there is no URL to read, so the
+"show me these calls" request arrives as an `initialQuery` prop instead. The page hydrates its filter
+**once** from the query string
 (`usageFilterParams.ts`) and then owns it: the URL is a way IN - the model editor's "Open in usage log", or
 a pasted link - not a mirror of the filter bar, which would push a history entry on every checkbox and make
 Back mean something the user never did. A bad link degrades to a BROADER view, never an empty one or an

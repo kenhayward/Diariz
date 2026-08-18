@@ -18,6 +18,10 @@ interface Props {
   apiBase: string;
   modelName: string;
   onRetry: () => void;
+  /// Given when the card is hosted somewhere a route change would be wrong - inside the settings modal,
+  /// where navigating drops the admin out of the modal and, in the desktop shell, out of the app. Absent
+  /// on the standalone page, where an ordinary link is right.
+  onOpenUsageLog?: (query: string) => void;
 }
 
 /// The exact request, as a command that can be pasted into a terminal.
@@ -47,7 +51,7 @@ export function toCurl(apiBase: string, requestBodyJson: string): string {
 /// moment an endpoint has just rejected a parameter by name. Offering it there, on that row, is what makes
 /// the state legible at all.
 export default function TestResultCard({
-  result, group, resolvedTimeoutSeconds, onFix, apiBase, modelName, onRetry,
+  result, group, resolvedTimeoutSeconds, onFix, apiBase, modelName, onRetry, onOpenUsageLog,
 }: Props) {
   const { t } = useTranslation("account");
   const [copied, setCopied] = useState<string | null>(null);
@@ -57,7 +61,8 @@ export default function TestResultCard({
     setCopied(what);
   }
 
-  const usageLink = `/admin/llm-usage?${usageFilterToParams({ kinds: ["AdminTest"], models: [modelName] })}`;
+  const usageQuery = usageFilterToParams({ kinds: ["AdminTest"], models: [modelName] });
+  const usageLink = `/admin/llm-usage?${usageQuery}`;
 
   const seconds = (ms: number) => `${(ms / 1000).toFixed(2)} s`;
   const dash = t("llmTestNotMeasured");
@@ -176,9 +181,15 @@ export default function TestResultCard({
           // Deep-links to this model's test calls rather than the whole week, which is what the label
           // promises. Filtered on the model NAME because that is what LlmCalls records - the snapshot, not
           // the id - so a renamed model's older tests stay under their old name.
-          <Link to={usageLink} className={LINK}>
-            {t("llmTestOpenUsage")}
-          </Link>
+          onOpenUsageLog ? (
+            <button type="button" onClick={() => onOpenUsageLog(usageQuery)} className={LINK}>
+              {t("llmTestOpenUsage")}
+            </button>
+          ) : (
+            <Link to={usageLink} className={LINK}>
+              {t("llmTestOpenUsage")}
+            </Link>
+          )
         ) : (
           <button type="button" onClick={onRetry} className={LINK}>
             {t("llmTestRetry")}

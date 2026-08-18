@@ -20,6 +20,42 @@ vi.mock("../lib/api", () => ({
     updateWorkflowSignal: vi.fn(),
     deleteWorkflowSignal: vi.fn(),
     listPlatformWebhooks: vi.fn().mockResolvedValue([]),
+    // The admin panels this modal now hosts.
+    listModels: vi.fn().mockResolvedValue([
+      { id: "m1", name: "gpt-oss-20b", apiBase: "http://a/v1", hasApiKey: false, contextLength: 8192, parameters: {} },
+    ]),
+    getLlmAssignments: vi.fn().mockResolvedValue({ defaultModelId: null, assignments: {} }),
+    getLlmModelDefaults: vi.fn().mockResolvedValue({}),
+    testModel: vi.fn().mockResolvedValue({
+      ok: true, httpStatus: 200, ttftMs: 10, durationMs: 20, promptTokens: 1, completionTokens: 2,
+      reasoningTokens: null, totalTokens: 3, finishReason: "stop", response: "hi",
+      requestBodyJson: '{"model":"gpt-oss-20b"}', errorKind: null, message: null, offendingParameter: null,
+    }),
+    // A COMPLETE totals object. A partial one still satisfies every assertion here, because the table's
+    // totals row renders after them - and then throws on the missing token counts, which vitest reports as
+    // an unhandled error rather than a failure. The suite reads green and CI does not.
+    getLlmUsage: vi.fn().mockResolvedValue({
+      rows: [], page: 1, pageSize: 50, total: 0,
+      totals: {
+        calls: 0, operations: 0, durationMs: 0,
+        promptTokens: null, completionTokens: null, reasoningTokens: null, totalTokens: null,
+        tokenMeasuredCalls: 0, promptTokensMeasured: 0, completionTokensMeasured: 0,
+        reasoningTokensMeasured: 0, totalTokensMeasured: 0,
+        failedCalls: 0, tokensPerSecond: null,
+      },
+    }),
+    getLlmUsageFilters: vi.fn().mockResolvedValue({ users: [], models: [], kinds: [] }),
+    getLlmUsageSummary: vi.fn().mockResolvedValue({
+      groups: [],
+      totals: {
+        calls: 0, operations: 0, durationMs: 0,
+        promptTokens: null, completionTokens: null, reasoningTokens: null, totalTokens: null,
+        tokenMeasuredCalls: 0, promptTokensMeasured: 0, completionTokensMeasured: 0,
+        reasoningTokensMeasured: 0, totalTokensMeasured: 0,
+        failedCalls: 0, tokensPerSecond: null,
+      },
+    }),
+    deleteLlmUsage: vi.fn(),
     createPlatformWebhook: vi.fn(),
     deletePlatformWebhook: vi.fn(),
   },
@@ -596,5 +632,83 @@ describe("SettingsModal", () => {
     await waitFor(() => expect(api.runTagBackfill).toHaveBeenCalled());
     expect(await screen.findByText(/3/)).toBeTruthy();
     confirm.mockRestore();
+  });
+
+  /// These two used to be `<a target="_blank">` to their own routes. In the installed PWA and the desktop
+  /// shell that leaves the app for the system browser, where the administrator is not signed in - so
+  /// reaching the usage log meant logging in again and navigating back to Settings.
+  describe("the admin panels", () => {
+    it("never links out of the app to reach them", async () => {
+      render(
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <MemoryRouter>
+            <SettingsModal onClose={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      await screen.findByRole("button", { name: /manage ai models/i });
+      for (const name of [/manage ai models/i, /usage log/i]) {
+        expect(screen.queryByRole("link", { name })).toBeNull();
+        expect(screen.getByRole("button", { name })).toBeTruthy();
+      }
+    });
+
+    it("opens the models panel over the settings modal", async () => {
+      render(
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <MemoryRouter>
+            <SettingsModal onClose={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      fireEvent.click(await screen.findByRole("button", { name: /manage ai models/i }));
+
+      // Rendered in place: the settings dialog is still mounted underneath.
+      await waitFor(() => expect(screen.getByRole("dialog", { name: /ai models/i })).toBeTruthy());
+      expect(screen.getByRole("dialog", { name: "Settings" })).toBeTruthy();
+      // ...and the panel itself really loaded, not just its frame.
+      await waitFor(() => expect(screen.getByRole("heading", { name: /models & routing/i })).toBeTruthy());
+    });
+
+    it("opens the usage panel without leaving the modal", async () => {
+      render(
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <MemoryRouter>
+            <SettingsModal onClose={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      fireEvent.click(await screen.findByRole("button", { name: /usage log/i }));
+
+      // Named from the catalogue, not from the key: a missing entry renders "llmUsageTitle" at the
+      // administrator, and a /usage/i matcher would happily match that too.
+      const dialog = await screen.findByRole("dialog", { name: /usage/i });
+      expect(dialog.getAttribute("aria-label")).not.toMatch(/^llm[A-Z]/);
+    });
+
+    it("carries the model's filter across when the test result asks for the usage log", async () => {
+      // The whole point of switching panels rather than navigating: the filter has to survive the switch,
+      // or "open in usage log" lands on every call the platform made this week.
+      render(
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <MemoryRouter>
+            <SettingsModal onClose={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      fireEvent.click(await screen.findByRole("button", { name: /manage ai models/i }));
+      fireEvent.click(await screen.findByRole("button", { name: /^edit$/i }));
+      fireEvent.click(await screen.findByRole("button", { name: /run test/i }));
+      fireEvent.click(await screen.findByRole("button", { name: /open in usage log/i }));
+
+      await waitFor(() => expect(api.getLlmUsage).toHaveBeenCalled());
+      const sent = vi.mocked(api.getLlmUsage).mock.calls[0][0];
+      expect(sent.kinds).toEqual(["AdminTest"]);
+      expect(sent.models).toEqual(["gpt-oss-20b"]);
+    });
   });
 });

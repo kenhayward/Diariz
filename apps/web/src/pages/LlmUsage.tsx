@@ -33,7 +33,16 @@ function toApiFilter(filter: UsageFilterState): LlmUsageFilter {
 /// Platform-Administrator-only viewer over the LLM usage log, reached at /admin/llm-usage behind the app
 /// login (see App.tsx). `RequireAuth` there only checks that someone is signed in, not what they're allowed
 /// to see, so the permission gate lives here: a non-admin gets a short refusal instead of the table.
-export default function LlmUsage() {
+interface Props {
+  /// Rendered inside the settings modal rather than as its own route: drops the top bar and the
+  /// full-height shell, which the host provides. The route still exists for a pasted or bookmarked link.
+  embedded?: boolean;
+  /// Seeds the filter when there is no URL to read one from - the settings modal has no route of its own,
+  /// so a "show me these calls" request arrives as a query string rather than a navigation.
+  initialQuery?: string;
+}
+
+export default function LlmUsage({ embedded = false, initialQuery }: Props = {}) {
   const { t } = useTranslation("account");
   const { isPlatformAdmin } = useAuth();
   const queryClient = useQueryClient();
@@ -53,7 +62,9 @@ export default function LlmUsage() {
   // editor's "Open in usage log", or a pasted link - not a mirror of the filter bar: keeping the two in
   // sync would push a history entry on every checkbox and make Back mean something the user did not do.
   const [searchParams] = useSearchParams();
-  const [filter, setFilter] = useState<UsageFilterState>(() => usageFilterFromParams(searchParams));
+  const [filter, setFilter] = useState<UsageFilterState>(() =>
+    usageFilterFromParams(initialQuery !== undefined ? new URLSearchParams(initialQuery) : searchParams),
+  );
   const [sort, setSort] = useState<LlmUsageSortKey>("startedAt");
   const [desc, setDesc] = useState(true);
   const [page, setPage] = useState(1);
@@ -158,16 +169,14 @@ export default function LlmUsage() {
 
   if (!isPlatformAdmin) {
     return (
-      <div className="flex h-screen flex-col">
-        <TopBar />
+      <Shell embedded={embedded}>
         <p className="p-6 text-sm text-gray-600 dark:text-gray-300">{t("llmUsageForbidden")}</p>
-      </div>
+      </Shell>
     );
   }
 
   return (
-    <div className="flex h-screen flex-col">
-      <TopBar />
+    <Shell embedded={embedded}>
       {/* GET /filters failing is otherwise silent - the multi-selects would just render with no options
           and nothing would say why, unlike the table's own explicit error state below. */}
       {filterOptionsQuery.isError && (
@@ -217,6 +226,17 @@ export default function LlmUsage() {
           />
         )}
       </div>
+    </Shell>
+  );
+}
+
+/// The page chrome, or none of it when the panel is hosted in a modal that already provides its own.
+function Shell({ embedded, children }: { embedded: boolean; children: React.ReactNode }) {
+  if (embedded) return <div className="flex min-h-0 flex-1 flex-col">{children}</div>;
+  return (
+    <div className="flex h-screen flex-col">
+      <TopBar />
+      {children}
     </div>
   );
 }

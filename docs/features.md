@@ -638,6 +638,10 @@ clipboard (with the key as a `$LLM_API_KEY` placeholder - the browser is never g
 naming the placeholder rather than dropping the header makes a forgotten substitution fail for an obvious
 reason), **Raw JSON** copies the whole result, **Open in usage log** deep-links to that model's test calls,
 and a failure offers **Retry**.
+  Both this page and the usage log open as **panels over Settings** rather than their own tab. They are
+still routes (`/admin/llm-models`, `/admin/llm-usage`) so a bookmarked or pasted address works, but the
+in-app path never navigates: opening a new tab is fine in a browser and wrong in the installed PWA and the
+desktop shell, where it leaves Diariz for the system browser and an unauthenticated session.
   The application defaults are overridable per deployment through `LlmDefaults__*` environment variables
 (e.g. `LlmDefaults__Temperature`, `LlmDefaults__Translation__Temperature`), and the shipped values reproduce
 the request bodies Diariz sent before this was configurable. A server with **no models configured** keeps

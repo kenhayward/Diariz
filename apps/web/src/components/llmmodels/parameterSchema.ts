@@ -37,12 +37,15 @@ export interface ParameterSpec {
 export const PARAMETERS: ParameterSpec[] = [
   { key: "temperature", label: "llmParamTemperature", kind: "number", min: 0, max: 2 },
   { key: "top_p", label: "llmParamTopP", kind: "number", min: 0, max: 1 },
-  { key: "top_k", label: "llmParamTopK", kind: "integer", min: 0 },
-  { key: "repeat_penalty", label: "llmParamRepeatPenalty", kind: "number", min: 0 },
+  // -1 disables top-k on several servers, which is a deliberate choice rather than a mistake.
+  { key: "top_k", label: "llmParamTopK", kind: "integer", min: -1 },
+  { key: "repeat_penalty", label: "llmParamRepeatPenalty", kind: "number", min: 0, max: 2 },
   { key: "frequency_penalty", label: "llmParamFrequencyPenalty", kind: "number", min: -2, max: 2 },
   { key: "presence_penalty", label: "llmParamPresencePenalty", kind: "number", min: -2, max: 2 },
-  { key: "max_tokens", label: "llmParamMaxTokens", kind: "integer", min: 0 },
-  { key: "max_completion_tokens", label: "llmParamMaxCompletionTokens", kind: "integer", min: 0 },
+  // -1 means "no cap" on several servers - see LlmParameterLayers, where these two are the reason the
+  // three-state design uses absence and null instead of a sentinel.
+  { key: "max_tokens", label: "llmParamMaxTokens", kind: "integer", min: -1 },
+  { key: "max_completion_tokens", label: "llmParamMaxCompletionTokens", kind: "integer", min: -1 },
   {
     key: "reasoning_effort",
     label: "llmParamReasoningEffort",
