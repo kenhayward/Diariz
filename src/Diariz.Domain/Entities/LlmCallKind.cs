@@ -22,4 +22,10 @@ public enum LlmCallKind
     ChatMessage = 12,
     FormulaRun = 13,
     ChatTitle = 14,
+
+    /// <summary>An administrator's connection test from /admin/llm-models. Logged like any other call - a
+    /// test that cost tokens and did not appear in the usage log would be the one call an admin could not
+    /// account for - but it is NOT dispatched by the resolver: the group and parameters come from whatever
+    /// the admin is editing, unsaved, so it has no group of its own.</summary>
+    AdminTest = 15,
 }

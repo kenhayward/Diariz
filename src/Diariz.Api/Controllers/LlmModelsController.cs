@@ -27,15 +27,17 @@ public class LlmModelsController : ControllerBase
     private readonly IApiKeyProtector _protector;
     private readonly SummarizationOptions _env;
     private readonly LlmDefaultsOptions _defaults;
+    private readonly ILlmTestProbe _probe;
 
     public LlmModelsController(
         DiarizDbContext db, IApiKeyProtector protector, IOptions<SummarizationOptions> env,
-        IOptions<LlmDefaultsOptions> defaults)
+        IOptions<LlmDefaultsOptions> defaults, ILlmTestProbe probe)
     {
         _db = db;
         _protector = protector;
         _env = env.Value;
         _defaults = defaults.Value;
+        _probe = probe;
     }
 
     [HttpGet]
@@ -158,6 +160,65 @@ public class LlmModelsController : ControllerBase
         return Task.FromResult<ActionResult<Dictionary<string, string>>>(layers);
     }
 
+    /// <summary>Runs one sample call against this model with the parameters the administrator is editing,
+    /// and reports what came back: how long the model took to say anything, what it cost, what it said,
+    /// and - when it failed - which parameter the endpoint blamed.
+    ///
+    /// The parameters come from the request because the point is to try a change BEFORE saving it. The
+    /// endpoint, key and model name come from the stored row and only from there.
+    ///
+    /// Scoped as <see cref="LlmCallKind.AdminTest"/> so the call appears in the usage log like any other:
+    /// a call that spent tokens and left no trace would be the one an administrator could not account
+    /// for.</summary>
+    [HttpPost("{id:guid}/test")]
+    public async Task<ActionResult<LlmTestOutcome>> Test(Guid id, LlmModelTestRequest req)
+    {
+        if (!Enum.TryParse<LlmCallGroup>(req.Group, out var group))
+            return BadRequest($"Unknown call group '{req.Group}'.");
+
+        if (ValidateParameters(req.Parameters) is { } bad) return bad;
+
+        var model = await _db.LlmModels.AsNoTracking().FirstOrDefaultAsync(m => m.Id == id);
+        if (model is null) return NotFound();
+
+        // The same order LlmSettingsResolver walks, with the request's unsaved layers standing in for the
+        // model's stored rows.
+        var layers = new List<string?>
+        {
+            group == LlmCallGroup.ModelBase ? null : Layer(req.Parameters, group),
+            Layer(req.Parameters, LlmCallGroup.ModelBase),
+            group == LlmCallGroup.ModelBase ? null : _defaults.LayerFor(group),
+            _defaults.BaseLayer,
+        };
+
+        var config = new LlmRequestConfig(
+            ApiBase: model.ApiBase,
+            ApiKey: _protector.Unprotect(model.ApiKeyEncrypted) ?? "",
+            Model: model.Name,
+            Parameters: LlmParameterLayers.Resolve(layers))
+        {
+            ContextCharBudget = LlmContextBudget.CharsFor(model.ContextLength),
+        };
+
+        // Read from the users table rather than a claim, the same way every other call site attributes its
+        // scope: the email is a denormalised snapshot on LlmCalls, and a blank one puts every test call in
+        // a single nameless bucket in the usage log's by-user grouping.
+        Guid? userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value is { } uid
+            && Guid.TryParse(uid, out var parsed)
+            ? parsed
+            : null;
+        var userEmail = userId is null
+            ? null
+            : await _db.Users.Where(u => u.Id == userId).Select(u => u.Email).FirstOrDefaultAsync();
+
+        using var scope = LlmCallScope.Push(LlmCallKind.AdminTest, userId, userEmail);
+
+        return await _probe.RunAsync(config, HttpContext.RequestAborted);
+    }
+
+    private static string? Layer(Dictionary<string, string> parameters, LlmCallGroup group) =>
+        parameters.TryGetValue(group.ToString(), out var json) ? json : null;
+
     [HttpGet("assignments")]
     public async Task<ActionResult<LlmAssignmentsDto>> GetAssignments()
     {
@@ -252,7 +313,15 @@ public class LlmModelsController : ControllerBase
         if (string.IsNullOrWhiteSpace(req.ApiBase)) return BadRequest("An endpoint URL is required.");
         if (req.ContextLength <= 0) return BadRequest("The context length must be greater than zero.");
 
-        foreach (var (groupName, json) in req.Parameters)
+        return ValidateParameters(req.Parameters);
+    }
+
+    /// <summary>Checks a group -> layer-JSON map: every group name real, every layer valid JSON, every key
+    /// one the layer merge actually reads. Shared by the upsert and the test call so a parameter that would
+    /// be silently ignored is refused identically by both.</summary>
+    private BadRequestObjectResult? ValidateParameters(Dictionary<string, string> parameters)
+    {
+        foreach (var (groupName, json) in parameters)
         {
             if (!Enum.TryParse<LlmCallGroup>(groupName, out _))
                 return BadRequest($"Unknown parameter group '{groupName}'.");

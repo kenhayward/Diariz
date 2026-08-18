@@ -6,6 +6,7 @@ import { useAuth } from "../auth";
 import { api, apiErrorMessage } from "../lib/api";
 import type { LlmModel } from "../lib/types";
 import RoutingMatrix from "../components/llmmodels/RoutingMatrix";
+import type { TestState } from "../components/llmmodels/TestRail";
 import ModelEditorDrawer from "../components/llmmodels/ModelEditorDrawer";
 
 /// Platform-Administrator-only editor for the models every LLM call is routed to, at /admin/llm-models
@@ -19,6 +20,9 @@ export default function LlmModels() {
   const [editing, setEditing] = useState<LlmModel | null>(null);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /// Model id -> its last connection test. Lives here rather than in the matrix so it survives the
+  /// re-render a routing write causes, and so Test all can drive it.
+  const [tests, setTests] = useState<Record<string, TestState>>({});
 
   // `enabled` keeps a non-admin from issuing the request at all: a refusal that still fetched would put
   // every configured endpoint name into the network log of someone not allowed to see them.
@@ -53,6 +57,25 @@ export default function LlmModels() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["llm-assignments"] }),
     onError: (e) => setError(apiErrorMessage(e, t("llmModelsAssignError"))),
   });
+
+  /// A row test runs the model's SAVED parameters against its own Defaults scope - it answers "can we
+  /// reach this at all", which is a different question from the drawer's per-call-type test.
+  async function runTest(model: LlmModel) {
+    setTests((prev) => ({ ...prev, [model.id]: { status: "running" } }));
+    try {
+      const result = await api.testModel(model.id, { group: "ModelBase", parameters: model.parameters });
+      setTests((prev) => ({ ...prev, [model.id]: { status: "done", result } }));
+    } catch (e) {
+      setTests((prev) => ({ ...prev, [model.id]: { status: "idle" } }));
+      setError(apiErrorMessage(e, t("llmModelsLoadError")));
+    }
+  }
+
+  /// One at a time, on purpose. These are real calls to real endpoints, and several models commonly share
+  /// one server - firing them together would measure the queue rather than the models.
+  async function runTestAll() {
+    for (const model of models) await runTest(model);
+  }
 
   async function createFromEnvironment() {
     setError(null);
@@ -133,6 +156,9 @@ export default function LlmModels() {
             defaultModelId={defaultModelId}
             onRoute={(next) => saveAssignments.mutate(next)}
             onEdit={setEditing}
+            tests={tests}
+            onTest={runTest}
+            onTestAll={runTestAll}
           />
         )}
       </div>

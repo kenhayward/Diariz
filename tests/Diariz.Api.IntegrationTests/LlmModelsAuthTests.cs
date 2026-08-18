@@ -98,4 +98,31 @@ public class LlmModelsAuthTests(ContainersFixture fx)
 
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
     }
+
+    [Fact]
+    public async Task Test_call_IsForbidden_ForNonAdminUser()
+    {
+        // It makes an outbound request from the server to a configured endpoint, with a stored credential
+        // the caller never sees. Anyone who can reach it can use the server as a client of that endpoint.
+        using var factory = NewFactory();
+        using var client = AuthenticatedClient(factory, await SeedNonAdminUserAsync(factory));
+
+        var resp = await client.PostAsJsonAsync(
+            $"/api/admin/llm-models/{Guid.NewGuid()}/test", new LlmModelTestRequest("Summaries", []));
+
+        // Forbidden rather than NotFound: the gate has to run before the id is even looked at, or the
+        // response tells an unauthorised caller which model ids exist.
+        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task Defaults_AreForbidden_ForNonAdminUser()
+    {
+        using var factory = NewFactory();
+        using var client = AuthenticatedClient(factory, await SeedNonAdminUserAsync(factory));
+
+        var resp = await client.GetAsync("/api/admin/llm-models/defaults");
+
+        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
 }

@@ -4,7 +4,10 @@ import type { LlmModel } from "../../lib/types";
 
 // vi.mock's factory is hoisted above top-level const declarations, so the mock is created via vi.hoisted.
 const { api } = vi.hoisted(() => ({
-  api: { listModels: vi.fn(), updateModel: vi.fn(), createModel: vi.fn(), deleteModel: vi.fn() },
+  api: {
+    listModels: vi.fn(), updateModel: vi.fn(), createModel: vi.fn(), deleteModel: vi.fn(),
+    testModel: vi.fn(),
+  },
 }));
 vi.mock("../../lib/api", () => ({ api, apiErrorMessage: (e: unknown) => String(e) }));
 
@@ -20,6 +23,13 @@ const MODELS: LlmModel[] = [
     parameters: { ModelBase: '{"temperature":0.9,"top_k":40}', Translation: '{"temperature":0.1}' },
   },
 ];
+
+const OK_RESULT = {
+  ok: true, httpStatus: 200, ttftMs: 310, durationMs: 1420,
+  promptTokens: 1240, completionTokens: 44, reasoningTokens: 128, totalTokens: 1412,
+  finishReason: "stop", response: "A short reply.", requestBodyJson: '{"model":"qwen3-27b"}',
+  errorKind: null, message: null, offendingParameter: null,
+};
 
 /// The application defaults, as the page hands them over - the bottom of the layer stack.
 const DEFAULTS = { ModelBase: '{"temperature":0.3,"timeout_seconds":120}' };
@@ -216,5 +226,86 @@ describe("ModelEditorDrawer", () => {
     expect(confirm).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
     confirm.mockRestore();
+  });
+
+  it("runs the test against the layers on screen, not the ones on the server", () => {
+    // Testing before saving is the whole reason the endpoint takes parameters at all.
+    api.testModel.mockResolvedValue(OK_RESULT);
+    open(MODELS[1]);
+    fireEvent.click(screen.getByRole("tab", { name: /Summaries/ }));
+    fireEvent.change(screen.getByTestId("param-Summaries-temperature"), { target: { value: "0.2" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /run test/i }));
+
+    // The whole layer set goes, exactly as Save sends it - the server walks the group it was given. What
+    // matters is that Summaries carries the UNSAVED 0.2 rather than the stored model's parameters.
+    expect(api.testModel).toHaveBeenCalledWith("b", {
+      group: "Summaries",
+      parameters: {
+        ModelBase: '{"temperature":0.9,"top_k":40}',
+        Summaries: '{"temperature":0.2}',
+        Translation: '{"temperature":0.1}',
+      },
+    });
+  });
+
+  it("keeps each tab's result so switching back does not lose it", async () => {
+    // The results are not comparable across tabs - different parameters - so one shared slot would make
+    // the rail show a number that belongs to a call type the admin is no longer looking at.
+    api.testModel.mockResolvedValue(OK_RESULT);
+    open(MODELS[1]);
+
+    fireEvent.click(screen.getByRole("button", { name: /run test/i }));
+    await screen.findByText(/0\.31 s/);
+
+    fireEvent.click(screen.getByRole("tab", { name: /Translation/ }));
+    expect(screen.queryByText(/0\.31 s/)).toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: /Defaults/ }));
+    expect(screen.getByText(/0\.31 s/)).toBeTruthy();
+  });
+
+  it("applies a one-click fix to the open tab only", async () => {
+    api.testModel.mockResolvedValue({
+      ...OK_RESULT, ok: false, httpStatus: 400, errorKind: "Http400",
+      message: "top_k is not supported", offendingParameter: "top_k", ttftMs: null,
+    });
+    open(MODELS[1]);
+    fireEvent.click(screen.getByRole("tab", { name: /Summaries/ }));
+
+    fireEvent.click(screen.getByRole("button", { name: /run test/i }));
+    const fix = await screen.findByRole("button", { name: /omit top k here/i });
+    fireEvent.click(fix);
+
+    // Omitted here, and the model's own Defaults - where top_k is genuinely set - left alone.
+    expect(screen.getByTestId("param-Summaries-top_k").textContent).toMatch(/omitted/i);
+    fireEvent.click(screen.getByRole("tab", { name: /Defaults/ }));
+    expect((screen.getByTestId("param-ModelBase-top_k") as HTMLInputElement).value).toBe("40");
+  });
+
+  it("saves an omitted parameter as null rather than dropping the key", async () => {
+    // The distinction the whole editor is built on: absent means inherit, null means do not send.
+    api.testModel.mockResolvedValue({
+      ...OK_RESULT, ok: false, errorKind: "Http400", offendingParameter: "top_k", ttftMs: null,
+    });
+    api.updateModel.mockResolvedValue(MODELS[1]);
+    open(MODELS[1]);
+    fireEvent.click(screen.getByRole("tab", { name: /Summaries/ }));
+
+    fireEvent.click(screen.getByRole("button", { name: /run test/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /omit top k here/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await vi.waitFor(() => expect(api.updateModel).toHaveBeenCalled());
+    expect(JSON.parse(api.updateModel.mock.calls[0][1].parameters.Summaries)).toEqual({ top_k: null });
+  });
+
+  it("will not test a model that does not exist yet", () => {
+    // The endpoint is keyed by id and takes the endpoint and key from the stored row, so there is nothing
+    // to test against until the model is saved. Saying why beats a button that fails.
+    open(null);
+
+    expect(screen.queryByRole("button", { name: /run test/i })).toBeNull();
+    expect(screen.getByText(/save the model before running a test/i)).toBeTruthy();
   });
 });

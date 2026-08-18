@@ -22,8 +22,10 @@ public static class LlmCallGroups
             or LlmCallKind.FormulaRun => LlmCallGroup.MinutesAndFormulas,
         LlmCallKind.Translation => LlmCallGroup.Translation,
         LlmCallKind.ChatMessage or LlmCallKind.ChatTitle => LlmCallGroup.Chat,
+        // AdminTest sends a full set of sampling parameters, but the admin chooses which group's they are
+        // while editing them, so there is nothing for this to decide. It never reaches the resolver.
         LlmCallKind.Embedding or LlmCallKind.SearchQuery or LlmCallKind.Dictation
-            or LlmCallKind.Unknown => null,
+            or LlmCallKind.AdminTest or LlmCallKind.Unknown => null,
         _ => throw new ArgumentOutOfRangeException(
             nameof(kind), kind, "no parameter group has been decided for this call kind"),
     };

@@ -448,6 +448,28 @@ saved), so the two can drift - `requestPreview.test.ts` is what holds them toget
 that the four **behaviour flags** (`timeout_seconds`, `tools_supported`, `images_supported`,
 `reasoning_enabled`) never appear in the previewed body, since no endpoint ever receives them.
 
+`POST /api/admin/llm-models/{id}/test` runs one sample call through `LlmTestProbe` so an administrator can
+see whether an endpoint and a set of parameters actually work. Three things about it are deliberate:
+
+- **The parameters come from the request, the credentials never do.** The body carries only a group name and
+  the same group -> layer-JSON map an upsert sends, so an admin can test before saving; the endpoint URL, API
+  key and model name are read from the stored row alone. Accepting a caller-supplied URL would turn the
+  endpoint into a way of reaching arbitrary hosts with an administrator's session and no model row left
+  behind, and the row is the audit trail.
+- **It always streams** (`ResponseHeadersRead` + `stream_options.include_usage`), because time-to-first-token
+  is the number that separates "the model was loading" from "the model is slow" and does not exist on a
+  buffered response. `LlmTestProbeTests.Measures_the_first_token_separately_from_the_whole_call` is what
+  stops that regressing - it is the one assertion a buffering implementation cannot pass.
+- **Failures are returned, not thrown.** A wrong endpoint is the main thing being tested for, so it comes
+  back as a readable result. `LlmErrorDiagnosis.OffendingParameter` then matches the error text against the
+  thirteen parameter names Diariz can send (word-bounded, first mention wins) to drive the editor's
+  one-click "omit this here" fix.
+
+Test calls are scoped `LlmCallKind.AdminTest` so `LlmTelemetryHandler` logs them like any other call.
+`LlmCallGroups.GroupFor` maps it to **null** - the group comes from what the admin is editing, so the
+resolver never decides it. The model's reply is returned in the HTTP response and never persisted; the usage
+log still stores counts only.
+
 Deleting a model in use is refused **by the controller**, not by the FKs: both are `ON DELETE RESTRICT`,
 but EF refuses client-side at `Remove` for the required assignment FK, and for the nullable
 `DefaultLlmModelId` it nulls the column ahead of the DELETE so the constraint never fires. See

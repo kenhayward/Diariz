@@ -24,6 +24,7 @@ public class LlmCallGroupsTests
     [InlineData(LlmCallKind.Embedding)]
     [InlineData(LlmCallKind.SearchQuery)]
     [InlineData(LlmCallKind.Dictation)]
+    [InlineData(LlmCallKind.AdminTest)]
     [InlineData(LlmCallKind.Unknown)]
     public void Has_no_group_for_kinds_that_send_no_sampling_parameters(LlmCallKind kind) =>
         Assert.Null(LlmCallGroups.GroupFor(kind));

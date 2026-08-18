@@ -860,6 +860,17 @@ public record LlmModelDto(Guid Id, string Name, string ApiBase, bool HasApiKey, 
 public record LlmModelUpsert(string Name, string ApiBase, string? ApiKey, int ContextLength,
     Dictionary<string, string> Parameters);
 
+/// <summary>Run one sample call against a model, with the parameters an administrator is currently
+/// editing rather than the saved ones - so a change can be tried before it is committed.
+///
+/// Carries NO endpoint, key or model name: those come from the stored row alone. Accepting them here would
+/// turn an administrator's session into a way of reaching arbitrary hosts without leaving a model row
+/// behind, and the row is the audit trail.
+///
+/// <c>Parameters</c> is the same group -> layer-JSON map as <see cref="LlmModelUpsert"/>, so the layer walk
+/// is identical to the one the saved model would get.</summary>
+public record LlmModelTestRequest(string Group, Dictionary<string, string> Parameters);
+
 /// <summary>Which model serves which call group, plus the fallback for groups with no entry. Group names
 /// are <c>LlmCallGroup</c> members; <c>ModelBase</c> is rejected - it is a parameter scope, not a call
 /// type.</summary>

@@ -82,6 +82,9 @@ Following the default is not the same as being pointed at whichever model is cur
 call type in the **No model** row moves with the default if you change it, while one pointed at a model
 stays where you put it.
 
+Each row has a **Test** button that checks the model is reachable - the endpoint, the key and the model
+name - and **Test all** in the footer runs them one at a time.
+
 A model that is still in use cannot be deleted. Diariz refuses and names the jobs still pointing at it,
 so you know exactly what to move first. **Delete model** lives at the foot of the model's own drawer.
 
