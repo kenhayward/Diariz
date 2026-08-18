@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import HubPopover from "./HubPopover";
 import NotesSection from "../NotesSection";
 import ShotStrip from "./ShotStrip";
+import CaptureControls from "./CaptureControls";
 import type { MeetingNote } from "../../lib/types";
 import type { PendingShot } from "../../lib/pendingScreenshots";
 
@@ -32,7 +33,8 @@ export type NotesPopoverProps = {
   onDeleteShot: (id: string) => void;
   /// Absent in a plain browser, which is what hides the whole screenshot area.
   onChangeCaptureArea?: () => void;
-  /// Takes a screenshot without closing the popover. Absent in a plain browser, same as onChangeCaptureArea.
+  /// Takes a screenshot without closing the popover. Absent in a plain browser, same as onChangeCaptureArea:
+  /// the two arrive together (both gated on the shell bridge), so either one missing hides the section.
   onCapture?: () => void;
   /// Whether this recording has a capture area yet. Capturing without one opens the area picker, and BOTH
   /// buttons then no-op until that picker is dismissed - which reads as the popover having frozen. So capture
@@ -132,7 +134,7 @@ export default function NotesPopover({
         <div style={{ maxHeight: 320, overflowY: "auto" }}>
           <NotesSection notes={lines} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} />
         </div>
-        {onChangeCaptureArea && (
+        {onChangeCaptureArea && onCapture && (
           <div
             style={{
               display: "flex",
@@ -146,53 +148,11 @@ export default function NotesPopover({
               <span style={{ fontFamily: "system-ui", fontWeight: 600, fontSize: 12, color: "var(--hub-text-2)" }}>
                 {t("screenshots")} ({shots.length})
               </span>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                {onCapture && (
-                  <button
-                    type="button"
-                    onClick={onCapture}
-                    disabled={!captureAreaSet}
-                    title={captureAreaSet ? undefined : t("screenshotCaptureNeedsArea")}
-                    style={{
-                      fontFamily: "system-ui",
-                      fontWeight: 500,
-                      fontSize: 12,
-                      padding: "2px 6px",
-                      borderRadius: 6,
-                      border: "1px solid var(--hub-border)",
-                      background: "transparent",
-                      color: "var(--hub-text-2)",
-                      cursor: captureAreaSet ? "pointer" : "not-allowed",
-                      opacity: captureAreaSet ? 1 : 0.5,
-                    }}
-                    onMouseEnter={(e) => {
-                      if (captureAreaSet) e.currentTarget.style.background = "var(--hub-surface-hover)";
-                    }}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                  >
-                    {t("screenshotCaptureButton")}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={onChangeCaptureArea}
-                  style={{
-                    fontFamily: "system-ui",
-                    fontWeight: 500,
-                    fontSize: 12,
-                    padding: "2px 6px",
-                    borderRadius: 6,
-                    border: "1px solid var(--hub-border)",
-                    background: "transparent",
-                    color: "var(--hub-text-2)",
-                    cursor: "pointer",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hub-surface-hover)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                >
-                  {t("screenshotCaptureArea")}
-                </button>
-              </div>
+              <CaptureControls
+                captureAreaSet={captureAreaSet}
+                onCapture={onCapture}
+                onChangeArea={onChangeCaptureArea}
+              />
             </div>
             <ShotStrip shots={shots} onDelete={onDeleteShot} />
           </div>

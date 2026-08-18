@@ -1414,11 +1414,13 @@ export default function Recorder({
         {recording && canCaptureScreenshots() && !hub.isOpen("notes") && (
           <HubIconButton
             label={t("screenshotCaptureButton")}
-            title={captureAreaSet ? undefined : t("screenshotCaptureNeedsArea")}
+            title={t("screenshotCaptureButtonHint")}
             onClick={requestCapture}
             // Same gate as the popover's capture button: with no area chosen this would open the picker and
-            // then sit inert until it settled. The area is set from the notes popover (or the tray).
-            disabled={!captureAreaSet}
+            // then sit inert until it settled. The area is set from the notes popover (or the tray) - which
+            // the button has to be able to say, so it goes inert-but-hoverable rather than `disabled`
+            // (a disabled button never renders its tooltip, leaving an icon-only control unexplained).
+            disabledReason={captureAreaSet ? undefined : t("screenshotCaptureNeedsArea")}
           >
             <IconCamera />
           </HubIconButton>

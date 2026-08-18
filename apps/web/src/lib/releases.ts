@@ -65,6 +65,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.226.2",
+    date: "2026-08-18",
+    pr: 543,
+    headline: "The capture buttons say why they are unavailable",
+    summary:
+      "The screenshot controls while recording - **Capture screenshot** and **Change capture area** - are now icons rather than text buttons, with their full description on hover. They sit in a narrow panel and a third control is coming, which the text labels would not fit.\n\n" +
+      "The reason for doing it now is a bug the icons would have made worse. Until you choose a capture area there is nothing to capture, so the capture button waits - and it was greyed out with an explanation attached that **could never appear**: a disabled button receives no mouse events, so its tooltip never renders. With a text label you could at least read the button. As an icon you would have had a greyed square and no way to find out why.\n\n" +
+      "So a control that is unavailable for a reason you can act on now stays hoverable and says so - \"Set a capture area first\". That covers the same button in the recording bar, which had the identical problem.\n\n" +
+      "The notes pop-out window carried its own copy of these buttons, and the two had already drifted apart on when capture is available. They are now one component, so they cannot drift again.",
+    changed: [
+      "The capture controls are icon buttons with hover descriptions, in both the notes panel and the pop-out notes window.",
+    ],
+    fixed: [
+      "A capture button that is waiting for a capture area now explains itself on hover. The explanation existed but could never be shown, because a disabled button renders no tooltip.",
+    ],
+  },
+  {
     version: "0.226.1",
     date: "2026-08-18",
     pr: 542,
