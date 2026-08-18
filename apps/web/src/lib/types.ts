@@ -1342,6 +1342,13 @@ export interface LlmUsageCallRow {
   success: boolean;
   statusCode: number | null;
   errorKind: string | null;
+  /// The server's finish_reason - "stop", "length", "tool_calls", "content_filter" - or null when it
+  /// reported none. Null is NOT the same as "stop": plenty of compatible servers omit the field.
+  finishReason: string | null;
+  /// The reply was cut off by a token cap. Derived server-side from finishReason so there is one
+  /// definition of it. A truncated call is still a SUCCESS - a 200 with tokens billed - so it is a
+  /// separate signal from the error state, not a kind of failure.
+  truncated: boolean;
   /// This call's own generation rate, completionTokens over durationMs. Null when the server reported no
   /// completion tokens or the duration was zero - never 0 (which would read as "generated nothing") and
   /// never Infinity. A measured zero IS 0, not null.
@@ -1368,6 +1375,9 @@ export interface LlmUsageOperationRow {
   reasoningTokens: number | null;
   totalTokens: number | null;
   success: boolean;
+  /// True when ANY call in this operation stopped on "length". Rolled up because one truncated call is
+  /// the whole reason to look, and operations is the default view.
+  truncated: boolean;
   /// Time the model actually spent on this operation: the SUM of its calls' durations. Deliberately NOT
   /// the wall-clock span between startedAt and completedAt, which for a multi-call operation includes the
   /// gaps between calls (tool execution in a chat turn). It is the denominator of tokensPerSecond, shown

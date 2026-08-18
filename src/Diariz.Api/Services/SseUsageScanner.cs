@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 
 namespace Diariz.Api.Services;
 
@@ -24,6 +25,11 @@ public sealed class SseUsageScanner
 
     /// <summary>Token counts from the most recent usage chunk seen, or null if none has appeared.</summary>
     public LlmUsage? Usage { get; private set; }
+
+    /// <summary>The most recent non-null <c>finish_reason</c> seen, or null if none has appeared.
+    /// <c>length</c> is the one that matters: it means a token cap cut the reply off, which otherwise
+    /// looks identical to a model that simply answered nothing.</summary>
+    public string? FinishReason { get; private set; }
 
     /// <summary>Bytes currently held in the partial-line buffer. Exposed only so the bound and the
     /// per-line reset are testable through a public seam - this repo tests through public API rather than
@@ -71,10 +77,50 @@ public sealed class SseUsageScanner
         if (!text.StartsWith("data:", StringComparison.Ordinal)) return;
 
         var data = text["data:".Length..].Trim();
+        if (data.Length == 0 || data[0] != '{') return;
+
         // Cheap pre-filter: the overwhelming majority of lines are content deltas, and parsing every one
         // of them as JSON would put a real cost on every token of every chat.
-        if (data.Length == 0 || data[0] != '{' || !data.Contains("\"usage\"", StringComparison.Ordinal)) return;
+        var hasUsage = data.Contains("\"usage\"", StringComparison.Ordinal);
+        var hasReason = HasStringFinishReason(data);
+        if (!hasUsage && !hasReason) return;
 
-        if (LlmUsageParser.TryParse(data, out var usage)) Usage = usage;
+        if (hasUsage && LlmUsageParser.TryParse(data, out var usage)) Usage = usage;
+
+        if (!hasReason) return;
+        try
+        {
+            using var doc = JsonDocument.Parse(data);
+            if (LlmFinishReasonParser.FromRoot(doc.RootElement) is { } reason) FinishReason = reason;
+        }
+        catch (JsonException)
+        {
+            // Same rule as everywhere else on this path: an unparseable chunk costs a measurement, not a call.
+        }
+    }
+
+    /// <summary>True only when the chunk carries a finish_reason with a STRING value.
+    ///
+    /// Matching the bare key would defeat the pre-filter completely: virtually every delta chunk carries
+    /// <c>"finish_reason":null</c>, so a key-name test would JSON-parse every token of every chat. This
+    /// walks past the colon and any whitespace and requires an opening quote, which also tolerates the
+    /// spaced-out formatting some servers emit.</summary>
+    internal static bool HasStringFinishReason(string data)
+    {
+        const string key = "\"finish_reason\"";
+        var i = data.IndexOf(key, StringComparison.Ordinal);
+        while (i >= 0)
+        {
+            var j = i + key.Length;
+            while (j < data.Length && char.IsWhiteSpace(data[j])) j++;
+            if (j < data.Length && data[j] == ':')
+            {
+                j++;
+                while (j < data.Length && char.IsWhiteSpace(data[j])) j++;
+                if (j < data.Length && data[j] == '"') return true;
+            }
+            i = data.IndexOf(key, i + key.Length, StringComparison.Ordinal);
+        }
+        return false;
     }
 }

@@ -57,6 +57,7 @@ function row(overrides: Partial<LlmUsageOperationRow> = {}): LlmUsageOperationRo
     reasoningTokens: null,
     totalTokens: 150,
     success: true,
+    truncated: false,
     durationMs: 4000,
     tokensPerSecond: 12.5,
     ...overrides,
@@ -86,6 +87,8 @@ function callRow(overrides: Partial<LlmUsageCallRow> = {}): LlmUsageCallRow {
     success: true,
     statusCode: 200,
     errorKind: null,
+    finishReason: "stop",
+    truncated: false,
     tokensPerSecond: 12.5,
     ...overrides,
   };
@@ -351,6 +354,44 @@ describe("LlmUsage", () => {
     expect(await screen.findByText(/filter options couldn't be loaded/i)).toBeTruthy();
     // The table itself is unaffected - getLlmUsage still runs and renders normally.
     await waitFor(() => expect(api.getLlmUsage).toHaveBeenCalled());
+  });
+
+  describe("truncation", () => {
+    /// A reply cut off by a token cap is a 200 with empty content and no error, so on this screen it looks
+    /// exactly like a model that answered nothing. Measured on gpt-oss-20b: max_tokens 8000 at high
+    /// reasoning effort spends the whole budget thinking and returns nothing. The row has to say so.
+    it("marks a truncated operation", async () => {
+      vi.mocked(api.getLlmUsage).mockResolvedValue(
+        usagePage([row({ truncated: true })], totals()),
+      );
+      renderPage();
+
+      expect(await screen.findByText(/cut off/i)).toBeTruthy();
+    });
+
+    it("says nothing about truncation on an ordinary row", async () => {
+      vi.mocked(api.getLlmUsage).mockResolvedValue(usagePage([row()], totals()));
+      renderPage();
+
+      await screen.findByText("Weekly Standup");
+      expect(screen.queryByText(/cut off/i)).toBeNull();
+    });
+
+    /// Truncation is not failure: the call succeeded and the tokens were billed. Showing it as a failure
+    /// would overstate the error rate and bury it under the outcome filter.
+    it("keeps a truncated row's outcome as a success", async () => {
+      vi.mocked(api.getLlmUsage).mockResolvedValue(
+        usagePage([row({ truncated: true })], totals()),
+      );
+      renderPage();
+
+      const badge = await screen.findByText(/cut off/i);
+      // Scoped to the badge's own cell: "Failed" is also an <option> in the outcome filter, so a
+      // document-wide query would match the dropdown rather than this row.
+      const cell = badge.closest("td")!;
+      expect(cell.textContent).toContain("OK");
+      expect(cell.textContent).not.toContain("Failed");
+    });
   });
 
   describe("mode switching", () => {

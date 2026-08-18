@@ -570,6 +570,14 @@ the platform-wide rate in the totals row, so a single slow operation is visible 
 an operation's rate is measured against the time the model actually spent, not the wall-clock span, which
 for a multi-call turn includes the gaps between calls. Rows matching the current filter can be deleted, with a confirmation stating
 the exact count before anything is removed.
+- **Truncated replies are visible.** Every call records the model's `finish_reason`, and the usage log
+shows a **Cut off** badge on any row where a token cap ended the reply. This matters because such a call
+does not fail: it returns success, every token is billed, and the answer comes back short or completely
+empty - so without the badge it is indistinguishable from a model that had nothing to say. It is easiest to
+hit on a reasoning model, where the reasoning is spent before the answer and a seemingly generous cap can be
+consumed before a single word of the reply is written. The outcome stays **OK** beside the badge, because
+the call genuinely succeeded; truncation is a separate signal, not a kind of failure. An operation is
+flagged when any of its calls was cut off, so the default view shows it without drilling in.
 - **AI models** (Platform Administrator, `/admin/llm-models`, reachable from Settings -> AI): every model the
 platform calls is configured here, and nowhere else. A model carries its **name** (sent verbatim as the
 `model` in each request), **endpoint**, an optional **API key** (encrypted at rest, write-only - it is never

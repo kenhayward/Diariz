@@ -906,6 +906,99 @@ public class LlmUsageViewerIntegrationTests(ContainersFixture fx)
         Assert.Null(Assert.Single(operations.Rows).TokensPerSecond);
     }
 
+
+    // ---- finish_reason / truncation (0.222.0) ----
+
+    /// A reply cut off by a token cap is a 200 with empty content and no error, so in the log it looks
+    /// exactly like a model that answered nothing. Measured on gpt-oss-20b: max_tokens 8000 at high
+    /// reasoning effort spends the entire budget thinking and returns finish_reason "length" with no
+    /// answer. The Calls view has to say so.
+    [Fact]
+    public async Task CallsMode_ReportsTheFinishReason()
+    {
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        db.LlmCalls.AddRange(
+            Row(marker, sequence: 1, finishReason: "stop"),
+            Row(marker, sequence: 2, finishReason: "length"),
+            Row(marker, sequence: 3));
+        await db.SaveChangesAsync();
+
+        var page = OkValue<LlmUsagePage<LlmUsageCallRow>>(
+            await Build(db).List(mode: "calls", models: [marker.ToString()]));
+
+        var rows = page.Rows.OrderBy(r => r.Sequence).ToList();
+        Assert.Equal("stop", rows[0].FinishReason);
+        Assert.Equal("length", rows[1].FinishReason);
+        Assert.Null(rows[2].FinishReason);          // a server reporting none is not the same as "stop"
+        Assert.False(rows[0].Truncated);
+        Assert.True(rows[1].Truncated);
+        Assert.False(rows[2].Truncated);
+    }
+
+    /// An operation is many calls, and a single truncated one is the whole point of looking. Rolling it up
+    /// as "any call was cut off" is what makes the default view able to show the problem at all.
+    [Fact]
+    public async Task OperationsMode_FlagsAnOperation_WhenAnyOfItsCallsWasTruncated()
+    {
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        var truncated = Guid.NewGuid();
+        var clean = Guid.NewGuid();
+        db.LlmCalls.AddRange(
+            Row(marker, operationId: truncated, sequence: 1, finishReason: "stop"),
+            Row(marker, operationId: truncated, sequence: 2, finishReason: "length"),
+            Row(marker, operationId: clean, sequence: 1, finishReason: "stop"),
+            Row(marker, operationId: clean, sequence: 2, finishReason: "stop"));
+        await db.SaveChangesAsync();
+
+        var page = OkValue<LlmUsagePage<LlmUsageOperationRow>>(
+            await Build(db).List(mode: "operations", models: [marker.ToString()]));
+
+        Assert.True(page.Rows.Single(r => r.OperationId == truncated).Truncated);
+        Assert.False(page.Rows.Single(r => r.OperationId == clean).Truncated);
+    }
+
+    /// Truncation is not failure. These calls succeeded - a 200, tokens billed - so flagging them as
+    /// failures would both overstate the error rate and hide them behind an outcome filter.
+    [Fact]
+    public async Task ATruncatedCall_IsStillASuccess()
+    {
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        db.LlmCalls.Add(Row(marker, finishReason: "length"));
+        await db.SaveChangesAsync();
+
+        var row = Assert.Single(OkValue<LlmUsagePage<LlmUsageCallRow>>(
+            await Build(db).List(mode: "calls", models: [marker.ToString()])).Rows);
+
+        Assert.True(row.Success);
+        Assert.True(row.Truncated);
+        Assert.Null(row.ErrorKind);
+    }
+
+    /// Only "length" means a token cap bit. tool_calls and content_filter are ordinary outcomes and must
+    /// not be dressed up as truncation.
+    [Fact]
+    public async Task OnlyLengthCountsAsTruncated()
+    {
+        await using var db = fx.CreateDbContext();
+        var marker = Guid.NewGuid();
+        db.LlmCalls.AddRange(
+            Row(marker, sequence: 1, finishReason: "tool_calls"),
+            Row(marker, sequence: 2, finishReason: "content_filter"),
+            Row(marker, sequence: 3, finishReason: "LENGTH"));   // case is the server's business, not ours
+        await db.SaveChangesAsync();
+
+        var rows = OkValue<LlmUsagePage<LlmUsageCallRow>>(
+            await Build(db).List(mode: "calls", models: [marker.ToString()]))
+            .Rows.OrderBy(r => r.Sequence).ToList();
+
+        Assert.False(rows[0].Truncated);
+        Assert.False(rows[1].Truncated);
+        Assert.True(rows[2].Truncated);   // matched case-insensitively
+    }
+
     private static LlmCall Row(
         Guid marker,
         int durationMs = 1000,
@@ -917,7 +1010,8 @@ public class LlmUsageViewerIntegrationTests(ContainersFixture fx)
         bool success = true,
         string? model = null,
         Guid? recordingId = null,
-        Guid? sectionId = null) => new()
+        Guid? sectionId = null,
+        string? finishReason = null) => new()
     {
         Id = Guid.NewGuid(),
         OperationId = operationId ?? marker,
@@ -934,6 +1028,7 @@ public class LlmUsageViewerIntegrationTests(ContainersFixture fx)
         Success = success,
         RecordingId = recordingId,
         SectionId = sectionId,
+        FinishReason = finishReason,
     };
 
     // ---- LlmUsageController.List: recordingId/sectionId filters (Task 5) ----

@@ -488,6 +488,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<string>("ErrorKind")
                         .HasColumnType("text");
 
+                    b.Property<string>("FinishReason")
+                        .HasColumnType("text");
+
                     b.Property<int>("Kind")
                         .HasColumnType("integer");
 

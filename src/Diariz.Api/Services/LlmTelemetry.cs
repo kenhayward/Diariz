@@ -56,6 +56,59 @@ public static class LlmUsageParser
             : null;
 }
 
+/// <summary>Reads <c>choices[0].finish_reason</c> out of an OpenAI-compatible response.
+///
+/// Worth its own parse because a reply cut off by a token cap is INVISIBLE otherwise: the call is a 200,
+/// no exception is raised, and the content is simply empty because reasoning consumed the whole budget.
+/// Without this an administrator sees a model that answered nothing, with no way to tell that from a model
+/// that failed. Measured on gpt-oss-20b: <c>max_tokens</c> 8000 at high reasoning effort returns
+/// <c>finish_reason: length</c> with empty content.</summary>
+public static class LlmFinishReasonParser
+{
+    /// <summary>The value that means "cut off by a token limit" - the one worth acting on.</summary>
+    public const string Length = "length";
+
+    /// <summary>Best-effort, like the usage parse: a telemetry read must never turn "could not measure"
+    /// into "the call failed".</summary>
+    public static string? Parse(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            return FromRoot(doc.RootElement);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Reads the first choice's reason, or null when the element is not a chat completion or the
+    /// reason is absent/null. Shared with the streaming scanner, which has already parsed the chunk.</summary>
+    public static string? FromRoot(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object) return null;
+        if (!root.TryGetProperty("choices", out var choices) || choices.ValueKind != JsonValueKind.Array) return null;
+
+        // The last choice carrying a non-null reason wins. n>1 is vanishingly rare here (nothing in Diariz
+        // asks for it), and the usage chunk of a stream carries an EMPTY choices array, so iterating rather
+        // than indexing [0] avoids reading a reason that is not there.
+        string? found = null;
+        foreach (var choice in choices.EnumerateArray())
+        {
+            if (choice.ValueKind != JsonValueKind.Object) continue;
+            if (!choice.TryGetProperty("finish_reason", out var reason)) continue;
+            if (reason.ValueKind != JsonValueKind.String) continue;   // null is "not finished yet"
+            var text = reason.GetString();
+            if (!string.IsNullOrWhiteSpace(text)) found = text;
+        }
+
+        return found;
+    }
+}
+
 /// <summary>Folds a bucketed token count into a span's description.
 ///
 /// WHY THE DESCRIPTION, of all places: GlitchTip persists no span-level data. Its parquet schema is
@@ -197,20 +250,28 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
             return response;
         }
 
-        // `usage` only exists on a buffered JSON body. Streaming responses (SSE) are handled above and
-        // never reach here.
+        // `usage` and `finish_reason` only exist on a buffered JSON body. Streaming responses (SSE) are
+        // handled above and never reach here. Read ONCE and parse both from the same string - reading twice
+        // would be a second pass over the whole body for no reason.
         var usage = default(LlmUsage);
-        if (IsJson(response) && LlmUsageParser.TryParse(await ReadForUsageAsync(response, ct), out var parsed))
+        string? finishReason = null;
+        if (IsJson(response))
         {
-            usage = parsed;
-            span.SetUsage(parsed);
+            var body = await ReadForUsageAsync(response, ct);
+            if (LlmUsageParser.TryParse(body, out var parsed))
+            {
+                usage = parsed;
+                span.SetUsage(parsed);
+            }
+            finishReason = LlmFinishReasonParser.Parse(body);
         }
 
         clock.Stop();
         var status = (int)response.StatusCode;
         Record(
             scope, target, model, startedAt, clock, promptChars, status, usage,
-            response.IsSuccessStatusCode ? null : $"Http{status}", streamed, timeToFirstTokenMs: null);
+            response.IsSuccessStatusCode ? null : $"Http{status}", streamed, timeToFirstTokenMs: null,
+            finishReason: finishReason);
 
         return response;
     }
@@ -264,7 +325,8 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
                 var finalErrorKind = fault is not null ? ErrorKindOf(fault) : errorKind;
                 Record(
                     scope, target, model, startedAt, clock, promptChars, status, scanner.Usage ?? default,
-                    finalErrorKind, streamed: true, timeToFirstTokenMs: (int?)timeToFirstToken?.TotalMilliseconds);
+                    finalErrorKind, streamed: true, timeToFirstTokenMs: (int?)timeToFirstToken?.TotalMilliseconds,
+                    finishReason: scanner.FinishReason);
             });
 
         var content = new StreamContent(observed);
@@ -336,7 +398,7 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
     private void Record(
         LlmCallScope? scope, string target, string model, DateTimeOffset startedAt,
         System.Diagnostics.Stopwatch clock, int? promptChars, int? statusCode, LlmUsage usage,
-        string? errorKind, bool streamed, int? timeToFirstTokenMs)
+        string? errorKind, bool streamed, int? timeToFirstTokenMs, string? finishReason = null)
     {
         var call = new LlmCall
         {
@@ -365,6 +427,7 @@ public sealed class LlmTelemetryHandler : DelegatingHandler
             Success = errorKind is null,
             StatusCode = statusCode,
             ErrorKind = errorKind,
+            FinishReason = finishReason,
         };
 
         try

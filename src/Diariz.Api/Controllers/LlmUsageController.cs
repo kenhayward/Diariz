@@ -157,7 +157,7 @@ public class LlmUsageController : ControllerBase
                     c.RecordingId, c.RecordingTitle, c.SectionId, c.SectionName, c.Model,
                     c.StartedAt, c.CompletedAt, c.DurationMs,
                     c.PromptTokens, c.CompletionTokens, c.ReasoningTokens, c.TotalTokens,
-                    c.Success, c.StatusCode, c.ErrorKind, null))
+                    c.Success, c.StatusCode, c.ErrorKind, c.FinishReason, null))
                 .ToListAsync(ct))
                 .Select(r => r with { TokensPerSecond = TokensPerSecondOf(r.CompletionTokens, r.DurationMs) })
                 .ToList();
@@ -239,6 +239,10 @@ public class LlmUsageController : ControllerBase
                 TotalTokensSum = g.Sum(c => (long?)c.TotalTokens),
                 TotalTokensMeasured = g.Count(c => c.TotalTokens != null),
                 Success = g.All(c => c.Success),
+                // Any call cut off by a token cap taints the whole operation - that is the thing worth
+                // seeing, and the operations view is the default. ToLower() rather than a case-insensitive
+                // string comparison because only the former translates to SQL.
+                Truncated = g.Any(c => c.FinishReason != null && c.FinishReason.ToLower() == "length"),
             })
             .ToListAsync(ct);
 
@@ -323,6 +327,7 @@ public class LlmUsageController : ControllerBase
                 ReasoningTokens = x.ReasoningTokensMeasured > 0 ? x.ReasoningTokensSum : null,
                 TotalTokens = x.TotalTokensMeasured > 0 ? x.TotalTokensSum : null,
                 x.Success,
+                x.Truncated,
             })
             .ToList();
 
@@ -362,7 +367,7 @@ public class LlmUsageController : ControllerBase
             .Select(x => new LlmUsageOperationRow(
                 x.OperationId, x.Kind, x.UserId, x.UserEmail, x.RecordingId, x.RecordingTitle, x.SectionId, x.SectionName, x.Model,
                 x.Turns, x.StartedAt, x.CompletedAt, x.PromptTokens, x.CompletionTokens, x.ReasoningTokens, x.TotalTokens, x.Success,
-                x.DurationMs, TokensPerSecondOf(x.CompletionTokens, x.DurationMs)))
+                x.Truncated, x.DurationMs, TokensPerSecondOf(x.CompletionTokens, x.DurationMs)))
             .ToList();
         return Ok(new LlmUsagePage<LlmUsageOperationRow>(operationRows, page, pageSize, operationsTotal, totals));
     }

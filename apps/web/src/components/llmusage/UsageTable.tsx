@@ -212,7 +212,7 @@ function OperationRow({ row, basePath }: { row: UsageRow; basePath: string }) {
       <TokenCell value={row.reasoningTokens} />
       <TokenCell value={row.totalTokens} />
       <RateCell value={row.tokensPerSecond} />
-      <OutcomeCell success={row.success} />
+      <OutcomeCell success={row.success} truncated={row.truncated} />
     </tr>
   );
 }
@@ -277,7 +277,13 @@ function RecordingCell({ row, basePath }: { row: UsageRow; basePath: string }) {
   );
 }
 
-function OutcomeCell({ success }: { success: boolean }) {
+/// Outcome, plus truncation when it applies.
+///
+/// Truncation is a SEPARATE badge rather than a third outcome value, because a cut-off call genuinely
+/// succeeded - a 200, with every one of those tokens billed. Folding it into the failure state would
+/// overstate the error rate and hide these rows behind an outcome filter, which is the opposite of what
+/// someone hunting a blank answer needs.
+function OutcomeCell({ success, truncated }: { success: boolean; truncated: boolean }) {
   const { t } = useTranslation("account");
   return (
     <td className="px-2 py-1">
@@ -290,6 +296,14 @@ function OutcomeCell({ success }: { success: boolean }) {
       >
         {success ? t("llmUsageOutcomeSuccess") : t("llmUsageOutcomeFailure")}
       </span>
+      {truncated && (
+        <span
+          title={t("llmUsageTruncatedHint")}
+          className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+        >
+          {t("llmUsageTruncated")}
+        </span>
+      )}
     </td>
   );
 }

@@ -578,5 +578,7 @@
   "llmParamReasoningEnabled": "Reasoning-Aufwand senden",
   "llmParamTimeoutSeconds": "Zeitlimit (Sekunden)",
   "llmParamToolsSupported": "Unterstuetzt Tool-Aufrufe",
-  "llmParamImagesSupported": "Unterstuetzt Bildeingabe"
+  "llmParamImagesSupported": "Unterstuetzt Bildeingabe",
+  "llmUsageTruncated": "Abgeschnitten",
+  "llmUsageTruncatedHint": "Das Modell hat sein Token-Limit erreicht, bevor es fertig war. Die Antwort kann kurz oder ganz leer sein, obwohl der Aufruf erfolgreich war und die Tokens berechnet wurden."
 }

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../../lib/api";
+import HelpButton from "../HelpButton";
 import type { LlmModel } from "../../lib/types";
 import ParameterPanel, { type ParameterLayer } from "./ParameterPanel";
 import { GROUPS } from "./parameterSchema";
@@ -88,8 +89,9 @@ export default function ModelEditorModal({ model, allModels, onClose, onSaved }:
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
       <div className="w-full max-w-3xl rounded bg-white p-4 shadow-lg dark:bg-gray-900">
-        <h2 className="mb-3 text-base font-medium text-gray-800 dark:text-gray-100">
+        <h2 className="mb-3 flex items-center gap-1 text-base font-medium text-gray-800 dark:text-gray-100">
           {model ? t("llmModelsEditTitle", { name: model.name }) : t("llmModelsAddTitle")}
+          <HelpButton topic="ai-model-parameters" />
         </h2>
 
         <div className="grid gap-3 sm:grid-cols-2">

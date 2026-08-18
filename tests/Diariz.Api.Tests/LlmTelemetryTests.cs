@@ -356,6 +356,85 @@ public class LlmTelemetryHandlerUsageTests
         Content = new StringContent(body, Encoding.UTF8, "application/json"),
     };
 
+    // ---- finish_reason (0.222.0) ----
+
+    /// The case this exists for. A reply cut off by max_tokens is a 200 with EMPTY content and no error,
+    /// so without finish_reason the usage log shows a call that apparently returned nothing. Measured on
+    /// gpt-oss-20b: max_tokens 8000 at high reasoning effort spends the whole budget thinking and returns
+    /// finish_reason "length" with no answer at all.
+    [Fact]
+    public async Task RecordsALengthFinishReason_WhenATokenCapCutTheReplyOff()
+    {
+        var sink = new FakeLlmUsageSink();
+        var http = Client(
+            new LlmTelemetryHandler(new FakeLlmTrace(), sink),
+            Json("""{"choices":[{"message":{"content":""},"finish_reason":"length"}],"usage":{"prompt_tokens":10,"completion_tokens":8000}}"""));
+
+        await http.PostAsync("/v1/chat/completions", new StringContent("{}"));
+
+        Assert.Equal("length", Assert.Single(sink.Calls).FinishReason);
+    }
+
+    [Fact]
+    public async Task RecordsAStopFinishReason_ForAnOrdinaryReply()
+    {
+        var sink = new FakeLlmUsageSink();
+        var http = Client(
+            new LlmTelemetryHandler(new FakeLlmTrace(), sink),
+            Json("""{"choices":[{"message":{"content":"hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":2}}"""));
+
+        await http.PostAsync("/v1/chat/completions", new StringContent("{}"));
+
+        Assert.Equal("stop", Assert.Single(sink.Calls).FinishReason);
+    }
+
+    /// Absent must stay null, not become a string. Plenty of compatible servers report no finish_reason,
+    /// and "the server said nothing" is different from "the server said stop".
+    [Fact]
+    public async Task LeavesTheFinishReasonNull_WhenTheServerReportsNone()
+    {
+        var sink = new FakeLlmUsageSink();
+        var http = Client(
+            new LlmTelemetryHandler(new FakeLlmTrace(), sink),
+            Json("""{"choices":[{"message":{"content":"hi"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}"""));
+
+        await http.PostAsync("/v1/chat/completions", new StringContent("{}"));
+
+        Assert.Null(Assert.Single(sink.Calls).FinishReason);
+    }
+
+    /// A null finish_reason is the "still going" state and must not be recorded as one.
+    [Fact]
+    public async Task LeavesTheFinishReasonNull_WhenItIsExplicitlyJsonNull()
+    {
+        var sink = new FakeLlmUsageSink();
+        var http = Client(
+            new LlmTelemetryHandler(new FakeLlmTrace(), sink),
+            Json("""{"choices":[{"message":{"content":"hi"},"finish_reason":null}],"usage":{"prompt_tokens":1,"completion_tokens":1}}"""));
+
+        await http.PostAsync("/v1/chat/completions", new StringContent("{}"));
+
+        Assert.Null(Assert.Single(sink.Calls).FinishReason);
+    }
+
+    /// The usage block still has to survive being parsed alongside the finish reason - the body is read
+    /// once and both come out of the same string.
+    [Fact]
+    public async Task StillRecordsTokenCounts_AlongsideTheFinishReason()
+    {
+        var sink = new FakeLlmUsageSink();
+        var http = Client(
+            new LlmTelemetryHandler(new FakeLlmTrace(), sink),
+            Json("""{"choices":[{"finish_reason":"length"}],"usage":{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30}}"""));
+
+        await http.PostAsync("/v1/chat/completions", new StringContent("{}"));
+
+        var call = Assert.Single(sink.Calls);
+        Assert.Equal("length", call.FinishReason);
+        Assert.Equal(20, call.CompletionTokens);
+        Assert.Equal(30, call.TotalTokens);
+    }
+
     [Fact]
     public async Task RecordsTheCall_WithTheAmbientScopesAttribution()
     {

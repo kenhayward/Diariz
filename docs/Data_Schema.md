@@ -107,6 +107,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddLlmCalls` | `LlmCalls` (one row per outbound model call - kind, attribution, model/endpoint, timing, token counts, prompt size, success/error, streamed; `UserId`/`RecordingId`/`SectionId` FKs **`ON DELETE SET NULL`**, each paired with a denormalized snapshot column so a row stays readable after its subject is deleted; five indexes) - the LLM usage log's storage. Never stores prompt or completion content. New table, additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddLlmUsageSettings` | `PlatformSettings.LlmUsageLoggingEnabled` (bool, default **true**) + `LlmUsageRetentionDays` (int, default 90; 0 = keep forever) + `LlmStreamUsageEnabled` (bool, default true) - the three admin controls for the usage log, edited on Model Settings. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `PlatformLlmModels` | `LlmModels`, `LlmModelParameters` (`jsonb`), `LlmCallAssignments` + `PlatformSettings.DefaultLlmModelId` - platform-wide model configuration. Purely additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddLlmCallFinishReason` | `LlmCalls.FinishReason` (text, nullable) - the model's reason for stopping, so a reply cut off by a token cap is distinguishable from one that had nothing to say. Additive and nullable, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `DropPerUserLlmSettings` | **Drops** `UserSettings.SummaryApiBase`, `SummaryApiKeyEncrypted`, `SummaryModel`, `ChatContextWindow`, `LlmTimeoutSeconds`, `ReasoningEnabled`, `ReasoningEffort` - LLM configuration moved to the platform. Destructive, but **deliberately no `CurrentFormat` bump**: restore does `pg_restore --clean` then migrates forward, so an older backup restores its own columns and this migration drops them - the restore succeeds and the platform is left correct, and the only loss is per-user values this release discards by design |
 
 ### Entity-relationship overview
@@ -1045,6 +1046,17 @@ are not enumerated here - a registered `Application` is a dynamically-registered
 type, redirect URIs, permitted scopes/grant types, PKCE requirement); an `Authorization` + its `Tokens`
 represent a user's granted, revocable connection. Revoking a connection deletes the authorization and its
 tokens. See `Overall_Synopsis_of_Platform.md` for the auth flow.
+
+#### `LlmCalls.FinishReason`
+
+| Column | Type | Notes |
+|---|---|---|
+| `FinishReason` | text null | the response's `finish_reason` - `stop`, `length`, `tool_calls`, `content_filter` - or null when the server reported none (or the call never got a response). Stored as the raw string rather than a boolean: it costs the same and the other values are worth having. Read from `choices[].finish_reason` on a buffered body, and from the SSE chunks by `SseUsageScanner` on a streamed one |
+
+`length` is the one that matters. A reply cut off by a token cap is otherwise **invisible**: a 200, no
+error, and empty content because reasoning consumed the whole budget before an answer was written. The API
+derives `Truncated` from it (case-insensitively) rather than storing a second column, so the two can never
+disagree, and rolls it up per operation as "any call was cut off".
 
 #### `LlmModels`
 
