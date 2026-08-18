@@ -97,6 +97,7 @@ import type {
   LlmModel,
   LlmModelUpsert,
   LlmAssignments,
+  LlmTestOutcome,
 } from "./types";
 
 const TOKEN_KEY = "diariz.token";
@@ -1682,6 +1683,16 @@ export const api = {
   /// lifetime of the server process - they come from configuration, not the database.
   async getLlmModelDefaults(): Promise<Record<string, string>> {
     const { data } = await http.get<Record<string, string>>("/api/admin/llm-models/defaults");
+    return data;
+  },
+
+  /// Run one sample call against a model with the parameters currently on screen, saved or not. The
+  /// endpoint, key and model name come from the stored row - this never sends them.
+  async testModel(
+    id: string,
+    body: { group: string; parameters: Record<string, string> },
+  ): Promise<LlmTestOutcome> {
+    const { data } = await http.post<LlmTestOutcome>(`/api/admin/llm-models/${id}/test`, body);
     return data;
   },
 

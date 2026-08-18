@@ -974,3 +974,24 @@ public sealed class FakeLlmUsageSink : ILlmUsageSink
     public List<LlmCall> Calls { get; } = new();
     public void Record(LlmCall call) => Calls.Add(call);
 }
+
+/// <summary>Records the config a test call was made with, and returns a canned outcome.
+///
+/// The point of capturing the config is that the endpoint's job is RESOLUTION - which endpoint, which key,
+/// which parameters after the layer walk - and that is invisible in the outcome it returns.</summary>
+public sealed class FakeLlmTestProbe : ILlmTestProbe
+{
+    private readonly LlmTestOutcome _outcome;
+
+    public FakeLlmTestProbe(LlmTestOutcome? outcome = null) =>
+        _outcome = outcome ?? new LlmTestOutcome(
+            true, 200, 10, 100, 1, 2, null, 3, "stop", "ok", "{}", null, null, null);
+
+    public LlmRequestConfig? LastConfig { get; private set; }
+
+    public Task<LlmTestOutcome> RunAsync(LlmRequestConfig config, CancellationToken ct = default)
+    {
+        LastConfig = config;
+        return Task.FromResult(_outcome);
+    }
+}

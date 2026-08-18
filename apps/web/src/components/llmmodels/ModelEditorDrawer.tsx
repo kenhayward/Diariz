@@ -4,8 +4,9 @@ import { api, apiErrorMessage } from "../../lib/api";
 import HelpButton from "../HelpButton";
 import type { LlmModel } from "../../lib/types";
 import ParameterGrid from "./ParameterGrid";
+import TestRail, { type TestState } from "./TestRail";
 import { buildRequestPreview, resolveInherited } from "./requestPreview";
-import { GROUPS, type ParameterLayer } from "./parameterSchema";
+import { GROUPS, type ParameterLayer, type ParameterValue } from "./parameterSchema";
 
 interface Props {
   /// Null when adding a model rather than editing one.
@@ -71,6 +72,9 @@ export default function ModelEditorDrawer({
   const [showConnection, setShowConnection] = useState(model === null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  /// Per tab, because the results are not comparable across call types: each ran with different
+  /// parameters, so one shared slot would show a number belonging to a tab the admin has left.
+  const [tests, setTests] = useState<Record<string, TestState>>({});
 
   const appDefaults = useMemo(() => parseLayers(defaults, false), [defaults]);
   const initial = useMemo(() => JSON.stringify(toLayers(model)), [model]);
@@ -111,6 +115,31 @@ export default function ModelEditorDrawer({
   function copyFrom(sourceId: string) {
     const source = allModels.find((m) => m.id === sourceId);
     if (source) setLayers(toLayers(source));
+  }
+
+  /// Runs the test with what is on screen rather than what is stored - testing before saving is the whole
+  /// reason the endpoint takes parameters at all.
+  async function runTest() {
+    if (!model) return;
+    setTests((prev) => ({ ...prev, [tab]: { status: "running" } }));
+    setError(null);
+    try {
+      const result = await api.testModel(model.id, { group: tab, parameters: toWire(layers) });
+      setTests((prev) => ({ ...prev, [tab]: { status: "done", result } }));
+    } catch (e) {
+      setTests((prev) => ({ ...prev, [tab]: { status: "idle" } }));
+      setError(apiErrorMessage(e, t("llmModelsSaveError")));
+    }
+  }
+
+  /// Applies a one-click fix from a failed result to the OPEN tab, never to the model's Defaults: the
+  /// endpoint rejected the parameter for this call, and narrowing the change to this call is what makes
+  /// the fix safe to offer at all.
+  function applyFix({ key, value }: { key: string; value: ParameterValue }) {
+    const next = { ...(layers[tab] ?? {}) };
+    if (value === undefined) delete next[key];
+    else next[key] = value;
+    setLayers({ ...layers, [tab]: next });
   }
 
   function resetGroup() {
@@ -276,29 +305,13 @@ export default function ModelEditorDrawer({
             />
           </div>
 
-          <aside className="min-w-0 overflow-auto border-t border-gray-200 bg-slate-50 lg:border-l lg:border-t-0 dark:border-gray-800 dark:bg-gray-950/60">
-            <div className="flex items-baseline justify-between border-b border-gray-200 px-4 py-2.5 dark:border-gray-800">
-              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                {t("llmTestRequestSent")}
-              </h3>
-              <span className="text-[10.5px] text-gray-400 dark:text-gray-500">
-                {t("llmTestParamCount", { count: Object.keys(preview.body).length - 1 })}
-              </span>
-            </div>
-            <pre
-              data-testid="request-preview"
-              className="max-h-[320px] overflow-auto px-4 py-3 text-[11px] leading-relaxed text-gray-600 dark:text-gray-400"
-            >
-              {JSON.stringify(preview.body, null, 2)}
-            </pre>
-            <p className="border-t border-gray-200 px-4 py-2.5 text-[11px] text-gray-400 dark:border-gray-800 dark:text-gray-500">
-              {t("llmTestClientFlags", {
-                timeout: preview.flags.timeoutSeconds,
-                tools: preview.flags.toolsSupported ? t("llmParamOn") : t("llmParamOff"),
-                images: preview.flags.imagesSupported ? t("llmParamOn") : t("llmParamOff"),
-              })}
-            </p>
-          </aside>
+          <TestRail
+            group={group.label}
+            preview={preview}
+            test={tests[tab] ?? { status: "idle" }}
+            onRun={model ? runTest : null}
+            onFix={applyFix}
+          />
         </div>
 
         {error && (

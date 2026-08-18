@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -14,6 +14,7 @@ const { api } = vi.hoisted(() => ({
     getLlmModelDefaults: vi.fn().mockResolvedValue({}),
     setLlmAssignments: vi.fn(),
     createModelFromEnvironment: vi.fn(),
+    testModel: vi.fn(),
     deleteModel: vi.fn(),
   },
 }));
@@ -71,5 +72,32 @@ describe("LlmModels", () => {
     // carries the context length alongside it, hence the substring match.
     expect(await screen.findByText(/http:\/\/only\/v1/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /create from environment/i })).toBeNull();
+  });
+
+  it("tests every model one at a time rather than all at once", async () => {
+    // These are real calls to real endpoints, and several models commonly point at the SAME server -
+    // firing them together would measure that server's queue instead of the models.
+    api.listModels.mockResolvedValue([
+      { id: "a", name: "one", apiBase: "http://a/v1", hasApiKey: false, contextLength: 8192, parameters: {} },
+      { id: "b", name: "two", apiBase: "http://b/v1", hasApiKey: false, contextLength: 8192, parameters: {} },
+    ]);
+    let release: (v: unknown) => void = () => {};
+    api.testModel.mockImplementation(() => new Promise((r) => { release = r; }));
+
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /test all/i }));
+
+    await vi.waitFor(() => expect(api.testModel).toHaveBeenCalledTimes(1));
+    expect(api.testModel).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      release({
+        ok: true, httpStatus: 200, ttftMs: 1, durationMs: 2, promptTokens: null, completionTokens: null,
+        reasoningTokens: null, totalTokens: null, finishReason: null, response: "", requestBodyJson: "{}",
+        errorKind: null, message: null, offendingParameter: null,
+      });
+    });
+
+    await vi.waitFor(() => expect(api.testModel).toHaveBeenCalledTimes(2));
   });
 });

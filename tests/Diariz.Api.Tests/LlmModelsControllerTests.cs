@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
+using Diariz.Api.Services;
 using Diariz.Api.Services.Llm;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
@@ -19,10 +20,12 @@ namespace Diariz.Api.Tests;
 /// sibling controller.</summary>
 public class LlmModelsControllerTests
 {
-    private static LlmModelsController Build(DiarizDbContext db, LlmDefaultsOptions? defaults = null) =>
+    private static LlmModelsController Build(
+        DiarizDbContext db, LlmDefaultsOptions? defaults = null, ILlmTestProbe? probe = null) =>
         new(db, new FakeApiKeyProtector(),
             Options.Create(new SummarizationOptions { ApiBase = "http://env/v1", Model = "env-model" }),
-            Options.Create(defaults ?? new LlmDefaultsOptions()))
+            Options.Create(defaults ?? new LlmDefaultsOptions()),
+            probe ?? new FakeLlmTestProbe())
         { ControllerContext = Http.Context(Guid.NewGuid()) };
 
     private static LlmModel Seed(DiarizDbContext db, string name = "m", string? key = "enc:secret")
@@ -366,5 +369,187 @@ public class LlmModelsControllerTests
         foreach (var (_, json) in layers)
             foreach (var (key, _) in JsonNode.Parse(json)!.AsObject())
                 Assert.Contains(key, LlmParameterLayers.ParameterNames);
+    }
+
+    // ---- the administrator's test call ----
+
+    private static LlmModelTestRequest TestReq(
+        string group = "Summaries", Dictionary<string, string>? parameters = null) =>
+        new(group, parameters ?? []);
+
+    [Fact]
+    public async Task Test_call_uses_the_stored_endpoint_and_key_not_anything_the_caller_sent()
+    {
+        // The request body names a group and some parameters and NOTHING else. An endpoint that accepted a
+        // caller-supplied URL would let an administrator's session be used to reach arbitrary hosts without
+        // leaving a model row behind - and the row is the audit trail.
+        using var db = TestDb.Create();
+        var model = Seed(db, "m", key: "enc:the-secret");
+        var probe = new FakeLlmTestProbe();
+
+        await Build(db, probe: probe).Test(model.Id, TestReq());
+
+        Assert.Equal("http://llm/v1", probe.LastConfig!.ApiBase);
+        Assert.Equal("the-secret", probe.LastConfig.ApiKey);
+        Assert.Equal("m", probe.LastConfig.Model);
+    }
+
+    [Fact]
+    public async Task Test_call_resolves_the_unsaved_layers_the_admin_is_editing()
+    {
+        // The whole point of taking parameters in the body: an admin tests BEFORE saving, so what runs must
+        // be what is on screen rather than what is in the database.
+        using var db = TestDb.Create();
+        var model = Seed(db);
+        var probe = new FakeLlmTestProbe();
+        var request = TestReq("Summaries", new Dictionary<string, string>
+        {
+            ["ModelBase"] = "{\"temperature\":0.9,\"top_k\":40}",
+            ["Summaries"] = "{\"temperature\":0.2}",
+        });
+
+        await Build(db, probe: probe).Test(model.Id, request);
+
+        // Group over base...
+        Assert.Equal(0.2, probe.LastConfig!.Parameters.Temperature);
+        // ...and the base still supplies what the group is silent about.
+        Assert.Equal(40, probe.LastConfig.Parameters.TopK);
+    }
+
+    [Fact]
+    public async Task Test_call_falls_through_to_the_application_defaults()
+    {
+        using var db = TestDb.Create();
+        var model = Seed(db);
+        var probe = new FakeLlmTestProbe();
+        var defaults = new LlmDefaultsOptions
+        {
+            Temperature = 0.3,
+            Translation = new LlmParameterDefaults { Temperature = 0.1 },
+        };
+
+        await Build(db, defaults, probe).Test(model.Id, TestReq("Translation"));
+
+        // The group's application default beats the base one, exactly as LlmSettingsResolver walks them.
+        Assert.Equal(0.1, probe.LastConfig!.Parameters.Temperature);
+    }
+
+    [Fact]
+    public async Task Test_call_honours_an_omitted_parameter()
+    {
+        // null means "do not send this", and it has to survive the round trip through the request body -
+        // otherwise the one thing an admin reaches for to fix a 400 cannot be tried before saving.
+        using var db = TestDb.Create();
+        var model = Seed(db);
+        var probe = new FakeLlmTestProbe();
+        var request = TestReq("Summaries", new Dictionary<string, string>
+        {
+            ["ModelBase"] = "{\"top_k\":40}",
+            ["Summaries"] = "{\"top_k\":null}",
+        });
+
+        await Build(db, probe: probe).Test(model.Id, request);
+
+        Assert.Null(probe.LastConfig!.Parameters.TopK);
+    }
+
+    [Fact]
+    public async Task Test_call_returns_not_found_for_an_unknown_model()
+    {
+        using var db = TestDb.Create();
+
+        var result = await Build(db).Test(Guid.NewGuid(), TestReq());
+
+        Assert.IsType<NotFoundResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Test_call_rejects_a_group_that_is_not_a_call_group()
+    {
+        using var db = TestDb.Create();
+        var model = Seed(db);
+
+        var result = await Build(db).Test(model.Id, TestReq("Nonsense"));
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Test_call_rejects_a_parameter_the_platform_cannot_send()
+    {
+        // The same guard the upsert applies. A key the layer merge ignores would produce a test that
+        // silently proved nothing about the setting the admin thought they were testing.
+        using var db = TestDb.Create();
+        var model = Seed(db);
+        var request = TestReq("Summaries", new Dictionary<string, string>
+        {
+            ["Summaries"] = "{\"temprature\":0.2}",
+        });
+
+        var result = await Build(db).Test(model.Id, request);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Test_call_reports_what_the_probe_found()
+    {
+        using var db = TestDb.Create();
+        var model = Seed(db);
+        var outcome = new LlmTestOutcome(
+            false, 400, null, 80, null, null, null, null, null, null, "{}", "Http400", "bad top_k", "top_k");
+
+        var result = await Build(db, probe: new FakeLlmTestProbe(outcome)).Test(model.Id, TestReq());
+
+        var dto = Assert.IsType<LlmTestOutcome>(result.Value);
+        Assert.False(dto.Ok);
+        Assert.Equal("top_k", dto.OffendingParameter);
+    }
+
+    [Fact]
+    public async Task Test_call_is_attributed_to_the_administrator_who_ran_it()
+    {
+        // A call that cost tokens and left no trace in the usage log would be the one call an admin could
+        // not account for. The ambient scope is what LlmTelemetryHandler reads to write that row.
+        using var db = TestDb.Create();
+        var model = Seed(db);
+        var probe = new ScopeCapturingProbe();
+
+        await Build(db, probe: probe).Test(model.Id, TestReq());
+
+        Assert.Equal(LlmCallKind.AdminTest, probe.Kind);
+    }
+
+    [Fact]
+    public async Task Test_call_records_which_administrator_ran_it()
+    {
+        // LlmCalls pairs the user FK with a denormalised email so a row stays readable after the account
+        // goes. Leaving it blank puts every test call in one nameless bucket in the usage log's by-user
+        // grouping, which reads as a real user who cannot be identified.
+        using var db = TestDb.Create();
+        var model = Seed(db);
+        var userId = Guid.NewGuid();
+        Users.Ensure(db, userId);
+        var probe = new ScopeCapturingProbe();
+        var controller = Build(db, probe: probe);
+        controller.ControllerContext = Http.Context(userId);
+
+        await controller.Test(model.Id, TestReq());
+
+        Assert.Equal(db.Users.Single(u => u.Id == userId).Email, probe.UserEmail);
+    }
+
+    private sealed class ScopeCapturingProbe : ILlmTestProbe
+    {
+        public LlmCallKind? Kind { get; private set; }
+        public string? UserEmail { get; private set; }
+
+        public Task<LlmTestOutcome> RunAsync(LlmRequestConfig config, CancellationToken ct = default)
+        {
+            Kind = LlmCallScope.Active?.Kind;
+            UserEmail = LlmCallScope.Active?.UserEmail;
+            return Task.FromResult(new LlmTestOutcome(
+                true, 200, 1, 2, null, null, null, null, null, "", "{}", null, null, null));
+        }
     }
 }

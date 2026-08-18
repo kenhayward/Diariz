@@ -100,7 +100,12 @@ export default function ParameterRow({
 
       <div className="min-w-0">
         {mode === "omit" ? (
-          <span className="block rounded-[5px] border border-dashed border-red-300 bg-red-50 px-[7px] py-1 text-center text-[11px] text-red-600 dark:border-red-900 dark:bg-red-500/10 dark:text-red-400">
+          // Carries the row's test id like the input it replaces, so the row stays addressable in every
+          // state rather than disappearing from the DOM when it is omitted.
+          <span
+            data-testid={testId}
+            className="block rounded-[5px] border border-dashed border-red-300 bg-red-50 px-[7px] py-1 text-center text-[11px] text-red-600 dark:border-red-900 dark:bg-red-500/10 dark:text-red-400"
+          >
             {t("llmParamOmitted")}
           </span>
         ) : kind === "boolean" ? (

@@ -617,6 +617,22 @@ lives at the foot of that model's drawer.
   The application defaults themselves are readable by the editor (`GET /api/admin/llm-models/defaults`), which
 is what lets an inherited row name the value it inherits even on the Defaults tab, where the layer below is
 the application's baseline rather than the model's own.
+  **Run test** (`POST /api/admin/llm-models/{id}/test`) sends one fixed sample call with the parameters
+currently on screen - saved or not - and reports **time to the first token**, **total duration**, **tokens
+per second** (completion tokens over duration, as in the usage log), the token counts, and the model's actual
+reply. Each call type keeps its own result, since they ran with different parameters. First-token time is
+separated from duration deliberately: together they distinguish a model that was still LOADING from one that
+is simply slow, which need opposite fixes and otherwise look identical.
+  On a failure the card carries the endpoint's own words plus **the single change that would address them**:
+a timeout offers to raise the timeout, and an endpoint that rejects a parameter by name offers to **omit**
+that parameter - for the open call type only. That is what makes the omit state discoverable: it is the least
+obvious of the three, and the moment it is needed is exactly the moment an endpoint has just refused a
+parameter by name.
+  The grid's per-row **Test** and footer **Test all** answer the coarser question - is this endpoint, key and
+model name reachable at all - running one model at a time, because several models commonly share a server and
+testing them together would measure that server's queue. The request carries no endpoint, key or model name:
+those come from the stored row only, so the endpoint cannot be used to reach a host that has no model row.
+Test calls are logged like any other, as the **Model test** kind.
   The application defaults are overridable per deployment through `LlmDefaults__*` environment variables
 (e.g. `LlmDefaults__Temperature`, `LlmDefaults__Translation__Temperature`), and the shipped values reproduce
 the request bodies Diariz sent before this was configurable. A server with **no models configured** keeps

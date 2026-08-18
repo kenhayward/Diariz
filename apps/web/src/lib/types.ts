@@ -1254,7 +1254,8 @@ export type LlmCallKind =
   | "SearchQuery"
   | "ChatMessage"
   | "FormulaRun"
-  | "ChatTitle";
+  | "ChatTitle"
+  | "AdminTest";
 
 /// Column a usage-log list request may sort by (LlmUsageQuery.SortWhitelist's keys).
 export type LlmUsageSortKey =
@@ -1478,6 +1479,32 @@ export interface LlmModelUpsert {
   apiKey?: string;
   contextLength: number;
   parameters: Record<string, string>;
+}
+
+/// One administrator-initiated test call. `response` is the model's actual reply - the only LLM output the
+/// API ever returns to a browser, and it is never stored.
+///
+/// Every token count is nullable because plenty of OpenAI-compatible servers report none, and a missing
+/// count is not a zero: rendering it as 0 would state something false about the call.
+export interface LlmTestOutcome {
+  ok: boolean;
+  httpStatus: number | null;
+  /// Milliseconds to the first content token. Null when nothing ever arrived.
+  ttftMs: number | null;
+  durationMs: number;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  reasoningTokens: number | null;
+  totalTokens: number | null;
+  finishReason: string | null;
+  response: string | null;
+  /// The body that was actually sent. Never contains the API key.
+  requestBodyJson: string;
+  /// Timeout | Transport | Http<status>, matching the usage log's vocabulary.
+  errorKind: string | null;
+  message: string | null;
+  /// Which parameter the endpoint blamed, when it named one.
+  offendingParameter: string | null;
 }
 
 /// Which model serves which call group, plus the fallback for groups with no entry.

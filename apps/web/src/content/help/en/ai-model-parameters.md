@@ -1,6 +1,6 @@
 ---
 title: Editing a model's parameters
-summary: The model drawer sets a model's connection details and every sampling parameter. Each parameter is inherited, omitted, or set, and omitted is not the same as inherited. Parameters can differ per call type and be copied between models.
+summary: The model drawer sets a model's connection details and every sampling parameter. Each parameter is inherited, omitted, or set, and omitted is not the same as inherited. Run test makes a real call so you can see the effect before saving.
 group: advanced
 order: 20
 ---
@@ -78,6 +78,43 @@ Four settings never appear there, and that is correct - they control Diariz rath
 **Timeout**, **Supports tool calling**, **Supports image input**, and **Send reasoning effort** (which
 decides whether `reasoning_effort` is included, but is not itself sent). They are summarised under the
 body instead.
+
+## Testing before you save
+
+**Run test** sends one real call to the model with whatever is on screen, saved or not, and shows you what
+came back. It uses a fixed sample transcript rather than your own meetings, so the timings are comparable
+between tabs and between models.
+
+Four numbers come back, and the first two are the ones to read together:
+
+- **First token** is how long the model took to say anything at all.
+- **Duration** is how long the whole reply took.
+
+A model that took nine seconds to start and one second to finish was **loading**. One that started instantly
+and took ten seconds is simply **slow**. Those need opposite fixes - a longer timeout versus a smaller model
+or fewer tokens - and the total on its own cannot tell them apart.
+
+**Tokens/s** is the completion tokens divided by the duration, the same figure the usage log reports. It
+counts the reply only, not the prompt the model read.
+
+Each tab keeps its own result. They are not comparable across tabs, because each ran with that tab's
+parameters.
+
+### When it fails
+
+The card shows the endpoint's own words rather than a generic failure, because those words usually name the
+thing to change. Two failures come with a one-click fix, applied to the tab you are on and nowhere else:
+
+- **A timeout** offers to raise the timeout for this call type. Worth trying first when a large local model
+  has to load before it can answer.
+- **A rejected parameter** offers to omit it. This is the failure the omitted state exists for: the endpoint
+  has just told you it does not accept that parameter, and omitting it stops Diariz sending it - for this
+  call type only.
+
+Nothing is saved by running a test, including the fixes. Press Save when the result is what you want.
+
+Test calls appear in the usage log as **Model test**, so a test that spent tokens is still accounted for.
+The reply itself is shown once and never stored.
 
 ## Copying between models
 

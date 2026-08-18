@@ -16,6 +16,9 @@ function show(assignments: Record<string, string>, defaultModelId: string | null
       defaultModelId={defaultModelId}
       onRoute={onRoute}
       onEdit={vi.fn()}
+      tests={{}}
+      onTest={vi.fn()}
+      onTestAll={vi.fn()}
     />,
   );
   return onRoute;
@@ -109,11 +112,90 @@ describe("RoutingMatrix", () => {
         defaultModelId={null}
         onRoute={vi.fn()}
         onEdit={onEdit}
+        tests={{}}
+        onTest={vi.fn()}
+        onTestAll={vi.fn()}
       />,
     );
 
     fireEvent.click(screen.getAllByRole("button", { name: /edit/i })[1]);
 
     expect(onEdit).toHaveBeenCalledWith(MODELS[1]);
+  });
+
+  it("offers each model a connection test", () => {
+    const onTest = vi.fn();
+    render(
+      <RoutingMatrix
+        models={MODELS}
+        assignments={{}}
+        defaultModelId={null}
+        onRoute={vi.fn()}
+        onEdit={vi.fn()}
+        tests={{}}
+        onTest={onTest}
+        onTestAll={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: /^test$/i })[1]);
+
+    expect(onTest).toHaveBeenCalledWith(MODELS[1]);
+  });
+
+  it("reports a reachable model on its own row", () => {
+    render(
+      <RoutingMatrix
+        models={MODELS}
+        assignments={{}}
+        defaultModelId={null}
+        onRoute={vi.fn()}
+        onEdit={vi.fn()}
+        tests={{
+          b: {
+            status: "done",
+            result: {
+              ok: true, httpStatus: 200, ttftMs: 310, durationMs: 1420,
+              promptTokens: 10, completionTokens: 44, reasoningTokens: null, totalTokens: 54,
+              finishReason: "stop", response: "hi", requestBodyJson: "{}",
+              errorKind: null, message: null, offendingParameter: null,
+            },
+          },
+        }}
+        onTest={vi.fn()}
+        onTestAll={vi.fn()}
+      />,
+    );
+
+    // Completion tokens over duration, the same arithmetic the result card uses.
+    expect(screen.getByText(/1\.42 s/)).toBeTruthy();
+    expect(screen.getByText(/31\.0/)).toBeTruthy();
+  });
+
+  it("says why an unreachable model failed rather than only that it did", () => {
+    render(
+      <RoutingMatrix
+        models={MODELS}
+        assignments={{}}
+        defaultModelId={null}
+        onRoute={vi.fn()}
+        onEdit={vi.fn()}
+        tests={{
+          a: {
+            status: "done",
+            result: {
+              ok: false, httpStatus: null, ttftMs: null, durationMs: 30,
+              promptTokens: null, completionTokens: null, reasoningTokens: null, totalTokens: null,
+              finishReason: null, response: null, requestBodyJson: "{}",
+              errorKind: "Transport", message: "No connection could be made", offendingParameter: null,
+            },
+          },
+        }}
+        onTest={vi.fn()}
+        onTestAll={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/no connection could be made/i)).toBeTruthy();
   });
 });

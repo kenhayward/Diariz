@@ -318,6 +318,10 @@ AddLlmClient<ISummarizationClient, SummarizationClient>(NoHttpTimeout);
 AddLlmClient<IDictationClient, DictationClient>(NoHttpTimeout);
 AddLlmClient<IActionsClient, ActionsClient>(NoHttpTimeout);
 AddLlmClient<ITranslationClient, TranslationClient>(NoHttpTimeout);
+// The administrator's connection test. Registered like every other LLM client so its calls are timed and
+// logged by LlmTelemetryHandler - a test that spent tokens invisibly would be the one call an admin could
+// not account for.
+AddLlmClient<ILlmTestProbe, LlmTestProbe>(NoHttpTimeout);
 builder.Services.AddScoped<ILlmSettingsResolver, LlmSettingsResolver>();
 builder.Services.AddHostedService<SummarizationWorker>();
 builder.Services.AddScoped<IFormulaRunner, FormulaRunner>();

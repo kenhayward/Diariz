@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import type { LlmModel } from "../../lib/types";
 import { ASSIGNABLE_GROUPS } from "./parameterSchema";
+import type { TestState } from "./TestRail";
 
 interface Props {
   models: LlmModel[];
@@ -10,6 +11,11 @@ interface Props {
   defaultModelId: string | null;
   onRoute: (next: { defaultModelId: string | null; assignments: Record<string, string> }) => void;
   onEdit: (model: LlmModel) => void;
+  /// Model id -> the last connection test on that row. Held by the page so it survives the re-render a
+  /// routing write causes.
+  tests: Record<string, TestState>;
+  onTest: (model: LlmModel) => void;
+  onTestAll: () => void;
 }
 
 /// The routing grid: models down the side, call types across the top, one selection per column.
@@ -20,7 +26,9 @@ interface Props {
 /// row meaning "nothing explicit here": for a call type it deletes the entry (falling through to the
 /// default), and for the Default column it clears the default (falling through to the server environment).
 /// Every cell in it means the same thing one level up from its column.
-export default function RoutingMatrix({ models, assignments, defaultModelId, onRoute, onEdit }: Props) {
+export default function RoutingMatrix({
+  models, assignments, defaultModelId, onRoute, onEdit, tests, onTest, onTestAll,
+}: Props) {
   const { t } = useTranslation("account");
 
   /// The API replaces the whole routing set on every write, so every change sends both halves - a payload
@@ -78,7 +86,7 @@ export default function RoutingMatrix({ models, assignments, defaultModelId, onR
           <div key={m.id} className={`${grid} border-b border-gray-100 px-3.5 py-3 dark:border-gray-800/60`}>
             <div className="min-w-0 pr-4">
               <div className="flex items-center gap-2">
-                <span className="size-[7px] shrink-0 rounded-full bg-gray-400 dark:bg-gray-500" />
+                <span className={`size-[7px] shrink-0 rounded-full ${statusDot(tests[m.id])}`} />
                 <span className="truncate text-[13.5px] font-semibold tracking-tight text-gray-900 dark:text-gray-100">
                   {m.name}
                 </span>
@@ -86,6 +94,7 @@ export default function RoutingMatrix({ models, assignments, defaultModelId, onR
               <p className="mt-[3px] truncate pl-[15px] text-[11px] tabular-nums text-gray-500 dark:text-gray-400">
                 {m.apiBase} · {m.contextLength.toLocaleString()} ctx
               </p>
+              <TestLine test={tests[m.id]} />
             </div>
 
             {columns.map((c) => (
@@ -97,7 +106,15 @@ export default function RoutingMatrix({ models, assignments, defaultModelId, onR
               />
             ))}
 
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-1.5">
+              <button
+                type="button"
+                onClick={() => onTest(m)}
+                disabled={tests[m.id]?.status === "running"}
+                className="whitespace-nowrap rounded-md border border-gray-300 px-2.5 py-1 text-[11.5px] disabled:opacity-60 dark:border-gray-700"
+              >
+                {tests[m.id]?.status === "running" ? "..." : t("llmModelsTest")}
+              </button>
               <button
                 type="button"
                 onClick={() => onEdit(m)}
@@ -135,7 +152,12 @@ export default function RoutingMatrix({ models, assignments, defaultModelId, onR
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 text-[11.5px] text-gray-500 dark:text-gray-400">
-          <span>{t("llmModelsRoutingFooter")}</span>
+          <div className="flex items-center gap-3">
+            <span>{t("llmModelsRoutingFooter")}</span>
+            <button type="button" onClick={onTestAll} className="text-indigo-600 hover:underline dark:text-indigo-400">
+              {t("llmModelsTestAll")}
+            </button>
+          </div>
           <span className="tabular-nums">
             {models.map((m) => t("llmModelsTally", { count: tally(m), model: m.name })).join("  ·  ")}
           </span>
@@ -164,5 +186,35 @@ function Dot({ label, selected, onSelect }: { label: string; selected: boolean; 
         {selected && <span className="size-[7px] rounded-full bg-white" />}
       </button>
     </div>
+  );
+}
+
+/// Untested is grey rather than red: nothing is known about it, and colouring an unknown as a failure
+/// would report a problem that has not been observed.
+function statusDot(test: TestState | undefined): string {
+  if (test?.status === "running") return "animate-pulse bg-indigo-500";
+  if (test?.status === "done") return test.result.ok ? "bg-green-600 dark:bg-green-500" : "bg-red-600 dark:bg-red-500";
+  return "bg-gray-400 dark:bg-gray-500";
+}
+
+/// The outcome inline on the row. A failure shows the endpoint's own words rather than "failed" - the
+/// message is what tells the administrator whether it is the URL, the key, or the model name.
+function TestLine({ test }: { test: TestState | undefined }) {
+  if (test?.status !== "done") return null;
+  const r = test.result;
+
+  if (!r.ok)
+    return (
+      <p className="mt-[3px] truncate pl-[15px] text-[11px] text-red-600 dark:text-red-400">{r.message}</p>
+    );
+
+  const perSecond =
+    r.completionTokens !== null && r.durationMs > 0
+      ? ` · ${(r.completionTokens / (r.durationMs / 1000)).toFixed(1)} tok/s`
+      : "";
+  return (
+    <p className="mt-[3px] truncate pl-[15px] text-[11px] tabular-nums text-green-700 dark:text-green-500">
+      {`✓ ${(r.durationMs / 1000).toFixed(2)} s${perSecond}`}
+    </p>
   );
 }
