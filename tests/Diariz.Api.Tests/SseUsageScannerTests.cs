@@ -120,4 +120,83 @@ public class SseUsageScannerTests
 
         Assert.Equal(0, scanner.BufferedBytes);
     }
+
+    // ---- finish_reason (0.222.0) ----
+
+    /// A reply cut off by max_tokens looks, to a user, exactly like a model that answered nothing: the
+    /// content is empty and no error is raised. finish_reason is the only thing that tells them apart, so
+    /// the scanner has to catch it in the stream the same way it catches usage.
+    [Fact]
+    public void CapturesALengthFinishReason_FromAStreamedChunk()
+    {
+        var scanner = new SseUsageScanner();
+        FeedAll(scanner, DELTA + BLANK);
+        Assert.Null(scanner.FinishReason);
+
+        FeedAll(scanner, LENGTH + BLANK);
+        Assert.Equal("length", scanner.FinishReason);
+    }
+
+    [Fact]
+    public void CapturesAStopFinishReason()
+    {
+        var scanner = new SseUsageScanner();
+        FeedAll(scanner, STOP + BLANK);
+        Assert.Equal("stop", scanner.FinishReason);
+    }
+
+    /// Servers differ on whitespace after the colon, and a scanner matching only the compact form would
+    /// silently report nothing for half of them.
+    [Fact]
+    public void CapturesAFinishReason_WrittenWithSpacesAfterTheColon()
+    {
+        var scanner = new SseUsageScanner();
+        FeedAll(scanner, SPACED + BLANK);
+        Assert.Equal("length", scanner.FinishReason);
+    }
+
+    /// The pre-filter exists so a chat's every token does not pay for a JSON parse. A null finish_reason
+    /// rides on essentially every delta chunk, so matching the bare key name would defeat it entirely.
+    [Fact]
+    public void DoesNotParseEveryDelta_JustBecauseItCarriesANullFinishReason()
+    {
+        var scanner = new SseUsageScanner();
+        FeedAll(scanner, DELTA + BLANK);
+        FeedAll(scanner, SPACED_NULL + BLANK);
+
+        Assert.Null(scanner.FinishReason);
+    }
+
+    /// The last one wins: a stream stops once, and a later chunk is closer to the truth than an earlier one.
+    [Fact]
+    public void KeepsTheLastFinishReasonSeen()
+    {
+        var scanner = new SseUsageScanner();
+        FeedAll(scanner, STOP + BLANK);
+        FeedAll(scanner, LENGTH + BLANK);
+
+        Assert.Equal("length", scanner.FinishReason);
+    }
+
+    [Fact]
+    public void FindsBothUsageAndFinishReason_InOneStream()
+    {
+        var scanner = new SseUsageScanner();
+        FeedAll(scanner, LENGTH + BLANK + UsageChunk + BLANK);
+
+        Assert.Equal("length", scanner.FinishReason);
+        Assert.Equal(5, scanner.Usage!.Value.CompletionTokens);
+    }
+
+    private const string BLANK = "\n\n";
+    private const string DELTA =
+        """data: {"choices":[{"delta":{"content":"hi"},"finish_reason":null}]}""";
+    private const string SPACED_NULL =
+        """data: {"choices":[{"delta":{"content":"b"},"finish_reason": null}]}""";
+    private const string LENGTH =
+        """data: {"choices":[{"delta":{},"finish_reason":"length"}]}""";
+    private const string STOP =
+        """data: {"choices":[{"delta":{},"finish_reason":"stop"}]}""";
+    private const string SPACED =
+        """data: {"choices":[{"delta":{}, "finish_reason" : "length"}]}""";
 }

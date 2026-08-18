@@ -1,3 +1,4 @@
+using Diariz.Api.Services;
 using Diariz.Domain.Entities;
 
 namespace Diariz.Api.Contracts;
@@ -75,7 +76,7 @@ public record LlmUsageTotals(
 // ---- LLM usage viewer rows (LlmUsageController) ----
 
 /// <summary>One <c>LlmCalls</c> row, as returned by <c>mode=calls</c>.</summary>
-public record LlmUsageCallRow(
+public partial record LlmUsageCallRow(
     Guid Id,
     Guid OperationId,
     int Sequence,
@@ -97,10 +98,25 @@ public record LlmUsageCallRow(
     bool Success,
     int? StatusCode,
     string? ErrorKind,
+    /// <summary>The server's <c>finish_reason</c> - <c>stop</c>, <c>length</c>, <c>tool_calls</c>,
+    /// <c>content_filter</c> - or null when it reported none. Null is NOT the same as <c>stop</c>:
+    /// plenty of OpenAI-compatible servers omit the field entirely.</summary>
+    string? FinishReason,
     /// <summary>This call's own generation rate: <c>CompletionTokens / DurationMs</c>. Null when the
     /// server reported no completion tokens, or when the duration is zero - never 0 (which would read as
     /// "generated nothing") and never Infinity (which does not survive JSON serialisation).</summary>
     double? TokensPerSecond);
+
+/// <summary>Extra members on the call row. <c>Truncated</c> is DERIVED from <see cref="FinishReason"/>
+/// rather than stored beside it, so there is exactly one definition of "a token cap cut this off" and the
+/// two can never disagree.</summary>
+public partial record LlmUsageCallRow
+{
+    /// <summary>The reply was cut off by a token cap. Matched case-insensitively because the casing is the
+    /// server's business, not ours.</summary>
+    public bool Truncated =>
+        string.Equals(FinishReason, LlmFinishReasonParser.Length, StringComparison.OrdinalIgnoreCase);
+}
 
 /// <summary>One operation - every <c>LlmCalls</c> row sharing an <c>OperationId</c>, collapsed to a
 /// single row, as returned by <c>mode=operations</c> (the default). See
@@ -123,6 +139,9 @@ public record LlmUsageOperationRow(
     long? ReasoningTokens,
     long? TotalTokens,
     bool Success,
+    /// <summary>True when ANY call in this operation stopped on <c>length</c>. Rolled up because a single
+    /// truncated call is the whole reason to look, and the operations view is the default.</summary>
+    bool Truncated,
     /// <summary>Total time the model spent on this operation: the SUM of its calls' <c>DurationMs</c>.
     ///
     /// Deliberately NOT the wall-clock span this row also shows (<see cref="StartedAt"/> to

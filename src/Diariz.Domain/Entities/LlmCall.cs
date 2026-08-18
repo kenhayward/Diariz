@@ -72,4 +72,13 @@ public class LlmCall
     /// the distinction would require checking the raw, un-linked token at the individual client, where both
     /// it and the linked composite are still in scope.</summary>
     public string? ErrorKind { get; set; }
+
+    /// <summary>The response's <c>finish_reason</c> - <c>stop</c>, <c>length</c>, <c>tool_calls</c>,
+    /// <c>content_filter</c> - or null when the server reported none (or the call never got a response).
+    ///
+    /// Stored as the raw string rather than a "truncated" flag: it costs the same and the other values
+    /// are worth having. <c>length</c> is the one that matters, because a reply cut off by a token cap is
+    /// otherwise INVISIBLE - a 200, no error, and empty content because reasoning consumed the whole
+    /// budget. Without this an administrator cannot tell that from a model that answered nothing.</summary>
+    public string? FinishReason { get; set; }
 }

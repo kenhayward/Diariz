@@ -578,5 +578,7 @@
   "llmParamReasoningEnabled": "Send reasoning effort",
   "llmParamTimeoutSeconds": "Timeout (seconds)",
   "llmParamToolsSupported": "Supports tool calling",
-  "llmParamImagesSupported": "Supports image input"
+  "llmParamImagesSupported": "Supports image input",
+  "llmUsageTruncated": "Cut off",
+  "llmUsageTruncatedHint": "The model hit its token cap before finishing. The reply may be short or completely empty, even though the call succeeded and the tokens were billed."
 }

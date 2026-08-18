@@ -578,5 +578,7 @@
   "llmParamReasoningEnabled": "Enviar esfuerzo de razonamiento",
   "llmParamTimeoutSeconds": "Tiempo de espera (segundos)",
   "llmParamToolsSupported": "Admite llamadas a herramientas",
-  "llmParamImagesSupported": "Admite entrada de imagenes"
+  "llmParamImagesSupported": "Admite entrada de imagenes",
+  "llmUsageTruncated": "Cortado",
+  "llmUsageTruncatedHint": "El modelo alcanzo su limite de tokens antes de terminar. La respuesta puede ser corta o estar vacia, aunque la llamada tuvo exito y los tokens se cobraron."
 }

@@ -376,6 +376,23 @@ clobbering manual names.
 
 ## LLM-powered features (all via an OpenAI-compatible endpoint)
 
+### Truncation (0.222.0)
+
+`LlmTelemetryHandler` records the model's `finish_reason` alongside the token counts, from both response
+shapes: `LlmFinishReasonParser` reads it out of a buffered JSON body (the body is read ONCE and both usage
+and reason come out of the same string), and `SseUsageScanner` picks it out of the stream.
+
+The scanner's pre-filter is the delicate part. It exists so a chat's every token does not pay for a JSON
+parse, and virtually every delta chunk carries `"finish_reason":null` - so matching the bare key name would
+defeat it entirely. `HasStringFinishReason` walks past the colon and any whitespace and requires an opening
+quote, which both excludes the null case and tolerates the spaced-out formatting some servers emit.
+
+`length` is what this is for: a reply cut off by a token cap is a 200 with empty content and no error, so
+without it the usage log shows a call that apparently returned nothing. The viewer derives `Truncated` from
+the stored string and shows a **Cut off** badge, keeping the outcome itself OK - the call succeeded and the
+tokens were billed, so folding it into the failure state would overstate the error rate and hide the row
+behind the outcome filter.
+
 ### Platform model configuration (0.221.0)
 
 LLM configuration is **platform-wide**, not per user. `ILlmSettingsResolver` (`LlmSettingsResolver`) answers
