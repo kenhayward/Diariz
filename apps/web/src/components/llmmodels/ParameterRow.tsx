@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ParameterKind, ParameterValue } from "./parameterSchema";
 
@@ -51,6 +52,14 @@ export default function ParameterRow({
   const mode = modeOf(value);
   const id = testId ?? name;
 
+  /// What the person has typed but not yet finished typing, or null when the field is showing the stored
+  /// value. Without it a controlled numeric input fights whoever is using it: parsing on every keystroke
+  /// turns "0." into 0, the field re-renders as "0", and the decimal point they just pressed vanishes -
+  /// which makes every fractional value (every temperature worth setting) impossible to enter.
+  ///
+  /// Only the PARSED value is ever emitted upward, so the layer never holds a half-typed string.
+  const [draft, setDraft] = useState<string | null>(null);
+
   /// What the inherited value reads as under the control. Booleans and "nothing at all" need words rather
   /// than a bare `true` or a blank, or the admin cannot tell them apart.
   function describeInherited(): string {
@@ -60,7 +69,10 @@ export default function ParameterRow({
   }
 
   function subline(): string {
-    if (mode === "set") return hint ? `${t("llmParamOverriddenHere")} · ${t(hint)}` : t("llmParamOverriddenHere");
+    if (mode === "set") {
+      const parts = [t("llmParamOverriddenHere"), outOfRange(), hint ? t(hint) : null].filter(Boolean);
+      return parts.join(" · ");
+    }
     if (mode === "omit") return t("llmParamNotSent");
     const value = describeInherited();
     return isBaseGroup ? t("llmParamAppDefault", { value }) : t("llmParamFromDefaults", { value });
@@ -69,9 +81,21 @@ export default function ParameterRow({
   /// The text currently in the box. An inheriting row shows the inherited value rather than a blank, so
   /// that overriding is one edit away from what is already in effect rather than a guess.
   function fieldText(): string {
+    if (draft !== null) return draft;
     const shown = mode === "set" ? value : inherited;
     if (shown === undefined || shown === null) return "";
     return String(shown);
+  }
+
+  /// The documented range, when the typed value falls outside it. Advisory only - Diariz cannot know what
+  /// any particular endpoint accepts, and several take values well outside the OpenAI-documented ranges -
+  /// so this says so rather than clamping a deliberate choice back to something the admin did not pick.
+  function outOfRange(): string | null {
+    if (typeof value !== "number") return null;
+    if ((min === undefined || value >= min) && (max === undefined || value <= max)) return null;
+    if (min !== undefined && max !== undefined) return t("llmParamRange", { min, max });
+    if (min !== undefined) return t("llmParamRangeMin", { min });
+    return t("llmParamRangeMax", { max });
   }
 
   function type(raw: string) {
@@ -79,6 +103,8 @@ export default function ParameterRow({
       onChange(raw);
       return;
     }
+    // Hold the raw text first, so a partial number ("0.", "-") survives the re-render that follows.
+    setDraft(raw);
     if (raw === "") {
       // An empty box is not a value. Emitting undefined or null would silently change the instruction to
       // "inherit" or "do not send" - neither of which the admin asked for - so hold the field at zero.
@@ -86,7 +112,9 @@ export default function ParameterRow({
       return;
     }
     const parsed = kind === "integer" ? parseInt(raw, 10) : parseFloat(raw);
-    if (!Number.isNaN(parsed)) onChange(parsed);
+    // A partial or unparseable entry emits NOTHING. It stays visible as a draft until the field is left,
+    // at which point the stored value comes back - never a silent 0 or NaN in the layer.
+    if (!Number.isNaN(parsed) && String(parsed) === raw.trim()) onChange(parsed);
   }
 
   return (
@@ -132,8 +160,7 @@ export default function ParameterRow({
             aria-describedby={`${id}-state`}
             value={fieldText()}
             onChange={(e) => type(e.target.value)}
-            min={min}
-            max={max}
+            onBlur={() => setDraft(null)}
             className={`${FIELD} ${mode === "set" ? "" : "text-gray-400 dark:text-gray-500"}`}
           />
         )}

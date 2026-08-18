@@ -56,6 +56,25 @@ describe("parameterSchema", () => {
     for (const g of ASSIGNABLE_GROUPS) expect(catalogue[g.column]).toBeTruthy();
   });
 
+  it("does not warn about the sentinel values the API says are legal", () => {
+    // LlmParameterLayers' own doc: "-1 is a legal, meaningful value for max_tokens (unlimited) and top_k
+    // (disabled) on some OpenAI-compatible servers" - it is the reason the three-state design uses absence
+    // and null rather than a sentinel. A lower bound of 0 on these would flag a deliberate, documented
+    // choice as a mistake.
+    for (const key of ["top_k", "max_tokens", "max_completion_tokens"]) {
+      const spec = PARAMETERS.find((p) => p.key === key)!;
+      expect(spec.min === undefined || spec.min <= -1).toBe(true);
+    }
+  });
+
+  it("bounds every numeric parameter that has a documented range", () => {
+    // A range is what the row shows when a value looks wrong, so an absent one means no guidance at all.
+    for (const key of ["temperature", "top_p", "frequency_penalty", "presence_penalty", "timeout_seconds"]) {
+      const spec = PARAMETERS.find((p) => p.key === key)!;
+      expect(spec.min !== undefined || spec.max !== undefined).toBe(true);
+    }
+  });
+
   it("gives every parameter a label and a kind", () => {
     for (const p of PARAMETERS) {
       expect(p.label.length).toBeGreaterThan(0);

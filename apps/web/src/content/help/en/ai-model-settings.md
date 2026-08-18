@@ -17,8 +17,9 @@ that is a question for your administrator rather than something to fix in your o
 
 ## Configuring models
 
-A Platform Administrator opens **Settings**, **AI**, then **Manage AI models** - or goes straight to
-`/admin/llm-models`. Each model there carries:
+A Platform Administrator opens **Settings**, **AI**, then **Manage AI models**, which opens over the
+settings window rather than in a new tab - so the installed app and the desktop app stay signed in. The
+address `/admin/llm-models` still works if you have it bookmarked. Each model there carries:
 
 - **A name.** Sent to the endpoint exactly as written, so it must match what that endpoint calls the
   model.

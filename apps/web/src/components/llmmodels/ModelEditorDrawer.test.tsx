@@ -207,6 +207,17 @@ describe("ModelEditorDrawer", () => {
     expect(screen.getByRole("tab", { name: /Translation/ }).textContent).toMatch(/1/);
   });
 
+  it("does not carry a half-typed value across to another tab", () => {
+    // The rows are one component per parameter; without a per-group identity, switching tabs reuses the
+    // same input and whatever was mid-edit would appear to belong to the call type just opened.
+    open(MODELS[1]);
+    fireEvent.change(screen.getByTestId("param-ModelBase-temperature"), { target: { value: "0." } });
+
+    fireEvent.click(screen.getByRole("tab", { name: /Translation/ }));
+
+    expect((screen.getByTestId("param-Translation-temperature") as HTMLInputElement).value).toBe("0.1");
+  });
+
   it("warns before discarding unsaved overrides", () => {
     const onClose = vi.fn();
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);

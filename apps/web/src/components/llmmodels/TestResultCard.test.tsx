@@ -174,6 +174,20 @@ describe("TestResultCard actions", () => {
     expect(onRetry).toHaveBeenCalled();
   });
 
+  it("hands the usage-log filter to its host when there is no page to navigate to", () => {
+    // Inside the settings modal there is no route to go to - navigating would drop the admin out of the
+    // modal (and, in the desktop shell, out of the app). The host opens its own usage panel instead.
+    const onOpenUsageLog = vi.fn();
+    show(OK, { onOpenUsageLog });
+
+    fireEvent.click(screen.getByRole("button", { name: /usage log/i }));
+
+    expect(onOpenUsageLog).toHaveBeenCalledWith(
+      expect.stringContaining("kinds=AdminTest"),
+    );
+    expect(screen.queryByRole("link", { name: /usage log/i })).toBeNull();
+  });
+
   it("links into the usage log filtered to this model's test calls", () => {
     // Without the filter the link lands on every call the platform has made this week, which is not what
     // "open in usage log" promises.

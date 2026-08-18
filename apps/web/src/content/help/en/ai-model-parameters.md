@@ -40,6 +40,11 @@ There is no **Set** button to press first: typing in a parameter's box is what s
 the right of the box are the ways back out - the loop returns the row to inherited, and the slashed zero
 omits it. Press the slashed zero again to return an omitted row to inherited.
 
+Where a parameter has a usual range, a value outside it is flagged under the field but still sent. Diariz
+cannot know what your endpoint accepts, and several take values well outside the documented ranges - so it
+tells you rather than overruling you. **Max tokens** and **Top K** accept `-1`, which many endpoints read
+as no cap and disabled respectively.
+
 **Omitted is not inherited.** Inherited passes the question down; omitted answers it with "send nothing",
 which actively suppresses a value a lower level would have supplied. Reach for it when an endpoint rejects
 a parameter it does not recognise. If you only mean "I have no opinion", leave the row inherited.

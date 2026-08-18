@@ -572,6 +572,23 @@ describe("LlmUsage", () => {
     expect(sent.models).toEqual(["qwen3.8-27b@q4_k_xl"]);
   });
 
+  it("opens on the calls a host asks for when there is no URL", async () => {
+    // Inside the settings modal there is no route, so the request arrives as a query string prop.
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter>
+          <LlmUsage embedded initialQuery="kinds=AdminTest&models=openai%2Fgpt-oss-20b" />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(api.getLlmUsage).toHaveBeenCalled());
+    const sent = vi.mocked(api.getLlmUsage).mock.calls[0][0];
+    expect(sent.kinds).toEqual(["AdminTest"]);
+    expect(sent.models).toEqual(["openai/gpt-oss-20b"]);
+  });
+
   it("still shows the usual week when the link names nothing", async () => {
     renderPage();
 

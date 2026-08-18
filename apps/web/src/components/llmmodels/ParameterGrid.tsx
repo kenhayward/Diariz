@@ -29,7 +29,10 @@ export default function ParameterGrid({ groupKey, layer, inherited, onChange }: 
     <div className="grid grid-cols-1 gap-x-5 md:grid-cols-2">
       {PARAMETERS.map((p) => (
         <ParameterRow
-          key={p.key}
+          // Keyed by GROUP and parameter, not parameter alone: the row holds a draft of what is being
+          // typed, and a key that is stable across tabs would carry a half-typed value into the call type
+          // the admin just switched to.
+          key={`${groupKey}-${p.key}`}
           name={p.key}
           label={p.label}
           kind={p.kind}

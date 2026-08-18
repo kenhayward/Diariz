@@ -9,10 +9,18 @@ import RoutingMatrix from "../components/llmmodels/RoutingMatrix";
 import type { TestState } from "../components/llmmodels/TestRail";
 import ModelEditorDrawer from "../components/llmmodels/ModelEditorDrawer";
 
+interface Props {
+  /// Rendered inside the settings modal rather than as its own route: drops the top bar and the
+  /// full-height shell, which the host provides, and routes the usage-log link through `onOpenUsageLog`
+  /// instead of navigating. The route still exists for a pasted or bookmarked link.
+  embedded?: boolean;
+  onOpenUsageLog?: (query: string) => void;
+}
+
 /// Platform-Administrator-only editor for the models every LLM call is routed to, at /admin/llm-models
 /// behind the app login (see App.tsx). `RequireAuth` there only checks that someone is signed in, so the
 /// permission gate lives here - the same arrangement as LlmUsage.
-export default function LlmModels() {
+export default function LlmModels({ embedded = false, onOpenUsageLog }: Props = {}) {
   const { t } = useTranslation("account");
   const { isPlatformAdmin } = useAuth();
   const queryClient = useQueryClient();
@@ -94,16 +102,14 @@ export default function LlmModels() {
 
   if (!isPlatformAdmin) {
     return (
-      <div className="flex h-screen flex-col">
-        <TopBar />
+      <Shell embedded={embedded}>
         <p className="p-6 text-sm text-gray-600 dark:text-gray-300">{t("llmModelsForbidden")}</p>
-      </div>
+      </Shell>
     );
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-y-auto">
-      <TopBar />
+    <Shell embedded={embedded}>
 
       {/* No centring wrapper: the matrix needs the full width, and a max-w-5xl would scroll it
           horizontally on a display that has room to spare. */}
@@ -179,8 +185,20 @@ export default function LlmModels() {
             queryClient.invalidateQueries({ queryKey: ["llm-models"] });
             queryClient.invalidateQueries({ queryKey: ["llm-assignments"] });
           }}
+          onOpenUsageLog={onOpenUsageLog}
         />
       )}
+    </Shell>
+  );
+}
+
+/// The page chrome, or none of it when the panel is hosted in a modal that already provides its own.
+function Shell({ embedded, children }: { embedded: boolean; children: React.ReactNode }) {
+  if (embedded) return <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div>;
+  return (
+    <div className="flex h-screen flex-col overflow-y-auto">
+      <TopBar />
+      {children}
     </div>
   );
 }

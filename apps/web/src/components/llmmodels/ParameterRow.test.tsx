@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import ParameterRow from "./ParameterRow";
@@ -135,5 +136,103 @@ describe("ParameterRow", () => {
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "" } });
 
     expect(onChange).toHaveBeenCalledWith(0);
+  });
+
+  /// A controlled numeric field that parses on every keystroke fights the person typing: after "0." the
+  /// parse yields 0, the field re-renders as "0", and the decimal point they just pressed disappears. The
+  /// row therefore keeps what was TYPED while the field is being edited, and only the parsed value is
+  /// emitted upward.
+  describe("typing a number", () => {
+    function Stateful({ kind = "number" as const, initial = 1 as unknown, onChange = vi.fn() }) {
+      const [v, setV] = useState<unknown>(initial);
+      return (
+        <ParameterRow
+          {...base}
+          kind={kind}
+          value={v as never}
+          onChange={(x) => {
+            onChange(x);
+            setV(x);
+          }}
+        />
+      );
+    }
+
+    it("keeps a decimal point that has been typed but not yet completed", () => {
+      render(<Stateful />);
+      const box = screen.getByRole("textbox") as HTMLInputElement;
+
+      fireEvent.change(box, { target: { value: "0" } });
+      fireEvent.change(box, { target: { value: "0." } });
+
+      expect(box.value).toBe("0.");
+    });
+
+    it("arrives at the decimal the person typed", () => {
+      const onChange = vi.fn();
+      render(<Stateful onChange={onChange} />);
+      const box = screen.getByRole("textbox") as HTMLInputElement;
+
+      for (const raw of ["0", "0.", "0.3"]) fireEvent.change(box, { target: { value: raw } });
+
+      expect(box.value).toBe("0.3");
+      expect(onChange.mock.calls.at(-1)?.[0]).toBe(0.3);
+    });
+
+    it("keeps a lone minus sign long enough to type the number after it", () => {
+      // -1 is meaningful for max_tokens (unlimited) and top_k (disabled) on some endpoints.
+      render(<Stateful kind="integer" />);
+      const box = screen.getByRole("textbox") as HTMLInputElement;
+
+      fireEvent.change(box, { target: { value: "-" } });
+
+      expect(box.value).toBe("-");
+    });
+
+    it("shows the stored value again once the field is left", () => {
+      // A draft that never resolved must not linger as if it had been accepted.
+      render(<Stateful />);
+      const box = screen.getByRole("textbox") as HTMLInputElement;
+
+      fireEvent.change(box, { target: { value: "not a number" } });
+      fireEvent.blur(box);
+
+      expect(box.value).toBe("1");
+    });
+
+    it("does not emit anything for a value it cannot parse", () => {
+      const onChange = vi.fn();
+      render(<Stateful onChange={onChange} />);
+
+      fireEvent.change(screen.getByRole("textbox"), { target: { value: "abc" } });
+
+      expect(onChange).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("range guidance", () => {
+    it("says when a value is outside the range the parameter documents", () => {
+      // Advisory, not enforced: Diariz cannot know what any given endpoint accepts, and some take values
+      // well outside the OpenAI-documented ranges. Saying so beats silently clamping a deliberate choice.
+      render(<ParameterRow {...base} min={0} max={2} value={7} onChange={vi.fn()} />);
+
+      expect(screen.getByText(/0 to 2/)).toBeTruthy();
+    });
+
+    it("still emits the out-of-range value the person chose", () => {
+      const onChange = vi.fn();
+      render(<ParameterRow {...base} min={0} max={2} value={1} onChange={onChange} />);
+
+      fireEvent.change(screen.getByRole("textbox"), { target: { value: "7" } });
+
+      expect(onChange).toHaveBeenCalledWith(7);
+    });
+
+    it("says nothing about a value inside the range", () => {
+      render(<ParameterRow {...base} min={0} max={2} value={0.7} onChange={vi.fn()} />);
+
+      expect(screen.queryByText(/0 to 2/)).toBeNull();
+      expect(screen.getByText(/overridden here/i)).toBeTruthy();
+    });
   });
 });

@@ -18,6 +18,9 @@ interface Props {
   onClose: () => void;
   onSaved: () => void;
   onDeleted: () => void;
+  /// Given when the drawer is hosted inside the settings modal, where a route change would drop the admin
+  /// out of it. See `TestResultCard`.
+  onOpenUsageLog?: (query: string) => void;
 }
 
 type Layers = Record<string, ParameterLayer>;
@@ -58,7 +61,7 @@ function toWire(layers: Layers): Record<string, string> {
 const BUTTON = "rounded-md border border-gray-300 px-2.5 py-1 text-xs dark:border-gray-700";
 
 export default function ModelEditorDrawer({
-  model, allModels, defaults, isDefaultModel, onClose, onSaved, onDeleted,
+  model, allModels, defaults, isDefaultModel, onClose, onSaved, onDeleted, onOpenUsageLog,
 }: Props) {
   const { t } = useTranslation("account");
   const [name, setName] = useState(model?.name ?? "");
@@ -182,9 +185,12 @@ export default function ModelEditorDrawer({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-gray-950/60" onMouseDown={close}>
+    <div className="fixed inset-0 z-[65] flex justify-end bg-gray-950/60" onMouseDown={close}>
       <div
         role="dialog"
+        // Marks this as the innermost dialog, so a host modal's Escape handler stands aside and the
+        // unsaved-changes warning below is not bypassed.
+        data-drawer="true"
         aria-label={model ? model.name : t("llmModelsAddTitle")}
         onMouseDown={(e) => e.stopPropagation()}
         className="flex h-full w-full max-w-[min(1096px,100vw-144px)] flex-col border-l border-gray-200 bg-white shadow-2xl dark:border-gray-800 dark:bg-gray-950"
@@ -313,6 +319,7 @@ export default function ModelEditorDrawer({
             onFix={applyFix}
             apiBase={model?.apiBase ?? ""}
             modelName={model?.name ?? ""}
+            onOpenUsageLog={onOpenUsageLog}
           />
         </div>
 
