@@ -65,6 +65,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.226.1",
+    date: "2026-08-18",
+    pr: 542,
+    headline: "The API reference stays in the app too",
+    summary:
+      "The last release moved the AI models page and the usage log inside the app. The API reference had exactly the same problem and was left behind: it opened in a new browser tab, and it is behind the app login, so from the installed app or the desktop app you arrived at a signed-out shell rather than the reference.\n\n" +
+      "It now opens as a panel, both from **Preferences, Integrations** and from **Settings, Integration**. The address `/developers/api` still works if you have it bookmarked.\n\n" +
+      "That is every in-app link that used to leave for the browser. The remaining ones - the GitHub link in About, a meeting's own URL, links inside your notes, and the help articles - all point somewhere genuinely outside Diariz, or to a page that needs no sign-in, and a new tab is right for those.",
+    fixed: [
+      "The API reference opens inside the app instead of a new browser tab, which in the installed app and the desktop app meant arriving signed out.",
+    ],
+  },
+  {
     version: "0.226.0",
     date: "2026-08-18",
     pr: 541,

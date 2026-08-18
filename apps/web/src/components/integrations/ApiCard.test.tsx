@@ -33,13 +33,6 @@ describe("ApiCard", () => {
     mock(api.revokeApiToken).mockResolvedValue(undefined);
   });
 
-  it("links to the API reference in a new tab", async () => {
-    renderCard();
-    const link = await screen.findByRole("link", { name: /view api reference/i });
-    expect(link.getAttribute("href")).toBe("/developers/api");
-    expect(link.getAttribute("target")).toBe("_blank");
-  });
-
   it("generates a token and shows it once", async () => {
     renderCard();
     await screen.findByRole("button", { name: /new token/i });
@@ -96,5 +89,23 @@ describe("ApiCard", () => {
     expect(await screen.findByText(/API access is switched off/i)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /new token/i })).toBeNull();
     expect(api.listApiTokens).not.toHaveBeenCalled();
+  });
+
+  /// The reference used to be `<a target="_blank">`. In the installed PWA and the desktop shell that leaves
+  /// Diariz for the system browser, where the user is not signed in - and the reference is behind the app
+  /// login, so it renders nothing useful once you get there.
+  it("does not link out of the app to reach the API reference", async () => {
+    renderCard();
+    await screen.findByRole("button", { name: /view api reference/i });
+
+    expect(screen.queryByRole("link", { name: /view api reference/i })).toBeNull();
+  });
+
+  it("opens the reference in place", async () => {
+    renderCard();
+
+    fireEvent.click(await screen.findByRole("button", { name: /view api reference/i }));
+
+    await waitFor(() => expect(screen.getByRole("dialog", { name: /api reference/i })).toBeTruthy());
   });
 });

@@ -117,7 +117,8 @@ Screenshots section. A note or screenshot sitting between two turns by the same 
 turns from being merged past it.
 - **User API access.** When a Platform Administrator enables it (Settings → Integration), generate a **personal
 API token** (Preferences → Integrations) to call the Diariz **REST API** directly as yourself — acting with your own
-permissions, over your own data — and browse a **built-in API reference** (Developers → View API reference). The
+permissions, over your own data — and browse a **built-in API reference**, opened as a panel from Preferences -> Integrations or Settings ->
+Integration (and still routed at `/developers/api` for a bookmarked address). The
 reference documents **every endpoint individually**: what the call does, who may make it, what it changes, and the
 things worth knowing before calling it (which actions overwrite hand-edited text, which are permanent, which run in
 the background and need polling, and which errors mean what). Each

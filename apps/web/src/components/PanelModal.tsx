@@ -1,17 +1,19 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
-/// A near-full-screen modal for the admin panels that used to be their own routes.
+/// A near-full-screen modal for the pages that used to be their own routes: the AI models grid, the LLM
+/// usage log, and the API reference.
 ///
 /// They were reached with `<a target="_blank">`, which is what made them a problem rather than a
 /// preference: in the installed PWA and the desktop shell that leaves the app entirely and opens the
-/// system browser, where the administrator is not signed in and has to log in again and re-navigate. The
-/// panels are wide - a seven-column routing grid, a usage table - so they get the whole viewport minus a
-/// margin rather than the centred box the smaller dialogs use.
+/// system browser, where the user is not signed in - and all three are behind the app login, so they
+/// render nothing useful once you get there. Each is wide (a seven-column routing grid, a usage table, a
+/// three-column API reference), so they get the whole viewport minus a margin rather than the centred box
+/// the smaller dialogs use.
 ///
 /// Sits at z-[60], the layer this codebase already uses for a dialog opened from a dialog. The model
 /// editor drawer inside goes above it at z-[65]; the help popover stays above everything at z-[70].
-export default function AdminPanelModal({
+export default function PanelModal({
   title,
   onClose,
   children,

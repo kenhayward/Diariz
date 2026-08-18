@@ -994,7 +994,7 @@ generating. It is now recorded when the stream ends (see the capture contract ab
 asked the endpoint to send, and `TimeToFirstTokenMs` populated for the first time.
 
 **Admin usage viewer (`/admin/llm-usage`).** Rendered in two places from one component: its own route, and
-a panel inside the settings modal (`AdminPanelModal`, z-[60] - the layer this codebase uses for a dialog
+a panel inside the settings modal (`PanelModal`, z-[60] - the layer this codebase uses for a dialog
 opened from a dialog; the model drawer inside goes to z-[65], below the help popover's z-[70]). The
 `embedded` prop only drops the page chrome the host provides. The in-app path deliberately does not
 navigate: these were `<a target="_blank">` links, which in the installed PWA and the desktop shell leave
