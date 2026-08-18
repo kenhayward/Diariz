@@ -66,6 +66,10 @@ export default function Setup() {
             fullName: fullName.trim() || null,
             nativeLanguage: language,
             uiLanguage: language,
+            // Deliberately not the setup language: that choice is about the interface and the user's own
+            // language, and plenty of people record meetings in another one. Detection stays the default
+            // until the user picks a transcription language in Preferences.
+            transcriptionLanguage: null,
             jobTitle: null,
             companyName: null,
             jobDescription: null,

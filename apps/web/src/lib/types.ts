@@ -375,6 +375,8 @@ export interface RecordingDetail {
   /// Optional pyannote diarization hints (null = automatic).
   minSpeakers: number | null;
   maxSpeakers: number | null;
+  /// The spoken language this recording is pinned to (BCP-47), or null when Whisper detects it.
+  transcriptionLanguage: string | null;
   speakerNames: Record<string, string>;
   speakers: SpeakerInfo[];
   current: TranscriptionDto | null;
@@ -692,6 +694,8 @@ export interface UserProfile {
   fullName: string | null;
   nativeLanguage: string | null;
   uiLanguage: string | null;
+  /// Default spoken language for new recordings (BCP-47), or null to detect it per recording.
+  transcriptionLanguage: string | null;
   googleConnected: boolean; // account is linked to a Google identity
   googleCalendar: boolean; // user granted Google Calendar read access
   jobTitle: string | null;
@@ -928,6 +932,7 @@ export interface UpdateUserProfile {
   fullName: string | null;
   nativeLanguage: string | null;
   uiLanguage: string | null;
+  transcriptionLanguage: string | null;
   jobTitle: string | null;
   companyName: string | null;
   jobDescription: string | null;

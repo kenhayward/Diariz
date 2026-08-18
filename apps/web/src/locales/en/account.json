@@ -625,5 +625,8 @@
   "llmParamToolsSupported": "Supports tool calling",
   "llmParamImagesSupported": "Supports image input",
   "llmUsageTruncated": "Cut off",
-  "llmUsageTruncatedHint": "The model hit its token cap before finishing. The reply may be short or completely empty, even though the call succeeded and the tokens were billed."
+  "llmUsageTruncatedHint": "The model hit its token cap before finishing. The reply may be short or completely empty, even though the call succeeded and the tokens were billed.",
+  "transcriptionLanguage": "Transcription language",
+  "transcriptionLanguageAuto": "- Detect automatically -",
+  "transcriptionLanguageHint": "The language your recordings are usually spoken in. Detecting it per recording can go wrong on a quiet opening. Each recording can still override this."
 }

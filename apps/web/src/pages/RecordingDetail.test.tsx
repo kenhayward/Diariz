@@ -51,6 +51,10 @@ vi.mock("../lib/api", () => ({
     getPerson: vi.fn(),
     updatePerson: vi.fn(),
     retranscribe: vi.fn(),
+    getLanguages: vi.fn().mockResolvedValue([
+      { code: "en", englishName: "English", nativeName: "English", rtl: false },
+      { code: "de", englishName: "German", nativeName: "Deutsch", rtl: false },
+    ]),
     renameSpeaker: vi.fn(),
     renameRecording: vi.fn(),
     deleteRecording: vi.fn(),
@@ -464,7 +468,10 @@ describe("RecordingDetail", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /^re-transcribe$/i }));
 
     await waitFor(() =>
-      expect(api.retranscribe).toHaveBeenCalledWith("rec-123", { speakers: { min: null, max: null } }),
+      expect(api.retranscribe).toHaveBeenCalledWith("rec-123", {
+        speakers: { min: null, max: null },
+        language: { code: null },
+      }),
     );
     await waitFor(() => expect(api.getRecording).toHaveBeenCalledTimes(2));
   });
@@ -619,7 +626,34 @@ describe("RecordingDetail", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /^re-transcribe$/i }));
 
     await waitFor(() =>
-      expect(api.retranscribe).toHaveBeenCalledWith("rec-123", { speakers: { min: 2, max: null } }),
+      expect(api.retranscribe).toHaveBeenCalledWith("rec-123", {
+        speakers: { min: 2, max: null },
+        language: { code: null },
+      }),
+    );
+  });
+
+  /// A recording detected as the wrong language (Whisper reads the opening of the audio, so a quiet start
+  /// can come back as a language nobody spoke) is fixed from this dialog - the pin has to reach the API.
+  it("re-transcribes with the spoken language pinned in the modal", async () => {
+    (api.retranscribe as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    renderPage(base);
+    await loaded();
+
+    openKebab();
+    fireEvent.click(screen.getByRole("menuitem", { name: /re-transcribe/i }));
+    const dialog = screen.getByRole("dialog", { name: /re-transcribe/i });
+    const picker = within(dialog).getByLabelText(/spoken language/i) as HTMLSelectElement;
+    await waitFor(() => expect(picker.options.length).toBeGreaterThan(1));
+
+    fireEvent.change(picker, { target: { value: "de" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^re-transcribe$/i }));
+
+    await waitFor(() =>
+      expect(api.retranscribe).toHaveBeenCalledWith("rec-123", {
+        speakers: { min: null, max: null },
+        language: { code: "de" },
+      }),
     );
   });
 

@@ -326,6 +326,8 @@ public record RecordingDetailDto(
     /// <summary>Projected date the nightly job will delete this recording's audio (`CreatedAt` + retention days),
     /// or null when auto-delete is off, the recording is protected/ineligible, or the audio is already gone.</summary>
     DateTimeOffset? AudioScheduledDeletionAt = null,
+    /// <summary>The spoken language this recording is pinned to (BCP-47), or null when it is auto-detected.</summary>
+    string? TranscriptionLanguage = null,
     /// <summary>Who recorded it (the owner) - drives the "Recorded by" line. Null name = a deleted/unknown user.
     /// Nullable purely so it can carry a default: a non-nullable struct with a default value crashes the OpenAPI
     /// schema exporter (same reason the admin surface with its <c>TimeOnly</c> field is excluded); in practice it
@@ -503,7 +505,12 @@ public record RenameRecordingRequest(string? Name);
 public record SpeakerHints(int? Min, int? Max);
 /// <summary>Re-transcribe options. <see cref="Speakers"/> is tri-state: omit/null = keep the recording's
 /// existing hints; present = set them (an object with null Min/Max means "back to automatic").</summary>
-public record RetranscribeRequest(string? Model, SpeakerHints? Speakers = null);
+/// <summary>The spoken language to transcribe in, as a tri-state wrapper (like <see cref="SpeakerHints"/>):
+/// a null <see cref="Code"/> means auto-detect, a code pins it. Absent from the request = leave the
+/// recording's existing choice alone.</summary>
+public record LanguageChoice(string? Code);
+
+public record RetranscribeRequest(string? Model, SpeakerHints? Speakers = null, LanguageChoice? Language = null);
 /// <summary>Edit a segment's text. <see cref="Text"/> is tri-state: a value sets the revision (the original
 /// is preserved); null = reset to the model's original (clears the revision); "" = a deliberately blank
 /// revision.</summary>
@@ -543,7 +550,9 @@ public record UserProfileDto(
     bool McpAccessEnabled = true,
     /// <summary>The caller's platform permissions, from their group membership. Resolved server-side on every
     /// request: the web must not infer authority from the JWT, which goes stale when membership changes.</summary>
-    PermissionsDto? Permissions = null);
+    PermissionsDto? Permissions = null,
+    /// <summary>The default spoken language for this user's recordings (BCP-47), or null to auto-detect.</summary>
+    string? TranscriptionLanguage = null);
 
 /// <summary>A user's platform permissions, expanded into booleans so the client never does bit arithmetic.</summary>
 public record PermissionsDto(
@@ -580,7 +589,9 @@ public record RoomDetailDto(
 public record UpdateUserProfileRequest(
     string? FullName, string? NativeLanguage, string? UiLanguage,
     string? JobTitle = null, string? CompanyName = null, string? JobDescription = null,
-    string? CompanyDescription = null, string? LinkedIn = null, string? Theme = null);
+    string? CompanyDescription = null, string? LinkedIn = null, string? Theme = null,
+    /// <summary>Default spoken language for new recordings (BCP-47); blank = auto-detect.</summary>
+    string? TranscriptionLanguage = null);
 
 /// <summary>Translate a transcript (or one segment) into <see cref="Language"/> (BCP-47). When null, the
 /// caller's saved native language is used; 400 if neither is set.</summary>

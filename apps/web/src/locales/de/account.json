@@ -625,5 +625,8 @@
   "llmParamToolsSupported": "Unterstuetzt Tool-Aufrufe",
   "llmParamImagesSupported": "Unterstuetzt Bildeingabe",
   "llmUsageTruncated": "Abgeschnitten",
-  "llmUsageTruncatedHint": "Das Modell hat sein Token-Limit erreicht, bevor es fertig war. Die Antwort kann kurz oder ganz leer sein, obwohl der Aufruf erfolgreich war und die Tokens berechnet wurden."
+  "llmUsageTruncatedHint": "Das Modell hat sein Token-Limit erreicht, bevor es fertig war. Die Antwort kann kurz oder ganz leer sein, obwohl der Aufruf erfolgreich war und die Tokens berechnet wurden.",
+  "transcriptionLanguage": "Transkriptionssprache",
+  "transcriptionLanguageAuto": "- Automatisch erkennen -",
+  "transcriptionLanguageHint": "Die Sprache, in der Ihre Aufnahmen ublicherweise gesprochen werden. Die Erkennung pro Aufnahme kann bei leisem Beginn fehlgehen. Jede Aufnahme kann dies weiterhin uberschreiben."
 }

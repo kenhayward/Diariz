@@ -1,11 +1,18 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { Language } from "../../lib/types";
 
 /// Asked for when the user re-transcribes: optional diarization speaker-count hints (the exception, not
-/// the norm — used mainly to split two people the diarizer merged into one).
+/// the norm — used mainly to split two people the diarizer merged into one) and the spoken language.
+///
+/// The language is here rather than only in preferences because this is the dialog a user reaches when a
+/// recording came back wrong: Whisper detects the language from the opening of the audio, so one that
+/// starts quiet can be transcribed as a language nobody spoke. Blank = let it detect again.
 export default function RetranscribeModal({
   initialMin,
   initialMax,
+  initialLanguage,
+  languages,
   hasRevisions,
   busy,
   onCancel,
@@ -13,14 +20,17 @@ export default function RetranscribeModal({
 }: {
   initialMin: number | null;
   initialMax: number | null;
+  initialLanguage: string | null;
+  languages: Language[];
   hasRevisions: boolean;
   busy: boolean;
   onCancel: () => void;
-  onConfirm: (min: number | null, max: number | null) => void;
+  onConfirm: (min: number | null, max: number | null, language: string | null) => void;
 }) {
   const { t } = useTranslation("workspace");
   const [min, setMin] = useState(initialMin != null ? String(initialMin) : "");
   const [max, setMax] = useState(initialMax != null ? String(initialMax) : "");
+  const [language, setLanguage] = useState(initialLanguage ?? "");
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onCancel();
@@ -29,7 +39,7 @@ export default function RetranscribeModal({
   }, [onCancel]);
 
   function confirm() {
-    onConfirm(min.trim() ? Number(min) : null, max.trim() ? Number(max) : null);
+    onConfirm(min.trim() ? Number(min) : null, max.trim() ? Number(max) : null, language || null);
   }
 
   return (
@@ -71,6 +81,23 @@ export default function RetranscribeModal({
             />
           </label>
         </div>
+        <label className="mt-4 block text-sm">
+          <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("spokenLanguage")}</span>
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            aria-label={t("spokenLanguage")}
+            className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          >
+            <option value="">{t("spokenLanguageAuto")}</option>
+            {languages.map((l) => (
+              <option key={l.code} value={l.code}>
+                {l.englishName} ({l.nativeName})
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">{t("spokenLanguageHint")}</span>
+        </label>
         <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"

@@ -625,5 +625,8 @@
   "llmParamToolsSupported": "Admite llamadas a herramientas",
   "llmParamImagesSupported": "Admite entrada de imagenes",
   "llmUsageTruncated": "Cortado",
-  "llmUsageTruncatedHint": "El modelo alcanzo su limite de tokens antes de terminar. La respuesta puede ser corta o estar vacia, aunque la llamada tuvo exito y los tokens se cobraron."
+  "llmUsageTruncatedHint": "El modelo alcanzo su limite de tokens antes de terminar. La respuesta puede ser corta o estar vacia, aunque la llamada tuvo exito y los tokens se cobraron.",
+  "transcriptionLanguage": "Idioma de transcripcion",
+  "transcriptionLanguageAuto": "- Detectar automaticamente -",
+  "transcriptionLanguageHint": "El idioma en que suelen hablarse sus grabaciones. Detectarlo en cada grabacion puede fallar si el comienzo es silencioso. Cada grabacion puede anular esta opcion."
 }

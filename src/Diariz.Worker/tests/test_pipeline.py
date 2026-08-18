@@ -214,7 +214,7 @@ def test_transcribe_wraps_every_stage_including_the_decode_and_the_shaping(monke
     monkeypatch.setattr(pipeline.telemetry, "span", fake_span)
     monkeypatch.setattr(pipeline.whisperx, "load_audio", lambda path: np.zeros(16000))
     monkeypatch.setattr(pipeline.config, "MAX_AUDIO_SECONDS", 0)
-    monkeypatch.setattr(pipeline, "_asr", lambda audio: {"language": "en", "segments": []})
+    monkeypatch.setattr(pipeline, "_asr", lambda audio, language=None: {"language": "en", "segments": []})
     monkeypatch.setattr(pipeline, "_get_align", lambda language: ("model", "meta"))
     monkeypatch.setattr(pipeline.whisperx, "align", lambda *a, **k: {"segments": []})
     monkeypatch.setattr(pipeline, "_diarize", lambda *a, **k: "diarization")
@@ -233,3 +233,166 @@ def test_transcribe_wraps_every_stage_including_the_decode_and_the_shaping(monke
         ("ai.shape", "shape"),
         ("ai.embeddings", "embeddings"),
     ]
+
+
+# ---- Alignment fallback for languages whisperx has no align model for ----
+#
+# whisperx ships align models for 37 languages. Whisper detects ~99, and misdetects the language
+# outright on short or quiet audio (a 2 m test recording in English came back as Welsh). Either way
+# load_align_model raises, and that used to fail the whole job - discarding a transcript the ASR had
+# already produced. Alignment only refines segment boundaries here: _shape_segments keeps no word-level
+# data at all, and assign_word_speakers guards its word loop with `if 'words' in seg`, so an unaligned
+# transcript still gets per-segment speakers.
+
+def test_get_align_returns_none_when_whisperx_has_no_model_for_the_language(monkeypatch):
+    monkeypatch.setattr(pipeline, "_align_cache", {})
+
+    def no_model(language_code, device):
+        raise ValueError(f"No default align-model for language: {language_code}")
+
+    monkeypatch.setattr(pipeline.whisperx, "load_align_model", no_model)
+
+    assert pipeline._get_align("cy") is None
+
+
+def test_get_align_caches_the_missing_model_so_every_job_does_not_retry_the_load(monkeypatch):
+    cache = {}
+    monkeypatch.setattr(pipeline, "_align_cache", cache)
+    calls = []
+
+    def no_model(language_code, device):
+        calls.append(language_code)
+        raise ValueError(f"No default align-model for language: {language_code}")
+
+    monkeypatch.setattr(pipeline.whisperx, "load_align_model", no_model)
+
+    assert pipeline._get_align("cy") is None
+    assert pipeline._get_align("cy") is None
+
+    assert calls == ["cy"]  # the second call was served from the cache
+    assert cache["cy"] is None
+
+
+def test_get_align_lets_a_real_load_failure_through(monkeypatch):
+    """A missing model is a ValueError and degrades; anything else (a failed download, a broken
+    checkpoint) must still fail the job rather than silently costing every transcript its alignment."""
+    monkeypatch.setattr(pipeline, "_align_cache", {})
+
+    def boom(language_code, device):
+        raise OSError("connection to huggingface.co failed")
+
+    monkeypatch.setattr(pipeline.whisperx, "load_align_model", boom)
+
+    with pytest.raises(OSError):
+        pipeline._get_align("en")
+
+
+def test_transcribe_keeps_the_transcript_when_the_language_has_no_align_model(monkeypatch):
+    aligned = []
+    diarized = {}
+    monkeypatch.setattr(pipeline.whisperx, "load_audio", lambda path: np.zeros(16000))
+    monkeypatch.setattr(pipeline.config, "MAX_AUDIO_SECONDS", 0)
+    monkeypatch.setattr(pipeline, "_asr", lambda audio, language=None: {
+        "language": "cy",
+        "segments": [{"start": 0.0, "end": 1.5, "text": "hello world"}],
+    })
+    monkeypatch.setattr(pipeline, "_get_align", lambda language: None)
+    monkeypatch.setattr(pipeline.whisperx, "align", lambda *a, **k: aligned.append(a) or {"segments": []})
+    monkeypatch.setattr(pipeline, "_diarize", lambda *a, **k: "diarization")
+
+    def assign(diarization, result):
+        diarized.update(diarization=diarization, segments=result["segments"])
+        return {"segments": [{**s, "speaker": "SPEAKER_00"} for s in result["segments"]]}
+
+    monkeypatch.setattr(pipeline.whisperx, "assign_word_speakers", assign)
+    monkeypatch.setattr(pipeline, "_extract_speakers", lambda audio, segments: [])
+
+    out = pipeline.transcribe("/tmp/audio.wav")
+
+    assert aligned == []  # alignment skipped, not attempted
+    # The ASR segments still reached diarization, so speakers are assigned per segment...
+    assert diarized["segments"] == [{"start": 0.0, "end": 1.5, "text": "hello world"}]
+    # ...and the job returns a transcript instead of raising.
+    assert out["segments"] == [
+        {"Speaker": "SPEAKER_00", "StartMs": 0, "EndMs": 1500, "Text": "hello world"}
+    ]
+    assert out["language"] == "cy"
+
+
+# ---- Pinned language (skips Whisper's auto-detection) ----
+
+def test_asr_forwards_a_pinned_language_to_faster_whisper(monkeypatch):
+    monkeypatch.setattr(pipeline.config, "ASR_BACKEND", "whisperx")
+    monkeypatch.setattr(pipeline.config, "BATCH_SIZE", 8)
+    captured = {}
+
+    class FakeModel:
+        def transcribe(self, audio, **kwargs):
+            captured.update(kwargs)
+            return {"language": "en", "segments": []}
+
+    monkeypatch.setattr(pipeline, "_get_whisper", lambda: FakeModel())
+
+    pipeline._asr("AUDIO", language="en")
+
+    assert captured == {"batch_size": 8, "language": "en"}
+
+
+def test_asr_forwards_a_pinned_language_to_openai_whisper(monkeypatch):
+    monkeypatch.setattr(pipeline.config, "ASR_BACKEND", "whisper")
+    monkeypatch.setattr(pipeline.config, "DEVICE", "cpu")
+    captured = {}
+
+    class FakeModel:
+        def transcribe(self, audio, **kwargs):
+            captured.update(kwargs)
+            return {"language": "en", "segments": []}
+
+    monkeypatch.setattr(pipeline, "_get_whisper_py", lambda: FakeModel())
+
+    pipeline._asr("AUDIO", language="de")
+
+    assert captured == {"fp16": False, "language": "de"}
+
+
+def test_asr_omits_the_language_when_none_is_pinned(monkeypatch):
+    """No language means auto-detect. Passing language=None explicitly would be the same thing to
+    whisper, but leaving the kwarg out keeps the auto path exactly as it was."""
+    monkeypatch.setattr(pipeline.config, "ASR_BACKEND", "whisperx")
+    monkeypatch.setattr(pipeline.config, "BATCH_SIZE", 8)
+    captured = {}
+
+    class FakeModel:
+        def transcribe(self, audio, **kwargs):
+            captured.update(kwargs=kwargs)
+            return {"language": "fr", "segments": []}
+
+    monkeypatch.setattr(pipeline, "_get_whisper", lambda: FakeModel())
+
+    out = pipeline._asr("AUDIO")
+
+    assert captured["kwargs"] == {"batch_size": 8}
+    assert out["language"] == "fr"  # whatever detection returned
+
+
+def test_transcribe_pins_the_language_for_the_asr_and_the_aligner(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(pipeline.whisperx, "load_audio", lambda path: np.zeros(16000))
+    monkeypatch.setattr(pipeline.config, "MAX_AUDIO_SECONDS", 0)
+
+    def fake_asr(audio, language=None):
+        captured["asr_language"] = language
+        # Whisper echoes back the language it was told to use.
+        return {"language": language or "cy", "segments": []}
+
+    monkeypatch.setattr(pipeline, "_asr", fake_asr)
+    monkeypatch.setattr(pipeline, "_get_align", lambda language: captured.update(align_language=language) or None)
+    monkeypatch.setattr(pipeline, "_diarize", lambda *a, **k: "diarization")
+    monkeypatch.setattr(pipeline.whisperx, "assign_word_speakers", lambda d, r: {"segments": []})
+    monkeypatch.setattr(pipeline, "_extract_speakers", lambda audio, segments: [])
+
+    out = pipeline.transcribe("/tmp/audio.wav", language="en")
+
+    assert captured["asr_language"] == "en"
+    assert captured["align_language"] == "en"
+    assert out["language"] == "en"

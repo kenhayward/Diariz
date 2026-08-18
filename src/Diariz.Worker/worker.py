@@ -2,7 +2,11 @@
 pyannote pipeline, and posts results back to the API.
 
 Job payload (Redis stream field "job") is JSON produced by the .NET API:
-  { "RecordingId": "...", "TranscriptionId": "...", "BlobKey": "...", "Model": "..." }
+  { "RecordingId": "...", "TranscriptionId": "...", "BlobKey": "...", "Model": "...",
+    "MinSpeakers": null, "MaxSpeakers": null, "Language": null }
+
+``Language`` is the owner's pinned transcription language as a Whisper code ("en"), resolved by the
+API from the recording's own override or the user's default; null means let Whisper detect it.
 """
 import json
 import logging
@@ -130,7 +134,8 @@ def handle(job: dict) -> None:
         with telemetry.transaction("transcribe"):
             with telemetry.span("storage.download", "download"):
                 audio_path = storage.download(blob_key)
-            result = pipeline.transcribe(audio_path, job.get("MinSpeakers"), job.get("MaxSpeakers"))
+            result = pipeline.transcribe(audio_path, job.get("MinSpeakers"), job.get("MaxSpeakers"),
+                                         language=job.get("Language"))
             # Full-pipeline wall-clock time (download + transcribe + diarize + embed), reported to the API.
             processing_ms = int((time.monotonic() - started) * 1000)
             with telemetry.span("http.client", "callback"):

@@ -625,5 +625,8 @@
   "llmParamToolsSupported": "Prend en charge les appels d'outils",
   "llmParamImagesSupported": "Prend en charge la saisie d'images",
   "llmUsageTruncated": "Tronque",
-  "llmUsageTruncatedHint": "Le modele a atteint sa limite de tokens avant de terminer. La reponse peut etre courte ou vide, meme si l'appel a reussi et que les tokens ont ete factures."
+  "llmUsageTruncatedHint": "Le modele a atteint sa limite de tokens avant de terminer. La reponse peut etre courte ou vide, meme si l'appel a reussi et que les tokens ont ete factures.",
+  "transcriptionLanguage": "Langue de transcription",
+  "transcriptionLanguageAuto": "- Detecter automatiquement -",
+  "transcriptionLanguageHint": "La langue habituellement parlee dans vos enregistrements. La detection par enregistrement peut echouer si le debut est silencieux. Chaque enregistrement peut toujours la remplacer."
 }

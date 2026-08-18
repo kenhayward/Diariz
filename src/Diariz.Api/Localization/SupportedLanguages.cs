@@ -66,6 +66,15 @@ public static class SupportedLanguages
     /// <summary>True when <paramref name="code"/> is one of the supported language codes (case-insensitive).</summary>
     public static bool IsSupported(string? code) => code is not null && Codes.Contains(code);
 
+    /// <summary>The Whisper language code for a supported BCP-47 tag, or null when the code is unset or
+    /// not one the platform supports (both mean "let Whisper detect it").
+    ///
+    /// Whisper takes ISO-639-1 codes, so the region/script subtag is dropped: "pt-BR" and "pt-PT" are both
+    /// "pt" to the model. Refusing an unknown code rather than forwarding it matters - forwarding "cy"
+    /// would pin the very language this exists to stop a recording being mis-detected as.</summary>
+    public static string? ToWhisperCode(string? code) =>
+        !IsSupported(code) ? null : code!.Split('-')[0].ToLowerInvariant();
+
     /// <summary>The matching language (case-insensitive), or null when unsupported.</summary>
     public static LanguageDto? Find(string? code) =>
         code is null ? null : All.FirstOrDefault(l => string.Equals(l.Code, code, StringComparison.OrdinalIgnoreCase));

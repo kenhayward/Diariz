@@ -48,20 +48,41 @@ def _normalize_segments(segments) -> list[dict]:
     return [{"start": s["start"], "end": s["end"], "text": s.get("text", "")} for s in segments]
 
 
-def _asr(audio) -> dict:
+def _asr(audio, language: str | None = None) -> dict:
     """Whisper transcription step, backend-pluggable. Returns {language, segments[{start,end,text}]}.
-    The aligner re-times every word afterwards, so the backend only needs decent segment text + language."""
+    The aligner re-times every word afterwards, so the backend only needs decent segment text + language.
+
+    `language` pins the spoken language and skips Whisper's auto-detection. Detection reads the opening
+    of the audio before any speech is known to be there, so a recording that starts quiet can come back
+    as a language nobody spoke - a 2 m English test recording detected as Welsh, which then had no align
+    model. None keeps auto-detection: the kwarg is left off entirely rather than passed as None, so the
+    unpinned path stays byte-for-byte what it was."""
+    kwargs = {"language": language} if language else {}
     if config.ASR_BACKEND == "whisper":
-        result = _get_whisper_py().transcribe(audio, fp16=config.DEVICE != "cpu")
+        result = _get_whisper_py().transcribe(audio, fp16=config.DEVICE != "cpu", **kwargs)
     else:
-        result = _get_whisper().transcribe(audio, batch_size=config.BATCH_SIZE)
+        result = _get_whisper().transcribe(audio, batch_size=config.BATCH_SIZE, **kwargs)
     return {"language": result.get("language", "en"), "segments": _normalize_segments(result["segments"])}
 
 
 def _get_align(language_code: str):
+    """The wav2vec2 alignment model for a language, or None when whisperx ships none for it.
+
+    whisperx has align models for 37 languages; Whisper transcribes ~99 and misdetects outright on
+    short or quiet audio. Letting the resulting ValueError escape failed the whole job and threw away a
+    transcript the ASR had already produced, so a missing model degrades instead (see transcribe). The
+    None is cached like a real model: without it every job in an unalignable language would re-attempt
+    the load. Only the "no such model" ValueError is swallowed - a failed download or a broken
+    checkpoint still raises, because silently dropping alignment for English would be a worse bug than
+    the one this fixes."""
     if language_code not in _align_cache:
-        _align_cache[language_code] = whisperx.load_align_model(
-            language_code=language_code, device=config.DEVICE)
+        try:
+            _align_cache[language_code] = whisperx.load_align_model(
+                language_code=language_code, device=config.DEVICE)
+        except ValueError:
+            log.warning("No alignment model for language %s; continuing with segment-level timings "
+                        "(word-level alignment unavailable)", language_code)
+            _align_cache[language_code] = None
     return _align_cache[language_code]
 
 
@@ -197,9 +218,10 @@ def _too_long(duration_ms: int, max_seconds: float) -> bool:
     return max_seconds > 0 and duration_ms > max_seconds * 1000
 
 
-def transcribe(audio_path: str, min_speakers=None, max_speakers=None) -> dict:
+def transcribe(audio_path: str, min_speakers=None, max_speakers=None, language=None) -> dict:
     """Run transcription -> alignment -> diarization -> per-speaker embeddings.
-    Returns {language, segments, speakers, duration_ms}. min/max_speakers are optional pyannote hints."""
+    Returns {language, segments, speakers, duration_ms}. min/max_speakers are optional pyannote hints;
+    `language` pins the spoken language (None = let Whisper detect it)."""
     # 0. Decode to a 16 kHz mono waveform. This shells out to ffmpeg and is the slowest single
     # stage on a long upload, so it gets its own span - without it the stage timings below do not
     # add up to the job's wall-clock time and a slow job looks unaccounted for.
@@ -213,15 +235,23 @@ def transcribe(audio_path: str, min_speakers=None, max_speakers=None) -> dict:
 
     # 1. Transcribe (backend-pluggable: faster-whisper on CUDA, openai-whisper on AMD ROCm)
     with telemetry.span("ai.asr", "asr"):
-        asr = _asr(audio)
+        asr = _asr(audio, language)
     language = asr["language"]
 
-    # 2. Word-level alignment
+    # 2. Word-level alignment. Optional: a language whisperx has no align model for keeps the ASR's own
+    # segment timings rather than failing the job. Nothing downstream needs the words - _shape_segments
+    # stores segment-level start/end/text/speaker and discards word data even when alignment ran, and
+    # assign_word_speakers guards its word loop with `if 'words' in seg`, so speakers are still assigned
+    # per segment. The cost is segment boundaries that are a little less precise.
     with telemetry.span("ai.align", "align"):
-        align_model, metadata = _get_align(language)
-        result = whisperx.align(
-            asr["segments"], align_model, metadata, audio, config.DEVICE,
-            return_char_alignments=False)
+        aligned = _get_align(language)
+        if aligned is None:
+            result = {"segments": asr["segments"]}
+        else:
+            align_model, metadata = aligned
+            result = whisperx.align(
+                asr["segments"], align_model, metadata, audio, config.DEVICE,
+                return_char_alignments=False)
 
     # 3. Diarization (with optional speaker-count hints) + speaker assignment
     with telemetry.span("ai.diarize", "diarize"):

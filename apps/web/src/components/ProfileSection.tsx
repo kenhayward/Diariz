@@ -27,6 +27,7 @@ export default function ProfileSection() {
 
   const [fullName, setFullName] = useState("");
   const [nativeLanguage, setNativeLanguage] = useState("");
+  const [transcriptionLanguage, setTranscriptionLanguage] = useState("");
   const [uiLanguage, setUiLanguage] = useState("");
   const [jobTitle, setJobTitle] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -41,6 +42,7 @@ export default function ProfileSection() {
     if (profile) {
       setFullName(profile.fullName ?? "");
       setNativeLanguage(profile.nativeLanguage ?? "");
+      setTranscriptionLanguage(profile.transcriptionLanguage ?? "");
       setUiLanguage(profile.uiLanguage ?? "");
       setJobTitle(profile.jobTitle ?? "");
       setCompanyName(profile.companyName ?? "");
@@ -58,6 +60,7 @@ export default function ProfileSection() {
       const res = await api.updateProfile({
         fullName: fullName.trim() || null,
         nativeLanguage: nativeLanguage || null,
+        transcriptionLanguage: transcriptionLanguage || null,
         uiLanguage: uiLanguage || null,
         jobTitle: jobTitle.trim() || null,
         companyName: companyName.trim() || null,
@@ -131,6 +134,24 @@ export default function ProfileSection() {
           ))}
         </select>
         <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">{t("nativeLanguageHint")}</span>
+      </label>
+
+      <label className="block text-sm">
+        <span className={labelSpan}>{t("transcriptionLanguage")}</span>
+        <select
+          value={transcriptionLanguage}
+          onChange={(e) => setTranscriptionLanguage(e.target.value)}
+          aria-label={t("transcriptionLanguage")}
+          className={field}
+        >
+          <option value="">{t("transcriptionLanguageAuto")}</option>
+          {languages?.map((l) => (
+            <option key={l.code} value={l.code}>
+              {l.englishName} ({l.nativeName})
+            </option>
+          ))}
+        </select>
+        <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">{t("transcriptionLanguageHint")}</span>
       </label>
 
       <label className="block text-sm">

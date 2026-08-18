@@ -1302,6 +1302,9 @@ namespace Diariz.Domain.Migrations
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");
 
+                    b.Property<string>("TranscriptionLanguage")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
@@ -2087,6 +2090,9 @@ namespace Diariz.Domain.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValue(0);
+
+                    b.Property<string>("TranscriptionLanguage")
+                        .HasColumnType("text");
 
                     b.Property<string>("UiLanguage")
                         .HasColumnType("text");

@@ -1,4 +1,6 @@
+using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
+using Microsoft.AspNetCore.Mvc;
 using Diariz.Api.Services;
 using Diariz.Api.Configuration;
 using Diariz.Api.Tests.Infrastructure;
@@ -82,5 +84,68 @@ public class UserProfileControllerTests
         var res = await sut.Get();
 
         Assert.False(res.Value!.McpAccessEnabled);
+    }
+
+    // ---- Default transcription language ----
+    //
+    // Deliberately its own setting rather than reusing NativeLanguage: that is the user's own language,
+    // used as the default translation target, and plenty of people record meetings in a language that is
+    // not their own. Pinning transcription to it would mis-transcribe them by default.
+
+    [Fact]
+    public async Task Update_persists_the_default_transcription_language()
+    {
+        using var host = new IdentityTestHost();
+        var sut = await BuildAsync(host);
+
+        await sut.Update(new UpdateUserProfileRequest(null, null, null, TranscriptionLanguage: "de"));
+
+        var userId = Guid.Parse(sut.ControllerContext.HttpContext.User.FindFirst(
+            System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
+        Assert.Equal("de", (await host.Db.UserSettings.FindAsync(userId))!.TranscriptionLanguage);
+    }
+
+    [Fact]
+    public async Task Profile_reports_the_default_transcription_language()
+    {
+        using var host = new IdentityTestHost();
+        var sut = await BuildAsync(host);
+        await sut.Update(new UpdateUserProfileRequest(null, null, null, TranscriptionLanguage: "fr"));
+
+        var res = await sut.Get();
+
+        Assert.Equal("fr", res.Value!.TranscriptionLanguage);
+    }
+
+    [Fact]
+    public async Task Profile_reports_no_transcription_language_when_the_user_has_not_set_one()
+    {
+        using var host = new IdentityTestHost();
+        var sut = await BuildAsync(host);
+
+        Assert.Null((await sut.Get()).Value!.TranscriptionLanguage);
+    }
+
+    [Fact]
+    public async Task Update_rejects_an_unsupported_transcription_language()
+    {
+        using var host = new IdentityTestHost();
+        var sut = await BuildAsync(host);
+
+        var res = await sut.Update(new UpdateUserProfileRequest(null, null, null, TranscriptionLanguage: "cy"));
+
+        Assert.IsType<BadRequestObjectResult>(res.Result);
+    }
+
+    [Fact]
+    public async Task Update_clears_the_transcription_language_when_it_is_blank()
+    {
+        using var host = new IdentityTestHost();
+        var sut = await BuildAsync(host);
+        await sut.Update(new UpdateUserProfileRequest(null, null, null, TranscriptionLanguage: "de"));
+
+        await sut.Update(new UpdateUserProfileRequest(null, null, null, TranscriptionLanguage: ""));
+
+        Assert.Null((await sut.Get()).Value!.TranscriptionLanguage);
     }
 }
