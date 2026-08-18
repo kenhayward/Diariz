@@ -51,13 +51,21 @@ for (let i = 0; i < 256; i++) POPCOUNT[i] = (i & 1) + POPCOUNT[i >> 1];
  *
  * Returns a 32-byte Uint8Array (256 bits).
  */
-function dhash(bitmap, width, height) {
+function dhash(bitmap, width, height, { pixelOrder = "bgra" } = {}) {
+  // Frames arrive from two worlds with two byte orders: Electron's nativeImage is BGRA, a canvas
+  // ImageData is RGBA. Reading one as the other still produces a working hash, which is what makes it
+  // dangerous - it just weighs the colour channels wrongly, so (say) a red-on-black chart and a
+  // blue-on-black one come out far more alike than a viewer would call them.
+  const rgba = pixelOrder === "rgba";
+  const rOffset = rgba ? 0 : 2;
+  const bOffset = rgba ? 2 : 0;
+
   const out = new Uint8Array((width - 1) * height / 8);
   let bit = 0;
   for (let y = 0; y < height; y++) {
-    let left = luma(bitmap, (y * width) * 4);
+    let left = luma(bitmap, y * width * 4, rOffset, bOffset);
     for (let x = 1; x < width; x++) {
-      const right = luma(bitmap, (y * width + x) * 4);
+      const right = luma(bitmap, (y * width + x) * 4, rOffset, bOffset);
       if (left > right) out[bit >> 3] |= 0x80 >> (bit & 7);
       left = right;
       bit++;
@@ -66,10 +74,10 @@ function dhash(bitmap, width, height) {
   return out;
 }
 
-/// Rec. 601 luma from a BGRA pixel at `i`. Matching the eye's sensitivity matters here: a green-on-black
+/// Rec. 601 luma from the pixel at `i`. Matching the eye's sensitivity matters here: a green-on-black
 /// chart and a blue-on-black one are very different to a viewer and nearly identical to a plain average.
-function luma(bitmap, i) {
-  return 0.114 * bitmap[i] + 0.587 * bitmap[i + 1] + 0.299 * bitmap[i + 2];
+function luma(bitmap, i, rOffset, bOffset) {
+  return 0.299 * bitmap[i + rOffset] + 0.587 * bitmap[i + 1] + 0.114 * bitmap[i + bOffset];
 }
 
 /// Number of differing bits between two digests: 0 is identical, 256 maximally different.

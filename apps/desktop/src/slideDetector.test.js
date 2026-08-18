@@ -89,6 +89,42 @@ test("dhash barely moves for a cursor drifting over a static slide", () => {
   assert.ok(hamming(hashOf(SLIDE_A), hashOf(SLIDE_A_WITH_CURSOR)) <= 2);
 });
 
+// Frames reach this module from two different worlds with two different byte orders: Electron's
+// nativeImage hands back BGRA, and a canvas ImageData (which is where frames come from once they are
+// sampled off a getDisplayMedia stream) is RGBA. Reading one as the other silently applies the luma
+// weights to the wrong channels - the hash still works, but it weighs colours wrongly, so a red-on-black
+// chart and a blue-on-black one become far more alike than they should be.
+test("dhash reads a colour frame identically whether the bytes are BGRA or RGBA", () => {
+  // Strongly coloured, so a channel mix-up cannot hide: red bars on a blue field.
+  const colourAt = (x) => (x >= 2 && x < 6 ? [220, 30, 30] : [20, 20, 200]);
+  const pack = (order) => {
+    const buf = Buffer.alloc(W * H * 4);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const [r, g, b] = colourAt(x);
+        const i = (y * W + x) * 4;
+        const [c0, c1, c2] = order === "rgba" ? [r, g, b] : [b, g, r];
+        buf[i] = c0;
+        buf[i + 1] = c1;
+        buf[i + 2] = c2;
+        buf[i + 3] = 255;
+      }
+    }
+    return buf;
+  };
+
+  const fromNativeImage = dhash(pack("bgra"), W, H, { pixelOrder: "bgra" });
+  const fromCanvas = dhash(pack("rgba"), W, H, { pixelOrder: "rgba" });
+
+  assert.equal(hamming(fromNativeImage, fromCanvas), 0);
+});
+
+test("dhash defaults to BGRA, the layout Electron's nativeImage produces", () => {
+  const bytes = frame(SLIDE_A);
+
+  assert.deepEqual(dhash(bytes, W, H), dhash(bytes, W, H, { pixelOrder: "bgra" }));
+});
+
 // ---- hamming --------------------------------------------------------------------------------------
 
 test("hamming is zero for identical digests", () => {
