@@ -31,9 +31,30 @@ vi.mock("../lib/api", () => ({
       reasoningTokens: null, totalTokens: 3, finishReason: "stop", response: "hi",
       requestBodyJson: '{"model":"gpt-oss-20b"}', errorKind: null, message: null, offendingParameter: null,
     }),
-    getLlmUsage: vi.fn().mockResolvedValue({ rows: [], page: 1, pageSize: 50, total: 0, totals: { calls: 0 } }),
+    // A COMPLETE totals object. A partial one still satisfies every assertion here, because the table's
+    // totals row renders after them - and then throws on the missing token counts, which vitest reports as
+    // an unhandled error rather than a failure. The suite reads green and CI does not.
+    getLlmUsage: vi.fn().mockResolvedValue({
+      rows: [], page: 1, pageSize: 50, total: 0,
+      totals: {
+        calls: 0, operations: 0, durationMs: 0,
+        promptTokens: null, completionTokens: null, reasoningTokens: null, totalTokens: null,
+        tokenMeasuredCalls: 0, promptTokensMeasured: 0, completionTokensMeasured: 0,
+        reasoningTokensMeasured: 0, totalTokensMeasured: 0,
+        failedCalls: 0, tokensPerSecond: null,
+      },
+    }),
     getLlmUsageFilters: vi.fn().mockResolvedValue({ users: [], models: [], kinds: [] }),
-    getLlmUsageSummary: vi.fn().mockResolvedValue({ groups: [], totals: { calls: 0 } }),
+    getLlmUsageSummary: vi.fn().mockResolvedValue({
+      groups: [],
+      totals: {
+        calls: 0, operations: 0, durationMs: 0,
+        promptTokens: null, completionTokens: null, reasoningTokens: null, totalTokens: null,
+        tokenMeasuredCalls: 0, promptTokensMeasured: 0, completionTokensMeasured: 0,
+        reasoningTokensMeasured: 0, totalTokensMeasured: 0,
+        failedCalls: 0, tokensPerSecond: null,
+      },
+    }),
     deleteLlmUsage: vi.fn(),
     createPlatformWebhook: vi.fn(),
     deletePlatformWebhook: vi.fn(),
