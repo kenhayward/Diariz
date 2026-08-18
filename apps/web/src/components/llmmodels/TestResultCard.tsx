@@ -1,4 +1,7 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
+import { usageFilterToParams } from "../llmusage/usageFilterParams";
 import type { LlmTestOutcome } from "../../lib/types";
 import { PARAMETERS, type ParameterValue } from "./parameterSchema";
 
@@ -11,6 +14,29 @@ interface Props {
   /// Applies a one-click fix to the open tab's layer. `null` means omit, never undefined - see
   /// `ParameterValue`.
   onFix: (fix: { key: string; value: ParameterValue }) => void;
+  /// The stored endpoint and model name, used to reproduce the call outside Diariz.
+  apiBase: string;
+  modelName: string;
+  onRetry: () => void;
+}
+
+/// The exact request, as a command that can be pasted into a terminal.
+///
+/// The key is a PLACEHOLDER, and not by omission: the browser is never given the stored key - it is
+/// write-only over the API - so there is nothing here to leak even if this were careless. Naming
+/// `$LLM_API_KEY` rather than dropping the header entirely means the command fails for an obvious reason
+/// (an unset variable) instead of an obscure one (a 401 the admin then has to diagnose separately).
+const LINK = "text-indigo-600 hover:underline dark:text-indigo-400";
+
+export function toCurl(apiBase: string, requestBodyJson: string): string {
+  const url = `${apiBase.replace(/\/+$/, "")}/chat/completions`;
+  const body = requestBodyJson.split("'").join(`'\\''`);
+  return [
+    `curl -N ${url} \\`,
+    `  -H "Content-Type: application/json" \\`,
+    `  -H "Authorization: Bearer $LLM_API_KEY" \\`,
+    `  -d '${body}'`,
+  ].join("\n");
 }
 
 /// The outcome of one test call: a verdict strip, the numbers, and - on a failure - the endpoint's own
@@ -20,8 +46,18 @@ interface Props {
 /// parameter states and the hardest to discover, and the moment an administrator needs it is exactly the
 /// moment an endpoint has just rejected a parameter by name. Offering it there, on that row, is what makes
 /// the state legible at all.
-export default function TestResultCard({ result, group, resolvedTimeoutSeconds, onFix }: Props) {
+export default function TestResultCard({
+  result, group, resolvedTimeoutSeconds, onFix, apiBase, modelName, onRetry,
+}: Props) {
   const { t } = useTranslation("account");
+  const [copied, setCopied] = useState<string | null>(null);
+
+  async function copy(what: string, text: string) {
+    await navigator.clipboard?.writeText(text);
+    setCopied(what);
+  }
+
+  const usageLink = `/admin/llm-usage?${usageFilterToParams({ kinds: ["AdminTest"], models: [modelName] })}`;
 
   const seconds = (ms: number) => `${(ms / 1000).toFixed(2)} s`;
   const dash = t("llmTestNotMeasured");
@@ -122,6 +158,31 @@ export default function TestResultCard({ result, group, resolvedTimeoutSeconds, 
             // the rejected value straight back on the wire.
             onClick={() => onFix({ key: offending, value: null })}
           />
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 border-t border-gray-100 px-3.5 py-2 text-[11.5px] dark:border-gray-800/60">
+        <button type="button" onClick={() => copy("curl", toCurl(apiBase, result.requestBodyJson))} className={LINK}>
+          {copied === "curl" ? t("llmTestCopied") : t("llmTestCopyCurl")}
+        </button>
+        <button
+          type="button"
+          onClick={() => copy("json", JSON.stringify(result, null, 2))}
+          className={LINK}
+        >
+          {copied === "json" ? t("llmTestCopied") : t("llmTestRawJson")}
+        </button>
+        {result.ok ? (
+          // Deep-links to this model's test calls rather than the whole week, which is what the label
+          // promises. Filtered on the model NAME because that is what LlmCalls records - the snapshot, not
+          // the id - so a renamed model's older tests stay under their old name.
+          <Link to={usageLink} className={LINK}>
+            {t("llmTestOpenUsage")}
+          </Link>
+        ) : (
+          <button type="button" onClick={onRetry} className={LINK}>
+            {t("llmTestRetry")}
+          </button>
         )}
       </div>
     </div>

@@ -311,6 +311,8 @@ export default function ModelEditorDrawer({
             test={tests[tab] ?? { status: "idle" }}
             onRun={model ? runTest : null}
             onFix={applyFix}
+            apiBase={model?.apiBase ?? ""}
+            modelName={model?.name ?? ""}
           />
         </div>
 

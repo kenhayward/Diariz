@@ -16,12 +16,16 @@ interface Props {
   test: TestState;
   /// Null when the model has not been saved yet, which is when there is nothing to test against.
   onRun: (() => void) | null;
+  /// The STORED endpoint and name, not what is in the connection panel: the probe uses the saved row, so
+  /// a cURL built from an unsaved edit would not reproduce the call that ran.
+  apiBase: string;
+  modelName: string;
   onFix: (fix: { key: string; value: ParameterValue }) => void;
 }
 
 /// The drawer's right-hand column: run a real call, see what came back, and see the exact body that would
 /// be sent as it is typed.
-export default function TestRail({ group, preview, test, onRun, onFix }: Props) {
+export default function TestRail({ group, preview, test, onRun, onFix, apiBase, modelName }: Props) {
   const { t } = useTranslation("account");
 
   const runLabel =
@@ -70,6 +74,9 @@ export default function TestRail({ group, preview, test, onRun, onFix }: Props) 
             group={group}
             resolvedTimeoutSeconds={preview.flags.timeoutSeconds}
             onFix={onFix}
+            apiBase={apiBase}
+            modelName={modelName}
+            onRetry={() => onRun?.()}
           />
         )}
 

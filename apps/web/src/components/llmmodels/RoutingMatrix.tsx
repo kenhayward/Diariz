@@ -26,6 +26,8 @@ interface Props {
 /// row meaning "nothing explicit here": for a call type it deletes the entry (falling through to the
 /// default), and for the Default column it clears the default (falling through to the server environment).
 /// Every cell in it means the same thing one level up from its column.
+const STICKY = "sticky left-0 z-10 bg-white dark:bg-gray-900";
+
 export default function RoutingMatrix({
   models, assignments, defaultModelId, onRoute, onEdit, tests, onTest, onTestAll,
 }: Props) {
@@ -63,12 +65,15 @@ export default function RoutingMatrix({
   }
 
   const grid = "grid grid-cols-[minmax(0,1fr)_repeat(7,86px)_128px] items-center";
+  // The model column stays put while the call types scroll under it: at a narrow width the dots are
+  // meaningless without the name they belong to, and a horizontal scroll is exactly when the name is the
+  // first thing to leave the screen. Needs its own opaque background, or the cells scroll through it.
 
   return (
     <div className="overflow-x-auto">
-      <div className="min-w-[900px] overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+      <div className="min-w-[900px] rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
         <div className={`${grid} items-end border-b border-gray-200 px-3.5 pb-2 pt-2.5 dark:border-gray-800`}>
-          <span className="text-[10.5px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+          <span className={`${STICKY} text-[10.5px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400`}>
             {t("llmModelsColModel")}
           </span>
           {columns.map((c) => (
@@ -84,7 +89,7 @@ export default function RoutingMatrix({
 
         {models.map((m) => (
           <div key={m.id} className={`${grid} border-b border-gray-100 px-3.5 py-3 dark:border-gray-800/60`}>
-            <div className="min-w-0 pr-4">
+            <div className={`${STICKY} min-w-0 pr-4`}>
               <div className="flex items-center gap-2">
                 <span className={`size-[7px] shrink-0 rounded-full ${statusDot(tests[m.id])}`} />
                 <span className="truncate text-[13.5px] font-semibold tracking-tight text-gray-900 dark:text-gray-100">
@@ -127,7 +132,7 @@ export default function RoutingMatrix({
         ))}
 
         <div className={`${grid} border-b border-gray-100 px-3.5 py-3 dark:border-gray-800/60`}>
-          <div className="min-w-0 pr-4">
+          <div className={`${STICKY} min-w-0 pr-4`}>
             <span className="pl-[15px] text-[13.5px] font-medium tracking-tight text-gray-500 dark:text-gray-400">
               {t("llmModelsNoModelRow")}
             </span>

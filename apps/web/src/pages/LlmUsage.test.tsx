@@ -151,11 +151,11 @@ function summaryPage(groups: LlmUsageSummaryGroup[], totalsObj: LlmUsageTotals):
   return { groups, totals: totalsObj };
 }
 
-function renderPage() {
+function renderPage(route = "/admin/llm-usage") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[route]}>
         <LlmUsage />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -560,5 +560,24 @@ describe("LlmUsage", () => {
       fireEvent.click(screen.getByRole("button", { name: "Delete filtered rows" }));
       expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("9999"));
     });
+  });
+
+  it("opens on the calls a link asks for", async () => {
+    // The model editor's "Open in usage log" is only useful if the page lands on the calls it names.
+    renderPage("/admin/llm-usage?kinds=AdminTest&models=qwen3.8-27b%40q4_k_xl");
+
+    await waitFor(() => expect(api.getLlmUsage).toHaveBeenCalled());
+    const sent = vi.mocked(api.getLlmUsage).mock.calls[0][0];
+    expect(sent.kinds).toEqual(["AdminTest"]);
+    expect(sent.models).toEqual(["qwen3.8-27b@q4_k_xl"]);
+  });
+
+  it("still shows the usual week when the link names nothing", async () => {
+    renderPage();
+
+    await waitFor(() => expect(api.getLlmUsage).toHaveBeenCalled());
+    const sent = vi.mocked(api.getLlmUsage).mock.calls[0][0];
+    expect(sent.kinds).toBeUndefined();
+    expect(sent.models).toBeUndefined();
   });
 });

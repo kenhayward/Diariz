@@ -1239,23 +1239,30 @@ export interface UpdateWorkflowSignalBody {
 /// this way, and LlmUsageFilter.kinds (below) is filtered by it too, since the server binds `kinds` as
 /// LlmCallKind[] and ASP.NET Core's query-string enum binder accepts names directly. No name-to-number
 /// translation is needed anywhere.
-export type LlmCallKind =
-  | "Unknown"
-  | "Summarize"
-  | "SectionSummary"
-  | "MeetingMinutes"
-  | "SectionMinutes"
-  | "MeetingTypeMinutes"
-  | "ExtractActions"
-  | "Tags"
-  | "Translation"
-  | "Dictation"
-  | "Embedding"
-  | "SearchQuery"
-  | "ChatMessage"
-  | "FormulaRun"
-  | "ChatTitle"
-  | "AdminTest";
+///
+/// Declared as a const array with the type derived from it, rather than a hand-written union, because the
+/// deep-link parser has to VALIDATE a kind at runtime - and two hand-maintained copies of the same list is
+/// exactly the drift `llmCallKind.test.ts` exists to catch.
+export const LLM_CALL_KINDS = [
+  "Unknown",
+  "Summarize",
+  "SectionSummary",
+  "MeetingMinutes",
+  "SectionMinutes",
+  "MeetingTypeMinutes",
+  "ExtractActions",
+  "Tags",
+  "Translation",
+  "Dictation",
+  "Embedding",
+  "SearchQuery",
+  "ChatMessage",
+  "FormulaRun",
+  "ChatTitle",
+  "AdminTest",
+] as const;
+
+export type LlmCallKind = (typeof LLM_CALL_KINDS)[number];
 
 /// Column a usage-log list request may sort by (LlmUsageQuery.SortWhitelist's keys).
 export type LlmUsageSortKey =

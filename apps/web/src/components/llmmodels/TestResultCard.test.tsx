@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { LlmTestOutcome } from "../../lib/types";
 import TestResultCard from "./TestResultCard";
 
@@ -24,13 +25,18 @@ const REJECTED: LlmTestOutcome = {
 function show(result: LlmTestOutcome, props: Record<string, unknown> = {}) {
   const onFix = vi.fn();
   render(
-    <TestResultCard
-      result={result}
-      group="Summaries"
-      resolvedTimeoutSeconds={120}
-      onFix={onFix}
-      {...props}
-    />,
+    <MemoryRouter>
+      <TestResultCard
+        result={result}
+        group="Summaries"
+        resolvedTimeoutSeconds={120}
+        apiBase="http://llm.test/v1"
+        modelName="m"
+        onFix={onFix}
+        onRetry={vi.fn()}
+        {...props}
+      />
+    </MemoryRouter>,
   );
   return onFix;
 }
@@ -107,5 +113,75 @@ describe("TestResultCard", () => {
     show({ ...OK, finishReason: "length" });
 
     expect(screen.getByText(/cut off/i)).toBeTruthy();
+  });
+});
+
+describe("TestResultCard actions", () => {
+  const writeText = vi.fn();
+
+  beforeEach(() => {
+    writeText.mockReset().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+  });
+
+  it("copies a cURL command for the request that actually ran", async () => {
+    // Rebuilding it from the editor's state afterwards would quote a request that was never sent - the
+    // whole point is to reproduce THIS call outside Diariz.
+    show(OK);
+
+    fireEvent.click(screen.getByRole("button", { name: /curl/i }));
+
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalled());
+    const command = writeText.mock.calls[0][0] as string;
+    expect(command).toContain("http://llm.test/v1/chat/completions");
+    expect(command).toContain('{"model":"m"}');
+  });
+
+  it("never puts a credential in the copied command", async () => {
+    // The browser is never given the key - it is write-only - so the command names a placeholder to
+    // substitute. A command that silently omitted authentication would fail for a reason the admin would
+    // then have to diagnose separately.
+    show(OK);
+
+    fireEvent.click(screen.getByRole("button", { name: /curl/i }));
+
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalled());
+    const command = writeText.mock.calls[0][0] as string;
+    expect(command).toMatch(/\$LLM_API_KEY/);
+    expect(command).not.toMatch(/sk-|Bearer [a-z0-9]{8}/i);
+  });
+
+  it("copies the whole result as JSON", async () => {
+    show(OK);
+
+    fireEvent.click(screen.getByRole("button", { name: /raw json/i }));
+
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalled());
+    expect(JSON.parse(writeText.mock.calls[0][0] as string).durationMs).toBe(1420);
+  });
+
+  it("offers a retry only when there is something to retry", () => {
+    show(OK);
+    expect(screen.queryByRole("button", { name: /retry/i })).toBeNull();
+  });
+
+  it("retries a failure", () => {
+    const onRetry = vi.fn();
+    show(TIMEOUT, { onRetry });
+
+    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+
+    expect(onRetry).toHaveBeenCalled();
+  });
+
+  it("links into the usage log filtered to this model's test calls", () => {
+    // Without the filter the link lands on every call the platform has made this week, which is not what
+    // "open in usage log" promises.
+    show(OK);
+
+    const href = screen.getByRole("link", { name: /usage log/i }).getAttribute("href") ?? "";
+    expect(href).toContain("/admin/llm-usage?");
+    expect(href).toContain("kinds=AdminTest");
+    expect(decodeURIComponent(href)).toContain("models=m");
   });
 });
