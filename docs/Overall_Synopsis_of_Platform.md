@@ -993,7 +993,13 @@ generating. It is now recorded when the stream ends (see the capture contract ab
 `CompletionTokens`/`ReasoningTokens`/`TotalTokens` parsed from the trailing `usage` chunk `stream_options`
 asked the endpoint to send, and `TimeToFirstTokenMs` populated for the first time.
 
-**Admin usage viewer (`/admin/llm-usage`).** The first user-visible surface over `LlmCalls` - a Platform
+**Admin usage viewer (`/admin/llm-usage`).** The page hydrates its filter **once** from the query string
+(`usageFilterParams.ts`) and then owns it: the URL is a way IN - the model editor's "Open in usage log", or
+a pasted link - not a mirror of the filter bar, which would push a history entry on every checkbox and make
+Back mean something the user never did. A bad link degrades to a BROADER view, never an empty one or an
+error: an unparseable date falls back to the default week and an unknown call kind is dropped, because
+"there is no usage" reads as a fact about the platform rather than about the link. It is
+the first user-visible surface over `LlmCalls` - a Platform
 Administrator page, linked from the Model Settings tab, over four endpoints on **`LlmUsageController`**
 (`api/admin/llm-usage`), every one gated by **`[Authorize(Policy = "ManagePlatform")]`** (not the weaker
 `ReadAdminSettings` Administrators also hold, because this log carries every user's activity across the

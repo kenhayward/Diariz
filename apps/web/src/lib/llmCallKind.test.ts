@@ -22,8 +22,8 @@ describe("LlmCallKind", () => {
 
   const webKinds = (() => {
     const source = read("apps/web/src/lib/types.ts");
-    const union = source.slice(source.indexOf("export type LlmCallKind ="));
-    return [...union.slice(0, union.indexOf(";")).matchAll(/"(\w+)"/g)].map((m) => m[1]);
+    const list = source.slice(source.indexOf("export const LLM_CALL_KINDS = ["));
+    return [...list.slice(0, list.indexOf("] as const")).matchAll(/"(\w+)"/g)].map((m) => m[1]);
   })();
 
   it("covers exactly the call kinds the API defines", () => {

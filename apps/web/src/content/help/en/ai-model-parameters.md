@@ -113,6 +113,18 @@ thing to change. Two failures come with a one-click fix, applied to the tab you 
 
 Nothing is saved by running a test, including the fixes. Press Save when the result is what you want.
 
+### Taking the result elsewhere
+
+Every result offers three ways out:
+
+- **Copy as cURL** puts the exact request on your clipboard, ready to paste into a terminal. The API key is
+  a `$LLM_API_KEY` placeholder rather than the real one - Diariz never gives the key back to the browser -
+  so set that variable before running it.
+- **Raw JSON** copies the whole result, for a bug report or a note.
+- **Open in usage log** shows this model's test calls alongside everything else the platform has run.
+
+A failure offers **Retry** instead of the usage-log link.
+
 Test calls appear in the usage log as **Model test**, so a test that spent tokens is still accounted for.
 The reply itself is shown once and never stored.
 

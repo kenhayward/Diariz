@@ -633,6 +633,11 @@ model name reachable at all - running one model at a time, because several model
 testing them together would measure that server's queue. The request carries no endpoint, key or model name:
 those come from the stored row only, so the endpoint cannot be used to reach a host that has no model row.
 Test calls are logged like any other, as the **Model test** kind.
+  Every result offers a way out of the drawer: **Copy as cURL** puts the exact request that ran on the
+clipboard (with the key as a `$LLM_API_KEY` placeholder - the browser is never given the stored key, and
+naming the placeholder rather than dropping the header makes a forgotten substitution fail for an obvious
+reason), **Raw JSON** copies the whole result, **Open in usage log** deep-links to that model's test calls,
+and a failure offers **Retry**.
   The application defaults are overridable per deployment through `LlmDefaults__*` environment variables
 (e.g. `LlmDefaults__Temperature`, `LlmDefaults__Translation__Temperature`), and the shipped values reproduce
 the request bodies Diariz sent before this was configurable. A server with **no models configured** keeps

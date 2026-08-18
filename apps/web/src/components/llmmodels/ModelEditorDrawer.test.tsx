@@ -1,4 +1,5 @@
 import { render, screen, fireEvent } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { LlmModel } from "../../lib/types";
 
@@ -35,17 +36,20 @@ const OK_RESULT = {
 const DEFAULTS = { ModelBase: '{"temperature":0.3,"timeout_seconds":120}' };
 
 function open(model: LlmModel | null = MODELS[0], props: Record<string, unknown> = {}) {
+  // Inside a router, as it always is in the app: the result card deep-links into the usage log.
   return render(
-    <ModelEditorDrawer
-      model={model}
-      allModels={MODELS}
-      defaults={DEFAULTS}
-      isDefaultModel={false}
-      onClose={vi.fn()}
-      onSaved={vi.fn()}
-      onDeleted={vi.fn()}
-      {...props}
-    />,
+    <MemoryRouter>
+      <ModelEditorDrawer
+        model={model}
+        allModels={MODELS}
+        defaults={DEFAULTS}
+        isDefaultModel={false}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+        onDeleted={vi.fn()}
+        {...props}
+      />
+    </MemoryRouter>,
   );
 }
 

@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth";
 import { api, apiErrorMessage } from "../lib/api";
 import { useRoomBasePath } from "../lib/rooms";
 import type { LlmUsageFilter, LlmUsageGroupDimension, LlmUsageSortKey } from "../lib/types";
-import UsageFilterBar, { defaultUsageFilter, type UsageFilterState } from "../components/llmusage/UsageFilterBar";
+import UsageFilterBar, { type UsageFilterState } from "../components/llmusage/UsageFilterBar";
+import { usageFilterFromParams } from "../components/llmusage/usageFilterParams";
 import UsageTable from "../components/llmusage/UsageTable";
 import UsageSummary from "../components/llmusage/UsageSummary";
 
@@ -48,7 +49,11 @@ export default function LlmUsage() {
   // fixing it needs the API to start returning a room id per row, not a client-side workaround here.
   const basePath = useRoomBasePath();
 
-  const [filter, setFilter] = useState<UsageFilterState>(() => defaultUsageFilter());
+  // Hydrated ONCE from the query string, then owned by the page. The URL is a way IN - from the model
+  // editor's "Open in usage log", or a pasted link - not a mirror of the filter bar: keeping the two in
+  // sync would push a history entry on every checkbox and make Back mean something the user did not do.
+  const [searchParams] = useSearchParams();
+  const [filter, setFilter] = useState<UsageFilterState>(() => usageFilterFromParams(searchParams));
   const [sort, setSort] = useState<LlmUsageSortKey>("startedAt");
   const [desc, setDesc] = useState(true);
   const [page, setPage] = useState(1);
