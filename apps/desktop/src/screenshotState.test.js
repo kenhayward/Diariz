@@ -30,12 +30,37 @@ test("no screenshot items exist while uploading", () => {
   assert.deepEqual(trayScreenshotItems({ phase: "uploading" }), []);
 });
 
-test("capture and change-area items appear while recording and ready", () => {
+test("capture, auto-capture and change-area items appear while recording and ready", () => {
   const items = trayScreenshotItems({ phase: "recording", source: "mic", ready: true });
-  assert.deepEqual(items.map((i) => i.id), ["capture", "change-area"]);
+  assert.deepEqual(items.map((i) => i.id), ["capture", "auto-capture", "change-area"]);
   assert.ok(items.every((i) => i.enabled));
   assert.equal(items[0].label, "Capture Screenshot");
-  assert.equal(items[1].label, "Change Capture Area…"); // matches the file's ellipsis-character idiom (FIX 8)
+  assert.equal(items[1].label, "Auto-capture");
+  assert.equal(items[2].label, "Change Capture Area…"); // matches the file's ellipsis-character idiom (FIX 8)
+});
+
+test("the auto-capture item is a checkbox reflecting whether it is running", () => {
+  const off = trayScreenshotItems({ phase: "recording", ready: true });
+  const on = trayScreenshotItems({ phase: "recording", ready: true, autoCapture: true });
+
+  assert.equal(off.find((i) => i.id === "auto-capture").type, "checkbox");
+  assert.equal(off.find((i) => i.id === "auto-capture").checked, false);
+  assert.equal(on.find((i) => i.id === "auto-capture").checked, true);
+});
+
+// Unlike the in-app buttons, the tray items do NOT gate on a capture area. The tray capture item has
+// always picked-then-captured when no area is set, and a tray menu has no hover text - so a greyed item
+// there could never say why, which is precisely the failure the in-app icon buttons were fixed for.
+// main.js opens the picker first instead.
+test("every screenshot item stays enabled, since a tray menu has no way to explain a greyed one", () => {
+  const items = trayScreenshotItems({ phase: "recording", ready: true });
+
+  assert.ok(items.every((i) => i.enabled));
+});
+
+// A stale `autoCapture: true` must not render as a lit checkbox on a state that cannot capture at all.
+test("no screenshot items exist while not capturable, even with auto-capture flagged on", () => {
+  assert.deepEqual(trayScreenshotItems({ phase: "recording", ready: false, autoCapture: true }), []);
 });
 
 test("no screenshot items exist while recording but not ready (e.g. a mid-recording renderer reload)", () => {
