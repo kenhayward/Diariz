@@ -84,9 +84,10 @@ the Python worker only ever sees an audio blob. So:
    the **settled image** (grabbed at commit). We record the former as `capturedAtMs` and use the latter as
    the image. This is strictly better than the brief's compromise and costs almost nothing (§4.5).
 2. **Sample rate vs. stability window.** The brief's defaults (2 fps, `stable_samples=3`) mean 1.5 s of
-   stability. We sample at 1 Hz, at which `stable_samples=3` becomes a 3 s dwell requirement - and any
-   slide shown for under 3 s is **missed entirely**, silently. At 1 Hz the default must be
-   `stableSamples = 2`. See §6 for the tunables and the tradeoff.
+   stability. At 1 Hz, `stable_samples=3` becomes a 3 s dwell requirement - and any slide shown for under
+   3 s is **missed entirely**, silently. This spec originally lowered the default to 2 to compensate;
+   B1's tests then showed 2 admits mid-transition frames, so the stability window stays at **3** and the
+   sample interval is what has to come down instead. See §6 and §14.
 3. **Commit-time races.** The brief's content is static by construction because it re-reads a file. Live, the
    screen can change between the sampling tick that triggered the commit and the full-resolution grab that
    follows it. That needs an explicit confirm step (§4.4), which the brief has no reason to describe.
@@ -404,7 +405,7 @@ native 1080p capture.
 | `hashSize` | `16` | The brief's value - a 256-bit dHash. |
 | `changeThreshold` | `24` | Brief's value, at the same hash size. **Calibrate.** |
 | `stabilityThreshold` | `12` | Brief's value. **Calibrate.** |
-| `stableSamples` | `2` | **Changed from the brief's 3.** At 1 Hz, 3 means a 3 s dwell requirement and any slide shown for under 3 s is silently missed. 2 gives a 2 s commit latency and catches a briskly-paced deck. If calibration shows 2 admits mid-transition frames, prefer dropping `sampleIntervalMs` to 500 ms and raising `stableSamples` to 3 over reverting to a 3 s dwell. |
+| `stableSamples` | `3` | **Was 2; corrected by B1's tests, which showed 2 admits mid-transition frames exactly as §6 warned it might.** A cross-fade does not drift smoothly through the hash space - dHash records the *sign* of each horizontal comparison and those signs flip together around the midpoint, so 25% and 50% through a fade produce the *same* digest. Two samples of one intermediate is all a streak of 2 needs, and a half-drawn frame commits. The cost is dwell time (a slide must hold for `stableSamples` x the sample interval), which is an argument for sampling faster than 1 Hz, not for lowering this. Both behaviours are pinned in `slideDetector.test.js`. |
 | `dedupeThreshold` | `10` | Brief's value. Stricter than `changeThreshold` on purpose: a false dedupe silently loses a slide. |
 | `maxCaptures` | `200` | Mirrors `MAX_LIVE_SCREENSHOTS`. See §7.3. |
 
@@ -793,3 +794,67 @@ tested against a real deck; if the sweep moves them, update the table and say so
 3. **Threshold defaults** (B12). Expected to move. Cheap to fix, and the §8.1 tests assert fixture
    behaviour rather than specific distances, so tuning does not invalidate them.
 4. **`title` on an `aria-disabled` button** (A6). Verified by hand, because jsdom cannot see it.
+
+---
+
+## 14. B0 findings - the frame source has to change
+
+**Measured on a three-display Windows machine (1920x1080 @1.25, 1920x1200 @1.25, 3840x2160 @2.5),
+Electron 43.** Twenty interleaved samples, after a warm-up grab:
+
+| Call | Mean | p50 | p90 |
+|---|---|---|---|
+| `getSources` @320px long edge (detection) | **428.4 ms** | 426.8 | 464.7 |
+| `getSources` @2560px long edge (commit) | **442.5 ms** | 425.3 | 527.6 |
+| `resize` to 17x16 + read bitmap | 0.2 ms | 0.2 | 0.3 |
+
+A follow-up probe isolates the cause. Requesting a **1x1** thumbnail costs **445.7 ms** - the same as a
+full-resolution one:
+
+| Request | Sources returned | Mean |
+|---|---|---|
+| `types: ["screen"]` @1x1 | 3 | 445.7 ms |
+| `types: ["screen"]` @320px | 3 | 485.7 ms |
+| `types: ["screen"]` @full | 3 | 466.9 ms |
+| `types: ["window"]` @320px | 24 | 2282.2 ms |
+
+### What this invalidates
+
+**§4.3's central optimisation does not exist.** `desktopCapturer.getSources()` composites and captures
+*every* screen on each call; `thumbnailSize` only governs a final downscale, which is free. Sampling
+small is therefore exactly as expensive as grabbing full resolution, and the sample/extract split saves
+nothing.
+
+At ~430 ms per call, a 1 Hz ticker costs **~43% of one core, continuously, for the length of the
+meeting** - against acceptance criterion 3's budget of 5%. Slowing the tick does not rescue it either:
+even one sample every 5 seconds is ~8.6% of a core, and a 5 s interval misses slides outright. **The
+per-call cost has to go, not the call rate.**
+
+### The direction that does work
+
+Stop re-initiating a capture per sample and **hold one warm capture session**: a `getDisplayMedia` video
+stream on the chosen display, opened when auto-capture engages and closed when it disengages, sampled
+via `drawImage` onto a small canvas. The shell already auto-grants sources through
+`setDisplayMediaRequestHandler` (that is how system-audio loopback works), so the existing capture-area
+picker can still choose the display and hand the stream over without a second picker.
+
+That relocates detection from the main process to the renderer, which **inverts §4.1** - but the reason
+§4.1 gave for the main process (do not push a full-resolution PNG per second across IPC) is satisfied
+even better there, because the frames never cross IPC at all. It also collapses three later steps:
+
+- **§4.5's `ageMs` hint becomes unnecessary.** The renderer owns the pause-aware recorded clock, so it
+  can stamp the candidate's first-seen moment directly. B6's IPC widening and B7's subtraction both go.
+- **§7.2's `paused` cross-boundary flag becomes unnecessary.** The renderer already knows it is paused.
+- **§4.4's commit-time confirm gets cheaper**, because the sample and the full-resolution frame come from
+  the same video element rather than from two independent captures. The confirm is still wanted (the
+  screen can change between frames) but the same-downsample-chain trap in B5 largely disappears.
+
+**Not yet measured:** the baseline cost of holding a `getDisplayMedia` stream open for an hour, and
+whether Windows shows a persistent screen-sharing indicator for it. Both need a second spike before this
+is adopted - that is B0 round two, and it should run before any of B2/B5 is written.
+
+### What survives unchanged
+
+**§4.2, the detector, is independent of where frames come from** and is built (B1). Its tests assert
+"how many slides came out of this footage", not distances or timings, so a change of frame source does
+not touch them.
