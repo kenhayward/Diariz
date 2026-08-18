@@ -1,6 +1,8 @@
+using System.Text.Json.Nodes;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
+using Diariz.Api.Services.Llm;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
@@ -17,9 +19,10 @@ namespace Diariz.Api.Tests;
 /// sibling controller.</summary>
 public class LlmModelsControllerTests
 {
-    private static LlmModelsController Build(DiarizDbContext db) =>
+    private static LlmModelsController Build(DiarizDbContext db, LlmDefaultsOptions? defaults = null) =>
         new(db, new FakeApiKeyProtector(),
-            Options.Create(new SummarizationOptions { ApiBase = "http://env/v1", Model = "env-model" }))
+            Options.Create(new SummarizationOptions { ApiBase = "http://env/v1", Model = "env-model" }),
+            Options.Create(defaults ?? new LlmDefaultsOptions()))
         { ControllerContext = Http.Context(Guid.NewGuid()) };
 
     private static LlmModel Seed(DiarizDbContext db, string name = "m", string? key = "enc:secret")
@@ -309,5 +312,59 @@ public class LlmModelsControllerTests
 
         Assert.IsType<ConflictObjectResult>(result.Result);
         Assert.Single(db.LlmModels);
+    }
+
+    [Fact]
+    public async Task Defaults_exposes_the_app_default_layers_the_resolver_walks()
+    {
+        // The admin UI shows what a parameter resolves to when left on Inherit, and previews the request
+        // body as it is typed. Both need the bottom of the layer stack, which lives in configuration and
+        // which the browser has no other way to see.
+        using var db = TestDb.Create();
+        var controller = Build(db, new LlmDefaultsOptions
+        {
+            Temperature = 0.3,
+            Translation = new LlmParameterDefaults { Temperature = 0.1 },
+        });
+
+        var layers = Assert.IsType<Dictionary<string, string>>(
+            (await controller.Defaults()).Value);
+
+        Assert.Equal(0.3, JsonNode.Parse(layers["ModelBase"])!["temperature"]!.GetValue<double>());
+        Assert.Equal(0.1, JsonNode.Parse(layers["Translation"])!["temperature"]!.GetValue<double>());
+    }
+
+    [Fact]
+    public async Task Defaults_omits_a_group_that_configures_nothing()
+    {
+        // Absent has to stay distinguishable from "an empty layer": the UI walks these the same way the
+        // resolver does, where a group with no layer inherits rather than deciding anything.
+        using var db = TestDb.Create();
+        var controller = Build(db, new LlmDefaultsOptions
+        {
+            Temperature = 0.3,
+            Tags = new LlmParameterDefaults(),
+        });
+
+        var layers = Assert.IsType<Dictionary<string, string>>(
+            (await controller.Defaults()).Value);
+
+        Assert.False(layers.ContainsKey("Tags"));
+        Assert.True(layers.ContainsKey("ModelBase"));
+    }
+
+    [Fact]
+    public async Task Defaults_never_leaks_the_environment_api_key()
+    {
+        // It is a sibling of the endpoints that deliberately withhold the stored key, and it is reached by
+        // the same page. Nothing here is a credential, and nothing here should become one.
+        using var db = TestDb.Create();
+
+        var layers = Assert.IsType<Dictionary<string, string>>(
+            (await Build(db).Defaults()).Value);
+
+        foreach (var (_, json) in layers)
+            foreach (var (key, _) in JsonNode.Parse(json)!.AsObject())
+                Assert.Contains(key, LlmParameterLayers.ParameterNames);
     }
 }

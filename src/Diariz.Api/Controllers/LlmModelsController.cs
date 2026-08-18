@@ -26,13 +26,16 @@ public class LlmModelsController : ControllerBase
     private readonly DiarizDbContext _db;
     private readonly IApiKeyProtector _protector;
     private readonly SummarizationOptions _env;
+    private readonly LlmDefaultsOptions _defaults;
 
     public LlmModelsController(
-        DiarizDbContext db, IApiKeyProtector protector, IOptions<SummarizationOptions> env)
+        DiarizDbContext db, IApiKeyProtector protector, IOptions<SummarizationOptions> env,
+        IOptions<LlmDefaultsOptions> defaults)
     {
         _db = db;
         _protector = protector;
         _env = env.Value;
+        _defaults = defaults.Value;
     }
 
     [HttpGet]
@@ -128,6 +131,31 @@ public class LlmModelsController : ControllerBase
         _db.LlmModels.Remove(model);
         await _db.SaveChangesAsync();
         return NoContent();
+    }
+
+    /// <summary>The bottom of the layer stack - the application defaults every unset parameter resolves
+    /// through, keyed by group exactly as a model's own parameter rows are.
+    ///
+    /// The editor needs these for two things it cannot do without them: telling an administrator what a
+    /// parameter inherits ("from Defaults - 0.3" rather than a blank), and previewing the request body as
+    /// it is typed. They live in configuration, so there is no other way for a browser to learn them.
+    ///
+    /// A group whose defaults configure nothing is OMITTED rather than sent as <c>{}</c>: the client walks
+    /// these the same way <see cref="LlmSettingsResolver"/> does, where a layer that mentions no key decides
+    /// nothing and an empty object is indistinguishable from one that does.</summary>
+    [HttpGet("defaults")]
+    public Task<ActionResult<Dictionary<string, string>>> Defaults()
+    {
+        var layers = new Dictionary<string, string>();
+
+        if (_defaults.BaseLayer is { } baseLayer)
+            layers[nameof(LlmCallGroup.ModelBase)] = baseLayer;
+
+        foreach (var group in Enum.GetValues<LlmCallGroup>())
+            if (group != LlmCallGroup.ModelBase && _defaults.LayerFor(group) is { } layer)
+                layers[group.ToString()] = layer;
+
+        return Task.FromResult<ActionResult<Dictionary<string, string>>>(layers);
     }
 
     [HttpGet("assignments")]

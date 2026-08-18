@@ -431,7 +431,24 @@ key and deadline. **Dictation is deliberately outside all of this** - it is spee
 `/audio/transcriptions` with its own model, configured entirely by `DictationOptions`.
 
 Administration is `LlmModelsController` (`/api/admin/llm-models`, `ManagePlatform`) and the `/admin/llm-models`
-page. Deleting a model in use is refused **by the controller**, not by the FKs: both are `ON DELETE RESTRICT`,
+page, which from 0.223.0 is a **routing grid** (models down the side, the seven call groups across the top,
+one selection per column) plus a per-model **drawer** of parameters. The grid writes the same
+`{defaultModelId, assignments}` object the old selects did, and keeps the same semantics: a group ABSENT from
+`assignments` follows `PlatformSettings.DefaultLlmModelId` rather than naming it, which is a different
+instruction from an assignment that happens to point at the current default. That state is drawn as a final
+`No model` row rather than inferred, so the two never collapse into each other in the UI.
+
+`GET /api/admin/llm-models/defaults` returns the **application** default layer per group (the JSON
+`LlmDefaultsOptions.BaseLayer` / `LayerFor` already produce). It exists because the browser is otherwise the
+one participant in the layer walk that cannot see its bottom level: without it the editor can neither name
+what an inherited row resolves to on the Defaults tab, nor preview a request body that matches what the
+server would actually send. The drawer's preview reimplements `LlmParameterLayers.Resolve` +
+`LlmRequestBody.Apply` in `requestPreview.ts` (it has to update as the admin types, before anything is
+saved), so the two can drift - `requestPreview.test.ts` is what holds them together, and in particular pins
+that the four **behaviour flags** (`timeout_seconds`, `tools_supported`, `images_supported`,
+`reasoning_enabled`) never appear in the previewed body, since no endpoint ever receives them.
+
+Deleting a model in use is refused **by the controller**, not by the FKs: both are `ON DELETE RESTRICT`,
 but EF refuses client-side at `Remove` for the required assignment FK, and for the nullable
 `DefaultLlmModelId` it nulls the column ahead of the DELETE so the constraint never fires. See
 `LlmModelSchemaTests` for the evidence.
