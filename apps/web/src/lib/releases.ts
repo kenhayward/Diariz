@@ -67,7 +67,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.222.0",
     date: "2026-08-18",
-    pr: 0,
+    pr: 537,
     headline: "Spot a reply that was cut off",
     summary:
       "A reply that hits the model's token cap does not fail. The call returns success, every token is billed, and the answer comes back short - or completely empty, if the model spent the whole allowance thinking before it wrote anything. Nothing in the log said so, which made it indistinguishable from a model that simply had nothing to say.\n\n" +
