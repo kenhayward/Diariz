@@ -6,13 +6,14 @@ import type { MinutesGenerationMode, WebhookCreated, WorkflowSignal } from "../l
 import { useAuth } from "../auth";
 import { bytesToGb, gbToBytes } from "../lib/format";
 import { platformWebhookEvents, SIGNAL_EXEMPT_EVENT_KEYS } from "../lib/webhookEvents";
-import AdminPanelModal from "./AdminPanelModal";
+import PanelModal from "./PanelModal";
 import MaintenancePanel from "./MaintenancePanel";
 
 // Lazily loaded: both are large, and most visits to Settings never open either. They are the same
 // components the /admin/* routes render - `embedded` only drops the page chrome this modal provides.
 const LlmUsage = lazy(() => import("../pages/LlmUsage"));
 const LlmModels = lazy(() => import("../pages/LlmModels"));
+const ApiReference = lazy(() => import("../pages/ApiReference"));
 import FeedbackPanel from "./FeedbackPanel";
 
 type Tab = "ai" | "quotas" | "maintenance" | "feedback" | "integration";
@@ -36,7 +37,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   /// Which admin panel is open over this modal, and - for the usage log - the filter it was asked to open
   /// on. Opened in place rather than navigated to: the old `target="_blank"` links left the installed PWA
   /// and the desktop shell for the system browser, where the admin is not signed in.
-  const [panel, setPanel] = useState<{ which: "usage" | "models"; query?: string } | null>(null);
+  const [panel, setPanel] = useState<{ which: "usage" | "models" | "api"; query?: string } | null>(null);
 
   // Storage quotas (GB inputs).
   const [starterGb, setStarterGb] = useState("");
@@ -389,14 +390,13 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                 </label>
                 <span className="text-xs text-gray-400 dark:text-gray-500">{t("webhooksEnabledHelp")}</span>
               </div>
-              <a
-                href="/developers/api"
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={() => setPanel({ which: "api" })}
                 className="inline-block text-xs text-indigo-600 hover:underline dark:text-indigo-400"
               >
                 {t("apiViewReference")} →
-              </a>
+              </button>
 
               {webhooksEnabled && <WorkflowSignalsSection />}
               {webhooksEnabled && <PlatformAutomationsSection />}
@@ -425,12 +425,20 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
       </div>
 
       {panel && (
-        <AdminPanelModal
-          title={panel.which === "usage" ? t("llmUsageViewerTitle") : t("llmModelsTitle")}
+        <PanelModal
+          title={
+            panel.which === "usage"
+              ? t("llmUsageViewerTitle")
+              : panel.which === "api"
+                ? t("apiReferenceTitle")
+                : t("llmModelsTitle")
+          }
           onClose={() => setPanel(null)}
         >
           <Suspense fallback={null}>
-            {panel.which === "usage" ? (
+            {panel.which === "api" ? (
+              <ApiReference embedded />
+            ) : panel.which === "usage" ? (
               <LlmUsage embedded initialQuery={panel.query ?? ""} />
             ) : (
               // Switches panels rather than navigating: a route change here would unmount the settings
@@ -438,7 +446,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
               <LlmModels embedded onOpenUsageLog={(query) => setPanel({ which: "usage", query })} />
             )}
           </Suspense>
-        </AdminPanelModal>
+        </PanelModal>
       )}
     </div>
   );

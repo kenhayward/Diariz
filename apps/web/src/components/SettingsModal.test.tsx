@@ -233,9 +233,7 @@ describe("SettingsModal", () => {
     renderModal();
 
     fireEvent.click(await screen.findByRole("tab", { name: /integration/i }));
-    const link = screen.getByRole("link", { name: /view api reference/i });
-    expect(link.getAttribute("href")).toBe("/developers/api");
-    expect(link.getAttribute("target")).toBe("_blank");
+    // How the reference is reached is asserted on its own, in "opens the API reference in place".
     const toggle = await screen.findByLabelText(/enable user api access/i);
     await waitFor(() => expect((toggle as HTMLInputElement).checked).toBe(false));
     fireEvent.click(toggle);
@@ -670,6 +668,26 @@ describe("SettingsModal", () => {
       expect(screen.getByRole("dialog", { name: "Settings" })).toBeTruthy();
       // ...and the panel itself really loaded, not just its frame.
       await waitFor(() => expect(screen.getByRole("heading", { name: /models & routing/i })).toBeTruthy());
+    });
+
+    it("opens the API reference in place rather than a new tab", async () => {
+      // Same flaw as the other two: it is behind the app login, so a new browser tab shows a signed-out
+      // shell rather than the reference.
+      render(
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <MemoryRouter>
+            <SettingsModal onClose={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      fireEvent.click(await screen.findByRole("tab", { name: /integration/i }));
+      expect(screen.queryByRole("link", { name: /view api reference/i })).toBeNull();
+
+      fireEvent.click(screen.getByRole("button", { name: /view api reference/i }));
+
+      const dialog = await screen.findByRole("dialog", { name: /api reference/i });
+      expect(dialog.getAttribute("aria-label")).not.toMatch(/^api[A-Z]/);
     });
 
     it("opens the usage panel without leaving the modal", async () => {

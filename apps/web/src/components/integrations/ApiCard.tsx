@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../../lib/api";
@@ -6,6 +6,10 @@ import { CodeIcon } from "../icons";
 import HelpButton from "../HelpButton";
 import SourceCard, { cardBtn } from "../SourceCard";
 import TokenDialog from "./TokenDialog";
+import PanelModal from "../PanelModal";
+
+// Lazily loaded: Scalar is a large bundle and most visits to Integrations never open the reference.
+const ApiReference = lazy(() => import("../../pages/ApiReference"));
 
 const TINT = "#6b7280";
 const TINT_DARK = "#cbd5e1";
@@ -25,6 +29,9 @@ export default function ApiCard() {
   const { data: tokens } = useQuery({ queryKey: ["api-tokens"], queryFn: api.listApiTokens, enabled });
 
   const [dialog, setDialog] = useState(false);
+  /// The reference, opened over this card rather than navigated to: it used to be a new browser tab, which
+  /// in the installed PWA and the desktop shell leaves Diariz for a browser where nobody is signed in.
+  const [reference, setReference] = useState(false);
   const [created, setCreated] = useState<string | null>(null);
   const [readOnly, setReadOnly] = useState(false);
   const [expiresAt, setExpiresAt] = useState(""); // yyyy-mm-dd or empty
@@ -88,9 +95,9 @@ export default function ApiCard() {
         disabledNote={enabled ? null : t("integrationsApiDisabled")}
         actions={
           <>
-            <a href="/developers/api" target="_blank" rel="noopener noreferrer" className={cardBtn}>
+            <button type="button" onClick={() => setReference(true)} className={cardBtn}>
               {t("apiViewReference")}
-            </a>
+            </button>
             <button type="button" onClick={() => setDialog(true)} className={cardBtn}>
               {t("integrationsNewToken")}
             </button>
@@ -170,6 +177,14 @@ export default function ApiCard() {
             </>
           }
         />
+      )}
+
+      {reference && (
+        <PanelModal title={t("apiReferenceTitle")} onClose={() => setReference(false)}>
+          <Suspense fallback={null}>
+            <ApiReference embedded />
+          </Suspense>
+        </PanelModal>
       )}
     </>
   );
