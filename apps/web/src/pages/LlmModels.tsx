@@ -5,9 +5,8 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../auth";
 import { api, apiErrorMessage } from "../lib/api";
 import type { LlmModel } from "../lib/types";
-import ModelList from "../components/llmmodels/ModelList";
-import ModelEditorModal from "../components/llmmodels/ModelEditorModal";
-import { ASSIGNABLE_GROUPS } from "../components/llmmodels/parameterSchema";
+import RoutingMatrix from "../components/llmmodels/RoutingMatrix";
+import ModelEditorDrawer from "../components/llmmodels/ModelEditorDrawer";
 
 /// Platform-Administrator-only editor for the models every LLM call is routed to, at /admin/llm-models
 /// behind the app login (see App.tsx). `RequireAuth` there only checks that someone is signed in, so the
@@ -35,6 +34,15 @@ export default function LlmModels() {
     enabled: isPlatformAdmin,
   });
 
+  // The bottom of the parameter layer stack. It comes from server configuration rather than the database,
+  // so it never changes while the page is open - hence no invalidation anywhere below.
+  const defaultsQuery = useQuery({
+    queryKey: ["llm-model-defaults"],
+    queryFn: () => api.getLlmModelDefaults(),
+    enabled: isPlatformAdmin,
+    staleTime: Infinity,
+  });
+
   const models = modelsQuery.data ?? [];
   const assignments = assignmentsQuery.data?.assignments ?? {};
   const defaultModelId = assignmentsQuery.data?.defaultModelId ?? null;
@@ -46,27 +54,6 @@ export default function LlmModels() {
     onError: (e) => setError(apiErrorMessage(e, t("llmModelsAssignError"))),
   });
 
-  function assign(groupKey: string, modelId: string) {
-    const next = { ...assignments };
-    // "" is the empty choice in the select: removing the entry is what makes the group fall back to the
-    // default model, so it must delete the key rather than store a blank id.
-    if (modelId) next[groupKey] = modelId;
-    else delete next[groupKey];
-    saveAssignments.mutate({ defaultModelId, assignments: next });
-  }
-
-  async function remove(model: LlmModel) {
-    setError(null);
-    try {
-      await api.deleteModel(model.id);
-      await queryClient.invalidateQueries({ queryKey: ["llm-models"] });
-    } catch (e) {
-      // The API refuses while any group or the default still points at it, and says which - surface that
-      // verbatim rather than a generic failure, because it names the exact thing to change first.
-      setError(apiErrorMessage(e, t("llmModelsDeleteError")));
-    }
-  }
-
   async function createFromEnvironment() {
     setError(null);
     try {
@@ -77,13 +64,16 @@ export default function LlmModels() {
     }
   }
 
+  function closeDrawer() {
+    setEditing(null);
+    setAdding(false);
+  }
+
   if (!isPlatformAdmin) {
     return (
       <div className="flex h-screen flex-col">
         <TopBar />
-        <p className="p-6 text-sm text-gray-600 dark:text-gray-300">
-          {t("llmModelsForbidden")}
-        </p>
+        <p className="p-6 text-sm text-gray-600 dark:text-gray-300">{t("llmModelsForbidden")}</p>
       </div>
     );
   }
@@ -92,10 +82,26 @@ export default function LlmModels() {
     <div className="flex h-screen flex-col overflow-y-auto">
       <TopBar />
 
-      <div className="mx-auto w-full max-w-5xl p-4">
-        <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">
-          {t("llmModelsIntro")}
-        </p>
+      {/* No centring wrapper: the matrix needs the full width, and a max-w-5xl would scroll it
+          horizontally on a display that has room to spare. */}
+      <div className="px-6 pb-7 pt-5">
+        <div className="mb-4 flex items-start justify-between gap-6">
+          <div>
+            <h2 className="text-[15px] font-semibold text-gray-900 dark:text-gray-100">
+              {t("llmModelsRoutingTitle")}
+            </h2>
+            <p className="mt-1 max-w-[620px] text-[12.5px] leading-relaxed text-gray-500 dark:text-gray-400">
+              {t("llmModelsIntro")}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-3 py-1.5 text-[12.5px] text-white"
+          >
+            {t("llmModelsAdd")}
+          </button>
+        </div>
 
         {error && (
           <p className="mb-3 rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-900/20 dark:text-red-300">
@@ -103,103 +109,49 @@ export default function LlmModels() {
           </p>
         )}
 
-        <div className="mb-3 flex gap-2">
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="rounded bg-indigo-600 px-3 py-1 text-sm text-white"
-          >
-            {t("llmModelsAdd")}
-          </button>
-          {/* A one-time migration aid. The API refuses a second call, so offering it once models exist
-              would be offering an action that can only fail. */}
-          {!modelsQuery.isLoading && models.length === 0 && (
-            <button
-              type="button"
-              onClick={createFromEnvironment}
-              className="rounded border px-3 py-1 text-sm dark:border-gray-700"
-            >
-              {t("llmModelsCreateFromEnv")}
-            </button>
-          )}
-        </div>
-
         {modelsQuery.isError ? (
           <p className="text-sm text-red-600 dark:text-red-400">{t("llmModelsLoadError")}</p>
         ) : models.length === 0 ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {t("llmModelsEmpty")}
-          </p>
+          <div className="rounded-lg border border-gray-200 p-6 dark:border-gray-800">
+            <p className="text-sm text-gray-500 dark:text-gray-400">{t("llmModelsEmpty")}</p>
+            {/* A one-time migration aid. The API refuses a second call, so offering it once models exist
+                would be offering an action that can only fail. */}
+            {!modelsQuery.isLoading && (
+              <button
+                type="button"
+                onClick={createFromEnvironment}
+                className="mt-3 rounded-md border border-gray-300 px-3 py-1 text-xs dark:border-gray-700"
+              >
+                {t("llmModelsCreateFromEnv")}
+              </button>
+            )}
+          </div>
         ) : (
-          <ModelList
+          <RoutingMatrix
             models={models}
             assignments={assignments}
             defaultModelId={defaultModelId}
+            onRoute={(next) => saveAssignments.mutate(next)}
             onEdit={setEditing}
-            onDelete={remove}
           />
-        )}
-
-        {models.length > 0 && (
-          <section className="mt-6">
-            <h2 className="mb-1 text-sm font-medium text-gray-800 dark:text-gray-100">{t("llmModelsAssignTitle")}</h2>
-            <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
-              {t("llmModelsAssignHint")}
-            </p>
-
-            <label className="mb-3 block text-sm">
-              <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("llmModelsDefaultModel")}</span>
-              <select
-                value={defaultModelId ?? ""}
-                onChange={(e) =>
-                  saveAssignments.mutate({ defaultModelId: e.target.value || null, assignments })
-                }
-                className="rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-900"
-              >
-                <option value="">{t("llmModelsUseEnvironment")}</option>
-                {models.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <div className="grid gap-2 sm:grid-cols-2">
-              {ASSIGNABLE_GROUPS.map((g) => (
-                <label key={g.key} className="block text-sm">
-                  <span className="mb-1 block text-gray-600 dark:text-gray-300">{t(g.label)}</span>
-                  <select
-                    value={assignments[g.key] ?? ""}
-                    onChange={(e) => assign(g.key, e.target.value)}
-                    className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-900"
-                  >
-                    <option value="">{t("llmModelsUseDefault")}</option>
-                    {models.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ))}
-            </div>
-          </section>
         )}
       </div>
 
       {(editing || adding) && (
-        <ModelEditorModal
+        <ModelEditorDrawer
           model={editing}
           allModels={models}
-          onClose={() => {
-            setEditing(null);
-            setAdding(false);
-          }}
+          defaults={defaultsQuery.data ?? {}}
+          isDefaultModel={editing !== null && editing.id === defaultModelId}
+          onClose={closeDrawer}
           onSaved={() => {
-            setEditing(null);
-            setAdding(false);
+            closeDrawer();
             queryClient.invalidateQueries({ queryKey: ["llm-models"] });
+          }}
+          onDeleted={() => {
+            closeDrawer();
+            queryClient.invalidateQueries({ queryKey: ["llm-models"] });
+            queryClient.invalidateQueries({ queryKey: ["llm-assignments"] });
           }}
         />
       )}

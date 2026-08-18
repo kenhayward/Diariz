@@ -42,6 +42,20 @@ describe("parameterSchema", () => {
     expect(ASSIGNABLE_GROUPS).toHaveLength(GROUPS.length - 1);
   });
 
+  it("gives every group a tab label and a column label that the catalogue actually defines", () => {
+    // The tab strip and the matrix header need shorter labels than the full group name - "Minutes and
+    // formulas" is three words too long for an 86px column. They are i18n keys, so a typo renders the raw
+    // key to the administrator rather than failing anywhere; reading the catalogue is what catches it.
+    const catalogue = JSON.parse(
+      readFileSync(resolve(__dirname, "../../locales/en/account.json"), "utf8"),
+    ) as Record<string, string>;
+
+    // Every group gets a tab; only the assignable ones get a matrix column (the matrix's own "Default"
+    // column is the default MODEL, not the ModelBase parameter scope).
+    for (const g of GROUPS) expect(catalogue[g.short]).toBeTruthy();
+    for (const g of ASSIGNABLE_GROUPS) expect(catalogue[g.column]).toBeTruthy();
+  });
+
   it("gives every parameter a label and a kind", () => {
     for (const p of PARAMETERS) {
       expect(p.label.length).toBeGreaterThan(0);

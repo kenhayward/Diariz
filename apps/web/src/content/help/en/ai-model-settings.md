@@ -1,6 +1,6 @@
 ---
 title: AI and model settings
-summary: Summaries, minutes, actions, tags, chat, and formulas all need an OpenAI-compatible endpoint. A Platform Administrator configures the models for everyone on the AI models page.
+summary: Summaries, minutes, actions, tags, chat, and formulas all need an OpenAI-compatible endpoint. A Platform Administrator configures the models for everyone on the AI models page, where a grid decides which model runs which kind of call.
 group: settings
 order: 10
 ---
@@ -39,11 +39,13 @@ whether the model supports tool calling or image input.
 
 Each one is in **one of three states**, and two of them are easy to confuse:
 
-- **Inherit** - this level says nothing, so whatever is configured below it decides.
-- **Off** - the parameter is left out of the request **entirely**. This is not the same as inheriting:
-  it actively suppresses a value a lower level would have supplied. Use it for an endpoint that rejects
-  a parameter it does not recognise.
-- **Set** - use this value.
+- **Inherited** - this level says nothing, so whatever is configured below it decides. This is what a
+  row does if you leave it alone, and it names what it inherits and from where.
+- **Omitted** - the parameter is left out of the request **entirely**. This is not the same as
+  inheriting: it actively suppresses a value a lower level would have supplied. Use it for an endpoint
+  that rejects a parameter it does not recognise.
+- **Set** - use this value. Typing in the row's value box is what sets it; there is no button to press
+  first.
 
 **Reasoning effort is free text**, not a fixed list, because models disagree about what they accept:
 gpt-oss takes `low`, `medium` and `high`, qwen3 also takes `xhigh`, and the next model will take
@@ -59,17 +61,29 @@ They resolve most-specific-first: the job's override, then the model's defaults,
 defaults. So you can leave everything on the model's defaults and drop the temperature for translation
 alone, without repeating the rest.
 
-To reuse a set of parameters, use **Copy from** in the model editor. It copies parameters only - never
-the name, endpoint or key - and nothing is saved until you press Save, so you can review what arrived
-first.
+Each call type is a tab in the model's drawer, carrying a count of how many parameters it overrides, and
+a panel on the right shows the exact request body that tab would send.
+
+To reuse a set of parameters, use **Copy parameters from** in the drawer. It copies parameters only -
+never the name, endpoint or key - and nothing is saved until you press Save, so you can review what
+arrived first.
 
 ## Different models per job
 
 Each job can also run on a **different model** entirely. Point tag extraction at something small and
-fast while summaries go to a larger model; anything you do not assign uses the **default model**.
+fast while summaries go to a larger model.
+
+The AI models page is a grid: your models down the side, the call types across the top, and one selection
+per column. Click a cell to move that call type to that model. The last row, **No model**, is how a call
+type goes back to following the default - and how the default itself goes back to the endpoint configured
+in the server environment.
+
+Following the default is not the same as being pointed at whichever model is currently the default: a
+call type in the **No model** row moves with the default if you change it, while one pointed at a model
+stays where you put it.
 
 A model that is still in use cannot be deleted. Diariz refuses and names the jobs still pointing at it,
-so you know exactly what to move first.
+so you know exactly what to move first. **Delete model** lives at the foot of the model's own drawer.
 
 ## The context window
 

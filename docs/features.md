@@ -585,17 +585,38 @@ returned to the browser once saved) and its **context window**, which is what th
 against. Every sampling parameter is then exposed per model: **temperature**, **top P**, **top K**,
 **repeat penalty**, **frequency** and **presence penalties**, **max tokens**, **max completion tokens**,
 **reasoning effort**, the request **timeout**, and whether the model supports **tool calling** or **image
-input**. Each parameter is one of three states - **Inherit** (the layer below decides), **Off** (the key is
-left out of the request entirely, which some endpoints require) or a **value** - and Off is genuinely
-different from Inherit: it suppresses what a lower layer would otherwise have supplied.
+input**. Each parameter is one of three states - **inherited** (the layer below decides), **omitted** (the
+key is left out of the request entirely, which some endpoints require) or a **value** - and omitted is
+genuinely different from inherited: it suppresses what a lower layer would otherwise have supplied. The
+value box IS how a parameter is set; the two controls beside it return the row to inherited or omit it, and
+the row states which state it is in ("overridden here", or what it inherits and from where) rather than
+leaving it to be inferred from which of three buttons is filled in.
+  **Routing is a grid.** The models run down the side, the seven call types across the top, and every column
+carries exactly one selection - clicking a cell moves that call type to that model. A final **No model** row
+is where a call type goes to *follow* the default rather than be pointed at a model, and where the default
+itself goes back to the endpoint configured in the server environment. The distinction is load-bearing: a
+call type following the default moves with it when the default changes, while one assigned to the model that
+happens to be the default stays where it was put.
+  The editor is a right-hand **drawer** with a tab per call type, each showing how many parameters it
+overrides, and the thirteen parameters in two columns. Connection details (name, endpoint, key, context
+window) sit behind a **Connection** button, since they are set once when a model is added. A panel beside
+the parameters previews the **exact request body** that call type would send, updated as values are typed -
+the resolved layer walk, with omitted parameters absent and inherited ones carrying their inherited value.
+The timeout, tool-calling, image-support and send-reasoning flags are deliberately shown *outside* that body:
+they govern Diariz rather than the request, and no endpoint ever receives them.
   Parameters can differ by **what the model is doing**. Alongside the model's own defaults, each of **tag
 extraction**, **action extraction**, **summaries**, **minutes and formulas**, **translation** and **chat**
 takes its own optional overrides, resolved most-specific-first: the call type's override, then the model's
 defaults, then the application defaults. **Reasoning effort is free text**, not a fixed list, because models
 disagree about what they accept (gpt-oss takes low/medium/high, qwen3 also takes xhigh). A whole parameter
-set can be **copied from another model** as a starting point - parameters only, never the name, endpoint or
-key. Each call type can also be pointed at a **different model** entirely, with a **default model** serving
-anything unassigned; a model still in use cannot be deleted until the call types pointing at it are moved.
+set can be **copied from another model** as a starting point - all seven layers at once, parameters only,
+never the name, endpoint or key - and **Reset all to inherit** clears the open tab alone. Each call type can
+also be pointed at a **different model** entirely, with a **default model** serving anything unassigned; a
+model still in use cannot be deleted until the call types pointing at it are moved, and **Delete model**
+lives at the foot of that model's drawer.
+  The application defaults themselves are readable by the editor (`GET /api/admin/llm-models/defaults`), which
+is what lets an inherited row name the value it inherits even on the Defaults tab, where the layer below is
+the application's baseline rather than the model's own.
   The application defaults are overridable per deployment through `LlmDefaults__*` environment variables
 (e.g. `LlmDefaults__Temperature`, `LlmDefaults__Translation__Temperature`), and the shipped values reproduce
 the request bodies Diariz sent before this was configurable. A server with **no models configured** keeps

@@ -1678,6 +1678,13 @@ export const api = {
     await http.delete(`/api/admin/llm-models/${id}`);
   },
 
+  /// The application defaults every unset parameter resolves through, keyed by call group. Static for the
+  /// lifetime of the server process - they come from configuration, not the database.
+  async getLlmModelDefaults(): Promise<Record<string, string>> {
+    const { data } = await http.get<Record<string, string>>("/api/admin/llm-models/defaults");
+    return data;
+  },
+
   async getLlmAssignments(): Promise<LlmAssignments> {
     const { data } = await http.get<LlmAssignments>("/api/admin/llm-models/assignments");
     return data;

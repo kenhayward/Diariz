@@ -11,6 +11,7 @@ const { api } = vi.hoisted(() => ({
   api: {
     listModels: vi.fn().mockResolvedValue([]),
     getLlmAssignments: vi.fn().mockResolvedValue({ defaultModelId: null, assignments: {} }),
+    getLlmModelDefaults: vi.fn().mockResolvedValue({}),
     setLlmAssignments: vi.fn(),
     createModelFromEnvironment: vi.fn(),
     deleteModel: vi.fn(),
@@ -65,9 +66,10 @@ describe("LlmModels", () => {
     ]);
     renderPage();
 
-    // Matched on the endpoint, which appears once: the model NAME also fills every assignment select's
-    // options, so finding it by name would be ambiguous rather than wrong.
-    expect(await screen.findByText("http://only/v1")).toBeTruthy();
+    // Matched on the endpoint rather than the name: the name is also the accessible name of all seven
+    // routing cells on that row, so finding it by name would be ambiguous rather than wrong. The sub-line
+    // carries the context length alongside it, hence the substring match.
+    expect(await screen.findByText(/http:\/\/only\/v1/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /create from environment/i })).toBeNull();
   });
 });
