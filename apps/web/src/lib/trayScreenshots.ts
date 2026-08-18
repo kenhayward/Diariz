@@ -1,3 +1,5 @@
+import type { CaptureArea } from "./captureGeometry";
+
 /// The seam between the Electron shell's screen capture and the web recorder. Mirrors trayRecorder: the
 /// shell owns the capture (hotkey, tray, capture area), the web app owns the recording clock. Everything
 /// here is a no-op in a plain browser, so callers never have to branch on `isElectron`.
@@ -19,6 +21,14 @@ interface ShellPayload {
   height: number;
 }
 
+/// What the shell reports when auto-capture starts or stops. `area` is present only while active, and
+/// describes what to capture in the target display's physical pixels - the renderer opens its own
+/// getDisplayMedia stream against the display the shell has already granted.
+export interface AutoCaptureState {
+  active: boolean;
+  area?: CaptureArea;
+}
+
 interface ScreenshotShell {
   canCaptureScreenshot?: boolean;
   captureScreenshot?: () => void;
@@ -26,6 +36,8 @@ interface ScreenshotShell {
   hasCaptureArea?: () => Promise<boolean>;
   onCaptureAreaChanged?: (cb: (hasArea: boolean) => void) => () => void;
   onScreenshotCaptured?: (cb: (payload: ShellPayload) => void) => () => void;
+  toggleAutoCapture?: () => void;
+  onAutoCaptureChanged?: (cb: (state: AutoCaptureState) => void) => () => void;
 }
 
 function shell(): ScreenshotShell | undefined {
@@ -77,4 +89,26 @@ export function onCaptureAreaChanged(cb: (hasArea: boolean) => void): () => void
   const api = shell();
   if (!api?.onCaptureAreaChanged) return () => {};
   return api.onCaptureAreaChanged(cb);
+}
+
+/// Whether this shell can auto-capture. Separate from `canCaptureScreenshots` on purpose: an installed
+/// desktop app updates on its own schedule, so a shell that predates this feature is a normal state
+/// rather than an error, and the toggle simply does not appear on it.
+export function canAutoCapture(): boolean {
+  return typeof shell()?.toggleAutoCapture === "function";
+}
+
+/// Ask the shell to start or stop auto-capture. With no capture area chosen yet the shell opens the
+/// picker first, exactly as a manual capture does.
+export function requestToggleAutoCapture(): void {
+  shell()?.toggleAutoCapture?.();
+}
+
+/// Subscribe to auto-capture starting and stopping. This is an event rather than something to poll
+/// because auto-capture stops on its own too: the recording ends, or the capture area's display goes
+/// away. Returns an unsubscribe function (a no-op in a browser or an older shell).
+export function onAutoCaptureChanged(cb: (state: AutoCaptureState) => void): () => void {
+  const api = shell();
+  if (!api?.onAutoCaptureChanged) return () => {};
+  return api.onAutoCaptureChanged(cb);
 }
