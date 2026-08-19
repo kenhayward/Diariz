@@ -259,6 +259,76 @@ public class SectionSummaryProcessorTests
     }
 
     [Fact]
+    public async Task ProcessAsync_WhenShutdownCancelsMidCall_StillRecordsFailed()
+    {
+        // The API being stopped (redeploy, container restart) cancels the job's token mid-call. The failure
+        // write is the only thing that moves the folder off Generating - the generate endpoint no-ops while
+        // that is set - so it must not be made with the token that just aborted the call.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var section = await SeedSection(db, userId);
+        await SeedRecording(db, userId, section.Id, summaryText: "x");
+        using var cts = new CancellationTokenSource();
+        var combiner = new FakeMeetingMinutesClient(onCall: cts.Cancel)
+        {
+            ThrowOnCall = new OperationCanceledException("The operation was canceled."),
+        };
+
+        await SectionSummaryProcessor.ProcessAsync(
+            db, new FakeSummarizationClient(), combiner, new FakeLlmSettingsResolver(), new FakeHubContext(),
+            SummarizationPrompt.DefaultTemplate, FolderSummaryPrompt.DefaultTemplate,
+            new SectionSummaryJob(section.Id), NullLogger.Instance, cts.Token);
+
+        var summary = await db.SectionSummaries.SingleAsync(x => x.SectionId == section.Id);
+        Assert.Equal(SectionGenerationStatus.Failed, summary.Status);
+    }
+
+    [Fact]
+    public async Task AbandonAsync_MarksTheFolderSummaryFailed_RatherThanLeavingItGenerating()
+    {
+        // A message past the delivery cap is dropped by StreamReclaimer to stop a poison job killing worker
+        // after worker. Dropped silently it leaves the folder in Generating with no job left to clear it.
+        using var db = TestDb.Create();
+        var section = await SeedSection(db, Guid.NewGuid());
+        db.SectionSummaries.Add(new SectionSummary
+        {
+            Id = Guid.NewGuid(), SectionId = section.Id, Status = SectionGenerationStatus.Generating,
+        });
+        await db.SaveChangesAsync();
+        var hub = new FakeHubContext();
+
+        await SectionSummaryProcessor.AbandonAsync(
+            db, hub, new SectionSummaryJob(section.Id), NullLogger.Instance);
+
+        var summary = await db.SectionSummaries.SingleAsync(x => x.SectionId == section.Id);
+        Assert.Equal(SectionGenerationStatus.Failed, summary.Status);
+        Assert.False(string.IsNullOrWhiteSpace(summary.Error));
+        Assert.Equal("SectionStatusChanged", Assert.Single(hub.Sent).Method);
+    }
+
+    [Fact]
+    public async Task AbandonAsync_LeavesAFolderThatHasSinceMovedOn_Alone()
+    {
+        // An abandoned message can be hours old, and the user may have regenerated or hand-written the
+        // summary in the meantime. Failing it then reports a dead job against work that has since succeeded.
+        using var db = TestDb.Create();
+        var section = await SeedSection(db, Guid.NewGuid());
+        db.SectionSummaries.Add(new SectionSummary
+        {
+            Id = Guid.NewGuid(), SectionId = section.Id, Status = SectionGenerationStatus.Ready, Text = "done",
+        });
+        await db.SaveChangesAsync();
+        var hub = new FakeHubContext();
+
+        await SectionSummaryProcessor.AbandonAsync(
+            db, hub, new SectionSummaryJob(section.Id), NullLogger.Instance);
+
+        var summary = await db.SectionSummaries.SingleAsync(x => x.SectionId == section.Id);
+        Assert.Equal(SectionGenerationStatus.Ready, summary.Status);
+        Assert.Empty(hub.Sent);
+    }
+
+    [Fact]
     public async Task Combiner_error_marks_failed_with_message()
     {
         using var db = TestDb.Create();

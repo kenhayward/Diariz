@@ -205,6 +205,76 @@ public class SectionMinutesProcessorTests
     }
 
     [Fact]
+    public async Task ProcessAsync_WhenShutdownCancelsMidCall_StillRecordsFailed()
+    {
+        // The API being stopped (redeploy, container restart) cancels the job's token mid-call. The failure
+        // write is the only thing that moves the folder off Generating - the generate endpoint no-ops while
+        // that is set - so it must not be made with the token that just aborted the call.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var section = await SeedSection(db, userId);
+        await SeedRecording(db, userId, section.Id, minutesText: "x");
+        using var cts = new CancellationTokenSource();
+        var combiner = new FakeMeetingMinutesClient(onCall: cts.Cancel)
+        {
+            ThrowOnCall = new OperationCanceledException("The operation was canceled."),
+        };
+
+        await SectionMinutesProcessor.ProcessAsync(
+            db, new FakeMeetingTypeMinutesGenerator(), combiner, new FakeLlmSettingsResolver(),
+            new FakeHubContext(), FolderMinutesPrompt.DefaultTemplate, new SectionMinutesJob(section.Id),
+            NullLogger.Instance, cts.Token);
+
+        var minutes = await db.SectionMinutes.SingleAsync(x => x.SectionId == section.Id);
+        Assert.Equal(SectionGenerationStatus.Failed, minutes.Status);
+    }
+
+    [Fact]
+    public async Task AbandonAsync_MarksTheFolderMinutesFailed_RatherThanLeavingItGenerating()
+    {
+        // A message past the delivery cap is dropped by StreamReclaimer to stop a poison job killing worker
+        // after worker. Dropped silently it leaves the folder in Generating with no job left to clear it.
+        using var db = TestDb.Create();
+        var section = await SeedSection(db, Guid.NewGuid());
+        db.SectionMinutes.Add(new SectionMinutes
+        {
+            Id = Guid.NewGuid(), SectionId = section.Id, Status = SectionGenerationStatus.Generating,
+        });
+        await db.SaveChangesAsync();
+        var hub = new FakeHubContext();
+
+        await SectionMinutesProcessor.AbandonAsync(
+            db, hub, new SectionMinutesJob(section.Id), NullLogger.Instance);
+
+        var minutes = await db.SectionMinutes.SingleAsync(x => x.SectionId == section.Id);
+        Assert.Equal(SectionGenerationStatus.Failed, minutes.Status);
+        Assert.False(string.IsNullOrWhiteSpace(minutes.Error));
+        Assert.Equal("SectionStatusChanged", Assert.Single(hub.Sent).Method);
+    }
+
+    [Fact]
+    public async Task AbandonAsync_LeavesAFolderThatHasSinceMovedOn_Alone()
+    {
+        // An abandoned message can be hours old, and the user may have regenerated or hand-written the
+        // minutes in the meantime. Failing it then reports a dead job against work that has since succeeded.
+        using var db = TestDb.Create();
+        var section = await SeedSection(db, Guid.NewGuid());
+        db.SectionMinutes.Add(new SectionMinutes
+        {
+            Id = Guid.NewGuid(), SectionId = section.Id, Status = SectionGenerationStatus.Ready, Text = "done",
+        });
+        await db.SaveChangesAsync();
+        var hub = new FakeHubContext();
+
+        await SectionMinutesProcessor.AbandonAsync(
+            db, hub, new SectionMinutesJob(section.Id), NullLogger.Instance);
+
+        var minutes = await db.SectionMinutes.SingleAsync(x => x.SectionId == section.Id);
+        Assert.Equal(SectionGenerationStatus.Ready, minutes.Status);
+        Assert.Empty(hub.Sent);
+    }
+
+    [Fact]
     public async Task Combiner_error_marks_failed()
     {
         using var db = TestDb.Create();

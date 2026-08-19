@@ -353,6 +353,93 @@ public class FormulaRunProcessorTests
     }
 
     [Fact]
+    public async Task ProcessAsync_WhenShutdownCancelsMidCall_StillRecordsFailed()
+    {
+        // The API being stopped (redeploy, container restart) cancels the job's token mid-call. FailAsync is
+        // the only thing that moves the result off Generating, and it read AND wrote with the same token - so
+        // the row kept "Generating..." with nothing left to finish it, while the worker acked the entry.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecordingWithTranscript(db, userId);
+        var (formula, result) = await SeedFormulaAndResult(db, userId, rec.Id);
+        using var cts = new CancellationTokenSource();
+        var chat = new FakeChatStreamClient(onCall: cts.Cancel)
+        {
+            ThrowOnCall = new OperationCanceledException("The operation was canceled."),
+        };
+
+        await FormulaRunProcessor.ProcessAsync(
+            db, chat, new FakeLlmSettingsResolver(), new FakeHubContext(),
+            new FormulaRunJob(rec.Id, null, result.Id, formula.Id, userId), NullLogger.Instance,
+            new CapturingWebhookPublisher(), "", cts.Token);
+
+        var persisted = await db.FormulaResults.FindAsync(result.Id);
+        Assert.Equal(FormulaRunStatus.Failed, persisted!.Status);
+    }
+
+    [Fact]
+    public async Task AbandonAsync_MarksARecordingResultFailed_RatherThanLeavingItGenerating()
+    {
+        // A message past the delivery cap is dropped by StreamReclaimer to stop a poison job killing worker
+        // after worker. Dropped silently it leaves the result card showing "Generating..." for good.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecordingWithTranscript(db, userId);
+        var (formula, result) = await SeedFormulaAndResult(db, userId, rec.Id);
+        var hub = new FakeHubContext();
+
+        await FormulaRunProcessor.AbandonAsync(
+            db, hub, new FormulaRunJob(rec.Id, null, result.Id, formula.Id, userId), NullLogger.Instance);
+
+        var persisted = await db.FormulaResults.FindAsync(result.Id);
+        Assert.Equal(FormulaRunStatus.Failed, persisted!.Status);
+        Assert.False(string.IsNullOrWhiteSpace(persisted.Error));
+        Assert.Equal("FormulaResultStatusChanged", Assert.Single(hub.Sent).Method);
+    }
+
+    [Fact]
+    public async Task AbandonAsync_MarksASectionResultFailed_Too()
+    {
+        // The section path writes a different table, so it needs its own proof rather than being assumed
+        // from the recording one.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        // No room/section rows needed: settling reaches the result row by its own id, never through the tree.
+        var sectionId = Guid.NewGuid();
+        var (formula, result) = await SeedFormulaAndSectionResult(db, userId, sectionId);
+        var hub = new FakeHubContext();
+
+        await FormulaRunProcessor.AbandonAsync(
+            db, hub, new FormulaRunJob(null, sectionId, result.Id, formula.Id, userId), NullLogger.Instance);
+
+        var persisted = await db.SectionFormulaResults.FindAsync(result.Id);
+        Assert.Equal(FormulaRunStatus.Failed, persisted!.Status);
+        Assert.False(string.IsNullOrWhiteSpace(persisted.Error));
+    }
+
+    [Fact]
+    public async Task AbandonAsync_LeavesAResultThatHasSinceMovedOn_Alone()
+    {
+        // An abandoned message can be hours old, and the run may have been re-done since. Failing it then
+        // reports a dead job against work that has succeeded.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecordingWithTranscript(db, userId);
+        var (formula, result) = await SeedFormulaAndResult(db, userId, rec.Id);
+        result.Status = FormulaRunStatus.Ready;
+        result.Text = "done";
+        await db.SaveChangesAsync();
+        var hub = new FakeHubContext();
+
+        await FormulaRunProcessor.AbandonAsync(
+            db, hub, new FormulaRunJob(rec.Id, null, result.Id, formula.Id, userId), NullLogger.Instance);
+
+        var persisted = await db.FormulaResults.FindAsync(result.Id);
+        Assert.Equal(FormulaRunStatus.Ready, persisted!.Status);
+        Assert.Empty(hub.Sent);
+    }
+
+    [Fact]
     public async Task Not_configured_marks_failed_and_never_calls_chat()
     {
         using var db = TestDb.Create();

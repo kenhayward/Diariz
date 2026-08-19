@@ -131,32 +131,77 @@ public static class FormulaRunProcessor
     private static Task<string?> OwnerEmailAsync(DiarizDbContext db, Guid userId, CancellationToken ct) =>
         db.Users.Where(u => u.Id == userId).Select(u => u.Email).FirstOrDefaultAsync(ct);
 
+    /// <summary>Settles a formula result whose job was dropped without ever running - the reclaimer
+    /// abandoning a message past its delivery cap. Nothing else will move it: the job is gone, so the card
+    /// sits on "Generating..." indefinitely with no error to explain it. Unlike a folder or a recording
+    /// summary the user is not blocked (a re-run mints a new result row), but the stranded card never
+    /// resolves on its own.
+    ///
+    /// <para>Only a result still sitting in Generating is touched - an abandoned message can be hours old,
+    /// and failing it then would report a dead job against a run that has since succeeded. No webhook is
+    /// emitted: <see cref="FailAsync"/>'s event says a run finished and failed, and this one never
+    /// started.</para></summary>
+    public static async Task AbandonAsync(
+        DiarizDbContext db, IHubContext<TranscriptionHub> hub, FormulaRunJob job, ILogger logger,
+        CancellationToken ct = default)
+    {
+        const string error = "This formula run was abandoned after repeated failures. Try running it again.";
+        var now = DateTimeOffset.UtcNow;
+
+        if (job.SectionId.HasValue)
+        {
+            var result = await db.SectionFormulaResults.FirstOrDefaultAsync(r => r.Id == job.ResultId, ct);
+            if (result is null || result.Status != FormulaRunStatus.Generating) return;
+            result.Status = FormulaRunStatus.Failed;
+            result.Error = error;
+            result.UpdatedAt = now;
+        }
+        else
+        {
+            var result = await db.FormulaResults.FirstOrDefaultAsync(r => r.Id == job.ResultId, ct);
+            if (result is null || result.Status != FormulaRunStatus.Generating) return;
+            result.Status = FormulaRunStatus.Failed;
+            result.Error = error;
+            result.UpdatedAt = now;
+        }
+
+        logger.LogError("Formula run {ResultId} was abandoned by the queue; marking it failed", job.ResultId);
+        await db.SaveChangesAsync(ct);
+        await hub.NotifyFormulaStatusAsync(job.UserId, job.RecordingId, job.SectionId, job.ResultId,
+            nameof(FormulaRunStatus.Failed));
+    }
+
     private static async Task FailAsync(
         DiarizDbContext db, IHubContext<TranscriptionHub> hub, FormulaRunJob job, string error,
         IWebhookPublisher webhooks, string publicUrl, ILogger logger, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
+        // Deliberately NOT ct, for the reads as much as the writes. The commonest way to get here is the host
+        // cancelling mid-call on a shutdown or redeploy, and that same token would abort this - the read threw
+        // before the write was even reached - leaving the row in Generating forever while the worker's finally
+        // acks the stream entry. This is what ends the job; it has to outlive the cancel.
+        var settle = CancellationToken.None;
         // A section-scoped job flips the SectionFormulaResult row; a recording job the FormulaResult row.
         if (job.SectionId.HasValue)
         {
-            var result = await db.SectionFormulaResults.FirstOrDefaultAsync(r => r.Id == job.ResultId, ct);
+            var result = await db.SectionFormulaResults.FirstOrDefaultAsync(r => r.Id == job.ResultId, settle);
             if (result is not null)
             {
                 result.Status = FormulaRunStatus.Failed;
                 result.Error = error;
                 result.UpdatedAt = now;
-                await db.SaveChangesAsync(ct);
+                await db.SaveChangesAsync(settle);
             }
         }
         else
         {
-            var result = await db.FormulaResults.FirstOrDefaultAsync(r => r.Id == job.ResultId, ct);
+            var result = await db.FormulaResults.FirstOrDefaultAsync(r => r.Id == job.ResultId, settle);
             if (result is not null)
             {
                 result.Status = FormulaRunStatus.Failed;
                 result.Error = error;
                 result.UpdatedAt = now;
-                await db.SaveChangesAsync(ct);
+                await db.SaveChangesAsync(settle);
             }
         }
         await hub.NotifyFormulaStatusAsync(job.UserId, job.RecordingId, job.SectionId, job.ResultId,
