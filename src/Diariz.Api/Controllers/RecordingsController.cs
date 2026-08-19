@@ -639,57 +639,12 @@ public class RecordingsController : ControllerBase
             .OrderByDescending(t => t.Version).FirstOrDefaultAsync();
         if (current is null) return NotFound();
 
-        var segments = await _db.Segments.Where(s => s.TranscriptionId == current.Id)
-            .OrderBy(s => s.Ordinal).ToListAsync();
-        if (segments.Count == 0) return NotFound();
+        // Preserved from before the merge itself moved to TranscriptSegmentMerge: a transcription with no
+        // segments is a 404 here, whereas the helper simply reports "nothing changed".
+        if (!await _db.Segments.AnyAsync(s => s.TranscriptionId == current.Id)) return NotFound();
 
-        // Group by the speaker's effective identity (assigned profile, else display name), not the raw
-        // diarization label — so two labels reassigned to the same person merge together.
-        var speakers = await _db.Speakers.Where(s => s.RecordingId == id)
-            .ToDictionaryAsync(s => s.Label, s => s);
-        string KeyFor(string label)
-        {
-            if (!speakers.TryGetValue(label, out var sp)) return $"l:{label}";
-            if (sp.PersonId is Guid pid) return $"p:{pid}";
-            return string.IsNullOrEmpty(sp.DisplayName) ? $"l:{label}" : $"n:{sp.DisplayName}";
-        }
-
-        // A note or a screenshot sits between two segments; don't let a same-speaker merge swallow that
-        // boundary (the note or image would jump to after the whole merged block). Flag the segment after
-        // each anchor. Both kinds of capture use the same rule, so they share one break set.
-        var noteTimes = await _db.MeetingNotes
-            .Where(n => n.RecordingId == id && n.CapturedAtMs != null)
-            .Select(n => n.CapturedAtMs!.Value)
-            .ToListAsync();
-        var shotTimes = await _db.MeetingScreenshots
-            .Where(s => s.RecordingId == id)
-            .Select(s => s.CapturedAtMs)
-            .ToListAsync();
-        var breakBefore = TranscriptNoteAnchor.BreakBeforeIndices(
-            segments.Select(s => s.StartMs).ToList(), noteTimes.Concat(shotTimes));
-
-        var merged = SegmentMerger.Merge(segments
-            .Select((s, i) => new SegmentMerger.Part(
-                KeyFor(s.SpeakerLabel), s.SpeakerLabel, s.StartMs, s.EndMs, s.EffectiveText, breakBefore.Contains(i)))
-            .ToList());
-        if (merged.Count == segments.Count) return NoContent(); // nothing adjacent to merge
-
-        _db.Segments.RemoveRange(segments);
-        var ordinal = 0;
-        foreach (var p in merged)
-            _db.Segments.Add(new Segment
-            {
-                Id = Guid.NewGuid(),
-                TranscriptionId = current.Id,
-                SpeakerLabel = p.SpeakerLabel,
-                StartMs = p.StartMs,
-                EndMs = p.EndMs,
-                // Merge consolidates the displayed (effective) text; the per-segment original/revised split
-                // is intentionally collapsed into a fresh Original on the merged row.
-                Original = p.Text,
-                Ordinal = ordinal++
-            });
-        await _db.SaveChangesAsync();
+        if (await TranscriptSegmentMerge.ApplyAsync(_db, id, current.Id))
+            await _db.SaveChangesAsync();
         return NoContent();
     }
 

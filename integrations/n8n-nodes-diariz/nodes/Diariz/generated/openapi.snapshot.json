@@ -4621,6 +4621,12 @@
       },
       "UpdateUserSettingsRequest": {
         "properties": {
+          "autoMergeSpeakerSegments": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
           "calendarAutoStopAfterMinutes": {
             "format": "int32",
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -4847,6 +4853,10 @@
       },
       "UserSettingsDto": {
         "properties": {
+          "autoMergeSpeakerSegments": {
+            "default": false,
+            "type": "boolean"
+          },
           "calendarAutoStopAfterMinutes": {
             "default": 3,
             "format": "int32",
