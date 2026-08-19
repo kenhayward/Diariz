@@ -22,6 +22,7 @@ export default function CalendarTab({
   isPersonalRoom,
   selectedDay,
   onSelectDay,
+  goToTodaySignal,
 }: {
   recordings: RecordingSummary[];
   /// The event overlay is personal-only: a shared room shows its own recordings and nothing else.
@@ -30,6 +31,10 @@ export default function CalendarTab({
   /// button - a sibling of this component - can read the day it needs to sync.
   selectedDay: string | null;
   onSelectDay: (day: string | null) => void;
+  /// Bumped by the panel when the toolbar's Go to today is pressed, to bring the month grid back. A
+  /// counter rather than a boolean or a day value: `selectedDay` already defaults to today, so pressing
+  /// the button often changes nothing else, and only a value that always changes can drive this.
+  goToTodaySignal: number;
 }) {
   const { t, i18n } = useTranslation("workspace");
   const qc = useQueryClient();
@@ -42,6 +47,18 @@ export default function CalendarTab({
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
   });
+  // Skip the first run: mounting must not re-assert the month `useState` has just initialised. Only a
+  // real bump from the toolbar moves the grid, which keeps the "reopening the tab starts on the current
+  // month" behaviour owned solely by the mount.
+  const seenSignal = useRef(false);
+  useEffect(() => {
+    if (!seenSignal.current) {
+      seenSignal.current = true;
+      return;
+    }
+    const now = new Date();
+    setMonth({ year: now.getFullYear(), month: now.getMonth() });
+  }, [goToTodaySignal]);
   // The selection is owned by RecordingsPanel, not here: the Calendar's quick-sync button lives in the
   // toolbar, which is this component's sibling, and it has to read the day being looked at to sync it.
   const dayKeys = useMemo(() => recordingDayKeys(recordings), [recordings]);

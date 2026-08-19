@@ -57,10 +57,22 @@ function renderTab(recordings: RecordingSummary[] = [rec]) {
     // Owned here because the real parent owns it: the panel holds the selection so its toolbar can read
     // the day the quick sync should refresh.
     const [selectedDay, setSelectedDay] = useState<string | null>(() => dayKey(new Date()));
+    // The panel bumps this when its toolbar's Go to today is pressed. A counter, not a boolean, because
+    // the button has to be able to fire more than once.
+    const [goToTodaySignal, setGoToTodaySignal] = useState(0);
     return (
       <>
         <button onClick={() => setOpen((o) => !o)}>toggle-tab</button>
-        {open && <CalendarTab recordings={recordings} isPersonalRoom selectedDay={selectedDay} onSelectDay={setSelectedDay} />}
+        <button onClick={() => setGoToTodaySignal((n) => n + 1)}>go-to-today</button>
+        {open && (
+          <CalendarTab
+            recordings={recordings}
+            isPersonalRoom
+            selectedDay={selectedDay}
+            onSelectDay={setSelectedDay}
+            goToTodaySignal={goToTodaySignal}
+          />
+        )}
       </>
     );
   }
@@ -109,6 +121,21 @@ describe("CalendarTab", () => {
 
     fireEvent.click(screen.getByText("toggle-tab")); // leave the tab
     fireEvent.click(screen.getByText("toggle-tab")); // come back
+
+    expect(await screen.findByText(monthHeading(0))).toBeTruthy();
+  });
+
+  // The point of the signal. `selectedDay` is initialised to today and is never touched here, so a
+  // "go to today" built only on setSelectedDay(today) would be a no-op and leave the grid on next month.
+  // If this test can pass without the signal, it is not testing the feature.
+  it("returns the grid to today's month when the signal fires, though the selected day never changed", async () => {
+    renderTab();
+    await screen.findByText("Today call");
+
+    fireEvent.click(screen.getByRole("button", { name: /next month/i }));
+    await waitFor(() => expect(screen.getByText(monthHeading(1))).toBeTruthy());
+
+    fireEvent.click(screen.getByText("go-to-today"));
 
     expect(await screen.findByText(monthHeading(0))).toBeTruthy();
   });
