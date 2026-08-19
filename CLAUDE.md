@@ -89,6 +89,30 @@ API persists `Segment`s + seeds `Speaker` rows → notifies the browser over **S
   `OnModelCreating` applies the pgvector extension + column **only when the provider is Npgsql**
   (`Database.IsNpgsql()`); under other providers (the in-memory test provider) the property is
   `Ignore`d. Keep new Postgres-only model config behind that same guard so unit tests can build the model.
+- **Split queries are the app-wide default — you do not need `.AsSplitQuery()`.**
+  `DiarizDbContext.OnConfiguring` sets `QuerySplittingBehavior.SplitQuery` (0.228.4), guarded on the provider
+  being relational for the same reason as the `Database.IsNpgsql()` guards above — the in-memory unit provider
+  would otherwise get a second provider registered and throw. Several collections hang off `Recording`
+  (`Speakers`, `Actions`, `Tags`, `Transcriptions`→`Segments`), and EF's *own* default returns the **cartesian
+  product** of every sibling collection an `Include` chain names. The results are identical either way — EF
+  de-duplicates the product back into the right object graph — so it is invisible to behaviour and to any
+  results-based test, and shows up only as row count and sort spill. Measured on prod before the fix: a
+  recording-detail query returned 104,720 rows for 334 rows of real data and spilled 207 MB (0.228.2); an MCP
+  read of the same recording returned 517,825 rows and spilled 1.97 GB (0.228.3). It compounds rather than
+  plateauing, because the count is a *product* — each new action item multiplies the whole result again.
+  It was fixed by hand twice, and both audits missed sites (nine across six files), which is why the default is
+  inverted rather than left to discipline. Three things follow:
+  - **Writing a query:** just write the `Include`s. The explicit `.AsSplitQuery()` calls still in
+    `RecordingsController` and the MCP tools are redundant belt-and-braces, not a pattern to copy.
+  - **Opting out:** `.AsSingleQuery()` where one statement is genuinely needed. The trade-off the default
+    accepts is that split queries run as separate statements with no shared snapshot, so a collection could in
+    principle be read either side of a concurrent write.
+  - **The one real caveat:** a row-limiting operation (`Skip`/`Take`) on a query that also `Include`s a
+    collection needs a deterministic `OrderBy`, or the separate statements can disagree. Nothing in the app
+    does this today (every paged query projects with `Select` instead), so check it if you add one.
+  `SplitQueryIntegrationTests`, `SplitQueryEverywhereIntegrationTests` and `GlobalSplitQueryIntegrationTests`
+  pin all of the above; the last one asserts the real `Program.cs` host resolves a context with the default on,
+  since a test proving only that *test-built* contexts get it would be a false positive.
 - All user-scoped queries filter by `UserId` from the JWT `NameIdentifier` claim — preserve this
   ownership check on every recording endpoint.
 
