@@ -67,7 +67,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.230.0",
     date: "2026-08-19",
-    pr: 0,
+    pr: 553,
     headline: "A Go to today button on the calendar",
     summary:
       "The Calendar tab opens on today, but until now there was no way back to it. Page the month grid forward to check next month's meetings and the only way home was clicking back a month at a time.\n\nThere is now a Go to today button on the panel toolbar, to the left of the two sync buttons. It appears whenever the Calendar tab is open - including in shared rooms, where the sync buttons do not - and one click puts both the selected day and the month grid back on today.",
