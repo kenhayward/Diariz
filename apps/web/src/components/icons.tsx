@@ -164,3 +164,13 @@ export const TagIcon = (p: IconProps) => (
     <circle cx="7.5" cy="7.5" r="1.3" fill="currentColor" />
   </svg>
 );
+
+/// Two strands joining into one. Marks the auto-merge preference, matching the transcript toolbar's Merge
+/// glyph so the setting and the manual action read as the same thing. The same shape is exported from
+/// `detail/icons.tsx`, but as a fixed-size ReactElement, which does not compose with this file's `size`.
+export const MergeIcon = (p: IconProps) => (
+  <svg {...svgProps(p)}>
+    <path d="M6 3v6a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3" />
+    <line x1="12" y1="15" x2="12" y2="21" />
+  </svg>
+);

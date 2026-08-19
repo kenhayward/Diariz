@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.Tests;
@@ -39,7 +40,8 @@ public class RecordingWebhookEmitTests
         var controller = new WorkerCallbackController(
             db, hub, queue, resolver, embedding, new FakeSpeakerIdentifier(),
             Options.Create(new WorkerOptions { CallbackSecret = Secret }),
-            publisher, Options.Create(new AppPublicOptions()))
+            publisher, Options.Create(new AppPublicOptions()),
+            NullLogger<WorkerCallbackController>.Instance)
         {
             ControllerContext = Http.Context(headers: ("X-Worker-Secret", Secret))
         };

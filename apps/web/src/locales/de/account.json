@@ -248,6 +248,8 @@
   "calendarSilencePrefix": "oder nach",
   "calendarSilenceSuffix": "Sekunden Stille - je nachdem, was zuerst eintritt.",
   "calendarAutoStopExample": "Eine Besprechung von 10:00-11:00 nimmt bis {{until}} weiter auf - oder stoppt früher, sobald {{seconds}} Sekunden lang niemand spricht.",
+  "autoMergeHeading": "Aufeinanderfolgende Beiträge derselben Person zu einem Block zusammenfassen",
+  "autoMergeBody": "Sobald eine Aufnahme transkribiert ist, werden aufeinanderfolgende Zeilen derselben Person automatisch zusammengefasst - dasselbe, was die Schaltfläche Zusammenführen im Transkript tut, nur ohne Klick. Notizen und Screenshots bleiben Trennstellen. Für dieses Transkript ist das dauerhaft: Um wieder kurze Zeilen zu erhalten, schalten Sie diese Option aus und transkribieren Sie erneut.",
   "calendarAfterMinutes": "Minuten nach dem geplanten Ende der Besprechung",
   "calendarSilenceSeconds": "Sekunden Stille vor dem Beenden",
   "storageQuotas": "Speicherkontingente",

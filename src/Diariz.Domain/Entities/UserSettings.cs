@@ -94,4 +94,13 @@ public class UserSettings
 
     public const int DefaultCalendarAutoStopAfterMinutes = 3;
     public const int DefaultCalendarSilenceStopSeconds = 30;
+
+    // ---- Transcript presentation ----
+
+    /// <summary>Whether consecutive same-speaker segments are collapsed into single blocks automatically,
+    /// once a recording has been transcribed and its speakers identified - the same collapse the transcript
+    /// toolbar's Merge action performs on demand. Off by default: it is permanent for that transcription
+    /// version, so it is opted into rather than assumed. Turning it off and re-transcribing is the way back
+    /// to granular segments.</summary>
+    public bool AutoMergeSpeakerSegments { get; set; }
 }

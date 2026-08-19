@@ -273,4 +273,39 @@ public class UserSettingsControllerTests
 
     // ---- LLM timeout override ----
 
+    // ---- Auto-merge speaker segments ----
+
+    [Fact]
+    public async Task Get_AutoMergeSpeakerSegments_DefaultsToFalse_WhenThereIsNoSettingsRow()
+    {
+        using var db = TestDb.Create();
+
+        var dto = await Build(db, Guid.NewGuid()).Get();
+
+        Assert.False(dto.AutoMergeSpeakerSegments);
+    }
+
+    [Fact]
+    public async Task Update_AutoMergeSpeakerSegments_RoundTrips()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(AutoMergeSpeakerSegments: true));
+
+        Assert.True((await Build(db, userId).Get()).AutoMergeSpeakerSegments);
+    }
+
+    [Fact]
+    public async Task Update_OmittingAutoMergeSpeakerSegments_LeavesItAlone()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(AutoMergeSpeakerSegments: true));
+
+        // Another preferences tab saving its own fields must not clear this one (the tri-state rule).
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(CalendarAutoStopEnabled: true));
+
+        Assert.True((await Build(db, userId).Get()).AutoMergeSpeakerSegments);
+    }
 }

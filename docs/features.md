@@ -62,7 +62,9 @@ plays or steps through just their segments, and reassigns them. Edits are kept *
 original words** — a ✎ marks revised rows and a **Show original / Show revised** toggle flips the whole
 transcript, so you can always get back to what the model said. Re-transcribe with a chosen model at any time
 (with optional **min/max speaker hints** for pyannote when voices are merged, and an optional **spoken
-language**), **merge** consecutive same-speaker rows, and **email yourself** the formatted transcript. The transcript **embeds its audio** in a
+language**), **merge** consecutive same-speaker rows (or set it to happen automatically for every
+recording, from Preferences - Recordings, so a transcript arrives already in speaker-sized blocks), and
+**email yourself** the formatted transcript. The transcript **embeds its audio** in a
 **conversation-flow player**: the recording is laid out left to right as speaker-coloured blocks sized by how
 long each person talked, with silence left dark and a legend giving each speaker's share — so the shape of the
 meeting is legible at a glance — and the bar doubles as the scrubber (click or drag anywhere on it to seek).

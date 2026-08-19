@@ -110,6 +110,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddLlmCallFinishReason` | `LlmCalls.FinishReason` (text, nullable) - the model's reason for stopping, so a reply cut off by a token cap is distinguishable from one that had nothing to say. Additive and nullable, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddTranscriptionLanguage` | `Recording.TranscriptionLanguage` + `UserSettings.TranscriptionLanguage` (both text, nullable) - the spoken language to transcribe in, per recording and as a per-user default; null on both means Whisper detects it. Additive and nullable, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `DropPerUserLlmSettings` | **Drops** `UserSettings.SummaryApiBase`, `SummaryApiKeyEncrypted`, `SummaryModel`, `ChatContextWindow`, `LlmTimeoutSeconds`, `ReasoningEnabled`, `ReasoningEffort` - LLM configuration moved to the platform. Destructive, but **deliberately no `CurrentFormat` bump**: restore does `pg_restore --clean` then migrates forward, so an older backup restores its own columns and this migration drops them - the restore succeeds and the platform is left correct, and the only loss is per-user values this release discards by design |
+| `AddAutoMergeSpeakerSegments` | `UserSettings.AutoMergeSpeakerSegments` (boolean NOT NULL DEFAULT false) - whether consecutive same-speaker segments are collapsed automatically once a recording finishes transcribing. Additive and defaulted, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 
 ### Entity-relationship overview
 
@@ -765,6 +766,7 @@ Per-user preferences (1:1 with the user via a **shared primary key** = `UserId`)
 | `CalendarAutoStopEnabled` | bool | whether a recording started from a **calendar event** ends by itself; **default false**. The two columns below are its conditions and are inert while it is false |
 | `CalendarAutoStopAfterMinutes` | int | minutes to keep recording past the invite's end time; **default 3**. Clamped to the default on write if non-positive (a zero would stop the take the instant it began) |
 | `CalendarSilenceStopSeconds` | int | seconds of continuous near-silence that also ends such a recording; **default 30**. Clamped like the above. Only counted once something has been heard, so a take started before anyone speaks is never cut short |
+| `AutoMergeSpeakerSegments` | bool | whether consecutive same-speaker segments are collapsed into single blocks automatically after transcription and speaker identification, the same collapse `POST /api/recordings/{id}/merge-segments` performs on demand; **default false**. Permanent for that transcription version |
 
 Each field falls back to the server `Summarization`/`Chat` defaults when null. The display name lives on
 `AspNetUsers.FullName` (editable via `PUT /api/user/profile`), not here.

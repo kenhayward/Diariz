@@ -447,6 +447,15 @@ highest-version transcription (plus its summary and the recording's actions). Sp
 across re-transcribes (the callback only seeds new labels). Embeddings refresh and auto-ID re-runs without
 clobbering manual names.
 
+When the recording's owner has `UserSettings.AutoMergeSpeakerSegments` set, the callback runs
+`TranscriptSegmentMerge.ApplyAsync` - the same helper behind `POST /api/recordings/{id}/merge-segments` -
+after speaker identification is saved and before any downstream job is enqueued, so the summary, actions,
+tags, embeddings, the SignalR notification and the webhook all see the merged shape. The call is wrapped in
+a swallowed try/catch: an unmerged transcript is valid, but throwing there would strand the recording in
+`Summarizing` with nothing queued to clear it. Because the merge runs before embedding, retrieval chunks are
+built from merged segments and are therefore coarser (`TranscriptChunker` never splits a segment) - an
+accepted trade-off of the setting.
+
 ## LLM-powered features (all via an OpenAI-compatible endpoint)
 
 ### Truncation (0.222.0)

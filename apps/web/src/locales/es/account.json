@@ -248,6 +248,8 @@
   "calendarSilencePrefix": "o tras",
   "calendarSilenceSuffix": "segundos de silencio - lo que ocurra primero.",
   "calendarAutoStopExample": "Una reunión de 10:00-11:00 sigue grabando hasta las {{until}} - o se detiene antes, en cuanto pasan {{seconds}} segundos sin que nadie hable.",
+  "autoMergeHeading": "Unir en un solo bloque las intervenciones seguidas de cada persona",
+  "autoMergeBody": "Cuando una grabación termina de transcribirse, las filas consecutivas de la misma persona se unen automáticamente: lo mismo que hace el botón Unir de la transcripción, sin el clic. Las notas y las capturas siguen siendo límites. Es permanente para esa transcripción: para recuperar las filas cortas, desactiva esta opción y vuelve a transcribir.",
   "calendarAfterMinutes": "Minutos después de la hora prevista de fin de la reunión",
   "calendarSilenceSeconds": "Segundos de silencio antes de detener",
   "storageQuotas": "Cuotas de almacenamiento",

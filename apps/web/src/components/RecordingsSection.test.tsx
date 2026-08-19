@@ -18,6 +18,7 @@ const settings = {
   reasoningEnabled: false, reasoningEffort: "medium", defaultReasoningEnabled: false, defaultReasoningEffort: "medium",
   placementMode: "SelectedFolder", placementSectionId: null,
   calendarAutoStopEnabled: false, calendarAutoStopAfterMinutes: 3, calendarSilenceStopSeconds: 30,
+  autoMergeSpeakerSegments: false,
 };
 
 function renderSection() {
@@ -119,6 +120,7 @@ describe("RecordingsSection", () => {
       expect(api.updateUserSettings).toHaveBeenCalledWith({
         placementMode: "SpecificFolder", placementSectionId: "sec-1",
         calendarAutoStopEnabled: false, calendarAutoStopAfterMinutes: 3, calendarSilenceStopSeconds: 30,
+        autoMergeSpeakerSegments: false,
       }),
     );
   });
@@ -170,6 +172,7 @@ describe("RecordingsSection", () => {
     expect(arg).toEqual({
       placementMode: "SpecificFolder", placementSectionId: "sec-1",
       calendarAutoStopEnabled: false, calendarAutoStopAfterMinutes: 3, calendarSilenceStopSeconds: 30,
+      autoMergeSpeakerSegments: false,
     });
     expect(arg).not.toHaveProperty("apiBase");
     expect(arg).not.toHaveProperty("toolsEnabled");
@@ -190,7 +193,7 @@ describe("RecordingsSection", () => {
     fireEvent.click(saveButton());
 
     await waitFor(() =>
-      expect(api.updateUserSettings).toHaveBeenCalledWith({ placementMode: "SpecificFolder", placementSectionId: null, calendarAutoStopEnabled: false, calendarAutoStopAfterMinutes: 3, calendarSilenceStopSeconds: 30 }),
+      expect(api.updateUserSettings).toHaveBeenCalledWith({ placementMode: "SpecificFolder", placementSectionId: null, calendarAutoStopEnabled: false, calendarAutoStopAfterMinutes: 3, calendarSilenceStopSeconds: 30, autoMergeSpeakerSegments: false }),
     );
   });
 
@@ -203,7 +206,7 @@ describe("RecordingsSection", () => {
     fireEvent.click(saveButton());
 
     await waitFor(() =>
-      expect(api.updateUserSettings).toHaveBeenCalledWith({ placementMode: "Ungrouped", placementSectionId: null, calendarAutoStopEnabled: false, calendarAutoStopAfterMinutes: 3, calendarSilenceStopSeconds: 30 }),
+      expect(api.updateUserSettings).toHaveBeenCalledWith({ placementMode: "Ungrouped", placementSectionId: null, calendarAutoStopEnabled: false, calendarAutoStopAfterMinutes: 3, calendarSilenceStopSeconds: 30, autoMergeSpeakerSegments: false }),
     );
   });
 
@@ -296,6 +299,7 @@ describe("RecordingsSection", () => {
       expect((api.updateUserSettings as ReturnType<typeof vi.fn>).mock.calls[0][0]).toEqual({
         placementMode: "SelectedFolder", placementSectionId: null,
         calendarAutoStopEnabled: true, calendarAutoStopAfterMinutes: 10, calendarSilenceStopSeconds: 90,
+        autoMergeSpeakerSegments: false,
       });
     });
 
@@ -386,5 +390,45 @@ describe("RecordingsSection", () => {
     renderSection();
     await screen.findByRole("radio", { name: /the folder I'm looking at/i });
     expect(screen.queryByText("Unsaved changes")).toBeNull();
+  });
+
+  describe("auto-merge", () => {
+    it("shows the switch off when the setting is off", async () => {
+      renderSection();
+      const sw = (await screen.findByRole("switch", {
+        name: "Merge each speaker's turn into one block",
+      })) as HTMLButtonElement;
+      expect(sw.getAttribute("aria-checked")).toBe("false");
+    });
+
+    it("shows the switch on when the setting is on", async () => {
+      (api.getUserSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ...settings, autoMergeSpeakerSegments: true,
+      });
+      renderSection();
+      const sw = (await screen.findByRole("switch", {
+        name: "Merge each speaker's turn into one block",
+      })) as HTMLButtonElement;
+      expect(sw.getAttribute("aria-checked")).toBe("true");
+    });
+
+    it("marks the footer unsaved when flipped, and saves the new value", async () => {
+      renderSection();
+      const sw = await screen.findByRole("switch", {
+        name: "Merge each speaker's turn into one block",
+      });
+      fireEvent.click(sw);
+      expect(screen.getByText("Unsaved changes")).toBeTruthy();
+
+      fireEvent.click(saveButton());
+
+      // Asserting the call, not relying on the method being absent from the vi.mock factory - an
+      // absent-method guard is destroyed silently the moment anything else needs that method.
+      await waitFor(() =>
+        expect(api.updateUserSettings).toHaveBeenCalledWith(
+          expect.objectContaining({ autoMergeSpeakerSegments: true }),
+        ),
+      );
+    });
   });
 });

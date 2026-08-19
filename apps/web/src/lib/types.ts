@@ -529,6 +529,9 @@ export interface UserSettings {
   calendarAutoStopAfterMinutes: number;
   /// Seconds of continuous silence that also ends such a recording.
   calendarSilenceStopSeconds: number;
+  /// Whether consecutive same-speaker segments are collapsed automatically once a recording finishes
+  /// transcribing. Off by default.
+  autoMergeSpeakerSegments: boolean;
 }
 
 /// Where a new recording lands in the user's Personal room. Mirrors the server enum names.
@@ -961,6 +964,8 @@ export interface UpdateUserSettings {
   calendarAutoStopAfterMinutes?: number;
   /// Seconds of silence that ends the recording; omit to leave unchanged. Non-positive resets to the default.
   calendarSilenceStopSeconds?: number;
+  /// Whether transcripts are auto-merged by speaker; omit to leave unchanged.
+  autoMergeSpeakerSegments?: boolean;
   /// Tri-state: omit = leave unchanged, 0 = clear the override, 5+ = set it (1-4 is rejected by the server).
   llmTimeoutSeconds?: number;
 }

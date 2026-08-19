@@ -6,7 +6,7 @@ import type { RecordingPlacementMode } from "../lib/types";
 import { sectionPathLabel } from "../lib/sectionTree";
 import FolderPickerModal from "./FolderPickerModal";
 import { usePreferencesFooter } from "./PreferencesFooter";
-import { CalendarIcon, FolderIcon } from "./icons";
+import { CalendarIcon, FolderIcon, MergeIcon } from "./icons";
 
 /// Mirrors the server-side defaults (`UserSettings.DefaultCalendar*`). Duplicated rather than derived
 /// because the field can be blank while typing, and a blank must fall back to something on save.
@@ -30,7 +30,7 @@ function clockAfter(hour: number, addMinutes: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-/// The five values as last loaded or last saved. `dirty` is a comparison against this rather than a flag
+/// The six values as last loaded or last saved. `dirty` is a comparison against this rather than a flag
 /// set by each change handler, so undoing an edit by hand clears the indicator instead of latching it.
 /// Reset from the payload on a successful save rather than waiting for the refetch, which would otherwise
 /// leave the footer briefly reading "Unsaved changes" over values that are already stored.
@@ -40,6 +40,7 @@ interface Baseline {
   calendarAutoStop: boolean;
   afterMinutes: number;
   silenceSeconds: number;
+  autoMergeSpeakerSegments: boolean;
 }
 
 /// Recordings tab: where a new recording lands in the user's Personal room (Ungrouped / the selected folder /
@@ -63,6 +64,8 @@ export default function RecordingsSection() {
   const [calendarAutoStop, setCalendarAutoStop] = useState(false);
   const [afterMinutes, setAfterMinutes] = useState(String(DEFAULT_AFTER_MINUTES));
   const [silenceSeconds, setSilenceSeconds] = useState(String(DEFAULT_SILENCE_SECONDS));
+  // How a finished transcript is shaped, rather than how a recording is captured or filed.
+  const [autoMerge, setAutoMerge] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedOnce, setSavedOnce] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -91,6 +94,7 @@ export default function RecordingsSection() {
       calendarAutoStop: data.calendarAutoStopEnabled ?? false,
       afterMinutes: data.calendarAutoStopAfterMinutes ?? DEFAULT_AFTER_MINUTES,
       silenceSeconds: data.calendarSilenceStopSeconds ?? DEFAULT_SILENCE_SECONDS,
+      autoMergeSpeakerSegments: data.autoMergeSpeakerSegments ?? false,
     };
     setSeededFrom(data);
     setPlacementMode(next.placementMode);
@@ -98,10 +102,11 @@ export default function RecordingsSection() {
     setCalendarAutoStop(next.calendarAutoStop);
     setAfterMinutes(String(next.afterMinutes));
     setSilenceSeconds(String(next.silenceSeconds));
+    setAutoMerge(next.autoMergeSpeakerSegments);
     setBaseline(next);
   }
 
-  // The exact five fields Save sends, so `dirty` compares what would be stored rather than what is typed:
+  // The exact six fields Save sends, so `dirty` compares what would be stored rather than what is typed:
   // blanking a duration field is not a change, because `positiveOr` would store the same number anyway.
   const current: Baseline = {
     placementMode,
@@ -109,6 +114,7 @@ export default function RecordingsSection() {
     calendarAutoStop,
     afterMinutes: positiveOr(afterMinutes, DEFAULT_AFTER_MINUTES),
     silenceSeconds: positiveOr(silenceSeconds, DEFAULT_SILENCE_SECONDS),
+    autoMergeSpeakerSegments: autoMerge,
   };
   const dirty =
     baseline !== null &&
@@ -116,7 +122,8 @@ export default function RecordingsSection() {
       current.placementSectionId !== baseline.placementSectionId ||
       current.calendarAutoStop !== baseline.calendarAutoStop ||
       current.afterMinutes !== baseline.afterMinutes ||
-      current.silenceSeconds !== baseline.silenceSeconds);
+      current.silenceSeconds !== baseline.silenceSeconds ||
+      current.autoMergeSpeakerSegments !== baseline.autoMergeSpeakerSegments);
 
   // The panel shows the chosen folder's full path unconditionally - the old inline picker could only show
   // a folder that happened to be at its current drill level, so a deeply nested choice looked unset.
@@ -151,6 +158,7 @@ export default function RecordingsSection() {
         calendarAutoStopEnabled: current.calendarAutoStop,
         calendarAutoStopAfterMinutes: current.afterMinutes,
         calendarSilenceStopSeconds: current.silenceSeconds,
+        autoMergeSpeakerSegments: current.autoMergeSpeakerSegments,
       });
       qc.invalidateQueries({ queryKey: ["user-settings"] });
       // Show the coerced values, so a field left blank reads as the default that was actually stored.
@@ -317,6 +325,42 @@ export default function RecordingsSection() {
               </p>
             </div>
           )}
+        </div>
+
+        {/* How a finished transcript is shaped. Runs the same collapse as the transcript toolbar's Merge
+            action, automatically, once a recording has been transcribed and its speakers identified. */}
+        <div className="overflow-hidden rounded-lg border dark:border-gray-700">
+          <div className="flex items-start justify-between gap-5 px-4 py-3.5">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="shrink-0 text-gray-500 dark:text-gray-400">
+                  <MergeIcon size={14} />
+                </span>
+                <h3 className="text-[15px] font-semibold dark:text-gray-100">{t("autoMergeHeading")}</h3>
+              </div>
+              <p className="mt-1 text-[13px] text-pretty text-gray-500 dark:text-gray-400">{t("autoMergeBody")}</p>
+            </div>
+            {/* Same control as the switch above: role="switch" on a button, because a native checkbox
+                cannot be styled as a track and knob without hiding it and losing the focus ring. The
+                heading is its accessible name - it has no visible label of its own. */}
+            <button
+              type="button"
+              role="switch"
+              aria-checked={autoMerge}
+              aria-label={t("autoMergeHeading")}
+              onClick={() => setAutoMerge((on) => !on)}
+              className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                autoMerge ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-700"
+              }`}
+            >
+              <span
+                aria-hidden
+                className={`absolute top-[3px] h-[18px] w-[18px] rounded-full bg-white transition-[left] ${
+                  autoMerge ? "left-[23px]" : "left-[3px]"
+                }`}
+              />
+            </button>
+          </div>
         </div>
       </div>
 

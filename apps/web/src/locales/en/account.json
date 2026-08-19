@@ -248,6 +248,8 @@
   "calendarSilencePrefix": "or after",
   "calendarSilenceSuffix": "seconds of silence - whichever comes first.",
   "calendarAutoStopExample": "A 10:00-11:00 meeting keeps recording until {{until}} - or stops sooner, once {{seconds}} seconds pass with nobody speaking.",
+  "autoMergeHeading": "Merge each speaker's turn into one block",
+  "autoMergeBody": "When a recording finishes transcribing, consecutive rows from the same person are joined automatically - the same thing the transcript's Merge button does, without the click. Notes and screenshots stay as boundaries. It is permanent for that transcript: to get short rows back, turn this off and transcribe it again.",
   "calendarAfterMinutes": "Minutes after the meeting was due to finish",
   "calendarSilenceSeconds": "Seconds of silence before stopping",
   "storageQuotas": "Storage Quotas",
