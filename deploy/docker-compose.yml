@@ -10,6 +10,25 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
+    # Server tuning + observability. shared_preload_libraries can ONLY be set at startup (ALTER SYSTEM
+    # + reload will not do it), which is why it lives here rather than in postgresql.conf at runtime.
+    #
+    # pg_stat_statements is what makes a slow endpoint diagnosable from the database side instead of by
+    # scraping API logs; it ships in this image but is not loaded by default. Install it once per database
+    # after the first start with:  CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+    #
+    # The three logging dials exist because a cartesian-product query silently spilled 207 MB to disk on
+    # every open of a large recording, and nothing in the default configuration said so (see 0.228.2).
+    # log_temp_files=0 logs EVERY spill, which is the signal that was missing.
+    command: >
+      postgres
+      -c shared_preload_libraries=pg_stat_statements
+      -c pg_stat_statements.max=5000
+      -c pg_stat_statements.track=all
+      -c track_io_timing=on
+      -c log_min_duration_statement=${PG_LOG_MIN_DURATION_MS:-250}
+      -c log_temp_files=${PG_LOG_TEMP_FILES_KB:-0}
+      -c log_lock_waits=on
     environment:
       POSTGRES_DB: diariz
       POSTGRES_USER: diariz
@@ -87,6 +106,18 @@ services:
       start_period: 60s
     environment:
       ASPNETCORE_ENVIRONMENT: Production
+      # EF Core logs EVERY executed statement, with its full SQL text, at Information - and the base
+      # appsettings.json sets Default=Information, so production was writing a line per query (the webhook
+      # poller alone fires every 2 s). src/Diariz.Api/appsettings.Production.json turns those two categories
+      # down to Warning; these vars are the operator dial over that file, since environment variables win
+      # over appsettings.{Environment}.json. Leave them unset in .env to take the file's value.
+      #
+      # Deliberately NOT lowering Default, and deliberately stopping at Infrastructure: that leaves
+      # Microsoft.EntityFrameworkCore.Query at its default, which is the category that emits
+      # MultipleCollectionIncludeWarning - the warning that correctly reported the 0.228.2 cartesian bug.
+      # Set both to Information temporarily when you need to watch the SQL a request actually runs.
+      Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command: ${EF_SQL_LOG_LEVEL:-Warning}
+      Logging__LogLevel__Microsoft.EntityFrameworkCore.Infrastructure: ${EF_INFRA_LOG_LEVEL:-Warning}
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=diariz;Username=diariz;Password=${POSTGRES_PASSWORD:-diariz}"
       Jwt__Key: ${JWT_KEY}
       # The API streams audio to the browser itself (same-origin), so MinIO never needs to be

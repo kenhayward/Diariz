@@ -253,28 +253,6 @@ public class TagsIntegrationTests(ContainersFixture fx)
         }
     }
 
-    /// <summary>Records the SQL text of every reader query the context runs, so a test can assert the SHAPE of
-    /// what EF emitted rather than only its results.</summary>
-    private sealed class RecordsSql : DbCommandInterceptor
-    {
-        public List<string> Statements { get; } = [];
-
-        public override InterceptionResult<DbDataReader> ReaderExecuting(
-            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result)
-        {
-            Statements.Add(command.CommandText);
-            return result;
-        }
-
-        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
-            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result,
-            CancellationToken ct = default)
-        {
-            Statements.Add(command.CommandText);
-            return ValueTask.FromResult(result);
-        }
-    }
-
     // The detail query single-queries three sibling collections already (Speakers, Actions, and
     // Transcriptions -> Segments), and EF is in single-query mode - no AsSplitQuery here, no global
     // QuerySplittingBehavior anywhere in the repo. Including a fourth collection therefore multiplies the
