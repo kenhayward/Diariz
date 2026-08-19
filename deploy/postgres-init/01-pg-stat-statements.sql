@@ -1,0 +1,30 @@
+-- Runs ONCE, on first initialisation of an empty data directory, via the postgres image's
+-- /docker-entrypoint-initdb.d hook. It executes as the bootstrap superuser (POSTGRES_USER) against
+-- POSTGRES_DB, before the API ever connects.
+--
+-- This is here rather than in an EF migration on purpose. pg_stat_statements is NOT a trusted
+-- extension, so creating it requires superuser:
+--
+--     ERROR:  permission denied to create extension "pg_stat_statements"
+--     HINT:  Must be superuser to create this extension.
+--
+-- The API runs its migrations at startup, so a migration that hit that error would stop the API
+-- booting - on a managed Postgres (RDS/Azure/Neon/Supabase), where the application role is usually
+-- not a superuser, for an extension that nothing in Diariz reads. The `vector` and `pg_trgm`
+-- extensions ARE created by migration, correctly: the schema cannot work without them, so failing
+-- hard is the right answer there. This one is observability, and must never block a deployment.
+--
+-- Creating the extension is independent of loading the library: this statement succeeds even when
+-- shared_preload_libraries does not list pg_stat_statements; only querying the view then errors.
+-- The compose service sets the preload in its `command:` (it can only be set at server start).
+--
+-- Existing deployments predate this file - their data directory is already initialised, so it never
+-- runs for them. They need it once, by hand:
+--
+--     docker exec diariz-postgres-1 psql -U diariz -d diariz \
+--       -c "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;"
+--
+-- Why it is worth having at all: a cartesian Include was writing 207 MB to disk on every open of a
+-- large recording, and the only reason it was ever found is that this extension was installed and
+-- could be asked. See 0.228.2 and 0.228.3.
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;

@@ -37,9 +37,10 @@ public sealed class GetRecordingDetailsTool : IChatTool
         var rec = await query
             .Include(r => r.Speakers)
             .Include(r => r.Actions)
-            .Include(r => r.Transcriptions).ThenInclude(t => t.Segments)
-            .Include(r => r.Transcriptions).ThenInclude(t => t.Summary)
-            .Include(r => r.Transcriptions).ThenInclude(t => t.MeetingMinutes)
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1)).ThenInclude(t => t.Segments)
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1)).ThenInclude(t => t.Summary)
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1)).ThenInclude(t => t.MeetingMinutes)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(ct);
         if (rec is null) return "No matching recording was found.";
 

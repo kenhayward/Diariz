@@ -79,8 +79,9 @@ public sealed class McpResourceService : IMcpResourceService
         var rec = await _db.Recordings
             .Where(r => r.Id == recordingId && r.UserId == userId)
             .Include(r => r.Speakers)
-            .Include(r => r.Transcriptions).ThenInclude(t => t.Segments)
-            .Include(r => r.Transcriptions).ThenInclude(t => t.MeetingMinutes)
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1)).ThenInclude(t => t.Segments)
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1)).ThenInclude(t => t.MeetingMinutes)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(ct);
         if (rec is null) return null;
 

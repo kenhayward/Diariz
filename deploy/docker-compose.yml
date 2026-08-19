@@ -42,6 +42,11 @@ services:
       - "${POSTGRES_BIND:-0.0.0.0}:${POSTGRES_PORT:-5433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      # Runs once, on a FRESH data directory only, as the bootstrap superuser: creates
+      # pg_stat_statements so a new deployment is not silently missing it. Deliberately not an EF
+      # migration - the extension needs superuser, the API runs migrations at startup, and a managed
+      # Postgres would then refuse to boot the API over an observability extension. See the file.
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U diariz"]
       interval: 5s

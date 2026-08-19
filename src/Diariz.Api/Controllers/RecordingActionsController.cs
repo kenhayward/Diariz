@@ -78,6 +78,7 @@ public class RecordingActionsController : ControllerBase
             .Include(r => r.Actions)
             .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
                 .ThenInclude(t => t.Segments.OrderBy(s => s.Ordinal))
+            .AsSplitQuery()
             .FirstOrDefaultAsync(r => r.Id == recordingId && r.UserId == UserId);
         if (rec is null) return NotFound();
 
