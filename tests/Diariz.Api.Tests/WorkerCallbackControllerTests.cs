@@ -8,6 +8,7 @@ using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.Tests;
@@ -36,11 +37,20 @@ public class WorkerCallbackControllerTests
         var controller = new WorkerCallbackController(
             db, hub, queue, resolver, embedding, identifier ?? new FakeSpeakerIdentifier(),
             Options.Create(new WorkerOptions { CallbackSecret = Secret }),
-            new CapturingWebhookPublisher(), Options.Create(new AppPublicOptions()))
+            new CapturingWebhookPublisher(), Options.Create(new AppPublicOptions()),
+            NullLogger<WorkerCallbackController>.Instance)
         {
             ControllerContext = Http.Context(headers: ("X-Worker-Secret", presentedSecret))
         };
         return (controller, db, hub, queue);
+    }
+
+    /// <summary>Give the recording's owner an explicit auto-merge preference. Absence of a row is itself a
+    /// case under test, so this is opt-in rather than part of SeedQueuedRecording.</summary>
+    private static async Task SeedAutoMerge(DiarizDbContext db, Guid userId, bool enabled)
+    {
+        db.UserSettings.Add(new UserSettings { UserId = userId, AutoMergeSpeakerSegments = enabled });
+        await db.SaveChangesAsync();
     }
 
     private static async Task<(Guid recordingId, Guid transcriptionId)> SeedQueuedRecording(DiarizDbContext db, Guid userId)
@@ -353,5 +363,100 @@ public class WorkerCallbackControllerTests
         Assert.Equal(RecordingStatus.Failed, rec!.Status);
         Assert.Equal("model exploded", rec.Error);
         Assert.Single(hub.Sent);
+    }
+
+    // ---- Auto-merge (UserSettings.AutoMergeSpeakerSegments) ----
+
+    /// <summary>The whole feature: with the owner opted in, the transcript arrives already collapsed.</summary>
+    [Fact]
+    public async Task Result_WithAutoMergeOn_CollapsesConsecutiveSameSpeakerSegments()
+    {
+        var (controller, db, _) = Build(presentedSecret: Secret);
+        var userId = Guid.NewGuid();
+        var (_, transcriptionId) = await SeedQueuedRecording(db, userId);
+        await SeedAutoMerge(db, userId, enabled: true);
+
+        await controller.Result(new TranscriptionResult(transcriptionId, "en",
+        [
+            new SegmentResult("SPEAKER_00", 0, 1000, "Hello"),
+            new SegmentResult("SPEAKER_00", 1000, 2000, "World"),
+            new SegmentResult("SPEAKER_01", 2000, 3000, "Hi there"),
+        ]));
+
+        var segs = await db.Segments.Where(s => s.TranscriptionId == transcriptionId)
+            .OrderBy(s => s.Ordinal).ToListAsync();
+        Assert.Equal(2, segs.Count);
+        Assert.Equal("Hello\nWorld", segs[0].EffectiveText);
+        Assert.Equal(0, segs[0].StartMs);
+        Assert.Equal(2000, segs[0].EndMs);
+        Assert.Equal("Hi there", segs[1].EffectiveText);
+    }
+
+    /// <summary>Pins the default. Every existing user must see byte-identical behaviour to before.</summary>
+    [Fact]
+    public async Task Result_WithAutoMergeOff_KeepsSegmentsGranular()
+    {
+        var (controller, db, _) = Build(presentedSecret: Secret);
+        var userId = Guid.NewGuid();
+        var (_, transcriptionId) = await SeedQueuedRecording(db, userId);
+        await SeedAutoMerge(db, userId, enabled: false);
+
+        await controller.Result(new TranscriptionResult(transcriptionId, "en",
+        [
+            new SegmentResult("SPEAKER_00", 0, 1000, "Hello"),
+            new SegmentResult("SPEAKER_00", 1000, 2000, "World"),
+        ]));
+
+        Assert.Equal(2, await db.Segments.CountAsync(s => s.TranscriptionId == transcriptionId));
+    }
+
+    /// <summary>The settings row is created lazily, so plenty of owners have none. Absent means off.</summary>
+    [Fact]
+    public async Task Result_WithNoUserSettingsRow_KeepsSegmentsGranular()
+    {
+        var (controller, db, _) = Build(presentedSecret: Secret);
+        var (_, transcriptionId) = await SeedQueuedRecording(db, Guid.NewGuid());
+
+        await controller.Result(new TranscriptionResult(transcriptionId, "en",
+        [
+            new SegmentResult("SPEAKER_00", 0, 1000, "Hello"),
+            new SegmentResult("SPEAKER_00", 1000, 2000, "World"),
+        ]));
+
+        Assert.Equal(2, await db.Segments.CountAsync(s => s.TranscriptionId == transcriptionId));
+    }
+
+    /// <summary>Pins where the hook sits: after voiceprint identification, not before it. Two diarization
+    /// labels that the identifier resolved to one person are the same speaker, so they must merge - which
+    /// only holds if the merge runs once SpeakerLabeling has assigned PersonId.</summary>
+    [Fact]
+    public async Task Result_WithAutoMergeOn_MergesTwoLabelsIdentifiedAsTheSamePerson()
+    {
+        var identifier = new FakeSpeakerIdentifier
+        {
+            // SpeakerMatch(Guid PersonId, string Name, double Distance) - the distance is unused here.
+            Match = new SpeakerMatch(Guid.NewGuid(), "Alice", 0.1),
+        };
+        var (controller, db, _, _) = BuildEx(Secret, summarizationEnabled: false, identifier);
+        var userId = Guid.NewGuid();
+        var (_, transcriptionId) = await SeedQueuedRecording(db, userId);
+        await SeedAutoMerge(db, userId, enabled: true);
+
+        // Both labels carry an embedding, so both go through identification and both land on Alice.
+        var embedding = new float[192];
+        await controller.Result(new TranscriptionResult(transcriptionId, "en",
+            [
+                new SegmentResult("SPEAKER_00", 0, 1000, "Hello"),
+                new SegmentResult("SPEAKER_01", 1000, 2000, "World"),
+            ],
+            Speakers:
+            [
+                new SpeakerEmbeddingResult("SPEAKER_00", embedding),
+                new SpeakerEmbeddingResult("SPEAKER_01", embedding),
+            ]));
+
+        var seg = Assert.Single(await db.Segments.Where(s => s.TranscriptionId == transcriptionId).ToListAsync());
+        Assert.Equal("Hello\nWorld", seg.EffectiveText);
+        Assert.Equal("SPEAKER_00", seg.SpeakerLabel); // the first label of the run is kept
     }
 }

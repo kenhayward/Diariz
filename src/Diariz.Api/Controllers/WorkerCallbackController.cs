@@ -31,12 +31,14 @@ public class WorkerCallbackController : ControllerBase
     private readonly WorkerOptions _opts;
     private readonly IWebhookPublisher _webhooks;
     private readonly IOptions<AppPublicOptions> _appOpts;
+    private readonly ILogger<WorkerCallbackController> _logger;
 
     public WorkerCallbackController(
         DiarizDbContext db, IHubContext<TranscriptionHub> hub, IJobQueue queue,
         ILlmSettingsResolver summarization, IEmbeddingSettingsResolver embedding,
         ISpeakerIdentifier identifier, IOptions<WorkerOptions> opts,
-        IWebhookPublisher webhooks, IOptions<AppPublicOptions> appOpts)
+        IWebhookPublisher webhooks, IOptions<AppPublicOptions> appOpts,
+        ILogger<WorkerCallbackController> logger)
     {
         _db = db;
         _hub = hub;
@@ -47,6 +49,7 @@ public class WorkerCallbackController : ControllerBase
         _opts = opts.Value;
         _webhooks = webhooks;
         _appOpts = appOpts;
+        _logger = logger;
     }
 
     private bool SecretOk =>
@@ -136,6 +139,32 @@ public class WorkerCallbackController : ControllerBase
         transcription.Recording.Status = autoSummarise ? RecordingStatus.Summarizing : RecordingStatus.Transcribed;
 
         await _db.SaveChangesAsync();
+
+        // Collapse consecutive same-speaker segments when the owner has asked for it. Deliberately here:
+        // after SpeakerLabeling has been saved, so two diarization labels resolved to one person merge as
+        // one speaker; and before every enqueue and the SignalR notify below, so the summary, actions,
+        // tags, embeddings, the browser and the webhook all see one final shape rather than a reshuffle.
+        // FirstOrDefaultAsync over a bool projection yields false when the owner has no settings row.
+        var autoMerge = await _db.UserSettings
+            .Where(x => x.UserId == transcription.Recording.UserId)
+            .Select(x => x.AutoMergeSpeakerSegments)
+            .FirstOrDefaultAsync();
+        if (autoMerge)
+        {
+            try
+            {
+                if (await TranscriptSegmentMerge.ApplyAsync(_db, transcription.RecordingId, transcription.Id))
+                    await _db.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                // Swallowed on purpose: an unmerged transcript is perfectly valid, but throwing here would
+                // leave the recording committed as Summarizing with no summarization job enqueued - stranded
+                // in "Summarising..." with nothing left to clear it, which is exactly what the enqueue guard
+                // immediately below exists to prevent.
+                _logger.LogError(ex, "Auto-merge failed for transcription {TranscriptionId}", transcription.Id);
+            }
+        }
 
         if (autoSummarise)
         {
