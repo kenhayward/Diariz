@@ -48,7 +48,8 @@ public sealed class GetTranscriptTool : IChatTool
 
         var rec = await query
             .Include(r => r.Speakers)
-            .Include(r => r.Transcriptions).ThenInclude(t => t.Segments)
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1)).ThenInclude(t => t.Segments)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(ct);
         if (rec is null) return "No matching recording was found.";
 

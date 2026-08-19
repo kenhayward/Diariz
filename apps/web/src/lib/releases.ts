@@ -65,6 +65,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.228.3",
+    date: "2026-08-19",
+    pr: 549,
+    headline: "The rest of the slowdown, in the eight places the last fix missed",
+    summary:
+      "0.228.2 made opening a meeting fast again. It did not go far enough: the same fault was in eight more places, and this release fixes those.\n\nThe previous fix was found by measuring one screen, and applied everywhere that screen's code lived. But asking the database for a transcript happens in nine places across Diariz, not one - and the other eight were each asking the same wasteful way. The largest of them was the assistant reading a meeting over MCP: a single request for one meeting's details was fetching 517,820 rows and writing 1.9 GB to disk, because on top of multiplying the lists together it was loading every version of the transcript you had ever produced for that meeting, then throwing all but the newest away.\n\nAll nine now ask the way 0.228.2 taught, and the four that were loading superseded transcripts now load only the current one. What is faster: chatting over your meetings, extracting action items, translating a transcript, running a formula, and everything an AI assistant reads through MCP - meeting details, transcripts, and jumping to a moment in one.\n\nNothing changed in what any of these produce. If you use the assistant against a long meeting with many speakers, this is the release where that stops being slow.",
+    changed: [
+      "Chat, action-item extraction, transcript translation, formula runs, and every MCP read now fetch a transcript the efficient way, matching the fix made to the meeting page in 0.228.2.",
+      "Reading a meeting through MCP no longer loads every past version of its transcript, only the current one - so a meeting you have re-transcribed several times is no slower to read than one you have not.",
+    ],
+    fixed: [
+      "Asking an AI assistant about a meeting could take seconds and write over a gigabyte of temporary files on the server for a single question. It is now a few milliseconds.",
+      "Chatting over several meetings at once multiplied the waste per meeting, so the more you selected the worse it got.",
+    ],
+  },
+  {
     version: "0.228.2",
     date: "2026-08-19",
     pr: 548,

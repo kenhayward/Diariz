@@ -49,7 +49,8 @@ public sealed class GetSegmentContextTool : IChatTool
 
         var rec = await q
             .Include(r => r.Speakers)
-            .Include(r => r.Transcriptions).ThenInclude(t => t.Segments)
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1)).ThenInclude(t => t.Segments)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(ct);
         if (rec is null) return name is not null ? $"No recording matching \"{name}\" was found." : "No matching recording.";
 

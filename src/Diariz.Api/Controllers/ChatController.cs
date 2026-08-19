@@ -450,6 +450,7 @@ public class ChatController : ControllerBase
             .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
                 .ThenInclude(t => t.Segments.OrderBy(s => s.Ordinal))
             .Where(r => ids.Contains(r.Id) && r.UserId == UserId)
+            .AsSplitQuery()
             .ToListAsync(ct);
 
         var contexts = new List<TranscriptContext>();

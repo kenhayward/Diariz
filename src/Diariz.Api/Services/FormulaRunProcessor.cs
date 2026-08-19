@@ -298,7 +298,7 @@ public static class FormulaRunProcessor
                 .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
                     .ThenInclude(t => t.Segments.OrderBy(s => s.Ordinal));
 
-        var rec = await query.FirstOrDefaultAsync(r => r.Id == recordingId, ct);
+        var rec = await query.AsSplitQuery().FirstOrDefaultAsync(r => r.Id == recordingId, ct);
         if (rec is null) return _ => null;
 
         var attendees = rec.Speakers.Select(s => s.DisplayName).ToList();
@@ -405,7 +405,7 @@ public static class FormulaRunProcessor
         if (flags.HasFlag(FormulaContext.Actions))
             query = query.Include(r => r.Actions);
 
-        var rec = await query.FirstOrDefaultAsync(r => r.Id == recordingId, ct);
+        var rec = await query.AsSplitQuery().FirstOrDefaultAsync(r => r.Id == recordingId, ct);
         if (rec is null) return FormulaContextBuilder.EmptyContextFallback;
 
         var noteLines = flags.HasFlag(FormulaContext.Notes)
