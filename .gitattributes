@@ -13,3 +13,8 @@
 # Both would only appear on a fresh clone, not for whoever wrote the file,
 # which is the worst way to find out.
 *.sh text eol=lf
+
+# Postgres runs deploy/postgres-init/*.sql inside the Linux container on first init.
+# psql tolerates CRLF, but keep these LF for the same reason as the shell scripts above -
+# so what a fresh Windows clone mounts is byte-identical to what CI and Linux hosts mount.
+deploy/postgres-init/*.sql text eol=lf

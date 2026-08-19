@@ -74,6 +74,7 @@ export const RELEASES: Release[] = [
     changed: [
       "Chat, action-item extraction, transcript translation, formula runs, and every MCP read now fetch a transcript the efficient way, matching the fix made to the meeting page in 0.228.2.",
       "Reading a meeting through MCP no longer loads every past version of its transcript, only the current one - so a meeting you have re-transcribed several times is no slower to read than one you have not.",
+      "A newly installed server now sets up its own query statistics automatically, instead of needing a command run by hand after the first start. Existing servers are unaffected and keep what they already have.",
     ],
     fixed: [
       "Asking an AI assistant about a meeting could take seconds and write over a gigabyte of temporary files on the server for a single question. It is now a few milliseconds.",

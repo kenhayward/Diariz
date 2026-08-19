@@ -40,8 +40,15 @@ Infrastructure (via Docker Compose, project name **`diariz`**):
 - **PostgreSQL + pgvector** (`pgvector/pgvector:pg16`) — relational data **and** voiceprint/embedding vectors.
   Compose passes it a `command:` rather than leaving the image defaults, for two reasons.
   **`shared_preload_libraries=pg_stat_statements`** can only be set at server start (an `ALTER SYSTEM` +
-  reload will not take), and the extension has to be installed once per database with
-  `CREATE EXTENSION IF NOT EXISTS pg_stat_statements;`. Without it there is no query-level view of the
+  reload will not take). The matching `CREATE EXTENSION` runs from
+  **`deploy/postgres-init/01-pg-stat-statements.sql`**, mounted at `/docker-entrypoint-initdb.d`, which the
+  image executes once on a fresh data directory as the bootstrap superuser - so a new deployment gets it
+  automatically. It is deliberately **not** an EF migration: the extension is untrusted and needs
+  superuser, the API runs migrations at startup, and on a managed Postgres (where the app role is not a
+  superuser) that would stop the API booting over an extension nothing in Diariz reads. `vector` and
+  `pg_trgm` are migration-created, correctly - the schema cannot work without them. Deployments that
+  predate the init script already have an initialised data directory, so it never runs for them; they need
+  `CREATE EXTENSION IF NOT EXISTS pg_stat_statements;` once, by hand. Without it there is no query-level view of the
   database at all, and a slow endpoint can only be chased by scraping API logs. It also turns on
   **`track_io_timing`**, **`log_min_duration_statement`** (`PG_LOG_MIN_DURATION_MS`, default 250 ms),
   **`log_temp_files`** (`PG_LOG_TEMP_FILES_KB`, default 0 = log every spill) and **`log_lock_waits`**.
