@@ -8946,7 +8946,7 @@
     },
     "/api/recordings/{id}/merge-segments": {
       "post": {
-        "description": "Collapses runs of consecutive segments that share a speaker into single blocks, which is what you want after correcting speaker assignments has left the transcript fragmented. Text is joined and the block spans from the first segment's start to the last one's end.\n\n**Permanent for this transcription version** - there is no un-merge. Re-transcribe to get granular segments back (that creates a new version and leaves this one intact).",
+        "description": "Collapses runs of consecutive segments that share a speaker into single blocks, which is what you want after correcting speaker assignments has left the transcript fragmented. Text is joined and the block spans from the first segment's start to the last one's end.\n\n**Permanent for this transcription version** - there is no un-merge. Re-transcribe to get granular segments back (that creates a new version and leaves this one intact). If you have turned on **auto-merge** in your recording preferences, a re-transcription is merged too - turn that off first.",
         "parameters": [
           {
             "in": "path",

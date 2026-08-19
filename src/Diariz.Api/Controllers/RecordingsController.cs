@@ -629,7 +629,8 @@ public class RecordingsController : ControllerBase
         "after correcting speaker assignments has left the transcript fragmented. Text is joined and the block " +
         "spans from the first segment's start to the last one's end.\n\n" +
         "**Permanent for this transcription version** - there is no un-merge. Re-transcribe to get granular " +
-        "segments back (that creates a new version and leaves this one intact).")]
+        "segments back (that creates a new version and leaves this one intact). If you have turned on " +
+        "**auto-merge** in your recording preferences, a re-transcription is merged too - turn that off first.")]
     public async Task<IActionResult> MergeSegments(Guid id)
     {
         var owned = await _db.Recordings.AnyAsync(r => r.Id == id && r.UserId == UserId);

@@ -87,7 +87,10 @@ Other things the transcript toolbar does:
 
 - **Select mode** ticks individual segments so you can play, edit, translate, or delete just those.
 - **Merge** joins consecutive rows by the same speaker. Notes and screenshots act as boundaries, so
-  text either side of them stays separate.
+  text either side of them stays separate. Merging is permanent for that transcript. If you always end
+  up doing it, turn on **Merge each speaker's turn into one block** in Preferences - Recordings, and
+  every recording is merged for you as soon as it finishes transcribing. While that is on, transcribing
+  a recording again produces a merged transcript too, so turn it off first if you want short rows back.
 - **Download or email** the formatted transcript, which carries the summary, minutes, and actions with it.
 
 ## The conversation-flow player
