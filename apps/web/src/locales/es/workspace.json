@@ -53,6 +53,7 @@
   "calNoRecordings": "No hay grabaciones este día.",
   "calDayEmpty": "Nada este día.",
   "calSyncCalendar": "Sincronizar calendario",
+  "calGoToToday": "Ir a hoy",
   "calSyncSelectedDay": "Sincronizar el día seleccionado",
   "calSyncFailed": "No se pudo sincronizar el calendario.",
   "calSyncFailedUnavailable": "Diariz no puede acceder a Outlook en este PC. Necesita Outlook clasico para Windows.",

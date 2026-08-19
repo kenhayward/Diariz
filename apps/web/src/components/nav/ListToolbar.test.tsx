@@ -39,6 +39,7 @@ function renderToolbar(over: Partial<Parameters<typeof ListToolbar>[0]> = {}) {
             sections={[]}
             drillSectionId={null}
             onError={() => {}}
+            onGoToToday={() => {}}
             {...over}
           />
           <StatusBar />
@@ -282,5 +283,35 @@ describe("ListToolbar refresh button", () => {
       expect(invalidate).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["calendar-events"] })),
     );
     expect(invalidate).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["recordings"] }));
+  });
+
+  describe("go to today", () => {
+    it("is offered on the Calendar tab", () => {
+      renderToolbar({ listMode: false, calendarMode: true });
+      expect(screen.getByRole("button", { name: "Go to today" })).toBeTruthy();
+    });
+
+    it("is not offered on the list", () => {
+      renderToolbar();
+      expect(screen.queryByRole("button", { name: "Go to today" })).toBeNull();
+    });
+
+    // The gating deliberately differs from the two syncs beside it: those are personal-only because the
+    // calendar EVENT OVERLAY is, but a shared room's day grid still draws that room's recordings, so
+    // navigating to today is meaningful there. Without this assertion, a later tidy-up that folded the
+    // button into the isPersonalRoom block would silently drop it from shared rooms.
+    it("is offered in a shared room, where the two syncs are not", () => {
+      renderToolbar({ listMode: false, calendarMode: true, isPersonalRoom: false });
+      expect(screen.getByRole("button", { name: "Go to today" })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Sync selected day" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Sync calendar" })).toBeNull();
+    });
+
+    it("calls back when clicked", () => {
+      const onGoToToday = vi.fn();
+      renderToolbar({ listMode: false, calendarMode: true, onGoToToday });
+      fireEvent.click(screen.getByRole("button", { name: "Go to today" }));
+      expect(onGoToToday).toHaveBeenCalledTimes(1);
+    });
   });
 });
