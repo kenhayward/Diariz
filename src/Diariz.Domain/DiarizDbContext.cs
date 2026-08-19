@@ -2,12 +2,51 @@ using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace Diariz.Domain;
 
 public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>(options)
 {
+    /// <summary>Splits collection Includes into one statement each, app-wide.
+    ///
+    /// Several entities hang collections off <c>Recording</c> - Speakers, Actions, Tags, and Transcriptions
+    /// with their Segments - and EF's default single-query mode returns the CARTESIAN PRODUCT of every
+    /// sibling collection an <c>Include</c> chain names. The results are identical either way, because EF
+    /// de-duplicates the product back into the right object graph, so this is invisible in behaviour and in
+    /// any results-based test. It shows up only as row count and sort spill: measured on production, one
+    /// recording detail query returned 104,720 rows for 334 rows of real data and spilled 207 MB to disk
+    /// (0.228.2), and an MCP read of the same recording returned 517,825 rows and spilled 1.97 GB (0.228.3).
+    /// It compounds rather than plateauing, because the row count is a product - every action item extracted
+    /// onto a recording multiplies the whole result again.
+    ///
+    /// That was fixed twice by hand, site by site, and both times the audit missed sites: nine of them across
+    /// six files, found only when production traffic happened to hit one. So the default is inverted here
+    /// instead of relying on anyone remembering <c>.AsSplitQuery()</c> on the next query they write.
+    ///
+    /// <para><b>Why here and not at <c>AddDbContext</c>:</b> there are a dozen <c>UseNpgsql</c> call sites
+    /// across <c>Program.cs</c>, the design-time factory and the test suite. "Remember to add it at every call
+    /// site" is precisely the failure mode this is meant to end. <c>OnConfiguring</c> runs for every context
+    /// however its options were built.</para>
+    ///
+    /// <para><b>The trade-off:</b> split queries run as separate statements with no shared snapshot, so a
+    /// collection could in principle be read either side of a concurrent write. Every read here is a user
+    /// reading their own recording, so that window is theoretical; the alternative was gigabyte sort spills
+    /// that were demonstrably not. A query that genuinely needs one statement can still opt out with
+    /// <c>.AsSingleQuery()</c>.</para>
+    ///
+    /// <para>Guarded on the provider being relational: the unit-test suite runs on the in-memory provider,
+    /// where <c>UseNpgsql</c> would register a second provider and throw. Same reasoning as the
+    /// <c>Database.IsNpgsql()</c> guards in <see cref="OnModelCreating"/>.</para></summary>
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        base.OnConfiguring(optionsBuilder);
+
+        if (optionsBuilder.Options.Extensions.OfType<RelationalOptionsExtension>().Any())
+            optionsBuilder.UseNpgsql(o => o.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
+    }
+
     public DbSet<Recording> Recordings => Set<Recording>();
     public DbSet<Transcription> Transcriptions => Set<Transcription>();
     public DbSet<Segment> Segments => Set<Segment>();

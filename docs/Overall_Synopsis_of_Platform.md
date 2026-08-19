@@ -38,6 +38,18 @@ infrastructure services.
 Infrastructure (via Docker Compose, project name **`diariz`**):
 
 - **PostgreSQL + pgvector** (`pgvector/pgvector:pg16`) — relational data **and** voiceprint/embedding vectors.
+  **Query splitting is on by default app-wide.** `DiarizDbContext.OnConfiguring` sets
+  `QuerySplittingBehavior.SplitQuery` (guarded on the provider being relational, so the in-memory unit-test
+  provider is unaffected). Several collections hang off `Recording` - Speakers, Actions, Tags, Transcriptions
+  with their Segments - and EF's own default returns the **cartesian product** of every sibling collection an
+  `Include` chain names. Results are identical either way, so it is invisible to behaviour and to any
+  results-based test; it shows up only as row count and sort spill. It was fixed by hand twice (0.228.2, then
+  0.228.3 after the first audit missed five files), so the default is inverted rather than relying on anyone
+  remembering `.AsSplitQuery()`. It is set in `OnConfiguring`, not at `AddDbContext`, because there are a
+  dozen `UseNpgsql` call sites across the app, the design-time factory and the tests. The trade-off: split
+  queries run as separate statements with no shared snapshot, so a collection could in principle be read
+  either side of a concurrent write - every read here is a user reading their own recording. A query that
+  genuinely needs one statement opts out with `.AsSingleQuery()`.
   Compose passes it a `command:` rather than leaving the image defaults, for two reasons.
   **`shared_preload_libraries=pg_stat_statements`** can only be set at server start (an `ALTER SYSTEM` +
   reload will not take). The matching `CREATE EXTENSION` runs from

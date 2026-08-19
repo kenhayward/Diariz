@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Diariz.Api.IntegrationTests;
 
 /// <summary>Every endpoint that loads a recording's Speakers, Actions and Segments must do it in SEPARATE
-/// statements. They are sibling collections on the same root, so in EF's default single-query mode one
+/// statements. They are sibling collections on the same root, so under EF's OWN default (single-query) one
 /// statement returns their cartesian product - speakers x actions x segments rows, each carrying a full Segment.
 ///
 /// The results are identical either way (EF de-duplicates the product back into the right object graph), so no
@@ -19,7 +19,12 @@ namespace Diariz.Api.IntegrationTests;
 /// again.
 ///
 /// So these tests assert the shape, not the timing: no single statement may join Segments to Speakers or to
-/// RecordingActions.</summary>
+/// RecordingActions.
+///
+/// <para>Since 0.228.4 the app-wide default is <c>QuerySplittingBehavior.SplitQuery</c> (see
+/// <c>DiarizDbContext.OnConfiguring</c>), so these would now pass with the explicit <c>.AsSplitQuery()</c>
+/// calls removed. They are kept as the behavioural guard on the paths that actually hurt: if the global
+/// default is ever changed back, these fail rather than production degrading quietly.</para></summary>
 [Collection(IntegrationCollection.Name)]
 public class SplitQueryIntegrationTests(ContainersFixture fx)
 {

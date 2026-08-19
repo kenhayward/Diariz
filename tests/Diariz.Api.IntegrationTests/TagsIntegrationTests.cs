@@ -254,10 +254,11 @@ public class TagsIntegrationTests(ContainersFixture fx)
     }
 
     // The detail query single-queries three sibling collections already (Speakers, Actions, and
-    // Transcriptions -> Segments), and EF is in single-query mode - no AsSplitQuery here, no global
-    // QuerySplittingBehavior anywhere in the repo. Including a fourth collection therefore multiplies the
-    // cartesian product by the tag count, and EVERY row of that product carries a Segment.Embedding
-    // (vector(768)). Measured on a 57-minute recording (11 speakers, 7 actions, 670 segments, 13 tags):
+    // Transcriptions -> Segments). When this test was written EF was in single-query mode here, so including
+    // a fourth collection multiplied the cartesian product by the tag count, and EVERY row of that product
+    // carried a Segment.Embedding (vector(768)). Since 0.228.4 the app-wide default is SplitQuery, so that
+    // multiplication can no longer happen - the assertion is kept because the tags still belong in their own
+    // query on their own merits, and this pins that they are not folded back in. Measured on a 57-minute recording (11 speakers, 7 actions, 670 segments, 13 tags):
     // 670,670 rows and a 1.8 GB external sort spill at 10.6 s WITH the tags joined in, against 51,590 rows,
     // 133 MB and 0.6 s without - while reading the tags separately costs 0.036 ms off the index. So this test
     // asserts the shape, not the timing: the tags must not ride on the segment query.

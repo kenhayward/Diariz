@@ -65,6 +65,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.228.4",
+    date: "2026-08-19",
+    pr: 550,
+    headline: "Making the last two releases' fault impossible rather than fixed",
+    summary:
+      "The last two releases fixed the same fault twice: a wasteful way of asking the database for a transcript, fixed in four places in 0.228.2 and in nine more in 0.228.3. This release stops it being possible to write again.\n\nBoth times the fix worked and both times it was incomplete, because finding every affected place meant reading code and hoping nothing was missed - and something was. The setting that caused it is a default: ask for a meeting's speakers and its action items and its transcript together, and the database is asked to combine them rather than fetch them separately. That default is now reversed for the whole application, so a query written next month cannot reintroduce this even if nobody remembers the history.\n\nThere is no visible change. This is the release that means there should not need to be another one like the last two.",
+    changed: [
+      "Fetching related information from the database is now separated by default across the whole application, rather than relying on each query being written carefully. The previous two releases fixed thirteen places by hand; this removes the possibility rather than the instances.",
+    ],
+  },
+  {
     version: "0.228.3",
     date: "2026-08-19",
     pr: 549,
