@@ -1366,6 +1366,28 @@ describe("RecordingsPanel", () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(api.reorderRecordings).not.toHaveBeenCalled();
   });
+
+  // End to end across three components: the button is in the toolbar, the selected day is in the panel,
+  // and the month is inside the Calendar tab. The selected day starts as today and is never changed here,
+  // so this only passes if the panel drives the month signal as well as the day.
+  it("returns the calendar to today's month from the toolbar, after paging away", async () => {
+    renderList();
+    await screen.findByText("Weekly Standup");
+    fireEvent.click(screen.getByRole("tab", { name: "Calendar" }));
+
+    const now = new Date();
+    const monthName = (offset: number) =>
+      new Date(now.getFullYear(), now.getMonth() + offset, 1).toLocaleString("en", { month: "long" });
+    const monthHeading = (offset: number) => new RegExp(`${monthName(offset)}\\s+\\d{4}`, "i");
+
+    await screen.findByText(monthHeading(0));
+    fireEvent.click(screen.getByRole("button", { name: /next month/i }));
+    await waitFor(() => expect(screen.getByText(monthHeading(1))).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("button", { name: "Go to today" }));
+
+    expect(await screen.findByText(monthHeading(0))).toBeTruthy();
+  });
 });
 
 /// Sorting is a **view**. The order the user arranged by hand is what every reorder write is measured

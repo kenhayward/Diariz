@@ -107,6 +107,14 @@ export default function RecordingsPanel() {
   // The Calendar tab's selected day, owned here rather than in the tab itself because the toolbar's
   // quick-sync button is the tab's sibling and has to know which day to read. Defaults to today.
   const [selectedDay, setSelectedDay] = useState<string | null>(() => dayKey(new Date()));
+  // Bumped by the toolbar's Go to today, and watched by CalendarTab to bring its month grid back. It is a
+  // separate signal from `selectedDay` because that already defaults to today: pressing the button while
+  // today is selected changes no day at all, and the month still has to move.
+  const [goToTodaySignal, setGoToTodaySignal] = useState(0);
+  function goToToday() {
+    setSelectedDay(dayKey(new Date()));
+    setGoToTodaySignal((n) => n + 1);
+  }
   const searching = searchQuery.length > 0;
   // How the level below is ordered. Persisted globally, and **display only** - see lib/listSort and the
   // note on `rowList`.
@@ -289,6 +297,7 @@ export default function RecordingsPanel() {
           drillSectionId={drill.sectionId}
           roomId={aggRoomId}
           onError={setOpError}
+          onGoToToday={goToToday}
         />
       )}
       <TabStrip tab={tab} onSelect={selectTab} />
@@ -412,6 +421,7 @@ export default function RecordingsPanel() {
             isPersonalRoom={isPersonalRoom}
             selectedDay={selectedDay}
             onSelectDay={setSelectedDay}
+            goToTodaySignal={goToTodaySignal}
           />
         ) : tab === "actions" ? (
           // Actions: a flat, cross-transcript list with its own filter/select/complete toolbar above.

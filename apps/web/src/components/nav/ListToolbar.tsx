@@ -29,6 +29,7 @@ function ListToolbar({
   drillSectionId,
   roomId,
   onError,
+  onGoToToday,
 }: {
   recordings: RecordingSummary[];
   listMode: boolean;
@@ -50,6 +51,9 @@ function ListToolbar({
   // The room to create sections in (a shared room, or undefined for the personal room).
   roomId?: string | null;
   onError: (msg: string | null) => void;
+  /// Return the Calendar to today. The panel owns both halves of that - the selected day and, via a
+  /// counter the Calendar tab watches, the visible month - so this is a callback rather than state here.
+  onGoToToday: () => void;
 }) {
   const { t } = useTranslation("workspace");
   const qc = useQueryClient();
@@ -218,11 +222,19 @@ function ListToolbar({
               />
             </span>
           )}
+          {/* Calendar-only. Unlike the two syncs below it is NOT personal-room-only: those need the event
+              overlay, which is personal, but a shared room's day grid still draws that room's recordings. */}
+          {calendarMode && (
+            <ToolbarButton label={t("calGoToToday")} onClick={onGoToToday} icon={<TodayIcon />} />
+          )}
           {/* Calendar-only, and personal-room-only, because that is exactly where the event overlay exists.
               One control per scope rather than a menu: "the meeting I just accepted is missing" is a common
-              enough moment to deserve a button, and the quick sync is seconds where the full one is tens. */}
+              enough moment to deserve a button, and the quick sync is seconds where the full one is tens.
+              The separator is INSIDE this block, not between it and the button above: rendered outside it
+              would dangle at the end of the toolbar in a shared room, where this pair is hidden. */}
           {calendarMode && isPersonalRoom && (
             <>
+              <span className="h-5 w-px shrink-0 bg-gray-200 dark:bg-gray-600" aria-hidden />
               <ToolbarButton
                 label={t("calSyncSelectedDay")}
                 onClick={() => sync("today", selectedDay ?? undefined)}
@@ -320,6 +332,19 @@ const CutIcon = () => (
     <line x1="20" y1="4" x2="8.12" y2="15.88" />
     <line x1="14.47" y1="14.48" x2="20" y2="20" />
     <line x1="8.12" y1="8.12" x2="12" y2="12" />
+  </svg>
+);
+// Feather `crosshair` with a filled centre - "centre on today". Deliberately not a calendar glyph:
+// SyncTodayIcon next to it is already a calendar with a marker in its body, and three calendars in a row
+// of three buttons are not tellable apart at 18px.
+const TodayIcon = () => (
+  <svg {...iconProps}>
+    <circle cx="12" cy="12" r="10" />
+    <line x1="22" y1="12" x2="18" y2="12" />
+    <line x1="6" y1="12" x2="2" y2="12" />
+    <line x1="12" y1="6" x2="12" y2="2" />
+    <line x1="12" y1="22" x2="12" y2="18" />
+    <circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none" />
   </svg>
 );
 
