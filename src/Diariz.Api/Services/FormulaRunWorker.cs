@@ -63,7 +63,8 @@ public class FormulaRunWorker : BackgroundService
             {
                 // Idle is the moment to pick up anything an instance that was killed mid-job left behind.
                 entries = await _reclaimer.ReclaimDueAsync(
-                    db, _opts.StreamKey, _opts.ConsumerGroup, _opts.ConsumerName, _log);
+                    db, _opts.StreamKey, _opts.ConsumerGroup, _opts.ConsumerName, _log,
+                    onAbandoned: e => AbandonEntryAsync(e, stoppingToken));
             }
 
             if (entries.Length == 0)
@@ -103,6 +104,23 @@ public class FormulaRunWorker : BackgroundService
         {
             await db.StreamAcknowledgeAsync(_opts.StreamKey, _opts.ConsumerGroup, entry.Id);
         }
+    }
+
+    /// <summary>Settles the result row behind a message the queue has given up on. Without this the drop is
+    /// silent and the card sits on "Generating..." for good.
+    ///
+    /// <para>Passing the shutdown token on is deliberate. If it cancels, this throws, the reclaimer's ack
+    /// never runs, and the message stays pending to be abandoned again on the next pass - so the result is
+    /// settled by whichever instance gets there, rather than lost with the entry.</para></summary>
+    private async Task AbandonEntryAsync(StreamEntry entry, CancellationToken ct)
+    {
+        var payload = entry["job"];
+        if (!payload.HasValue ||
+            JsonSerializer.Deserialize<FormulaRunJob>((string)payload!) is not { } job) return;
+
+        using var scope = _scopes.CreateScope();
+        var ctx = scope.ServiceProvider.GetRequiredService<DiarizDbContext>();
+        await FormulaRunProcessor.AbandonAsync(ctx, _hub, job, _log, ct);
     }
 
     private async Task EnsureGroupAsync(IDatabase db)

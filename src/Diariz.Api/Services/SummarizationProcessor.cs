@@ -100,9 +100,36 @@ public static class SummarizationProcessor
             logger.LogError(ex, "Summarisation failed for recording {RecordingId}", rec.Id);
             rec.Status = RecordingStatus.Failed;
             rec.Error = ex.Message;
-            await db.SaveChangesAsync(ct);
+            // Deliberately NOT ct. The commonest way to land here is the host cancelling mid-call on a
+            // shutdown or redeploy, and that same token would cancel this write - leaving the recording in
+            // Summarizing forever while the worker's finally acks the stream entry, so nothing ever retries
+            // it and no error is recorded. This write is what ends the job; it has to outlive the cancel.
+            await db.SaveChangesAsync(CancellationToken.None);
             await hub.NotifyStatusAsync(rec.UserId, rec.Id, RecordingStatus.Failed.ToString());
         }
+    }
+
+    /// <summary>Settles a recording whose summarisation job was dropped without ever running - the
+    /// reclaimer abandoning a message past its delivery cap. Nothing else will move it: the job is gone,
+    /// and <c>POST /summarize</c> is a no-op while the status reads Summarizing, so without this the
+    /// recording shows "Summarising..." indefinitely with no error anywhere to explain it.
+    ///
+    /// <para>Only a recording still sitting in Summarizing is touched. An abandoned message can be hours
+    /// old, and in that time the user may have re-run the summary or re-transcribed; failing it then would
+    /// report a dead job against work that has since succeeded.</para></summary>
+    public static async Task AbandonAsync(
+        DiarizDbContext db, IHubContext<TranscriptionHub> hub, SummarizationJob job, ILogger logger,
+        CancellationToken ct = default)
+    {
+        var rec = await db.Recordings.FirstOrDefaultAsync(r => r.Id == job.RecordingId, ct);
+        if (rec is null || rec.Status != RecordingStatus.Summarizing) return;
+
+        logger.LogError(
+            "Summarisation for recording {RecordingId} was abandoned by the queue; marking it failed", rec.Id);
+        rec.Status = RecordingStatus.Failed;
+        rec.Error = "Summarisation was abandoned after repeated failures. Try summarising again.";
+        await db.SaveChangesAsync(ct);
+        await hub.NotifyStatusAsync(rec.UserId, rec.Id, RecordingStatus.Failed.ToString());
     }
 
     private static Task<string?> OwnerEmailAsync(DiarizDbContext db, Guid userId, CancellationToken ct) =>

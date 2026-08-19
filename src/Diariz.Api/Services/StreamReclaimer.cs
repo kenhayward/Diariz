@@ -76,8 +76,16 @@ public sealed class StreamReclaimer
     /// <summary>Claim any abandoned messages, returning them to be processed as though freshly read.
     /// Returns empty when not due, when nothing is stale, or when Redis is unhappy - recovery is
     /// opportunistic and must never take down the loop it is helping.</summary>
+    /// <param name="onAbandoned">Invoked with a message about to be dropped past the delivery cap, before
+    /// it is acked. Dropping the entry is the right call, but on its own it is silent: whatever the job was
+    /// for is left in whatever in-flight state the enqueue put it in, with nothing left to move it on. The
+    /// drop belongs here; what the drop <em>means</em> belongs to the worker, which is the only thing that
+    /// knows how to read the payload. Its failure aborts this pass, deliberately - the message stays
+    /// pending and is abandoned again on the next check, so the notification retries rather than being
+    /// lost with the entry.</param>
     public async Task<StreamEntry[]> ReclaimDueAsync(
-        IDatabase db, string streamKey, string group, string consumer, ILogger log, DateTimeOffset? now = null)
+        IDatabase db, string streamKey, string group, string consumer, ILogger log, DateTimeOffset? now = null,
+        Func<StreamEntry, Task>? onAbandoned = null)
     {
         if (!IsDue(now ?? DateTimeOffset.UtcNow)) return [];
 
@@ -97,6 +105,14 @@ public sealed class StreamReclaimer
                     log.LogError(
                         "Abandoning {Id} on {Stream} after {Count} deliveries - it is more likely the cause "
                         + "of the failures than a casualty of them", p.MessageId, streamKey, p.DeliveryCount);
+                    if (onAbandoned is not null)
+                    {
+                        // XPENDING carries no payload, so read the entry back before the ack - the handler
+                        // needs the job to know which recording to settle. Notify first, ack second: an ack
+                        // that landed first would drop the only record of the job on a failed handler.
+                        var entry = await db.StreamRangeAsync(streamKey, p.MessageId, p.MessageId, 1);
+                        if (entry.Length > 0) await onAbandoned(entry[0]);
+                    }
                     await db.StreamAcknowledgeAsync(streamKey, group, p.MessageId);
                     continue;
                 }

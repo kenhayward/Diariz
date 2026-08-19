@@ -77,9 +77,40 @@ public static class SectionSummaryProcessor
             var failed = await UpsertAsync(db, section);
             failed.Status = SectionGenerationStatus.Failed;
             failed.Error = ex.Message;
-            await db.SaveChangesAsync(ct);
+            // Deliberately NOT ct. The commonest way to land here is the host cancelling mid-call on a
+            // shutdown or redeploy, and that same token would cancel this write - leaving the folder in
+            // Generating forever while the worker's finally acks the stream entry, so nothing ever retries
+            // it and no error is recorded. This write is what ends the job; it has to outlive the cancel.
+            await db.SaveChangesAsync(CancellationToken.None);
             await hub.NotifySectionStatusAsync(section.UserId, section.Id, "summary", "Failed");
         }
+    }
+
+    /// <summary>Settles a folder whose folder-summary job was dropped without ever running - the reclaimer
+    /// abandoning a message past its delivery cap. Nothing else will move it: the job is gone, and the
+    /// generate endpoint is a no-op while the status reads Generating, so without this the folder shows
+    /// "Generating..." indefinitely with no error anywhere to explain it.
+    ///
+    /// <para>Only a folder still sitting in Generating is touched. An abandoned message can be hours old,
+    /// and in that time the user may have regenerated or hand-written it; failing it then would report a
+    /// dead job against work that has since succeeded.</para></summary>
+    public static async Task AbandonAsync(
+        DiarizDbContext db, IHubContext<TranscriptionHub> hub, SectionSummaryJob job, ILogger logger,
+        CancellationToken ct = default)
+    {
+        var summary = await db.SectionSummaries.FirstOrDefaultAsync(x => x.SectionId == job.SectionId, ct);
+        if (summary is null || summary.Status != SectionGenerationStatus.Generating) return;
+
+        var section = await db.Sections.FirstOrDefaultAsync(x => x.Id == job.SectionId, ct);
+        if (section is null) return;
+
+        logger.LogError(
+            "Folder-summary generation for section {SectionId} was abandoned by the queue; marking it failed",
+            section.Id);
+        summary.Status = SectionGenerationStatus.Failed;
+        summary.Error = "Folder-summary generation was abandoned after repeated failures. Try again.";
+        await db.SaveChangesAsync(ct);
+        await hub.NotifySectionStatusAsync(section.UserId, section.Id, "summary", "Failed");
     }
 
     private static Task<string?> OwnerEmailAsync(DiarizDbContext db, Guid userId, CancellationToken ct) =>

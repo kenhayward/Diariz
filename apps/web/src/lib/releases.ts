@@ -65,6 +65,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.228.1",
+    date: "2026-08-19",
+    pr: 546,
+    headline: "Work that dies no longer leaves you stuck on \"Summarising...\"",
+    summary:
+      "A summary that failed days ago could leave its meeting reading **Summarising...** forever - through a server restart, a redeploy, even a fresh install of the desktop app. Nothing was running. The status simply had no way back.\n\nThe status is stored with the meeting, so nothing you reinstall or restart touches it. Only the job itself clears it, and asking again does nothing while it is set - that is deliberate, so an impatient second click cannot queue duplicate work, but it also means the one button that looks like it should fix this is the one button that cannot.\n\nChasing it down turned up the same flaw in four places, so this release fixes the class rather than the case. **Meeting summaries**, **folder summaries**, **folder minutes**, and **formula runs** could all be left showing progress that would never finish.\n\n**A job interrupted by the server stopping.** Restarting or redeploying cancels whatever is in flight. Each of the four correctly caught that and went to record a failure - but the recording of the failure was cancelled by the same shutdown, so nothing was written. The work kept a status only the job that had just died could clear. That last write is now made outside the cancellation, so anything interrupted by a restart is reported as failed and can be retried.\n\n**A job the queue gave up on.** A job that repeatedly kills the process is dropped rather than retried forever, which is right - but it was dropped silently, leaving its meeting or folder waiting on something that no longer existed. Dropping it now marks the work failed, with an error saying so, and never touches something you have re-run in the meantime.\n\n**A queue that was briefly unreachable.** A meeting was marked as summarising just before its job was queued. If the queue could not be reached in that instant, the status stuck with no job behind it. The meeting now goes back to **Transcribed**, where the Summarise button works normally.\n\nIf you have something stuck in this state today, re-transcribing the meeting still clears it (for a folder, writing the summary or minutes by hand does) - and from this release on, nothing new should get stuck.",
+    fixed: [
+      "A meeting summary, folder summary, folder minutes, or formula run interrupted by a server restart or redeploy was left showing progress permanently, with no error recorded. The failure is now written even as the server shuts down.",
+      "A job abandoned by the queue after repeated failures was dropped silently, leaving its meeting or folder stuck. It is now marked failed with an explanation - unless you have already re-run it, which is left alone.",
+      "A meeting could be marked as summarising just before its job failed to queue, leaving nothing to clear the status. It now returns to **Transcribed**, so Summarise works again.",
+    ],
+  },
+  {
     version: "0.228.0",
     date: "2026-08-18",
     pr: 545,
