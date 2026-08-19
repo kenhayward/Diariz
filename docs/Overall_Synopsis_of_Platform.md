@@ -209,7 +209,27 @@ Every stream consumer acks in a `finally`, which handles a job that *throws* but
   Reclaiming otherwise reintroduces the poison-message loop that acking-in-finally exists to prevent: a
   job that kills the worker would be handed straight to its replacement, forever. Past the cap the
   message is acked and abandoned with a loud log, on the reasoning that it is likelier the cause of the
-  deaths than a casualty of them.
+  deaths than a casualty of them. Since 0.228.1 the API's reclaimer also hands the abandoned entry to an
+  optional `onAbandoned` callback **before** the ack, so the worker can settle whatever the job was for -
+  `SummarizationWorker` uses it to call `SummarizationProcessor.AbandonAsync`, which fails the recording
+  rather than leaving it in `Summarizing` with nothing left to clear it. The callback runs before the ack
+  deliberately: if it throws, the entry stays pending and is abandoned again on the next pass, so the
+  settle retries instead of being lost with the message.
+
+**A status must never outlive the job that owns it.** `Summarizing` is only cleared by the summarisation
+job, and `POST /api/recordings/{id}/summarize` is a no-op while it is set (so a second click cannot queue a
+second job), which makes any path that loses the job a permanently stuck recording - re-transcribing is the
+only way out. Three such paths were closed in 0.228.1, and the shape of each is worth keeping in mind for
+any future queue-backed status:
+
+- **The failure write must outlive the cancellation.** `SummarizationProcessor` catches a cancelled LLM
+  call and records `Failed` - but wrote it with the *same* token, so a host shutdown cancelled the write
+  too and the worker's `finally` acked the entry anyway. That write now uses `CancellationToken.None`.
+- **An abandoned message must settle its subject** (the `onAbandoned` callback above).
+- **Commit the in-flight status before the enqueue, and roll it back if the enqueue fails.** The order is
+  forced: the summariser runs in this same process, so enqueueing first lets it finish and write
+  `Summarized` before the status flip lands on top of it. `WorkerCallbackController` therefore commits
+  `Summarizing`, and on an enqueue failure puts the recording back to `Transcribed` before rethrowing.
 
 **This is not zero-downtime**, and the stack cannot currently provide it: the API binds a fixed host port
 and hosts 13 in-process `BackgroundService` singletons, one of which (`WebhookDeliveryProcessor`) claims

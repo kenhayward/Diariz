@@ -139,7 +139,24 @@ public class WorkerCallbackController : ControllerBase
 
         if (autoSummarise)
         {
-            await _queue.EnqueueSummarizationAsync(new SummarizationJob(transcription.RecordingId, transcription.Id));
+            try
+            {
+                await _queue.EnqueueSummarizationAsync(new SummarizationJob(transcription.RecordingId, transcription.Id));
+            }
+            catch
+            {
+                // Summarizing is already committed above, and the job we just failed to queue is the only
+                // thing that clears it - POST /summarize no-ops while it is set, so the recording would sit
+                // in "Summarising..." until someone thought to re-transcribe it. Put it back to a status the
+                // user can act on, then let the failure surface to the worker.
+                //
+                // The status is deliberately committed *before* the enqueue rather than after: the summariser
+                // runs in this same process and would otherwise be free to finish and write Summarized before
+                // the flip landed on top of it - trading a rare stuck recording for a rarer one.
+                transcription.Recording.Status = RecordingStatus.Transcribed;
+                await _db.SaveChangesAsync();
+                throw;
+            }
             // Action items are extracted next (its worker skips recordings already extracted, so a re-transcribe
             // never clobbers manual edits). It is status-neutral (no race with the summary) and, when it finishes,
             // chains the meeting-minutes job — so the minutes render the same canonical action set.

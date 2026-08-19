@@ -69,7 +69,8 @@ public class SummarizationWorker : BackgroundService
             {
                 // Idle is the moment to pick up anything an instance that was killed mid-job left behind.
                 entries = await _reclaimer.ReclaimDueAsync(
-                    db, _opts.StreamKey, _opts.ConsumerGroup, _opts.ConsumerName, _log);
+                    db, _opts.StreamKey, _opts.ConsumerGroup, _opts.ConsumerName, _log,
+                    onAbandoned: e => AbandonEntryAsync(e, stoppingToken));
             }
 
             if (entries.Length == 0)
@@ -113,6 +114,24 @@ public class SummarizationWorker : BackgroundService
             // a poison message would loop forever.
             await db.StreamAcknowledgeAsync(_opts.StreamKey, _opts.ConsumerGroup, entry.Id);
         }
+    }
+
+    /// <summary>Settles the recording behind a message the queue has given up on. Without this the drop is
+    /// silent: the recording keeps the Summarizing the enqueue gave it, the Summarize endpoint no-ops while
+    /// that is set, and the only way out is a re-transcribe.
+    ///
+    /// <para>Passing the shutdown token on is deliberate. If it cancels, this throws, the reclaimer's ack
+    /// never runs, and the message stays pending to be abandoned again on the next pass - so the recording
+    /// is settled by whichever instance gets there, rather than lost with the entry.</para></summary>
+    private async Task AbandonEntryAsync(StreamEntry entry, CancellationToken ct)
+    {
+        var payload = entry["job"];
+        if (!payload.HasValue ||
+            JsonSerializer.Deserialize<SummarizationJob>((string)payload!) is not { } job) return;
+
+        using var scope = _scopes.CreateScope();
+        var ctx = scope.ServiceProvider.GetRequiredService<DiarizDbContext>();
+        await SummarizationProcessor.AbandonAsync(ctx, _hub, job, _log, ct);
     }
 
     private async Task EnsureGroupAsync(IDatabase db)

@@ -97,6 +97,72 @@ public class SummarizationProcessorTests
     }
 
     [Fact]
+    public async Task ProcessAsync_WhenShutdownCancelsMidCall_StillRecordsFailed()
+    {
+        // The API being stopped (redeploy, container restart) cancels the job's token while the LLM call
+        // is in flight. The failure write is the only thing that moves the recording off Summarizing, so
+        // it must not be made with the token that just aborted the call - a write that cancels too leaves
+        // the recording stuck in Summarizing forever, with the stream entry already acked and no error
+        // anywhere. The user's only escape is a re-transcribe.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, tr) = await Seed(db, userId, name: "x");
+        using var cts = new CancellationTokenSource();
+        var client = new FakeSummarizationClient(onCall: cts.Cancel)
+        {
+            ThrowOnCall = new OperationCanceledException("The operation was canceled."),
+        };
+        var hub = new FakeHubContext();
+
+        await SummarizationProcessor.ProcessAsync(db, client, new FakeLlmSettingsResolver(),
+            hub, Job(rec, tr), SummarizationPrompt.DefaultTemplate, NullLogger.Instance,
+            new CapturingWebhookPublisher(), "", cts.Token);
+
+        var reloaded = await db.Recordings.FindAsync(rec.Id);
+        Assert.Equal(RecordingStatus.Failed, reloaded!.Status);
+    }
+
+    [Fact]
+    public async Task AbandonAsync_MarksTheRecordingFailed_RatherThanLeavingItSummarizing()
+    {
+        // A message past the delivery cap is dropped by StreamReclaimer to stop a poison job killing worker
+        // after worker. Dropping the message is right; dropping it silently is not - the recording it was
+        // for stays in Summarizing with no job left to clear it and no error to explain why.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, tr) = await Seed(db, userId, name: "x");
+        var hub = new FakeHubContext();
+
+        await SummarizationProcessor.AbandonAsync(db, hub, Job(rec, tr), NullLogger.Instance);
+
+        var reloaded = await db.Recordings.FindAsync(rec.Id);
+        Assert.Equal(RecordingStatus.Failed, reloaded!.Status);
+        Assert.False(string.IsNullOrWhiteSpace(reloaded.Error));
+        var msg = Assert.Single(hub.Sent);
+        Assert.Equal("RecordingStatusChanged", msg.Method);
+        Assert.Equal(userId.ToString(), msg.Group);
+    }
+
+    [Fact]
+    public async Task AbandonAsync_LeavesARecordingThatHasSinceMovedOn_Alone()
+    {
+        // The message may have been sitting in the pending list for hours, during which the user can have
+        // re-run the summary or re-transcribed the recording. Failing it then would report a stale job's
+        // death against work that has since succeeded.
+        using var db = TestDb.Create();
+        var (rec, tr) = await Seed(db, Guid.NewGuid(), name: "x");
+        rec.Status = RecordingStatus.Summarized;
+        await db.SaveChangesAsync();
+        var hub = new FakeHubContext();
+
+        await SummarizationProcessor.AbandonAsync(db, hub, Job(rec, tr), NullLogger.Instance);
+
+        var reloaded = await db.Recordings.FindAsync(rec.Id);
+        Assert.Equal(RecordingStatus.Summarized, reloaded!.Status);
+        Assert.Empty(hub.Sent);
+    }
+
+    [Fact]
     public async Task ProcessAsync_SkipsOverwrite_WhenSummaryIsUserEdited()
     {
         using var db = TestDb.Create();

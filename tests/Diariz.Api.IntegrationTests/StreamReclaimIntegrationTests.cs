@@ -122,4 +122,27 @@ public class StreamReclaimIntegrationTests(ContainersFixture fx)
         Assert.Empty(entries);
         Assert.Empty(await db.StreamPendingMessagesAsync(stream, Group, 10, RedisValue.Null));
     }
+
+    [Fact]
+    public async Task Hands_an_abandoned_message_to_the_caller_before_dropping_it()
+    {
+        // Abandoning is invisible to whatever the job was for: the entry is acked and gone, so a recording
+        // waiting on it stays in Summarizing with no job left to clear it. The caller gets the payload so
+        // it can settle its own side - the drop stays here, the meaning of the drop belongs to the worker.
+        var stream = $"reclaim-{Guid.NewGuid():N}";
+        var db = await FreshStreamAsync(fx, stream);
+        var id = await AbandonAsync(db, stream, "victim-0", "{\"RecordingId\":\"stuck\"}");
+        for (var i = 1; i <= StreamReclaimer.MaxDeliveries; i++)
+            await db.StreamClaimAsync(stream, Group, $"victim-{i}", 0, [id]);
+
+        var seen = new List<string>();
+        var reclaimer = new StreamReclaimer(minIdle: TimeSpan.Zero);
+        var entries = await reclaimer.ReclaimDueAsync(
+            db, stream, Group, "live", NullLogger.Instance,
+            onAbandoned: e => { seen.Add((string)e["job"]!); return Task.CompletedTask; });
+
+        Assert.Empty(entries);
+        Assert.Equal(["{\"RecordingId\":\"stuck\"}"], seen);
+        Assert.Empty(await db.StreamPendingMessagesAsync(stream, Group, 10, RedisValue.Null));
+    }
 }

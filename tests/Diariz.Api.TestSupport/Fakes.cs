@@ -611,8 +611,14 @@ public sealed class FakeJobQueue : IJobQueue
         return Task.CompletedTask;
     }
 
+    /// <summary>Makes the summarisation enqueue fail, standing in for Redis being briefly unreachable.
+    /// That window matters: whoever commits <c>Summarizing</c> alongside it must not leave the recording
+    /// in a status only the (now non-existent) job could clear.</summary>
+    public Exception? ThrowOnSummarizationEnqueue { get; set; }
+
     public Task EnqueueSummarizationAsync(SummarizationJob job, CancellationToken ct = default)
     {
+        if (ThrowOnSummarizationEnqueue is not null) throw ThrowOnSummarizationEnqueue;
         SummarizationEnqueued.Add(job);
         return Task.CompletedTask;
     }

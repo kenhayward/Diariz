@@ -65,6 +65,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.228.1",
+    date: "2026-08-19",
+    pr: 546,
+    headline: "A summary that dies no longer leaves the meeting stuck on \"Summarising...\"",
+    summary:
+      "A summary that failed days ago could leave its meeting reading **Summarising...** forever - through a server restart, a redeploy, even a fresh install of the desktop app. Nothing was running. The status simply had no way back.\n\nThe status is stored with the meeting, so nothing you reinstall or restart touches it. Only the summarisation job itself clears it, and asking for a summary again does nothing while it is set - that is deliberate, so an impatient second click cannot queue a second job, but it also means the one button that looks like it should fix this is the one button that cannot. The only way out was to re-transcribe the meeting.\n\nThree ways the job could disappear without ever writing its result, all now closed.\n\n**The server being stopped mid-summary.** Restarting or redeploying the server cancels whatever is in flight. The summariser correctly caught that and went to record a failure - but the recording of the failure was cancelled by the same shutdown, so nothing was written. The meeting kept a status only the job that had just died could clear. That last write is now made outside the cancellation, so a summary interrupted by a restart is reported as failed and can be retried.\n\n**A job the queue gave up on.** A job that repeatedly kills the process is dropped rather than retried forever, which is right - but it was dropped silently, leaving its meeting waiting on something that no longer existed. Dropping it now marks the meeting failed, with an error saying so.\n\n**A queue that was briefly unreachable.** A meeting was marked as summarising just before its job was queued. If the queue could not be reached in that instant, the status stuck with no job behind it. The meeting now goes back to **Transcribed**, where the Summarise button works normally.\n\nIf you have a meeting stuck in this state today, re-transcribing it still clears it - and from this release on, nothing new should get stuck.",
+    fixed: [
+      "A summary interrupted by a server restart or redeploy left the meeting reading **Summarising...** permanently, with no error recorded. The failure is now written even as the server shuts down.",
+      "A summarisation job abandoned by the queue after repeated failures was dropped silently, leaving its meeting stuck. The meeting is now marked failed with an explanation.",
+      "A meeting could be marked as summarising just before its job failed to queue, leaving nothing to clear the status. It now returns to **Transcribed**, so Summarise works again.",
+    ],
+  },
+  {
     version: "0.228.0",
     date: "2026-08-18",
     pr: 545,

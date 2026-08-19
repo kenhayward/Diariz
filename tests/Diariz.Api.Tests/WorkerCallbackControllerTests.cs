@@ -212,6 +212,27 @@ public class WorkerCallbackControllerTests
     }
 
     [Fact]
+    public async Task Result_WhenSummarisationEnqueueFails_LeavesRecordingTranscribed()
+    {
+        // Committing Summarizing before the job exists is a one-way door: nothing but that job clears the
+        // status, POST /summarize is a no-op while it is set, and the recording is stuck until someone
+        // re-transcribes it. A Redis blip in this window must leave the recording in a status the user can
+        // act on instead - Transcribed, from which Summarize works normally.
+        var (controller, db, _, queue) = BuildEx(Secret, summarizationEnabled: true);
+        var (recordingId, transcriptionId) = await SeedQueuedRecording(db, Guid.NewGuid());
+        queue.ThrowOnSummarizationEnqueue = new InvalidOperationException("redis down");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => controller.Result(
+            new TranscriptionResult(transcriptionId, "en",
+                [new SegmentResult("SPEAKER_00", 0, 1000, "Hello")])));
+
+        // The transcript itself is durable - the segments are the expensive part and must survive.
+        var rec = await db.Recordings.FindAsync(recordingId);
+        Assert.Equal(RecordingStatus.Transcribed, rec!.Status);
+        Assert.Single(await db.Segments.Where(s => s.TranscriptionId == transcriptionId).ToListAsync());
+    }
+
+    [Fact]
     public async Task Result_WhenSummarisationNotConfigured_StaysTranscribed_AndDoesNotEnqueue()
     {
         var (controller, db, _, queue) = BuildEx(Secret, summarizationEnabled: false);
