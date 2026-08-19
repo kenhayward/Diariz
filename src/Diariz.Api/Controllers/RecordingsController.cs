@@ -181,6 +181,7 @@ public class RecordingsController : ControllerBase
                 .ThenInclude(t => t.Summary)
             .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
                 .ThenInclude(t => t.MeetingMinutes)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(r => r.Id == id);
 
         if (rec is null) return NotFound();
@@ -241,14 +242,18 @@ public class RecordingsController : ControllerBase
                 ? rec.CreatedAt.AddDays(platform.AudioRetentionDays)
                 : null;
 
-        // Tags are read in their OWN query, deliberately not as a fourth `.Include` above. EF is in
-        // single-query mode here (no AsSplitQuery, no global QuerySplittingBehavior), so every sibling
-        // collection on that Include chain multiplies into a cartesian product - and each row of the product
-        // carries a Segment.Embedding (vector(768)). Adding tags as an Include turned this recording's
+        // Tags are read in their OWN query, deliberately not as a fourth `.Include` above. The chain is
+        // `AsSplitQuery` now, so a fourth Include would no longer multiply - but a tag list is tiny
+        // (extraction caps at 12, plus what the user adopted or dismissed) and this shape already works, so
+        // there is nothing to gain by folding it back in and a round trip to lose.
+        //
+        // The history is worth keeping, because it is what the split is for: while this was a single query,
+        // every sibling collection on the Include chain multiplied into a cartesian product, each row of it
+        // carrying a Segment.Embedding (vector(768)). Adding tags as an Include turned one recording's
         // 11 speakers x 7 actions x 670 segments (51,590 rows) into 11 x 7 x 13 x 670 (670,670 rows), which
         // measured 10.6 s against 0.6 s on real Postgres - the sort spilled 1.8 GB to disk instead of 133 MB.
-        // A per-recording tag list is tiny (extraction caps at 12, plus what the user adopted or dismissed),
-        // so a second indexed round trip is free (0.04 ms, 3 buffer hits) next to what the join costs.
+        // Removing the tags only shrank that product; Speakers and Actions were siblings of Segments all
+        // along. See SplitQueryIntegrationTests for the shape all four of these endpoints must keep.
         var tagRows = await _db.RecordingTags.Where(t => t.RecordingId == id).ToListAsync();
 
         // Adopted tags in adoption order (AdoptedAt, not CreatedAt: a promoted suggestion was created when
@@ -729,6 +734,7 @@ public class RecordingsController : ControllerBase
                 .ThenInclude(t => t.Summary)
             .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
                 .ThenInclude(t => t.MeetingMinutes)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
         if (rec is null) return NotFound();
 
@@ -1750,6 +1756,7 @@ public class RecordingsController : ControllerBase
             .Include(r => r.Actions)
             .Include(r => r.Transcriptions).ThenInclude(t => t.Segments)
             .Where(r => ids.Contains(r.Id) && r.UserId == UserId)
+            .AsSplitQuery()
             .ToListAsync();
         if (recs.Count != ids.Count) return NotFound();                 // some aren't the caller's
 
@@ -2015,6 +2022,7 @@ public class RecordingsController : ControllerBase
                 .ThenInclude(t => t.Summary)
             .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
                 .ThenInclude(t => t.MeetingMinutes)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
         if (rec is null) return NotFound();
 

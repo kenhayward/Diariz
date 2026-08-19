@@ -65,6 +65,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.228.2",
+    date: "2026-08-19",
+    pr: 548,
+    headline: "Opening a meeting is fast again, and stays fast as it fills up",
+    summary:
+      "Opening a meeting had been getting slower, and the meetings it hurt most were the ones with the most in them. This release makes the worst of them roughly a hundred times quicker to open, and stops the problem coming back as a meeting grows.\n\nThe cause was in how Diariz asked the database for a meeting. It asked for the transcript, the speakers and the action items all at once, and the database answered by combining them - returning every segment once for every speaker, and again for every action item. The right information came back, so nothing ever looked wrong; there was simply an enormous amount of it. A workshop with 272 segments, 55 speakers and 7 action items was fetching 104,720 rows to show 334 things, and the database had to spill 207 MB to disk sorting them.\n\nThat is why it got worse over time rather than settling. The three lists multiply, so every action item extracted from a meeting made the whole meeting slower to open again, and a meeting with many speakers started from a much worse place.\n\nDiariz now asks for the three lists separately. The same information arrives, in a fraction of the time, and adding an action item no longer costs anything. The change covers everywhere the transcript is read this way: opening a meeting, emailing a transcript to yourself, downloading one as text, Markdown, RTF or subtitles, and merging meetings together. Merging gained the most, because it was reading every version of every transcript multiplied the same way.\n\nNothing changed about what you see. If your library is small you may not notice; if you have long meetings with a lot of speakers, opening one should feel immediate now.",
+    fixed: [
+      "Opening a meeting grew slower as it accumulated speakers and action items, badly so for long meetings with many speakers. Measured on the worst meeting in a real library: 702 ms down to a few milliseconds.",
+      "Emailing a transcript, downloading it as text, Markdown, RTF or subtitles, and merging meetings all read the transcript the same costly way, and are all faster now.",
+      "The database no longer writes hundreds of megabytes of temporary files each time a large meeting is opened, which had been slowing everything else on the server down with it.",
+    ],
+  },
+  {
     version: "0.228.1",
     date: "2026-08-19",
     pr: 546,
