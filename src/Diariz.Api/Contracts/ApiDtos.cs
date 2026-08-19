@@ -634,7 +634,10 @@ public record UserSettingsDto(
     /// <summary>Minutes to keep recording past the invite's end time.</summary>
     int CalendarAutoStopAfterMinutes = UserSettings.DefaultCalendarAutoStopAfterMinutes,
     /// <summary>Seconds of continuous silence that also ends such a recording.</summary>
-    int CalendarSilenceStopSeconds = UserSettings.DefaultCalendarSilenceStopSeconds);
+    int CalendarSilenceStopSeconds = UserSettings.DefaultCalendarSilenceStopSeconds,
+    /// <summary>Whether consecutive same-speaker segments are collapsed automatically once a recording
+    /// finishes transcribing. Off by default.</summary>
+    bool AutoMergeSpeakerSegments = false);
 
 /// <summary>A chat tool's state for the settings panel: whether it is on for this user
 /// (<paramref name="Enabled"/>) and its server-side default.</summary>
@@ -667,7 +670,9 @@ public record UpdateUserSettingsRequest(
     int? CalendarAutoStopAfterMinutes = null,
     /// <summary>Seconds of continuous silence that ends such a recording. Null leaves it unchanged; a
     /// non-positive value resets to the default.</summary>
-    int? CalendarSilenceStopSeconds = null);
+    int? CalendarSilenceStopSeconds = null,
+    /// <summary>Whether transcripts are auto-merged by speaker. Null leaves it unchanged.</summary>
+    bool? AutoMergeSpeakerSegments = null);
 
 // ---- MCP access tokens ----
 /// <summary>A stored MCP token, listed in Preferences. The secret is never returned — only a short display

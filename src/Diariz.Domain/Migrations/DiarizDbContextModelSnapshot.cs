@@ -2020,6 +2020,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("AutoMergeSpeakerSegments")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("CalendarAutoStopAfterMinutes")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")

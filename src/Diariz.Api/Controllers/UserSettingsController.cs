@@ -76,7 +76,8 @@ public class UserSettingsController : ControllerBase
             CalendarAutoStopAfterMinutes:
                 s?.CalendarAutoStopAfterMinutes ?? UserSettings.DefaultCalendarAutoStopAfterMinutes,
             CalendarSilenceStopSeconds:
-                s?.CalendarSilenceStopSeconds ?? UserSettings.DefaultCalendarSilenceStopSeconds);
+                s?.CalendarSilenceStopSeconds ?? UserSettings.DefaultCalendarSilenceStopSeconds,
+            AutoMergeSpeakerSegments: s?.AutoMergeSpeakerSegments ?? false);
     }
 
     [HttpPut]
@@ -151,6 +152,9 @@ public class UserSettingsController : ControllerBase
         if (req.CalendarSilenceStopSeconds is { } silence)
             s.CalendarSilenceStopSeconds =
                 silence > 0 ? silence : UserSettings.DefaultCalendarSilenceStopSeconds;
+
+        // No clamping: it is a plain switch, unlike the two durations above.
+        if (req.AutoMergeSpeakerSegments is { } autoMerge) s.AutoMergeSpeakerSegments = autoMerge;
 
         await _db.SaveChangesAsync();
         return NoContent();
