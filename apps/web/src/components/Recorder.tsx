@@ -25,6 +25,7 @@ import {
   type SourceSelection,
 } from "../lib/audioDevices";
 import { connectTrayRecorder, type RecorderState, type TrayBridge } from "../lib/trayRecorder";
+import { setCapturing } from "../lib/chunkReload";
 import { useNotesPopout } from "../lib/useNotesPopout";
 import type { NotesState } from "../lib/notesChannel";
 import { onRecordingRequested, type CalendarEventContext, type RecordingRequest } from "../lib/recordRequest";
@@ -382,6 +383,15 @@ export default function Recorder({
   const uploadDoneRef = useRef<(() => void) | null>(null);
   // Reports phase changes to the Electron tray; a no-op in a plain browser.
   const reportRef = useRef<(s: RecorderState) => void>(() => {});
+
+  /// Every phase change goes through here rather than straight to `reportRef`, so the two things that need
+  /// to know about it cannot drift apart. The second is the stale-chunk auto-reload: it tears the page down,
+  /// and this recorder lives in it, so it must not fire mid-capture. Uploading counts - the blob is still
+  /// only in this page until the request completes.
+  function report(state: RecorderState) {
+    setCapturing(state.phase === "recording" || state.phase === "uploading");
+    reportRef.current(state);
+  }
 
   // Re-enumerate inputs (mount, hot-plug via devicechange, and after a grant unlocks labels). Also
   // re-resolves a specific-mic selection against the new list so an unplugged device falls back cleanly.
@@ -1038,7 +1048,7 @@ export default function Recorder({
       // Auto-open the notes popover per the remembered preference. `stop()` resets the hub, so at record
       // start nothing else is open and `toggle` reliably *opens* notes.
       if (localStorage.getItem(NOTES_OPEN_KEY) !== "false" && !hub.isOpen("notes")) hub.toggle("notes");
-      reportRef.current({ phase: "recording", source: coarse });
+      report({ phase: "recording", source: coarse });
       // A mic grant unlocks device labels — re-enumerate so specifics appear next time.
       if (coarse !== "system") void refreshDevices();
     } catch (e) {
@@ -1046,7 +1056,7 @@ export default function Recorder({
       console.error("Audio capture failed:", e);
       const message = describeAudioError(e, coarse, isElectron);
       setError(message);
-      reportRef.current({ phase: "error", error: message });
+      report({ phase: "error", error: message });
     }
   }
 
@@ -1114,7 +1124,7 @@ export default function Recorder({
 
   async function upload() {
     setBusy(true);
-    reportRef.current({ phase: "uploading" });
+    report({ phase: "uploading" });
     const blob = new Blob(chunksRef.current, { type: "audio/webm" });
     // Recorded time only (pauses excluded); stop() has already folded the final running segment.
     const durationMs = timing.elapsedMs(timingRef.current, Date.now());
@@ -1198,12 +1208,12 @@ export default function Recorder({
         console.error("Attaching screenshots failed unexpectedly:", e);
       }
       onUploaded();
-      reportRef.current({ phase: "idle" });
+      report({ phase: "idle" });
     } catch (e) {
       const message = apiErrorMessage(e, t("errUpload"));
       setError(message);
       if (userId) setPending(rec); // safe in storage — show the recovery banner
-      reportRef.current({ phase: "error", error: message });
+      report({ phase: "error", error: message });
     } finally {
       setBusy(false);
     }

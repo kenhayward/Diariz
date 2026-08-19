@@ -7,10 +7,17 @@ import { ThemeProvider } from "./theme";
 import { LanguageProvider } from "./language";
 import { HelpProvider } from "./lib/help/HelpContext";
 import { initTelemetry } from "./lib/telemetry";
+import { installChunkReloadHandler } from "./lib/chunkReload";
 import App from "./App";
 import "./index.css";
 
 const queryClient = new QueryClient();
+
+// A deploy replaces every content-hashed chunk, so a session that started before it asks for files the
+// server no longer has the moment the user opens a page it had not loaded yet. Installed before first
+// render, and outside it, because the failing import can happen at any point in the session's life - which
+// for the tray app is days. See lib/chunkReload.
+installChunkReloadHandler({ reload: () => window.location.reload(), storage: window.sessionStorage });
 
 // Start reporting before the app renders, so a crash during first render is captured. Never blocks
 // for long: initTelemetry resolves false rather than throwing if the config request fails, and it

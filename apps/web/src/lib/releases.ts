@@ -65,6 +65,18 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.230.2",
+    date: "2026-08-19",
+    pr: 0,
+    headline: "Pages no longer break when Diariz is updated under you",
+    summary:
+      "If Diariz had been left open across an update - which the desktop app does constantly, since closing the window only hides it to the tray - opening a page you had not visited yet in that session could fail with \"Something went wrong showing this page\" and a message about a module that could not be fetched. Manage AI models was the usual place to hit it, but every page that loads on demand was affected, and the only way out was to reload by hand.\n\nThe cause is that each update gives Diariz's files new names and removes the old ones. A window that was already open still asks for the old names, and they are no longer there. It looked like a desktop bug, but a browser tab left open across an update behaved the same way; browser tabs just get reloaded far more often.\n\nDiariz now notices this and reloads itself, so the page you asked for simply opens. If a recording is in progress it will not reload behind your back - it explains that an update is available and leaves the choice to you, so a meeting being recorded is never lost to it.",
+    fixed: [
+      "Opening a page after Diariz had been updated in the background no longer fails with a module-loading error. It reloads and shows the page instead.",
+      "A reload is never triggered automatically while a recording or upload is in progress; you are offered the update and choose when to take it.",
+    ],
+  },
+  {
     version: "0.230.1",
     date: "2026-08-19",
     pr: 554,
