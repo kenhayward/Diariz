@@ -519,7 +519,10 @@ day goes on. The grid opens on the working day (an hour behind the clock when th
 past its usual 06:00-23:00 window whenever something falls outside it, so a meeting can never be off the edge.
 A block does what its row did — a recording opens its transcript and keeps its full actions menu, a meeting
 opens its invite — and a block too short for two lines puts its title and time on one. The calendar a meeting
-came from is shown in the block's tooltip.
+came from is shown in the block's tooltip. A **Go to today** button sits on the panel toolbar whenever the
+Calendar tab is open (in shared rooms too, unlike the two syncs beside it): it returns the selected day and
+the month grid to today in one click, which matters most after you have paged the grid forward - the day was
+already today, so only the grid had moved.
 - **Two calendar syncs, in the panel toolbar**: **Sync calendar** refreshes every source you have connected in
 one go — Google, subscribed `.ics` feeds and a mirrored desktop Outlook calendar — touching only the ones you
 actually have, and **Sync selected day** does the same for a single day - whichever day you have picked in
