@@ -67,7 +67,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.230.1",
     date: "2026-08-19",
-    pr: 0,
+    pr: 554,
     headline: "Security advisory cleared in a test-only dependency",
     summary:
       "A library used only when Diariz runs its own automated tests - never by the running application - had a published security advisory against it. The library it comes from has since been updated, and this release takes that update along with the routine patch updates to the database and web framework packages underneath.\n\nNothing about the application changes, and nothing that was affected was ever reachable from a running server: the flagged code only ever ran on a developer machine or a build agent. This is housekeeping, recorded so the update is traceable.",
