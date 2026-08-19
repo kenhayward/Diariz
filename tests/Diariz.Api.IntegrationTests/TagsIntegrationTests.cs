@@ -301,7 +301,7 @@ public class TagsIntegrationTests(ContainersFixture fx)
             Assert.Equal(["hint"], dto.SuggestedTags!);
         }
 
-        var segmentQuery = Assert.Single(sql.Statements.Where(s => s.Contains("\"Segments\"")));
+        var segmentQuery = Assert.Single(sql.Statements, s => s.Contains("\"Segments\""));
         Assert.DoesNotContain("\"RecordingTags\"", segmentQuery);
         Assert.Contains(sql.Statements, s => s.Contains("\"RecordingTags\"") && !s.Contains("\"Segments\""));
     }
