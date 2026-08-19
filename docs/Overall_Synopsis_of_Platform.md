@@ -38,6 +38,16 @@ infrastructure services.
 Infrastructure (via Docker Compose, project name **`diariz`**):
 
 - **PostgreSQL + pgvector** (`pgvector/pgvector:pg16`) — relational data **and** voiceprint/embedding vectors.
+  Compose passes it a `command:` rather than leaving the image defaults, for two reasons.
+  **`shared_preload_libraries=pg_stat_statements`** can only be set at server start (an `ALTER SYSTEM` +
+  reload will not take), and the extension has to be installed once per database with
+  `CREATE EXTENSION IF NOT EXISTS pg_stat_statements;`. Without it there is no query-level view of the
+  database at all, and a slow endpoint can only be chased by scraping API logs. It also turns on
+  **`track_io_timing`**, **`log_min_duration_statement`** (`PG_LOG_MIN_DURATION_MS`, default 250 ms),
+  **`log_temp_files`** (`PG_LOG_TEMP_FILES_KB`, default 0 = log every spill) and **`log_lock_waits`**.
+  A temp-file spill means a sort or hash outgrew `work_mem` and went to disk; that is nearly always a
+  query-shape bug rather than a tuning problem, and logging every one of them is how 0.228.2 was found -
+  a cartesian `Include` had been writing 207 MB to disk on each open of a large recording, silently.
 - **Redis** (`redis:7`) — job queues (Redis **Streams**), nothing is stored long-term here.
 - **MinIO** (S3-compatible) — original audio blobs and uploaded attachment files.
 
