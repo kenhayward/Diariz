@@ -65,6 +65,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.229.0",
+    date: "2026-08-19",
+    pr: 0,
+    headline: "Transcripts that arrive already merged by speaker",
+    summary:
+      "A transcript arrives split into a new row every time the speaker changes and again on every pause, so one person's uninterrupted answer can land as twenty rows. The transcript toolbar has always had a Merge button that joins them back up - and if you use it, you use it on every single recording.\n\nThis release lets you stop pressing it. In Preferences, on the Recordings tab, a new switch merges each speaker's consecutive rows automatically as soon as a recording finishes transcribing and its speakers have been identified. It is the same merge the button does, so notes and screenshots still act as boundaries, and two voices that Diariz recognised as the same person are joined as one speaker.\n\nIt is off by default and nothing changes until you turn it on. One thing to know before you do: merging is permanent for that transcript, and with this on, transcribing a recording again produces a merged transcript too - so if you want the short rows back, turn the switch off first. Merged transcripts also give the assistant larger blocks of text to search, which can make it less precise about which moment it points you to.",
+    added: [
+      "Preferences - Recordings: Merge each speaker's turn into one block, off by default. When on, every recording's consecutive same-speaker rows are joined as soon as it finishes transcribing.",
+    ],
+  },
+  {
     version: "0.228.4",
     date: "2026-08-19",
     pr: 550,
