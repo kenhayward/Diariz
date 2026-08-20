@@ -617,8 +617,12 @@ public record SaveCalendarSelectionRequest(IReadOnlyList<string> Ids);
 public record UserSettingsDto(
     int ContextWindow,
     /// <summary>The model serving chat, for the context dial's label before the first turn reports one.
-    /// Read-only: an administrator chooses it at /admin/llm-models.</summary>
+    /// Read-only: an administrator chooses which models are available at /admin/llm-models.</summary>
     string ChatModel,
+    /// <summary>The model this user last chose in the chat picker, or null to follow the platform's chat
+    /// routing. Unlike <c>ContextWindow</c> and <c>ChatModel</c> above it, this one IS writable - those two
+    /// are derived from it.</summary>
+    Guid? ChatModelId,
     bool ToolsEnabled, bool DefaultToolsEnabled, IReadOnlyList<ChatToolDto> Tools,
     // Where a new recording lands in the user's Personal room. The mode serialises as its enum name
     // ("SelectedFolder" etc.) via the global string-enum converter, same as MinutesGenerationMode.
@@ -672,7 +676,17 @@ public record UpdateUserSettingsRequest(
     /// non-positive value resets to the default.</summary>
     int? CalendarSilenceStopSeconds = null,
     /// <summary>Whether transcripts are auto-merged by speaker. Null leaves it unchanged.</summary>
-    bool? AutoMergeSpeakerSegments = null);
+    bool? AutoMergeSpeakerSegments = null,
+    /// <summary>The chat model picker's choice. Null leaves it unchanged; <c>Guid.Empty</c> clears the pick
+    /// and follows the platform's chat routing; a value sets it. Empty-as-clear mirrors the
+    /// "non-positive clears" rule the numeric fields use - a separate boolean would be a second way to say
+    /// the same thing.
+    ///
+    /// Not validated against the offered set here, on purpose: an administrator can un-tick a model at any
+    /// time, so a stored pick is always provisional. The read path and every chat turn ignore one that is
+    /// not offered, which makes an un-tick reversible - rejecting or clearing it here would destroy the
+    /// user's choice permanently.</summary>
+    Guid? ChatModelId = null);
 
 // ---- MCP access tokens ----
 /// <summary>A stored MCP token, listed in Preferences. The secret is never returned — only a short display
@@ -717,7 +731,12 @@ public record ChatModelDto(Guid Id, string Label, string Name, int ContextLength
 /// the user's whole library on demand.</summary>
 public record SavedChatContextDto(
     IReadOnlyList<Guid> RecordingIds, string? AttachmentName, string? AttachmentText,
-    bool IncludeAttachments = false, bool SearchAllMeetings = false, Guid? SectionId = null);
+    bool IncludeAttachments = false, bool SearchAllMeetings = false, Guid? SectionId = null,
+    /// <summary>The model this conversation was using when it was saved, so reopening it puts the user back
+    /// on that model. Null for conversations saved before 0.231.0, and for one on the platform default.
+    /// Stored, not validated: if the model is no longer offered the client falls back to the default, the
+    /// same way a chat turn does.</summary>
+    Guid? ModelId = null);
 
 /// <summary>A streaming chat request: the selected context + the full conversation so far.
 /// <paramref name="SectionId"/> (when set) makes the chat about a folder - its roll-up summary, minutes and

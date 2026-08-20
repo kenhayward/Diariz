@@ -51,6 +51,10 @@ public class UserSettingsController : ControllerBase
         "Also included: how a recording started from a calendar event should end - whether it stops by " +
         "itself, how long it keeps going past the invite's end time, and how much silence ends it early; " +
         "and the per-request LLM timeout, alongside the platform/server default it falls back to.\n\n" +
+        "`chatModelId` is the model you last chose in the chat picker, and `contextWindow` / `chatModel` " +
+        "are derived from it - they describe the model that will actually answer you, not the platform " +
+        "default. It comes back null when you have made no choice, or when the model you chose is no " +
+        "longer offered for chat.\n\n" +
         "**Your API key is never returned.** Only `hasApiKey` says whether one is stored.")]
     public async Task<UserSettingsDto> Get()
     {
@@ -61,8 +65,9 @@ public class UserSettingsController : ControllerBase
         return new UserSettingsDto(
             // Read-only from 0.221.0: the window belongs to the model the platform assigns to chat, so the
             // dial still has a number to report against but the user has nothing to set.
-            ContextWindow: await _contextResolver.ResolveContextWindowAsync(),
-            ChatModel: (await _llmSettings.ResolveAsync(LlmCallKind.ChatMessage)).Model,
+            ContextWindow: await _contextResolver.ResolveContextWindowAsync(s?.ChatModelId),
+            ChatModel: (await _llmSettings.ResolveAsync(LlmCallKind.ChatMessage, s?.ChatModelId)).Model,
+            ChatModelId: s?.ChatModelId,
             ToolsEnabled: tools.MasterEnabled,
             DefaultToolsEnabled: _chatDefaults.ToolsEnabled,
             Tools: tools.Catalog
@@ -101,7 +106,11 @@ public class UserSettingsController : ControllerBase
         "it is.\n\n" +
         "`llmTimeoutSeconds` follows its own rule: null leaves it unchanged, 0 clears the override and falls " +
         "back to the platform/server default, and a value of 5 or more sets it. A value of 1-4 seconds is " +
-        "rejected with a 400 rather than silently coerced, since that is not a working timeout.")]
+        "rejected with a 400 rather than silently coerced, since that is not a working timeout.\n\n" +
+        "`chatModelId` picks which model answers your chat, from `GET /api/chat/models`. Null leaves it " +
+        "unchanged, an all-zero GUID clears it and follows the platform's choice, and a value sets it. An " +
+        "id that is not offered is stored but ignored, so an administrator un-ticking a model does not " +
+        "destroy your choice.")]
     public async Task<IActionResult> Update(UpdateUserSettingsRequest req)
     {
         var s = await _db.UserSettings.FindAsync(UserId);
@@ -113,6 +122,12 @@ public class UserSettingsController : ControllerBase
 
         // Tool calling: a value sets the master override; null leaves it unchanged.
         if (req.ToolsEnabled is not null) s.ChatToolsEnabled = req.ToolsEnabled;
+
+        // Chat model: Guid.Empty clears, a value sets, null leaves alone - the same three-way shape the
+        // numeric fields use. Not checked against the offered set: an un-ticked model must stay stored so
+        // re-ticking restores the choice.
+        if (req.ChatModelId is { } chatModelId)
+            s.ChatModelId = chatModelId == Guid.Empty ? null : chatModelId;
 
         // Per-tool overrides: a map (possibly empty) replaces them; null leaves them unchanged.
         if (req.ToolOverrides is not null)
