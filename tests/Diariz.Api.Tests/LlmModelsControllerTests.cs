@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
@@ -814,7 +815,7 @@ public class LlmModelsControllerTests
         var result = await BuildAs(db, userId, probe).Test(model.Id, new LlmModelTestRequest("Tags", [], rec.Id));
 
         Assert.Equal("Tags", result.Value!.ParsedKind);
-        Assert.Contains("Forecast", result.Value.ParsedJson);
+        Assert.Equal("Forecast", Assert.Single(Assert.IsAssignableFrom<IReadOnlyList<ExtractedTag>>(result.Value.Parsed)).Tag);
     }
 
     [Fact]
@@ -834,7 +835,7 @@ public class LlmModelsControllerTests
 
         Assert.True(result.Value!.Ok);
         Assert.Equal("Tags", result.Value.ParsedKind);
-        Assert.Equal("[]", result.Value.ParsedJson);
+        Assert.Empty(Assert.IsAssignableFrom<IReadOnlyList<ExtractedTag>>(result.Value.Parsed));
     }
 
     [Fact]
@@ -849,7 +850,96 @@ public class LlmModelsControllerTests
 
         var result = await BuildAs(db, userId, probe).Test(model.Id, new LlmModelTestRequest("Tags", [], rec.Id));
 
-        Assert.Null(result.Value!.ParsedJson);
+        Assert.Null(result.Value!.Parsed);
+    }
+
+    /// <summary>Serializes an outcome exactly as ASP.NET serializes a controller response, so an assertion
+    /// about property names is about what the browser actually receives.</summary>
+    private static JsonElement AsTheBrowserSeesIt(LlmTestOutcome outcome)
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        JsonConfig.Apply(options);
+        return JsonDocument.Parse(JsonSerializer.Serialize(outcome, options)).RootElement.Clone();
+    }
+
+    [Fact]
+    public async Task A_parsed_summary_reaches_the_browser_under_the_names_it_reads()
+    {
+        // Regression, 0.235.1. The parsed payload used to be hand-serialized into a STRING nested inside the
+        // response. ASP.NET camelCases the envelope; a bare JsonSerializer.Serialize call does not. So the
+        // outer object said "parsedJson" and the inner one said "Summary", and both looked right in
+        // isolation - a perfectly good summary arrived and the panel reported "extracted no summary".
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var model = Seed(db);
+        var rec = SeedTranscribedRecording(db, userId, "Named already");
+        var probe = new FakeLlmTestProbe(new LlmTestOutcome(
+            true, 200, 10, 100, 1, 2, null, 3, "stop",
+            "The team agreed to revise the forecast before Friday.", "{}", null, null, null));
+
+        var result = await BuildAs(db, userId, probe).Test(model.Id, new LlmModelTestRequest("Summaries", [], rec.Id));
+        var wire = AsTheBrowserSeesIt(result.Value!);
+
+        var parsed = wire.GetProperty("parsed");
+        Assert.Contains("revise the forecast", parsed.GetProperty("summary").GetString());
+        Assert.True(parsed.TryGetProperty("name", out _), $"Got: {parsed}");
+    }
+
+    [Fact]
+    public async Task Parsed_tags_reach_the_browser_under_the_names_it_reads()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var model = Seed(db);
+        var rec = SeedTranscribedRecording(db, userId);
+        var probe = new FakeLlmTestProbe(new LlmTestOutcome(
+            true, 200, 10, 100, 1, 2, null, 3, "stop",
+            """[{"tag":"Forecast","weight":0.8}]""", "{}", null, null, null));
+
+        var result = await BuildAs(db, userId, probe).Test(model.Id, new LlmModelTestRequest("Tags", [], rec.Id));
+        var first = AsTheBrowserSeesIt(result.Value!).GetProperty("parsed")[0];
+
+        Assert.Equal("Forecast", first.GetProperty("tag").GetString());
+        Assert.Equal(0.8, first.GetProperty("weight").GetDouble());
+    }
+
+    [Fact]
+    public async Task Parsed_actions_reach_the_browser_under_the_names_it_reads()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var model = Seed(db);
+        var rec = SeedTranscribedRecording(db, userId);
+        var probe = new FakeLlmTestProbe(new LlmTestOutcome(
+            true, 200, 10, 100, 1, 2, null, 3, "stop",
+            """[{"action":"Send the deck","actor":"Sam","deadline":"2026-09-01"}]""", "{}", null, null, null));
+
+        var result = await BuildAs(db, userId, probe).Test(model.Id, new LlmModelTestRequest("Actions", [], rec.Id));
+        var first = AsTheBrowserSeesIt(result.Value!).GetProperty("parsed")[0];
+
+        Assert.Equal("Send the deck", first.GetProperty("text").GetString());
+        Assert.Equal("Sam", first.GetProperty("actor").GetString());
+        Assert.Equal("2026-09-01", first.GetProperty("deadline").GetString());
+    }
+
+    [Fact]
+    public async Task An_empty_extraction_reaches_the_browser_as_an_empty_array()
+    {
+        // The state the whole panel is for: a call that succeeded and would still have stored nothing. It
+        // must arrive as [] - not null, which the browser cannot distinguish from "this group does not parse".
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var model = Seed(db);
+        var rec = SeedTranscribedRecording(db, userId);
+        var probe = new FakeLlmTestProbe(new LlmTestOutcome(
+            true, 200, 10, 100, 1, 2, null, 3, "stop",
+            "I could not identify any topics.", "{}", null, null, null));
+
+        var result = await BuildAs(db, userId, probe).Test(model.Id, new LlmModelTestRequest("Tags", [], rec.Id));
+        var parsed = AsTheBrowserSeesIt(result.Value!).GetProperty("parsed");
+
+        Assert.Equal(JsonValueKind.Array, parsed.ValueKind);
+        Assert.Equal(0, parsed.GetArrayLength());
     }
 
     private sealed class ScopeCapturingProbe : ILlmTestProbe

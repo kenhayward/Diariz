@@ -30,7 +30,7 @@ const OK_RESULT = {
   ok: true, httpStatus: 200, ttftMs: 310, durationMs: 1420,
   promptTokens: 1240, completionTokens: 44, reasoningTokens: 128, totalTokens: 1412,
   finishReason: "stop", response: "A short reply.", requestBodyJson: '{"model":"qwen3-27b"}',
-  errorKind: null, message: null, offendingParameter: null, parsedKind: null, parsedJson: null,
+  errorKind: null, message: null, offendingParameter: null, parsedKind: null, parsed: null,
 };
 
 /// The application defaults, as the page hands them over - the bottom of the layer stack.

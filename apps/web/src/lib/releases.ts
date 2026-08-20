@@ -65,6 +65,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.235.1",
+    date: "2026-08-20",
+    pr: 563,
+    headline: "A good answer in the model test no longer reports as nothing",
+    summary:
+      "Testing a model against one of your recordings could report \"the pipeline would have extracted no summary from this reply\" when the model had in fact answered perfectly well - the summary was right there under Raw reply.\n\nThe result was being handed to the browser twice over: once as the response, and again as a block of text inside it holding the parsed answer. The two halves disagreed about how to spell their field names, so the browser read the outer half correctly and could not read the inner one at all. Tags and action items were affected the same way.\n\nThe parsed answer is now part of the response proper rather than a block of text tucked inside it, so there is only one thing doing the naming and the two cannot fall out of step again.",
+    fixed: [
+      "A successful model test against a recording now shows the tags, action items or summary it produced, instead of reporting that nothing was extracted.",
+    ],
+  },
+  {
     version: "0.235.0",
     date: "2026-08-20",
     pr: 562,

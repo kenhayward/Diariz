@@ -604,8 +604,16 @@ any good at the job. Four things about it are deliberate:
   public `api/user/settings` DTO), shared by all three tabs so timings stay comparable between models.
   The reply is then run back through the pipeline's own parsers, which gained content-only overloads
   (`ParseContent`) because the probe streams and never holds a `/chat/completions` envelope. Those parsers
-  are **total** - an unreadable reply yields an empty list, not an exception - so `ParsedJson` of `[]` is the
+  are **total** - an unreadable reply yields an empty list, not an exception - so `Parsed` of `[]` is the
   real and useful answer "this model would have produced nothing", not an error.
+  `LlmTestOutcome.Parsed` is the parsed **object** (`IReadOnlyList<ExtractedTag>`,
+  `IReadOnlyList<ExtractedAction>` or `SummaryResult`), not a JSON string. It was a string for one release
+  and that was a bug (0.235.1): the string came from a bare `JsonSerializer.Serialize`, which defaults to
+  PascalCase, nested inside a response ASP.NET camelCases via `JsonSerializerDefaults.Web` - so the
+  envelope said `parsedJson` and the payload inside it said `Summary`, and the browser read nothing while
+  both sides looked correct in isolation. **Nested hand-serialization is the hazard**; returning the object
+  lets one serializer name every property. `LlmModelsControllerTests` pins this by serializing the whole
+  outcome the way ASP.NET does and asserting the property names the browser actually reads.
 - **It always streams** (`ResponseHeadersRead` + `stream_options.include_usage`), because time-to-first-token
   is the number that separates "the model was loading" from "the model is slow" and does not exist on a
   buffered response. `LlmTestProbeTests.Measures_the_first_token_separately_from_the_whole_call` is what

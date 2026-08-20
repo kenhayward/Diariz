@@ -251,20 +251,23 @@ public class LlmModelsController : ControllerBase
         return outcome with
         {
             ParsedKind = recordingPrompt.ParsedKind,
-            ParsedJson = ParseForDisplay(recordingPrompt.ParsedKind, outcome.Response, recording),
+            Parsed = ParseForDisplay(recordingPrompt.ParsedKind, outcome.Response, recording),
         };
     }
 
     /// <summary>The reply as the pipeline would have understood it. Not a validation step - all three
-    /// parsers are total, and an empty array is the meaningful answer "this model gave us nothing".</summary>
-    private static string ParseForDisplay(string parsedKind, string response, Recording? recording) =>
+    /// parsers are total, and an empty list is the meaningful answer "this model gave us nothing".
+    ///
+    /// <para>Returns the object itself and lets the response serializer name its properties. Serializing it
+    /// here instead produced PascalCase inside a camelCase envelope, which the browser could not read.</para></summary>
+    private static object? ParseForDisplay(string parsedKind, string response, Recording? recording) =>
         parsedKind switch
         {
-            "Tags" => JsonSerializer.Serialize(TagsPrompt.ParseContent(response)),
-            "Actions" => JsonSerializer.Serialize(ActionsPrompt.ParseContent(response)),
-            "Summary" => JsonSerializer.Serialize(
-                SummarizationPrompt.ParseContent(response, needName: string.IsNullOrWhiteSpace(recording?.Name))),
-            _ => "null",
+            "Tags" => TagsPrompt.ParseContent(response),
+            "Actions" => ActionsPrompt.ParseContent(response),
+            "Summary" => SummarizationPrompt.ParseContent(
+                response, needName: string.IsNullOrWhiteSpace(recording?.Name)),
+            _ => null,
         };
 
     private static string? Layer(Dictionary<string, string> parameters, LlmCallGroup group) =>

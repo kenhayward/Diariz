@@ -30,7 +30,7 @@ vi.mock("../lib/api", () => ({
       ok: true, httpStatus: 200, ttftMs: 10, durationMs: 20, promptTokens: 1, completionTokens: 2,
       reasoningTokens: null, totalTokens: 3, finishReason: "stop", response: "hi",
       requestBodyJson: '{"model":"gpt-oss-20b"}', errorKind: null, message: null, offendingParameter: null,
-      parsedKind: null, parsedJson: null,
+      parsedKind: null, parsed: null,
     }),
     // The drawer reads the remembered test recording on mount, so these must exist even though no test here
     // touches the picker - an absent method throws inside an effect, which surfaces as an unrelated failure.
