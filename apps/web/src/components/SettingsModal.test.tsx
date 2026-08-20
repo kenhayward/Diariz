@@ -30,7 +30,12 @@ vi.mock("../lib/api", () => ({
       ok: true, httpStatus: 200, ttftMs: 10, durationMs: 20, promptTokens: 1, completionTokens: 2,
       reasoningTokens: null, totalTokens: 3, finishReason: "stop", response: "hi",
       requestBodyJson: '{"model":"gpt-oss-20b"}', errorKind: null, message: null, offendingParameter: null,
+      parsedKind: null, parsedJson: null,
     }),
+    // The drawer reads the remembered test recording on mount, so these must exist even though no test here
+    // touches the picker - an absent method throws inside an effect, which surfaces as an unrelated failure.
+    getTestRecording: vi.fn().mockResolvedValue({ recordingId: null, title: null }),
+    setTestRecording: vi.fn().mockResolvedValue(undefined),
     // A COMPLETE totals object. A partial one still satisfies every assertion here, because the table's
     // totals row renders after them - and then throws on the missing token counts, which vitest reports as
     // an unhandled error rather than a failure. The suite reads green and CI does not.

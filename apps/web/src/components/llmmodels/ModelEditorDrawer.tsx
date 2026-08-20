@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../../lib/api";
 import HelpButton from "../HelpButton";
-import type { LlmModel } from "../../lib/types";
+import type { LlmModel, LlmTestRecording } from "../../lib/types";
 import ParameterGrid from "./ParameterGrid";
 import TestRail, { type TestState } from "./TestRail";
 import { buildRequestPreview, resolveInherited } from "./requestPreview";
@@ -60,6 +60,11 @@ function toWire(layers: Layers): Record<string, string> {
 
 const BUTTON = "rounded-md border border-gray-300 px-2.5 py-1 text-xs dark:border-gray-700";
 
+/// The call groups whose test runs the real prompt against a real transcript. Mirrors
+/// `LlmTestPromptFactory.NeedsRecording` on the server, which is the authority - the server rejects a
+/// content-group test with no recording regardless of what this list says.
+const RECORDING_GROUPS = new Set(["Tags", "Actions", "Summaries"]);
+
 export default function ModelEditorDrawer({
   model, allModels, defaults, isDefaultModel, onClose, onSaved, onDeleted, onOpenUsageLog,
 }: Props) {
@@ -79,6 +84,24 @@ export default function ModelEditorDrawer({
   /// Per tab, because the results are not comparable across call types: each ran with different
   /// parameters, so one shared slot would show a number belonging to a tab the admin has left.
   const [tests, setTests] = useState<Record<string, TestState>>({});
+  /// Shared by all three content tabs and remembered per administrator, so successive models are compared
+  /// against the same content.
+  const [recording, setRecording] = useState<LlmTestRecording>({ recordingId: null, title: null });
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .getTestRecording()
+      .then((r) => {
+        if (!cancelled) setRecording(r);
+      })
+      .catch(() => {
+        // No remembered recording is not an error worth a banner - the picker just starts empty.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const appDefaults = useMemo(() => parseLayers(defaults, false), [defaults]);
   const initial = useMemo(() => JSON.stringify(toLayers(model)), [model]);
@@ -124,12 +147,28 @@ export default function ModelEditorDrawer({
 
   /// Runs the test with what is on screen rather than what is stored - testing before saving is the whole
   /// reason the endpoint takes parameters at all.
+  /// Persisted on SELECTION rather than on run: an administrator who picks a recording and then closes the
+  /// drawer should not have to pick it again.
+  function pickRecording(recordingId: string, title: string) {
+    setRecording({ recordingId, title });
+    api.setTestRecording(recordingId).catch(() => {
+      // The choice still applies to this session; only remembering it failed.
+    });
+  }
+
   async function runTest() {
     if (!model) return;
+    const needsRecording = RECORDING_GROUPS.has(tab);
+    if (needsRecording && !recording.recordingId) return;
+
     setTests((prev) => ({ ...prev, [tab]: { status: "running" } }));
     setError(null);
     try {
-      const result = await api.testModel(model.id, { group: tab, parameters: toWire(layers) });
+      const result = await api.testModel(model.id, {
+        group: tab,
+        parameters: toWire(layers),
+        ...(needsRecording ? { recordingId: recording.recordingId! } : {}),
+      });
       setTests((prev) => ({ ...prev, [tab]: { status: "done", result } }));
     } catch (e) {
       setTests((prev) => ({ ...prev, [tab]: { status: "idle" } }));
@@ -322,6 +361,9 @@ export default function ModelEditorDrawer({
             preview={preview}
             test={tests[tab] ?? { status: "idle" }}
             onRun={model ? runTest : null}
+            needsRecording={RECORDING_GROUPS.has(tab)}
+            recording={recording}
+            onPickRecording={pickRecording}
             onFix={applyFix}
             apiBase={model?.apiBase ?? ""}
             modelName={model?.name ?? ""}
