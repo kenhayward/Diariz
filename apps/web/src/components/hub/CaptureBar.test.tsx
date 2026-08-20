@@ -57,4 +57,20 @@ describe("CaptureBar", () => {
     const cluster = container.querySelector('[data-tour="capture"]');
     expect(cluster?.className).toContain("min-w-0");
   });
+
+  // The bar's own chrome is 68px of dead space around the cluster - 36px of padding plus the two gap-4
+  // gutters to the centring spacers - which is a quarter of the whole bar once the cluster is down to its
+  // icons. One shared threshold rather than the per-state ones the cluster uses: the bar does not know
+  // whether a recording is running, and 44px is noise at the recording tier's 690px. jsdom computes no
+  // geometry and loads no Tailwind CSS, so this proves the classes are present, not the resulting width.
+  it("tightens its own padding and gutters on a narrow bar", () => {
+    const { container } = renderBar();
+    const bar = container.firstElementChild as HTMLElement;
+    expect(bar.className).toContain("px-[18px]");
+    expect(bar.className).toContain("@max-[480px]:px-2");
+    expect(bar.className).toContain("gap-4");
+    expect(bar.className).toContain("@max-[480px]:gap-1");
+    // Moved off the inline style, or the class could never win.
+    expect(bar.style.padding).toBe("");
+  });
 });

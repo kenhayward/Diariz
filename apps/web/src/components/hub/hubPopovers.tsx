@@ -1,7 +1,11 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 
-/** The command-hub popovers that share the "one open at a time" state. */
-export type HubPopoverId = "source" | "stop" | "notes" | "acct";
+/**
+ * The command-hub popovers that share the "one open at a time" state. `more` is the narrow-window
+ * overflow menu: sharing this state is what lets a menu row open another popover without nesting - picking
+ * "Auto-stop" toggles `stop`, which closes `more` on the way.
+ */
+export type HubPopoverId = "source" | "stop" | "notes" | "acct" | "more";
 
 export type HubPopoverApi = {
   /** The currently-open popover, or null when all are closed. */
@@ -28,7 +32,8 @@ function useHubPopoverState(): HubPopoverApi {
 
 /**
  * Provides the shared "one popover open at a time" state to the top-bar cluster + avatar. Wrap the region
- * that hosts the audio-source, auto-stop, notes and account popovers so opening any one closes the rest.
+ * that hosts the audio-source, auto-stop, notes, overflow and account popovers so opening any one closes
+ * the rest.
  */
 export function HubPopoverProvider({ children }: { children: ReactNode }) {
   const api = useHubPopoverState();

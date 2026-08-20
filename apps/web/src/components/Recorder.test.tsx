@@ -2097,3 +2097,144 @@ describe("notes pop-out", () => {
     await waitFor(() => expect(screen.queryByTestId("notes-popover")).toBeNull());
   });
 });
+
+// The narrow-window overflow menu. Below the cramped tier the secondary icon buttons are hidden by a
+// container query and this menu stands in for them, so nothing the bar offers becomes unreachable however
+// narrow the window gets. Every assertion here is scoped with `within(dialog)`: the inline buttons are
+// hidden by CSS in a browser but jsdom loads no CSS, so an unscoped query for "Auto-stop" matches both the
+// menu row and the inline button.
+describe("Recorder overflow menu", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
+    (getStream as Mock).mockResolvedValue(fakeSession);
+  });
+
+  afterEach(() => {
+    delete (window as unknown as { diariz?: unknown }).diariz;
+  });
+
+  function installShellWithCapture() {
+    const captureScreenshot = vi.fn();
+    (window as unknown as { diariz?: unknown }).diariz = {
+      canCaptureScreenshot: true,
+      captureScreenshot,
+      onScreenshotCaptured: () => () => {},
+    };
+    return captureScreenshot;
+  }
+
+  const openMenu = async () => {
+    fireEvent.click(await screen.findByRole("button", { name: /more controls/i }));
+    return within(await screen.findByRole("dialog", { name: /more controls/i }));
+  };
+
+  it("offers auto-stop and upload while idle", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    const menu = await openMenu();
+
+    expect(menu.getByRole("button", { name: "Auto-stop" })).toBeTruthy();
+    expect(menu.getByRole("button", { name: "Upload" })).toBeTruthy();
+    expect(menu.queryByRole("button", { name: "Notes" })).toBeNull();
+  });
+
+  // Upload is disabled for the whole of a recording, so a row for it could only ever be greyed. The menu
+  // exists because room is short; a permanently dead row is the last thing it should spend a line on.
+  it("swaps upload for notes while recording", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+
+    const menu = await openMenu();
+
+    expect(menu.getByRole("button", { name: "Notes" })).toBeTruthy();
+    expect(menu.queryByRole("button", { name: "Upload" })).toBeNull();
+  });
+
+  it("offers the screenshot row only when the shell can capture, while recording", async () => {
+    installShellWithCapture();
+    render(<Recorder onUploaded={() => {}} />);
+
+    expect((await openMenu()).queryByRole("button", { name: "Capture screenshot" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /more controls/i })); // close
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+
+    expect((await openMenu()).getByRole("button", { name: "Capture screenshot" })).toBeTruthy();
+  });
+
+  // The load-bearing claim of this design: a menu row does not nest a popover inside the menu. HubPopover
+  // panels are absolute children of their own `relative` wrapper in the bar, so they drop from the bar
+  // wherever they were opened from - and the hub's one-open-at-a-time state closes the menu on the way.
+  it("opens the auto-stop popover from the menu, closing the menu rather than nesting", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    const menu = await openMenu();
+
+    fireEvent.click(menu.getByRole("button", { name: "Auto-stop" }));
+
+    expect(await screen.findByRole("button", { name: /in 15 minutes/i })).toBeTruthy();
+    expect(screen.queryByRole("dialog", { name: /more controls/i })).toBeNull();
+  });
+
+  it("opens the notes popover from the menu, closing the menu rather than nesting", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+    const menu = await openMenu();
+
+    fireEvent.click(menu.getByRole("button", { name: "Notes" }));
+
+    expect(await screen.findByTestId("notes-popover")).toBeTruthy();
+    expect(screen.queryByRole("dialog", { name: /more controls/i })).toBeNull();
+  });
+
+  it("opens the file dialog from the menu and closes the menu", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    const input = screen.getByTestId("upload-input") as HTMLInputElement;
+    const click = vi.spyOn(input, "click");
+    const menu = await openMenu();
+
+    fireEvent.click(menu.getByRole("button", { name: "Upload" }));
+
+    // openFileDialog is async - it asks for the File System Access picker first and falls back to clicking
+    // the hidden input a microtask later, which is the path jsdom takes.
+    await waitFor(() => expect(click).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("dialog", { name: /more controls/i })).toBeNull();
+  });
+
+  // Parity with the inline buttons, which is the whole point of the menu: it stands in for them, so a
+  // control that is unavailable in the bar must be unavailable here. Without this the menu would hand a
+  // user with no CreateRecording a working file picker for an upload the server will refuse.
+  it("carries the permission gate onto the auto-stop and upload rows", async () => {
+    roomState.can = () => false;
+    render(<Recorder onUploaded={() => {}} />);
+    const menu = await openMenu();
+
+    for (const name of ["Auto-stop", "Upload"]) {
+      const row = menu.getByRole("button", { name });
+      expect(row.getAttribute("aria-disabled")).toBe("true");
+      expect(row.getAttribute("title")).toMatch(/permission/i);
+    }
+  });
+
+  // The menu takes the same gate as the inline camera button rather than inventing its own: with no
+  // capture area chosen, capturing would throw the shell's area picker up under the cursor.
+  it("carries the capture-area gate onto the screenshot row", async () => {
+    (window as unknown as { diariz?: unknown }).diariz = {
+      canCaptureScreenshot: true,
+      captureScreenshot: vi.fn(),
+      onScreenshotCaptured: () => () => {},
+      hasCaptureArea: () => Promise.resolve(false),
+    };
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+
+    const row = (await openMenu()).getByRole("button", { name: "Capture screenshot" });
+
+    expect(row.getAttribute("title")).toBe("Set a capture area first");
+    expect(row.getAttribute("aria-disabled")).toBe("true");
+  });
+});

@@ -65,6 +65,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.234.0",
+    date: "2026-08-20",
+    pr: 561,
+    headline: "The record controls keep shrinking instead of running out of room",
+    summary:
+      "The record controls at the top of the page now keep shrinking as the window narrows, instead of running out of room and disappearing behind the chat panel.\n\nThey used to take one step: past a point the words next to the microphone and the record button dropped away, leaving icons. That was enough for a window with nothing recording in it, and not enough for anything narrower - and while a recording was running, with a timer, a level meter and up to three more buttons in the row, it was nowhere near enough.\n\nNow they keep going. The \"+System\" tag shrinks to a green dot, the little arrow goes, the spacing tightens, and the level meter steps aside. If it is still too narrow, everything except the microphone and the record button folds into a single \"...\" button that lists them - so auto-stop, upload, screenshots and notes are always one click away, at any width.\n\nIn numbers: the controls used to need a 376px-wide strip when idle and a 666px one while recording. They now need 217px and 367px. On a typical window with the chat panel open, that is the difference between needing about 1030px to record and needing about 730px.",
+    added: [
+      "A \"...\" button appears when the top bar is too narrow to show every record control, listing the ones that no longer fit - auto-stop, upload, screenshots and notes - so none of them becomes unreachable.",
+    ],
+    changed: [
+      "The record controls now collapse in several steps rather than one: the \"+System\" tag becomes a dot, the arrow and the level meter step aside, and the bar's spacing tightens.",
+      "While a recording is running the controls start collapsing much earlier, because that row is wider. Upload is hidden for the duration, since it cannot be used mid-recording anyway.",
+    ],
+  },
+  {
     version: "0.233.1",
     date: "2026-08-20",
     pr: 560,

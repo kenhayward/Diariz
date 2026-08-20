@@ -34,4 +34,29 @@ describe("RecordHero", () => {
     expect(label.className).toContain("@xl:inline");
     expect(label.className).not.toContain("md:inline");
   });
+
+  // The recording cluster is ~290px wider than the idle one, so it needs its own, much earlier threshold:
+  // below a 690px bar the level meter goes. It is *hidden*, not unmounted - HubLevelMeter is what detects
+  // silence via onSilentChange, and dropping it from the tree would silently disable the "no sound" hint at
+  // narrow widths. jsdom computes no geometry, so this proves the class is present, not the fit.
+  it("hides the level meter on a narrow bar without unmounting it", () => {
+    render(
+      <RecordHero
+        recording
+        paused={false}
+        mmss="00:12"
+        stream={null}
+        canRecord
+        busy={false}
+        startDisabled={false}
+        onStart={noop}
+        onPause={noop}
+        onResume={noop}
+        onStop={noop}
+        onSilentChange={noop}
+      />,
+    );
+    const meter = screen.getByTestId("hub-meter-slot");
+    expect(meter.className).toContain("@max-[690px]:hidden");
+  });
 });
