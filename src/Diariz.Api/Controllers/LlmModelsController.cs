@@ -336,27 +336,40 @@ public class LlmModelsController : ControllerBase
     /// contains the relaxation. Only parsed model ids are returned; the endpoint's response body never
     /// reaches the caller, so this cannot be used as a general-purpose fetch.</summary>
     [HttpPost("discover")]
-    public async Task<ActionResult<List<DiscoveredModelDto>>> Discover(
+    public async Task<ActionResult<DiscoverModelsResultDto>> Discover(
         DiscoverModelsRequest req, CancellationToken ct = default)
     {
         var apiBase = req.ApiBase?.Trim();
         if (string.IsNullOrWhiteSpace(apiBase)) return BadRequest("An endpoint URL is required.");
 
-        var found = await _discovery.ListAsync(apiBase, req.ApiKey, ct);
-        var chat = found.Where(LlmModelDiscovery.IsChatModel).ToList();
+        var listing = await _discovery.ListAsync(apiBase, req.ApiKey, ct);
+
+        // Reached the server and it named its models, but nothing there serves an OpenAI-compatible
+        // listing - so there is no address a completion could be sent to. Importing anyway is what produced
+        // models that looked fine and then never answered, so it is refused with the reason.
+        if (listing.ChatApiBase is null && listing.Models.Count > 0)
+            return BadRequest(
+                "That server answered, but it does not serve an OpenAI-compatible endpoint at that address " +
+                "or at /v1. Check the URL - for LM Studio it usually ends in /v1.");
+
+        var chat = listing.Models.Where(LlmModelDiscovery.IsChatModel).ToList();
 
         var existing = await _db.LlmModels
             .Where(m => chat.Select(c => c.Id).Contains(m.Name))
             .Select(m => m.Name)
             .ToListAsync(ct);
 
-        return chat
-            .Select(m => new DiscoveredModelDto(
-                m.Id,
-                m.ContextLength ?? LlmModelDiscovery.DefaultContextLength,
-                ContextLengthReported: m.ContextLength is not null,
-                AlreadyExists: existing.Contains(m.Id)))
-            .ToList();
+        // The RESOLVED endpoint, not the one that was typed - the dialog shows it, so a corrected URL is
+        // visible rather than a silent adjustment nobody could account for later.
+        return new DiscoverModelsResultDto(
+            listing.ChatApiBase ?? apiBase,
+            chat
+                .Select(m => new DiscoveredModelDto(
+                    m.Id,
+                    m.ContextLength ?? LlmModelDiscovery.DefaultContextLength,
+                    ContextLengthReported: m.ContextLength is not null,
+                    AlreadyExists: existing.Contains(m.Id)))
+                .ToList());
     }
 
     /// <summary>Creates a model row for each named model on this endpoint.
@@ -374,7 +387,16 @@ public class LlmModelsController : ControllerBase
         var apiBase = req.ApiBase?.Trim();
         if (string.IsNullOrWhiteSpace(apiBase)) return BadRequest("An endpoint URL is required.");
 
-        var found = (await _discovery.ListAsync(apiBase, req.ApiKey, ct))
+        var listing = await _discovery.ListAsync(apiBase, req.ApiKey, ct);
+
+        // No endpoint chat could call means nothing worth creating - a row whose ApiBase does not serve
+        // /chat/completions is a model that exists and never answers.
+        if (listing.ChatApiBase is not { } resolvedBase)
+            return BadRequest(
+                "That server does not serve an OpenAI-compatible endpoint at that address or at /v1, so " +
+                "these models could not be called. Check the URL - for LM Studio it usually ends in /v1.");
+
+        var found = listing.Models
             .Where(LlmModelDiscovery.IsChatModel)
             .ToDictionary(m => m.Id);
 
@@ -395,7 +417,9 @@ public class LlmModelsController : ControllerBase
             {
                 Id = Guid.NewGuid(),
                 Name = name,
-                ApiBase = apiBase,
+                // The RESOLVED base, not the typed one. Storing what was typed is what created models
+                // pointing at an address /chat/completions is not served from.
+                ApiBase = resolvedBase,
                 ApiKeyEncrypted = key,
                 ContextLength = model.ContextLength ?? LlmModelDiscovery.DefaultContextLength,
                 // Not offered in chat, and no display name. Importing forty models from a server must not

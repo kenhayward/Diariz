@@ -2,12 +2,23 @@ using System.Net.Http.Headers;
 
 namespace Diariz.Api.Services.Llm;
 
+/// <summary>What a server reported, and the endpoint its models must actually be called on.
+///
+/// <paramref name="ChatApiBase"/> is null when nothing at that address serves an OpenAI-compatible model
+/// listing. That is deliberately distinct from finding no models: a server can report models through
+/// LM Studio's own endpoint while the base URL given is not one <c>/chat/completions</c> is served from, and
+/// importing rows against it would create models that cannot answer.</summary>
+public sealed record ModelListing(string? ChatApiBase, IReadOnlyList<DiscoveredModel> Models)
+{
+    public static readonly ModelListing None = new(null, []);
+}
+
 public interface ILlmModelDiscoveryClient
 {
-    /// <summary>Asks an OpenAI-compatible server what models it has. Failures return an empty list rather
-    /// than throwing - a wrong URL is the main thing being diagnosed here.</summary>
-    Task<IReadOnlyList<DiscoveredModel>> ListAsync(
-        string apiBase, string? apiKey, CancellationToken ct = default);
+    /// <summary>Asks an OpenAI-compatible server what models it has, and resolves the endpoint they must be
+    /// called on. Failures return an empty listing rather than throwing - a wrong URL is the main thing being
+    /// diagnosed here.</summary>
+    Task<ModelListing> ListAsync(string apiBase, string? apiKey, CancellationToken ct = default);
 }
 
 /// <summary>Asks an OpenAI-compatible server what models it has.
@@ -35,9 +46,13 @@ public interface ILlmModelDiscoveryClient
 /// block the primary use case. The compensating control is that only a Platform Administrator can call it,
 /// and that nothing of the response but model ids is ever echoed back.
 ///
-/// LM Studio's <c>/api/v0/models</c> is tried first because it reports a type and a real context length; the
-/// OpenAI-compatible <c>/models</c> reports neither, so everything from it needs a default and a name
-/// heuristic.</summary>
+/// <b>Two endpoints are consulted, for two different jobs.</b> LM Studio's <c>/api/v0/models</c> supplies the
+/// metadata - a type and a real context length, neither of which the OpenAI-compatible listing reports - but
+/// it answers at the SERVER ROOT regardless of the path given, so it confirms the server exists and nothing
+/// whatever about the base URL. The OpenAI-compatible <c>{base}/models</c> is therefore also fetched, to
+/// resolve the endpoint completions will actually be posted to. Skipping that is what shipped a base URL
+/// missing its <c>/v1</c>: discovery passed, and every chat call then went to <c>/chat/completions</c> at the
+/// root, which LM Studio answers <c>200</c> and never streams, so replies never arrived.</summary>
 public sealed class LlmModelDiscoveryClient(HttpClient http) : ILlmModelDiscoveryClient
 {
     private const int TimeoutSeconds = 10;
@@ -47,10 +62,10 @@ public sealed class LlmModelDiscoveryClient(HttpClient http) : ILlmModelDiscover
     /// then parses to nothing rather than being read to the end.</summary>
     private const int MaxResponseBytes = 512 * 1024;
 
-    public async Task<IReadOnlyList<DiscoveredModel>> ListAsync(
-        string apiBase, string? apiKey, CancellationToken ct = default)
+    public async Task<ModelListing> ListAsync(string apiBase, string? apiKey, CancellationToken ct = default)
     {
-        if (!Uri.TryCreate(apiBase.TrimEnd('/'), UriKind.Absolute, out var baseUri)) return [];
+        var trimmed = apiBase.TrimEnd('/');
+        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var baseUri)) return ModelListing.None;
 
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(TimeSpan.FromSeconds(TimeoutSeconds));
@@ -58,16 +73,34 @@ public sealed class LlmModelDiscoveryClient(HttpClient http) : ILlmModelDiscover
         // LM Studio's own listing sits at the SERVER ROOT, beside /v1 rather than under it, so the version
         // segment has to come off. Appending it to the configured base would ask for /v1/api/v0/models and
         // always miss, silently costing every import its real context lengths.
-        var lmStudio = new Uri(baseUri, "/api/v0/models");
-        var lmStudioBody = await GetAsync(lmStudio, apiKey, deadline.Token);
-        if (lmStudioBody is not null)
+        var root = new Uri(baseUri, "/").ToString().TrimEnd('/');
+        var lmStudioBody = await GetAsync(new Uri($"{root}/api/v0/models"), apiKey, deadline.Token);
+        var richModels = lmStudioBody is null ? [] : LlmModelDiscovery.ParseLmStudio(lmStudioBody);
+
+        // Resolve the endpoint the models will actually be CALLED on, by finding one that serves an
+        // OpenAI-compatible listing. This is the whole point: LM Studio's metadata endpoint answers at the
+        // root whatever path was typed, so it confirms the server exists and nothing about the base URL.
+        // A base missing /v1 therefore used to sail through discovery and then send every completion to
+        // /chat/completions at the root, which LM Studio answers 200 and never streams.
+        //
+        // The typed base is tried first so a deliberate non-standard path is respected; /v1 is the fallback
+        // because it is where OpenAI-compatible servers put it.
+        foreach (var candidate in new[] { trimmed, $"{root}/v1" }.Distinct())
         {
-            var models = LlmModelDiscovery.ParseLmStudio(lmStudioBody);
-            if (models.Count > 0) return models;
+            var body = await GetAsync(new Uri($"{candidate}/models"), apiKey, deadline.Token);
+            if (body is null) continue;
+
+            var openAi = LlmModelDiscovery.ParseOpenAi(body);
+            // Parsed, not merely 200. LM Studio returns 200 with an {"error": ...} body for a path it does
+            // not serve, so the status says nothing - only a listing that parses proves the endpoint works.
+            if (openAi.Count == 0) continue;
+
+            return new ModelListing(candidate, richModels.Count > 0 ? richModels : openAi);
         }
 
-        var openAi = await GetAsync(new Uri(baseUri + "/models"), apiKey, deadline.Token);
-        return openAi is null ? [] : LlmModelDiscovery.ParseOpenAi(openAi);
+        // Reached the server but found nowhere to call it. Models may still be reported, so the caller can
+        // tell "no models" apart from "models, but no usable endpoint" and say something useful.
+        return new ModelListing(null, richModels);
     }
 
     /// <summary>The body of a successful GET, or null for anything else. A non-success status is a fact

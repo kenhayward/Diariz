@@ -11,7 +11,7 @@ declare module "axios" {
 import type {
   TemplateContent,
   ChatModelOption,
-  DiscoveredModel,
+  DiscoverModelsResult,
   ImportModelsResult,
   AdminUser,
   Attachment,
@@ -1697,8 +1697,10 @@ export const api = {
   /// Ask an OpenAI-compatible endpoint what chat models it has. Non-LLM models are filtered out server-side,
   /// and models already configured come back flagged rather than hidden - an administrator needs to see that
   /// the endpoint has them, not wonder why they are missing.
-  async discoverModels(body: { apiBase: string; apiKey?: string | null }): Promise<DiscoveredModel[]> {
-    const { data } = await http.post<DiscoveredModel[]>("/api/admin/llm-models/discover", body);
+  async discoverModels(
+    body: { apiBase: string; apiKey?: string | null },
+  ): Promise<DiscoverModelsResult> {
+    const { data } = await http.post<DiscoverModelsResult>("/api/admin/llm-models/discover", body);
     return data;
   },
 

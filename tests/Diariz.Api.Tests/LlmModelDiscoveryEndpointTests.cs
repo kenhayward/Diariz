@@ -51,7 +51,7 @@ public class LlmModelDiscoveryEndpointTests
             new DiscoveredModel("llama-3.3-70b", null, null));
 
         var result = await Build(db, discovery).Discover(new DiscoverModelsRequest("http://lm.test/v1", null));
-        var dtos = Assert.IsType<List<DiscoveredModelDto>>(result.Value);
+        var dtos = Assert.IsType<DiscoverModelsResultDto>(result.Value).Models;
 
         Assert.True(dtos.Single(d => d.Id == "gpt-4o").AlreadyExists);
         Assert.False(dtos.Single(d => d.Id == "llama-3.3-70b").AlreadyExists);
@@ -68,7 +68,7 @@ public class LlmModelDiscoveryEndpointTests
 
         var result = await Build(db, discovery).Discover(new DiscoverModelsRequest("http://lm.test/v1", null));
 
-        Assert.Equal(["gpt-4o"], Assert.IsType<List<DiscoveredModelDto>>(result.Value).Select(d => d.Id));
+        Assert.Equal(["gpt-4o"], Assert.IsType<DiscoverModelsResultDto>(result.Value).Models.Select(d => d.Id));
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public class LlmModelDiscoveryEndpointTests
             new DiscoveredModel("qwen", 200_000, "llm"));
 
         var result = await Build(db, discovery).Discover(new DiscoverModelsRequest("http://lm.test/v1", null));
-        var dtos = Assert.IsType<List<DiscoveredModelDto>>(result.Value);
+        var dtos = Assert.IsType<DiscoverModelsResultDto>(result.Value).Models;
 
         var guessed = dtos.Single(d => d.Id == "gpt-4o");
         Assert.Equal(16384, guessed.ContextLength);
@@ -118,6 +118,38 @@ public class LlmModelDiscoveryEndpointTests
         Assert.Equal(0, discovery.Calls);
     }
 
+    [Fact]
+    public async Task Reports_the_resolved_endpoint_rather_than_the_one_submitted()
+    {
+        // A server address typed without /v1 is corrected to the path that actually serves the models. The
+        // dialog shows this, so the correction is visible instead of being applied behind the administrator.
+        using var db = TestDb.Create();
+        var discovery = Found(new DiscoveredModel("gpt-4o", null, null));
+        discovery.ChatApiBase = "http://lm.test:1234/v1";
+
+        var result = await Build(db, discovery)
+            .Discover(new DiscoverModelsRequest("http://lm.test:1234", null));
+
+        Assert.Equal("http://lm.test:1234/v1", Assert.IsType<DiscoverModelsResultDto>(result.Value).ApiBase);
+    }
+
+    [Fact]
+    public async Task Refuses_a_server_that_serves_no_openai_endpoint()
+    {
+        // Reported live: models imported against a base with no /v1 were created happily and then every
+        // chat call went to /chat/completions at the root, which LM Studio answers 200 and never streams -
+        // so the reply simply never arrived. Refusing with the reason beats creating models that cannot answer.
+        using var db = TestDb.Create();
+        var discovery = Found(new DiscoveredModel("gpt-4o", null, null));
+        discovery.ChatApiBase = null;
+
+        var result = await Build(db, discovery)
+            .Discover(new DiscoverModelsRequest("http://lm.test:1234", null));
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("/v1", bad.Value!.ToString());
+    }
+
     // ---- Import ----
 
     [Fact]
@@ -135,7 +167,7 @@ public class LlmModelDiscoveryEndpointTests
 
         var created = Assert.Single(db.LlmModels);
         Assert.Equal("gpt-4o", created.Name);
-        Assert.Equal("http://lm.test/v1", created.ApiBase);
+        Assert.Equal("http://lm.test/v1", created.ApiBase);   // the resolved base, from the fake
         Assert.NotNull(created.ApiKeyEncrypted);
         Assert.Equal(128000, created.ContextLength);
     }
@@ -239,6 +271,33 @@ public class LlmModelDiscoveryEndpointTests
 
         Assert.Equal(2, Assert.IsType<ImportModelsResultDto>(result.Value).Added);
         Assert.Equal(["gpt-4o", "qwen"], db.LlmModels.Select(m => m.Name).OrderBy(n => n));
+    }
+
+    [Fact]
+    public async Task Stores_the_resolved_endpoint_not_the_one_submitted()
+    {
+        // The defect itself: what gets written to ApiBase is what every future completion is posted to.
+        using var db = TestDb.Create();
+        var discovery = Found(new DiscoveredModel("gpt-4o", null, null));
+        discovery.ChatApiBase = "http://lm.test:1234/v1";
+
+        await Build(db, discovery).Import(new ImportModelsRequest("http://lm.test:1234", null, ["gpt-4o"]));
+
+        Assert.Equal("http://lm.test:1234/v1", Assert.Single(db.LlmModels).ApiBase);
+    }
+
+    [Fact]
+    public async Task Creates_nothing_when_no_endpoint_could_be_resolved()
+    {
+        using var db = TestDb.Create();
+        var discovery = Found(new DiscoveredModel("gpt-4o", null, null));
+        discovery.ChatApiBase = null;
+
+        var result = await Build(db, discovery)
+            .Import(new ImportModelsRequest("http://lm.test:1234", null, ["gpt-4o"]));
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Empty(db.LlmModels);
     }
 
     [Fact]

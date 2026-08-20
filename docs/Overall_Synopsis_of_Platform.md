@@ -517,6 +517,16 @@ no HTTP, so the interesting decision - what counts as a chat model - is testable
 whose window is not reported is created at `LlmModelDiscovery.DefaultContextLength` (16,384) and named in the
 import summary, because that number sizes both the chat dial and the real context budget.
 
+`ListAsync` returns a **`ModelListing(ChatApiBase, Models)`**, and `ChatApiBase` is the endpoint the models
+will actually be called on - not the string that was typed. It is resolved by finding a candidate whose
+`{base}/models` **parses as a listing**: the typed base first, then `{root}/v1`. Parsing matters rather than
+the status, because LM Studio answers **200 with an `{"error": ...}` body** for a path it does not serve.
+Skipping this shipped a real defect in 0.232.0: a base URL missing its `/v1` passed discovery, because
+`/api/v0/models` answers at the server root whatever path was given, and every completion then went to
+`/chat/completions` at the root and never streamed. A null `ChatApiBase` with a non-empty `Models` means
+"models found, nowhere to call them", which both endpoints refuse with that reason rather than creating rows
+that cannot answer.
+
 **This is the only route in the platform that fetches an administrator-supplied URL**, which is exactly what
 `POST /{id}/test` refuses to do. The relaxation was deliberate and is bounded: `ManagePlatform` only, a 10
 second timeout, redirects not followed (`AllowAutoRedirect = false` on the primary handler), a capped read,

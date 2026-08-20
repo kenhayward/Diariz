@@ -930,6 +930,14 @@ public record DiscoverModelsRequest(string ApiBase, string? ApiKey);
 /// from a guess has no reason to correct the guess.</summary>
 public record DiscoveredModelDto(string Id, int ContextLength, bool ContextLengthReported, bool AlreadyExists);
 
+/// <summary>What a server reported, and the endpoint the models will be created against.
+///
+/// <paramref name="ApiBase"/> is the <b>resolved</b> endpoint, which may differ from the one submitted: a
+/// server address typed without its <c>/v1</c> is corrected to the path that actually serves
+/// <c>/chat/completions</c>. It is returned so the correction is visible in the dialog rather than silent -
+/// a model row pointing at the wrong path looks perfectly healthy and simply never answers.</summary>
+public record DiscoverModelsResultDto(string ApiBase, IReadOnlyList<DiscoveredModelDto> Models);
+
 /// <summary>Create a model row for each named model on this endpoint. Names are re-checked against the
 /// endpoint's own listing, so this cannot be used to create a row for a model it never reported.</summary>
 public record ImportModelsRequest(string ApiBase, string? ApiKey, IReadOnlyList<string> Names);

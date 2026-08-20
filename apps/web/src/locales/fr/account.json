@@ -520,6 +520,7 @@
   "llmModelsAddAllIntro": "Demandez a un serveur quels modeles il propose, puis choisissez ceux a ajouter. Les modeles hors chat, comme les embeddings et la reconnaissance vocale, sont ecartes.",
   "llmModelsDiscover": "Rechercher",
   "llmModelsDiscoverEmpty": "Aucun modele trouve a cet endpoint.",
+  "llmModelsWillUseEndpoint": "Les modeles seront ajoutes avec l'endpoint {{endpoint}}",
   "llmModelsDiscoverError": "Impossible de joindre cet endpoint.",
   "llmModelsImportFailed": "Impossible d'ajouter ces modeles.",
   "llmModelsAddCount": "Ajouter {{count}} modele",

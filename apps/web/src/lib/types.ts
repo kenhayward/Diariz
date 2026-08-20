@@ -1518,6 +1518,15 @@ export interface DiscoveredModel {
   alreadyExists: boolean;
 }
 
+/// What a server reported, plus the endpoint the models will be created against. `apiBase` is the RESOLVED
+/// endpoint and may differ from the one submitted - an address typed without its `/v1` is corrected to the
+/// path that actually serves completions. Shown in the dialog so the correction is visible: a model row
+/// pointing at the wrong path looks perfectly healthy and simply never answers.
+export interface DiscoverModelsResult {
+  apiBase: string;
+  models: DiscoveredModel[];
+}
+
 /// What an import did. `needContextLength` names the models whose window was defaulted rather than reported.
 export interface ImportModelsResult {
   added: number;

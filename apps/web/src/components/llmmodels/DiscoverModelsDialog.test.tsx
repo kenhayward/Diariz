@@ -8,11 +8,14 @@ vi.mock("../../lib/api", () => ({ api, apiErrorMessage: (e: unknown) => String(e
 
 import DiscoverModelsDialog from "./DiscoverModelsDialog";
 
-const FOUND = [
-  { id: "gpt-4o", contextLength: 128000, contextLengthReported: true, alreadyExists: false },
-  { id: "llama-3.3-70b", contextLength: 16384, contextLengthReported: false, alreadyExists: false },
-  { id: "already-here", contextLength: 8192, contextLengthReported: true, alreadyExists: true },
-];
+const FOUND = {
+  apiBase: "http://lm.test/v1",
+  models: [
+    { id: "gpt-4o", contextLength: 128000, contextLengthReported: true, alreadyExists: false },
+    { id: "llama-3.3-70b", contextLength: 16384, contextLengthReported: false, alreadyExists: false },
+    { id: "already-here", contextLength: 8192, contextLengthReported: true, alreadyExists: true },
+  ],
+};
 
 function open(onImported = vi.fn()) {
   render(<DiscoverModelsDialog onClose={vi.fn()} onImported={onImported} />);
@@ -85,6 +88,36 @@ describe("DiscoverModelsDialog", () => {
     expect((api.importModels as Mock).mock.calls[0][0].apiBase).toBe("http://lm.test/v1");
   });
 
+  it("shows the endpoint the models will be created against", async () => {
+    // The server corrects an address typed without /v1. Applying that silently is what shipped models
+    // that looked healthy and never answered, so the resolved endpoint is put on screen.
+    (api.discoverModels as Mock).mockResolvedValue({
+      apiBase: "http://lm.test:1234/v1",
+      models: [{ id: "gpt-4o", contextLength: 8192, contextLengthReported: true, alreadyExists: false }],
+    });
+    render(<DiscoverModelsDialog onClose={vi.fn()} onImported={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText(/endpoint/i), { target: { value: "http://lm.test:1234" } });
+    fireEvent.click(screen.getByRole("button", { name: /discover/i }));
+
+    expect(await screen.findByText(/http:\/\/lm\.test:1234\/v1/)).toBeTruthy();
+  });
+
+  it("imports against the resolved endpoint, not the one that was typed", async () => {
+    (api.discoverModels as Mock).mockResolvedValue({
+      apiBase: "http://lm.test:1234/v1",
+      models: [{ id: "gpt-4o", contextLength: 8192, contextLengthReported: true, alreadyExists: false }],
+    });
+    render(<DiscoverModelsDialog onClose={vi.fn()} onImported={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText(/endpoint/i), { target: { value: "http://lm.test:1234" } });
+    fireEvent.click(screen.getByRole("button", { name: /discover/i }));
+    await screen.findByRole("checkbox", { name: /gpt-4o/ });
+
+    fireEvent.click(screen.getByRole("button", { name: /add 1 model/i }));
+
+    await waitFor(() => expect(api.importModels).toHaveBeenCalled());
+    expect((api.importModels as Mock).mock.calls[0][0].apiBase).toBe("http://lm.test:1234/v1");
+  });
+
   it("never offers to import a model that already exists", async () => {
     open();
     await screen.findByRole("checkbox", { name: /gpt-4o/ });
@@ -105,7 +138,7 @@ describe("DiscoverModelsDialog", () => {
   });
 
   it("shows an empty state rather than an enabled zero-model import", async () => {
-    (api.discoverModels as Mock).mockResolvedValue([]);
+    (api.discoverModels as Mock).mockResolvedValue({ apiBase: "http://lm.test/v1", models: [] });
     open();
 
     expect(await screen.findByText(/no models/i)).toBeTruthy();

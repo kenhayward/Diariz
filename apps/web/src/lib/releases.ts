@@ -65,6 +65,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.233.0",
+    date: "2026-08-20",
+    pr: 559,
+    headline: "Add all no longer creates models that cannot answer, and a slow reply can be stopped",
+    summary:
+      "Adding models with Add all could produce models that looked perfectly healthy and then never answered.\n\nIf you gave Add all a server address without the /v1 on the end, it still found the models - because the listing it reads to get their names and context sizes sits at the top of the server and answers whatever address you type. The models were then created against that address, and every question sent to one went somewhere the server does not accept chat requests. LM Studio replies to those with a bare acknowledgement and nothing else, so the answer never arrived and the chat simply sat there.\n\nAdd all now checks the address it is going to save, not just that the server is there, and corrects it when it can. The dialog shows the endpoint the models will be created against, so a correction is visible rather than silent. If nothing at the address you gave can accept chat requests, it says so instead of creating models that cannot be used.\n\nSeparately, the send button now turns into a stop button while a reply is on its way, so a request that is taking too long can be abandoned and the box used again straight away. Stopping was already possible, but it was a small grey button that was easy to miss.",
+    fixed: [
+      "Add all now saves the endpoint that actually accepts chat requests, correcting a server address given without its /v1 rather than creating models that never answer.",
+      "Add all refuses, with the reason, when nothing at the given address can accept chat requests.",
+    ],
+    changed: [
+      "The send button becomes a stop button while a reply is on its way, so a slow or unresponsive model can be abandoned without waiting for it to time out.",
+      "The Add all dialog shows the endpoint the models will be created against.",
+    ],
+  },
+  {
     version: "0.232.1",
     date: "2026-08-20",
     pr: 558,

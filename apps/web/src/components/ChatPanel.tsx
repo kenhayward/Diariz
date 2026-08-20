@@ -1028,13 +1028,19 @@ export default function ChatPanel() {
             </button>
           )}
 
+          {/* The send button BECOMES the stop button while a reply is pending, in the same place and the
+              same shape - an endpoint that accepts a request and then never streams is otherwise a panel
+              that looks broken for as long as the server-side idle timeout runs. It was previously a grey
+              text button, which read as disabled chrome rather than the way out. */}
           {streaming ? (
             <button
               type="button"
               onClick={stop}
-              className="rounded bg-gray-200 px-3 py-1.5 text-sm dark:bg-gray-700 dark:text-gray-100"
+              aria-label={t("stop")}
+              title={t("stop")}
+              className="flex items-center justify-center rounded bg-red-600 p-2 text-white hover:bg-red-700"
             >
-              {t("stop")}
+              <StopSquareIcon />
             </button>
           ) : (
             <button
