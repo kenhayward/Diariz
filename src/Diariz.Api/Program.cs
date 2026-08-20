@@ -322,6 +322,9 @@ AddLlmClient<ITranslationClient, TranslationClient>(NoHttpTimeout);
 // logged by LlmTelemetryHandler - a test that spent tokens invisibly would be the one call an admin could
 // not account for.
 AddLlmClient<ILlmTestProbe, LlmTestProbe>(NoHttpTimeout);
+// The single rule for which models chat may use. Both LLM resolvers and the picker endpoint read it, so
+// that "offered for chat" cannot mean three slightly different things.
+builder.Services.AddScoped<IChatModelCatalog, ChatModelCatalog>();
 builder.Services.AddScoped<ILlmSettingsResolver, LlmSettingsResolver>();
 builder.Services.AddHostedService<SummarizationWorker>();
 builder.Services.AddScoped<IFormulaRunner, FormulaRunner>();
