@@ -20,6 +20,22 @@ about, and it updates as you move around:
 
 A context-usage dial shows how much of the model's context window you are using.
 
+## Choosing a model
+
+If your administrator has made more than one model available for chat, the sparkle button beside the
+context dial opens a list of them. Each one shows its name and, in brackets, how much context it can
+hold.
+
+You can switch model in the middle of a conversation. Everything said so far goes across with your next
+question, so the new model carries on from where the last one left off. That makes it easy to try a
+second opinion, or to move up to a model with more room when a long conversation starts to fill the
+dial. The dial updates the moment you choose, so it always shows the window of the model that will
+answer you next.
+
+Your choice is remembered, and it is stored with a conversation when you save one, so reopening it puts
+you back on the model it was using. If your administrator later stops offering that model, the
+conversation falls back to the standard one rather than failing.
+
 ## What you can do
 
 - **Stream replies** as they are generated.
