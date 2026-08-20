@@ -107,13 +107,19 @@ public class ChatController : ControllerBase
         "pre-loaded text. `includeAttachments` pulls the in-scope recordings' attachments into the context - " +
         "files are extracted and URLs fetched, and anything unsupported or unreachable is skipped rather than " +
         "failing the request.\n\n" +
+        "**Choosing a model.** `modelId` picks which model answers this turn, from the list at " +
+        "`GET /api/chat/models`. Omit it to use the platform's chat model. An id that is not on that list " +
+        "is ignored rather than rejected, and the default answers - so a model an administrator stops " +
+        "offering degrades gracefully instead of breaking a saved conversation. Because each request " +
+        "carries the whole history, you may change it between turns and the new model still sees " +
+        "everything said so far.\n\n" +
         "Context is trimmed to fit a character budget, so a very large selection is truncated rather than " +
         "rejected. When you have chat tools enabled the model can also look beyond the supplied context. " +
         "Returns 404 if any selected recording or folder is not visible to you, and 400 when no LLM endpoint " +
         "is configured for you or the platform.")]
     public async Task<IActionResult> Stream(ChatStreamRequest req, CancellationToken ct)
     {
-        var cfg = await _settings.ResolveAsync(LlmCallKind.ChatMessage, ct);
+        var cfg = await _settings.ResolveAsync(LlmCallKind.ChatMessage, req.ModelId, ct);
         if (!cfg.Enabled)
             return BadRequest("Chat is not configured. Set an LLM endpoint in Settings.");
 
@@ -178,7 +184,7 @@ public class ChatController : ControllerBase
         }
         var history = (req.Messages ?? []).Select(m => new ChatMessage(m.Role, m.Content)).ToList();
         var messages = ChatContextBuilder.BuildMessages(system, history);
-        var contextTotal = await _contextResolver.ResolveContextWindowAsync(ct);
+        var contextTotal = await _contextResolver.ResolveContextWindowAsync(req.ModelId, ct);
         var promptTokens = messages.Sum(m => ChatContextMeter.EstimateTokens(m.Content));
         var toolContext = new ChatToolContext(UserId, scopeRecIds);
 

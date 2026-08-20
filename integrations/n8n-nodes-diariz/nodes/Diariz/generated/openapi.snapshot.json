@@ -618,6 +618,13 @@
             },
             "type": "array"
           },
+          "modelId": {
+            "format": "uuid",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "recordingIds": {
             "items": {
               "format": "uuid",
@@ -6777,7 +6784,7 @@
     },
     "/api/chat/stream": {
       "post": {
-        "description": "The chat endpoint. The response is **streamed**, not a single JSON body, so read it incrementally rather than waiting for completion; the final chunk carries a context-usage snapshot.\n\n**Stateless per turn.** Nothing is remembered between calls: send the full message history every time, along with the context you want in scope. `recordingIds` pre-loads those transcripts; `sectionId` additionally prepends a folder's roll-up and widens the scope to every recording beneath it; sending neither means library-wide mode, where the model answers by searching rather than from pre-loaded text. `includeAttachments` pulls the in-scope recordings' attachments into the context - files are extracted and URLs fetched, and anything unsupported or unreachable is skipped rather than failing the request.\n\nContext is trimmed to fit a character budget, so a very large selection is truncated rather than rejected. When you have chat tools enabled the model can also look beyond the supplied context. Returns 404 if any selected recording or folder is not visible to you, and 400 when no LLM endpoint is configured for you or the platform.",
+        "description": "The chat endpoint. The response is **streamed**, not a single JSON body, so read it incrementally rather than waiting for completion; the final chunk carries a context-usage snapshot.\n\n**Stateless per turn.** Nothing is remembered between calls: send the full message history every time, along with the context you want in scope. `recordingIds` pre-loads those transcripts; `sectionId` additionally prepends a folder's roll-up and widens the scope to every recording beneath it; sending neither means library-wide mode, where the model answers by searching rather than from pre-loaded text. `includeAttachments` pulls the in-scope recordings' attachments into the context - files are extracted and URLs fetched, and anything unsupported or unreachable is skipped rather than failing the request.\n\n**Choosing a model.** `modelId` picks which model answers this turn, from the list at `GET /api/chat/models`. Omit it to use the platform's chat model. An id that is not on that list is ignored rather than rejected, and the default answers - so a model an administrator stops offering degrades gracefully instead of breaking a saved conversation. Because each request carries the whole history, you may change it between turns and the new model still sees everything said so far.\n\nContext is trimmed to fit a character budget, so a very large selection is truncated rather than rejected. When you have chat tools enabled the model can also look beyond the supplied context. Returns 404 if any selected recording or folder is not visible to you, and 400 when no LLM endpoint is configured for you or the platform.",
         "requestBody": {
           "content": {
             "application/*+json": {

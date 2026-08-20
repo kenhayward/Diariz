@@ -730,7 +730,13 @@ public record ChatStreamRequest(
     IReadOnlyList<ChatTurnDto> Messages,
     bool IncludeAttachments = false,
     bool SearchAllMeetings = false,
-    Guid? SectionId = null);
+    Guid? SectionId = null,
+    /// <summary>A model from <c>GET /api/chat/models</c> to answer this turn. Null, unknown, or a model the
+    /// platform does not offer for chat all mean the same thing: the administrator's chat model answers.
+    ///
+    /// The request is stateless, so switching model part-way through a conversation needs nothing else -
+    /// the full history is resent every turn and reaches the new model as a matter of course.</summary>
+    Guid? ModelId = null);
 
 /// <summary>Extracted attachment text returned to the client (held and resent with each turn).</summary>
 public record ChatAttachmentDto(string Name, int Chars, string Text);
