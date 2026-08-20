@@ -25,7 +25,7 @@ import {
   type SourceSelection,
 } from "../lib/audioDevices";
 import { connectTrayRecorder, type RecorderState, type TrayBridge } from "../lib/trayRecorder";
-import { setCapturing } from "../lib/chunkReload";
+import { setCapturing } from "../lib/captureState";
 import { useNotesPopout } from "../lib/useNotesPopout";
 import type { NotesState } from "../lib/notesChannel";
 import { onRecordingRequested, type CalendarEventContext, type RecordingRequest } from "../lib/recordRequest";

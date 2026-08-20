@@ -66,4 +66,32 @@ function notificationFor(prev, next) {
   return null;
 }
 
-module.exports = { formatElapsed, trayRecorderItems, trayTooltip, notificationFor };
+/// What to ask before quitting, or null to quit straight away.
+///
+/// Quitting is the one action that can lose a recording outright. The window's own close hides to the tray
+/// rather than unloading, so nothing else tears the renderer down - and the renderer cannot guard this for
+/// itself, because Electron cancels a close as soon as `beforeunload` is handled but shows no dialog, which
+/// would make Quit appear to do nothing at all. So the ask lives here, in the main process.
+///
+/// `uploading` counts: the audio is written to local storage just before the request goes out, so most of
+/// that phase survives - but not the moment before it, and interrupting it still costs the user a recovery
+/// they never asked for.
+function quitConfirmation(state) {
+  const phase = state && state.phase;
+  if (phase !== "recording" && phase !== "uploading") return null;
+  const recording = phase === "recording";
+  return {
+    type: "warning",
+    title: "Diariz",
+    message: recording ? "A recording is still running." : "A recording is still uploading.",
+    detail: recording
+      ? "Quitting now ends it and the audio is lost. Stop the recording first to keep it."
+      : "Quitting now interrupts the upload. It will be offered again next time you open Diariz.",
+    buttons: ["Quit anyway", "Cancel"],
+    // Enter and Escape both cancel: the destructive choice has to be taken deliberately.
+    defaultId: 1,
+    cancelId: 1,
+  };
+}
+
+module.exports = { formatElapsed, trayRecorderItems, trayTooltip, notificationFor, quitConfirmation };

@@ -16,10 +16,11 @@ const {
   nativeImage,
   screen,
   globalShortcut,
+  dialog,
 } = require("electron");
 const Store = require("electron-store");
 const { normalizeServerUrl } = require("./url");
-const { trayRecorderItems, trayTooltip, notificationFor } = require("./recorderState");
+const { trayRecorderItems, trayTooltip, notificationFor, quitConfirmation } = require("./recorderState");
 const { updateRestartItem, notificationForUpdate, isNewerVersion } = require("./updateState");
 const { documentLoadOptions, trayReloadItem } = require("./documentLoad");
 const { buildStartUrl, codeFromArgv, notificationForAuthError } = require("./desktopAuth");
@@ -673,6 +674,10 @@ function notifyUpdate(kind, opts) {
 
 function restartToUpdate() {
   if (!autoUpdater) return;
+  // Confirmed BEFORE `isQuitting` is set: installing an update restarts the app, which ends a recording just
+  // as surely as quitting does. Setting the flag first and then being cancelled would leave the window
+  // closing for real instead of hiding to the tray.
+  if (!confirmQuit()) return;
   isQuitting = true;
   autoUpdater.quitAndInstall();
 }
@@ -1402,9 +1407,29 @@ function refreshTray() {
       { label: "Check for Updates…", click: () => checkForUpdates(true) },
       { label: "Screenshot Hotkey…", click: () => showHotkeyWindow() },
       { label: "Settings…", click: () => showSetupWindow() },
-      { label: "Quit", click: () => { isQuitting = true; app.quit(); } },
+      // No confirmation here: `app.quit()` fires `before-quit`, which is the single gate. Asking in both
+      // places would ask twice.
+      { label: "Quit", click: () => app.quit() },
     ]),
   );
+}
+
+/// Ask before a quit that would destroy a recording. Returns true when the quit should go ahead.
+///
+/// Every quit path funnels through here rather than only the tray item: `before-quit` also fires for the
+/// macOS app menu, the dock, and a signal, and a guard on one entry point is not a guard.
+/// Latched once the user has said yes, so a path that confirms and then calls `app.quit()` is not asked a
+/// second time by `before-quit`. Never reset: the app is on its way out.
+let quitConfirmed = false;
+
+function confirmQuit() {
+  if (quitConfirmed) return true;
+  const ask = quitConfirmation(recorder);
+  if (!ask) return true;
+  // Synchronous on purpose: `before-quit` cannot be paused, so the answer has to arrive before it returns.
+  const ok = dialog.showMessageBoxSync(mainWindow ?? undefined, ask) === 0;
+  if (ok) quitConfirmed = true;
+  return ok;
 }
 
 /// macOS menu-bar icon: a monochrome Template image (black-on-transparent) that macOS recolours for the
@@ -1501,7 +1526,12 @@ if (!app.requestSingleInstanceLock()) {
     app.on("activate", () => showMainWindow());
   });
 
-  app.on("before-quit", () => {
+  app.on("before-quit", (e) => {
+    // Covers the quit paths that never touch the tray item - the macOS app menu, the dock, Cmd-Q.
+    if (!confirmQuit()) {
+      e.preventDefault();
+      return;
+    }
     isQuitting = true;
     // Closed explicitly rather than left to teardown, so its `close` handler runs and the bounds are
     // saved for next time.

@@ -3,9 +3,9 @@ import {
   handlePreloadError,
   installChunkReloadHandler,
   isStaleChunkError,
-  setCapturing,
   type ChunkReloadDeps,
 } from "./chunkReload";
+import { setCapturing } from "./captureState";
 
 /// A sessionStorage stand-in. The real guard has to survive the reload it triggers, which is exactly what
 /// sessionStorage does and a plain variable would not - so the seam is the storage object, not a boolean.

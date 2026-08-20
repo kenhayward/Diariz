@@ -7,6 +7,7 @@ const {
   trayRecorderItems,
   trayTooltip,
   notificationFor,
+  quitConfirmation,
 } = require("./recorderState");
 
 test("formatElapsed renders mm:ss, zero-padded, clamped at zero", () => {
@@ -85,4 +86,28 @@ test("notificationFor fires on start, on uploaded, and on error only", () => {
   // no notification for intermediate / unrelated transitions
   assert.equal(notificationFor({ phase: "recording" }, { phase: "uploading" }), null);
   assert.equal(notificationFor({ phase: "recording", source: "mic" }, { phase: "recording", source: "mic" }), null);
+});
+
+// Quitting while a take is live is the one way to lose a recording outright: the audio lives only in the
+// renderer's memory until the recorder stops, and the window's own close hides to tray rather than
+// unloading, so nothing else asks. The renderer cannot guard this itself - Electron cancels a close when
+// beforeunload is handled but shows no dialog, so a guard there would make Quit silently do nothing.
+test("quitConfirmation asks before quitting mid-recording", () => {
+  const ask = quitConfirmation({ phase: "recording" });
+  assert.ok(ask, "a live recording must be confirmed");
+  assert.match(ask.message, /recording/i);
+  // The destructive button must not be the default one the Enter key presses.
+  assert.equal(ask.defaultId, ask.cancelId);
+});
+
+test("quitConfirmation asks while an upload is still in flight", () => {
+  const ask = quitConfirmation({ phase: "uploading" });
+  assert.ok(ask, "an upload in flight must be confirmed");
+});
+
+test("quitConfirmation does not interrupt an ordinary quit", () => {
+  assert.equal(quitConfirmation({ phase: "idle" }), null);
+  assert.equal(quitConfirmation({ phase: "error" }), null);
+  // Defensive: main.js seeds its state before the renderer has ever reported.
+  assert.equal(quitConfirmation(undefined), null);
 });

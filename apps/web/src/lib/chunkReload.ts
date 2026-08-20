@@ -14,6 +14,8 @@
 /// **cancelable** `vite:preloadError` on `window` and rethrows only if nobody calls `preventDefault()`.
 /// Reloading fetches the current `index.html` (served `no-cache`) and with it the current chunk names.
 
+import { isCapturing as capturing } from "./captureState";
+
 /// When the last automatic reload happened, in `sessionStorage` so it survives the reload it triggered.
 const RELOADED_AT_KEY = "diariz.chunkReloadedAt";
 
@@ -23,22 +25,13 @@ const RELOADED_AT_KEY = "diariz.chunkReloadedAt";
 /// lifts, so a later deploy still recovers on its own.
 const LOOP_WINDOW_MS = 10_000;
 
-/// Set by the Recorder around a capture. Module state rather than React state because the listener below is
-/// installed once at startup, outside the component tree, and has to read this at the moment of failure.
-let capturing = false;
-
-/// Called by the Recorder when a recording or upload starts and finishes.
-export function setCapturing(active: boolean): void {
-  capturing = active;
-}
-
 export interface ChunkReloadDeps {
   reload: () => void;
   storage: Pick<Storage, "getItem" | "setItem">;
   now?: () => number;
   /// True while a recording or upload is in flight. A reload tears the page down and `MediaRecorder` lives
   /// in it, so reloading then would destroy the take - and the desktop tray app is exactly where long
-  /// unattended recordings happen. Defaults to the flag `setCapturing` maintains.
+  /// unattended recordings happen. Defaults to the shared capture state (see `captureState`).
   isCapturing?: () => boolean;
 }
 
@@ -46,7 +39,7 @@ export interface ChunkReloadDeps {
 /// @returns true when it reloaded - the caller should then cancel the event so Vite does not also rethrow.
 export function handlePreloadError(deps: ChunkReloadDeps): boolean {
   const now = deps.now ?? (() => Date.now());
-  const isCapturing = deps.isCapturing ?? (() => capturing);
+  const isCapturing = deps.isCapturing ?? capturing;
 
   if (isCapturing()) return false;
 
