@@ -704,6 +704,14 @@ public record CreateApiTokenRequest(string? Name, bool ReadOnly = false, DateTim
 // ---- Chat ----
 public record ChatTurnDto(string Role, string Content);
 
+/// <summary>One model a chat user may pick.
+///
+/// Deliberately carries no endpoint and no API key: every signed-in user reads this, unlike
+/// <see cref="LlmModelDto"/>, which is administrator-only for exactly that reason.
+/// <paramref name="Name"/> is the slug the server sends as <c>model</c>, present so a client can match a
+/// streamed usage snapshot back to a label rather than rendering the raw slug.</summary>
+public record ChatModelDto(Guid Id, string Label, string Name, int ContextLength, bool IsDefault);
+
 /// <summary>The context a chat turn (or a saved conversation) runs against. <paramref name="SearchAllMeetings"/>
 /// is the "All meetings" mode: no transcripts are pre-loaded and the assistant is told to answer by searching
 /// the user's whole library on demand.</summary>

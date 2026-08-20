@@ -60,6 +60,21 @@ public class ChatModelCatalogTests
     }
 
     [Fact]
+    public async Task Does_not_list_a_model_that_is_not_offered()
+    {
+        // The counterpart to ResolveOfferedAsync's refusal. Without it the picker would advertise a model
+        // the resolver then declines to use, which reads to the user as the choice being ignored.
+        using var db = TestDb.Create();
+        var chat = Seed(db, "chat-model");
+        Seed(db, "expensive-cloud-model", chatEnabled: false);
+        AssignChat(db, chat.Id);
+
+        var options = await new ChatModelCatalog(db).ListAsync();
+
+        Assert.Equal(["chat-model"], options.Select(o => o.Name));
+    }
+
+    [Fact]
     public async Task Falls_back_to_the_platform_default_when_chat_has_no_assignment()
     {
         using var db = TestDb.Create();
