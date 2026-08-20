@@ -1580,12 +1580,16 @@ export interface LlmTestOutcome {
   message: string | null;
   /// Which parameter the endpoint blamed, when it named one.
   offendingParameter: string | null;
-  /// Which shape `parsedJson` holds - "Tags" | "Actions" | "Summary" - or null when this group ran the
+  /// Which shape `parsed` holds - "Tags" | "Actions" | "Summary" - or null when this group ran the
   /// built-in sample, or the call failed.
   parsedKind: string | null;
-  /// The reply run through the pipeline's own parser, serialised. An empty array is a real answer: the
-  /// pipeline would have extracted nothing.
-  parsedJson: string | null;
+  /// The reply run through the pipeline's own parser: `ParsedTag[]`, `ParsedAction[]`, or `ParsedSummary`,
+  /// per `parsedKind`. An empty array is a real answer - the pipeline would have extracted nothing. Null
+  /// when this group ran the built-in sample, or the call failed.
+  ///
+  /// A real object, not a JSON string. It was a string in 0.235.0, hand-serialized on the server with
+  /// PascalCase property names inside a camelCase response, so nothing here could read it.
+  parsed: ParsedTag[] | ParsedAction[] | ParsedSummary | null;
 }
 
 /// The recording an administrator tests models against. Both null when nothing is chosen, or the chosen
@@ -1595,7 +1599,7 @@ export interface LlmTestRecording {
   title: string | null;
 }
 
-/// The three shapes `LlmTestOutcome.parsedJson` can hold, matching the server's own extraction records.
+/// The three shapes `LlmTestOutcome.parsed` can hold, matching the server's own extraction records.
 export interface ParsedTag {
   tag: string;
   weight: number;

@@ -129,10 +129,15 @@ public class LlmSettingsResolverTests
     }
 
     [Fact]
-    public async Task Keeps_the_tuned_platform_timeout_only_while_falling_back_to_the_environment()
+    public async Task Keeps_the_tuned_platform_timeout_whether_or_not_a_model_row_exists()
     {
-        // The admin's platform timeout could not be migrated into a model row (the endpoint lives in
-        // configuration, not the database), so the fallback honours it - and a real model does not.
+        // REVERSED in 0.235.1. This used to assert the opposite for the second case - a model row made the
+        // platform timeout inert - which was the 0.221.0 position that the timeout had become a per-model
+        // parameter. It could not survive contact with the UI: the Settings control still promises a
+        // "platform-wide request timeout for every AI call", so an administrator who raised it to 600 for a
+        // slow local model got 120 and a failure that looks like a dead endpoint. Either the control had to
+        // go or the value had to be honoured; honouring it keeps per-model tuning intact, because the
+        // platform value sits BELOW a model's own layers.
         using var db = TestDb.Create();
         db.PlatformSettings.Add(new PlatformSettings { Id = PlatformSettings.SingletonId, LlmTimeoutSeconds = 900 });
         await db.SaveChangesAsync();
@@ -144,7 +149,7 @@ public class LlmSettingsResolverTests
         ps.DefaultLlmModelId = model.Id;
         await db.SaveChangesAsync();
 
-        Assert.Equal(120, (await Build(db).ResolveAsync(LlmCallKind.Summarize)).TimeoutSeconds);
+        Assert.Equal(900, (await Build(db).ResolveAsync(LlmCallKind.Summarize)).TimeoutSeconds);
     }
 
     [Fact]
@@ -324,5 +329,63 @@ public class LlmSettingsResolverTests
         var cfg = await Build(db).ResolveAsync(LlmCallKind.ChatMessage, null);
 
         Assert.Equal("chat-model", cfg.Model);
+    }
+
+    [Fact]
+    public async Task Honours_the_administrators_platform_timeout_for_a_model_row()
+    {
+        // Regression, 0.235.1. The Settings control promises "platform-wide request timeout for EVERY AI
+        // call", but the value was read only on the environment-fallback path - so the moment a deployment
+        // configured its first model it became inert, and every call silently reverted to the shipped 120.
+        // A 27b model on a local server needs more than that, and the failure looks like a dead endpoint.
+        using var db = TestDb.Create();
+        var model = Seed(db, "big-model", "http://big/v1");
+        db.PlatformSettings.Add(new PlatformSettings
+        {
+            Id = PlatformSettings.SingletonId, DefaultLlmModelId = model.Id, LlmTimeoutSeconds = 600,
+        });
+        await db.SaveChangesAsync();
+
+        Assert.Equal(600, (await Build(db).ResolveAsync(LlmCallKind.Summarize)).TimeoutSeconds);
+    }
+
+    [Fact]
+    public async Task A_models_own_timeout_still_beats_the_platform_one()
+    {
+        // The platform value is a floor for models that say nothing, not an override. Per-model tuning is
+        // the whole point of the parameter drawer, and it has to keep winning.
+        using var db = TestDb.Create();
+        var model = Seed(db, "big-model", "http://big/v1");
+        db.LlmModelParameters.Add(new LlmModelParameters
+        {
+            Id = Guid.NewGuid(), LlmModelId = model.Id, Group = LlmCallGroup.ModelBase,
+            ParametersJson = "{\"timeout_seconds\":90}",
+        });
+        db.PlatformSettings.Add(new PlatformSettings
+        {
+            Id = PlatformSettings.SingletonId, DefaultLlmModelId = model.Id, LlmTimeoutSeconds = 600,
+        });
+        await db.SaveChangesAsync();
+
+        Assert.Equal(90, (await Build(db).ResolveAsync(LlmCallKind.Summarize)).TimeoutSeconds);
+    }
+
+    [Fact]
+    public async Task Leaves_the_configured_default_alone_when_the_admin_never_changed_it()
+    {
+        // An operator can set LlmDefaults__TimeoutSeconds in configuration. The platform row defaults to 120
+        // and must not silently outrank that just by existing - only a value the admin actually changed
+        // should speak.
+        using var db = TestDb.Create();
+        var model = Seed(db, "big-model", "http://big/v1");
+        db.PlatformSettings.Add(new PlatformSettings
+        {
+            Id = PlatformSettings.SingletonId, DefaultLlmModelId = model.Id,
+            LlmTimeoutSeconds = PlatformSettings.DefaultLlmTimeoutSeconds,
+        });
+        await db.SaveChangesAsync();
+        var defaults = new LlmDefaultsOptions { TimeoutSeconds = 45 };
+
+        Assert.Equal(45, (await Build(db, defaults).ResolveAsync(LlmCallKind.Summarize)).TimeoutSeconds);
     }
 }

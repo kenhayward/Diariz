@@ -57,8 +57,14 @@ export default function RecordingPicker({ value, onChange, disabled }: Props) {
 
   const label = (r: RecordingSummary) => r.name ?? r.title;
 
+  // Newest first: the recording you want to test against is almost always the one you just made, and the
+  // listing arrives in the API's own order rather than this one.
   const testable = useMemo(
-    () => (recordings ?? []).filter((r) => TESTABLE.has(r.status)),
+    () =>
+      (recordings ?? [])
+        .filter((r) => TESTABLE.has(r.status))
+        .slice()
+        .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
     [recordings],
   );
   const matches = useMemo(() => {

@@ -78,7 +78,9 @@ export default function ModelEditorDrawer({
   const [apiKey, setApiKey] = useState<string | undefined>(undefined);
   const [layers, setLayers] = useState<Layers>(() => toLayers(model));
   const [tab, setTab] = useState<string>("ModelBase");
-  const [showConnection, setShowConnection] = useState(model === null);
+  // Expanded from the start. The endpoint and context window are what the drawer is most often
+  // opened to check, so collapsing them made the first action on every visit the same click.
+  const [showConnection, setShowConnection] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   /// Per tab, because the results are not comparable across call types: each ran with different

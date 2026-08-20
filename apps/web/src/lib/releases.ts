@@ -65,6 +65,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.235.1",
+    date: "2026-08-20",
+    pr: 563,
+    headline: "The LLM timeout setting works again, and a good test answer no longer reports as nothing",
+    summary:
+      "Two fixes to the AI model settings, both found while testing models against real recordings.\n\n**The LLM timeout was being ignored.** The Settings box promises a \"platform-wide request timeout for every AI call\", but the value had only ever been read on deployments with no configured models. The moment a platform added its first model it went inert, and every call quietly reverted to the built-in 120 seconds - so an administrator who raised it to 600 for a large local model still saw calls give up after two minutes, which looks exactly like a dead endpoint. The setting now applies to every call, and a timeout set on an individual model still takes precedence over it.\n\n**A good answer could report as nothing.** Testing a model against one of your recordings could say \"the pipeline would have extracted no summary from this reply\" while the summary sat right there under Raw reply. The parsed answer was being packed into the response as a block of text whose field names did not match what the page was looking for. It is now part of the response proper, so there is only one thing doing the naming.\n\nAlso in this release: the model drawer opens with its connection details already showing, Add all no longer arrives with every model on the server pre-ticked (a Select all link covers the bulk case, and models you already have are shown ticked because they are already there), and the recording picker lists your newest recordings first.",
+    fixed: [
+      "The platform LLM timeout applies to every AI call again. It had been ignored on any platform with a configured model, silently falling back to 120 seconds.",
+      "A successful model test against a recording now shows the tags, action items or summary it produced, instead of reporting that nothing was extracted.",
+    ],
+    changed: [
+      "The model drawer opens with the connection details expanded rather than collapsed.",
+      "Add all no longer pre-ticks every model it finds. Models already in your list are shown ticked, anything new is yours to choose, and Select all adds the lot in one press.",
+      "The recording picker in the test panel lists the newest recording first.",
+    ],
+  },
+  {
     version: "0.235.0",
     date: "2026-08-20",
     pr: 562,

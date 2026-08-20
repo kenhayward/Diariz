@@ -3,16 +3,9 @@ import type { ParsedAction, ParsedSummary, ParsedTag } from "../../lib/types";
 
 interface Props {
   parsedKind: string;
-  parsedJson: string;
-}
-
-function parse<T>(json: string): T | null {
-  try {
-    return JSON.parse(json) as T;
-  } catch {
-    // A display concern must never take the drawer down, and the raw reply is shown alongside this anyway.
-    return null;
-  }
+  /// Already an object - the server hands back the parsed result itself rather than a JSON string, so the
+  /// envelope's serializer names every property and the two cannot disagree on casing.
+  parsed: ParsedTag[] | ParsedAction[] | ParsedSummary;
 }
 
 /// The model's reply as the PIPELINE understood it - not as the model wrote it.
@@ -20,11 +13,11 @@ function parse<T>(json: string): T | null {
 /// This is what makes the test panel answer "is this model any good at this job" rather than only "does
 /// this endpoint answer". An empty extraction is the state worth designing for: the call succeeded, spent
 /// tokens, and would still have left the recording with no tags. It gets a sentence, not an empty box.
-export default function ParsedResult({ parsedKind, parsedJson }: Props) {
+export default function ParsedResult({ parsedKind, parsed }: Props) {
   const { t } = useTranslation("account");
 
   if (parsedKind === "Summary") {
-    const summary = parse<ParsedSummary>(parsedJson);
+    const summary = parsed as ParsedSummary | null;
     if (!summary?.summary) return <Nothing kind={t("llmTestParsedSummary")} />;
     return (
       <div className="space-y-1">
@@ -40,8 +33,8 @@ export default function ParsedResult({ parsedKind, parsedJson }: Props) {
   }
 
   if (parsedKind === "Tags") {
-    const tags = parse<ParsedTag[]>(parsedJson);
-    if (!tags?.length) return <Nothing kind={t("llmTestParsedTags")} />;
+    const tags = parsed as ParsedTag[] | null;
+    if (!Array.isArray(tags) || tags.length === 0) return <Nothing kind={t("llmTestParsedTags")} />;
     return (
       <ul className="flex flex-wrap gap-1.5">
         {tags.map((tag) => (
@@ -58,8 +51,8 @@ export default function ParsedResult({ parsedKind, parsedJson }: Props) {
   }
 
   if (parsedKind === "Actions") {
-    const actions = parse<ParsedAction[]>(parsedJson);
-    if (!actions?.length) return <Nothing kind={t("llmTestParsedActions")} />;
+    const actions = parsed as ParsedAction[] | null;
+    if (!Array.isArray(actions) || actions.length === 0) return <Nothing kind={t("llmTestParsedActions")} />;
     return (
       // Its own scroll container: a long meeting's actions must not push the drawer sideways.
       <div className="overflow-x-auto">

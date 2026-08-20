@@ -142,13 +142,13 @@ export default function TestResultCard({
               : t("llmTestResponse")}
         </h4>
         {result.ok ? (
-          result.parsedKind && result.parsedJson ? (
+          result.parsedKind && result.parsed ? (
             <>
               {/* Parsed first, raw behind a disclosure: for a recording-backed test the useful answer is
                   what the pipeline WOULD have stored, and the model's own prose is the follow-up question.
                   The four sample-transcript groups have nothing to parse and keep the plain paragraph. */}
               <div className="mt-1.5">
-                <ParsedResult parsedKind={result.parsedKind} parsedJson={result.parsedJson} />
+                <ParsedResult parsedKind={result.parsedKind} parsed={result.parsed} />
               </div>
               <details className="mt-2">
                 <summary className="cursor-pointer text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">

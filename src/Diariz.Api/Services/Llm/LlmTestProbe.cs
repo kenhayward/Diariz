@@ -33,16 +33,24 @@ public sealed record LlmTestOutcome(
     /// <summary>Which of the thirteen parameters the endpoint blamed, when it named one. Drives the
     /// editor's one-click "omit this here" fix.</summary>
     string? OffendingParameter,
-    /// <summary>Which shape <see cref="ParsedJson"/> holds - Tags, Actions or Summary - or null when this
+    /// <summary>Which shape <see cref="Parsed"/> holds - Tags, Actions or Summary - or null when this
     /// group ran the built-in sample, or the call failed.</summary>
     string? ParsedKind = null,
-    /// <summary>The reply run through the pipeline's OWN parser, serialised. An empty array is a real and
-    /// important answer: it means the pipeline would have extracted nothing from this model's reply.
-    /// Null when nothing was parsed.
+    /// <summary>The reply run through the pipeline's OWN parser: an <c>IReadOnlyList&lt;ExtractedTag&gt;</c>,
+    /// an <c>IReadOnlyList&lt;ExtractedAction&gt;</c>, or a <c>SummaryResult</c>, per
+    /// <see cref="ParsedKind"/>. An EMPTY list is a real and important answer - it means the pipeline would
+    /// have extracted nothing from this model's reply. Null when nothing was parsed (a sample-transcript
+    /// group, or a failed call).
+    ///
+    /// <para>A real object, not a JSON string. It used to be the latter, and the string was built by a bare
+    /// <c>JsonSerializer.Serialize</c> while ASP.NET camelCased the envelope around it - so the response
+    /// said <c>parsedJson</c> on the outside and <c>Summary</c> on the inside, and the browser read
+    /// nothing. Handing back the object lets one serializer name every property, which is the only way the
+    /// two cannot disagree.</para>
     ///
     /// <para>Defaulted, so the probe's own construction sites are unchanged - it never parses. Parsing is
     /// the controller's job, because only it knows which call group ran.</para></summary>
-    string? ParsedJson = null);
+    object? Parsed = null);
 
 public interface ILlmTestProbe
 {

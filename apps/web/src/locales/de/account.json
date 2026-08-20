@@ -521,6 +521,8 @@
   "llmModelsDiscover": "Suchen",
   "llmModelsDiscoverEmpty": "An diesem Endpunkt wurden keine Modelle gefunden.",
   "llmModelsWillUseEndpoint": "Modelle werden mit dem Endpunkt {{endpoint}} hinzugefügt",
+  "llmModelsSelectAll": "Alle auswaehlen",
+  "llmModelsClearAll": "Zuruecksetzen",
   "llmModelsDiscoverError": "Dieser Endpunkt war nicht erreichbar.",
   "llmModelsImportFailed": "Diese Modelle konnten nicht hinzugefügt werden.",
   "llmModelsAddCount": "{{count}} Modell hinzufügen",
