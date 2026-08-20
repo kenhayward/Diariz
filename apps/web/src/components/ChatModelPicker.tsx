@@ -59,7 +59,7 @@ export default function ChatModelPicker({ models, selectedId, disabled = false, 
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-30 mt-1 max-h-64 w-64 overflow-y-auto rounded-md border bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800"
+          className="absolute right-0 top-full z-30 mt-1 max-h-64 w-72 max-w-[calc(100vw-2rem)] overflow-y-auto overflow-x-hidden rounded-md border bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800"
         >
           {models.map((m) => (
             <button
@@ -71,12 +71,21 @@ export default function ChatModelPicker({ models, selectedId, disabled = false, 
                 onSelect(m.id);
                 setOpen(false);
               }}
-              className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700 ${
+              // A FLEX row, and the label a flex item with min-w-0. `truncate` on the inline span it used
+              // to be contributed only its `white-space: nowrap` - overflow and text-overflow do not apply
+              // to a non-replaced inline box - so a long imported slug could neither wrap nor ellipsise:
+              // it overflowed the menu (giving it a horizontal scrollbar, since overflow-y:auto makes
+              // overflow-x compute to auto) and pushed the context length onto a second line, where it was
+              // off the right-hand edge and invisible. Measured before and after in a browser: 421px of
+              // scroll width in a 241px box, and rows at 54px instead of 33px.
+              // min-w-0 is load-bearing: without it a flex item refuses to shrink below its content.
+              title={m.label}
+              className={`flex w-full items-baseline gap-1.5 px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700 ${
                 m.id === selected?.id ? "font-medium text-indigo-600 dark:text-indigo-400" : ""
               }`}
             >
-              <span className="truncate">{m.label}</span>{" "}
-              <span className="text-[11px] tabular-nums text-gray-500 dark:text-gray-400">
+              <span className="min-w-0 truncate">{m.label}</span>
+              <span className="shrink-0 text-[11px] tabular-nums text-gray-500 dark:text-gray-400">
                 ({m.contextLength.toLocaleString()} {t("ctxSuffix")})
               </span>
             </button>

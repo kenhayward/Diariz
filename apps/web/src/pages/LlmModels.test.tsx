@@ -1,6 +1,6 @@
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const authState = { isPlatformAdmin: true };
@@ -13,6 +13,7 @@ const { api } = vi.hoisted(() => ({
     getLlmAssignments: vi.fn().mockResolvedValue({ defaultModelId: null, assignments: {} }),
     getLlmModelDefaults: vi.fn().mockResolvedValue({}),
     setLlmAssignments: vi.fn(),
+    setModelChatEnabled: vi.fn(),
     createModelFromEnvironment: vi.fn(),
     testModel: vi.fn(),
     deleteModel: vi.fn(),
@@ -21,6 +22,30 @@ const { api } = vi.hoisted(() => ({
 vi.mock("../lib/api", () => ({ api, apiErrorMessage: (e: unknown) => String(e) }));
 
 import LlmModels from "./LlmModels";
+import { CHAT_MODELS_KEY } from "../lib/modelQueryKeys";
+
+/// Stands in for the mounted ChatPanel, holding the picker's query in the SAME QueryClient. Without an
+/// active observer an invalidation only marks the entry stale, so a passive cache check would not prove the
+/// picker actually reloads.
+function PickerProbe({ queryFn }: { queryFn: () => Promise<unknown> }) {
+  // The SHARED key, not a copy of it - a hardcoded key here would keep passing after ChatPanel moved to a
+  // different one, which is precisely the drift that caused the bug.
+  useQuery({ queryKey: CHAT_MODELS_KEY, queryFn });
+  return null;
+}
+
+function renderPageWithPicker(queryFn: () => Promise<unknown>) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>
+        <LlmModels />
+        <PickerProbe queryFn={queryFn} />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  return qc;
+}
 
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -99,5 +124,42 @@ describe("LlmModels", () => {
     });
 
     await vi.waitFor(() => expect(api.testModel).toHaveBeenCalledTimes(2));
+  });
+
+  // ---- Keeping the chat picker in step with the model list ----
+
+  const MODEL = {
+    id: "a", name: "gpt-oss-20b", displayName: null, apiBase: "http://a/v1", hasApiKey: false,
+    chatEnabled: false, contextLength: 8192, parameters: {},
+  };
+
+  it("reloads the chat model picker when a model is offered for chat", async () => {
+    // The picker reads its own query key. Nothing on this page knew about that key, so ticking In chat
+    // updated the grid and left the picker showing the previous set until the whole app was reloaded.
+    api.listModels.mockResolvedValue([MODEL]);
+    api.setModelChatEnabled.mockResolvedValue(undefined);
+    const listChatModels = vi.fn().mockResolvedValue([]);
+
+    renderPageWithPicker(listChatModels);
+    await waitFor(() => expect(listChatModels).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(await screen.findByRole("checkbox", { name: /gpt-oss-20b/i }));
+
+    await waitFor(() => expect(listChatModels).toHaveBeenCalledTimes(2));
+  });
+
+  it("reloads the chat model picker when the routing changes", async () => {
+    // Moving the Chat dot changes which model the picker marks as the default, and which one it offers
+    // implicitly - so a routing write has to reach it too, even though it writes a different resource.
+    api.listModels.mockResolvedValue([MODEL]);
+    api.setLlmAssignments.mockResolvedValue(undefined);
+    const listChatModels = vi.fn().mockResolvedValue([]);
+
+    renderPageWithPicker(listChatModels);
+    await waitFor(() => expect(listChatModels).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(await screen.findByRole("radio", { name: /chat on gpt-oss-20b/i }));
+
+    await waitFor(() => expect(listChatModels).toHaveBeenCalledTimes(2));
   });
 });
