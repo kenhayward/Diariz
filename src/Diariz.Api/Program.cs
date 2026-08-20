@@ -322,6 +322,12 @@ AddLlmClient<ITranslationClient, TranslationClient>(NoHttpTimeout);
 // logged by LlmTelemetryHandler - a test that spent tokens invisibly would be the one call an admin could
 // not account for.
 AddLlmClient<ILlmTestProbe, LlmTestProbe>(NoHttpTimeout);
+// Model discovery: the one outbound call that takes an administrator-supplied URL. Auto-redirect OFF so a
+// cooperating host cannot 3xx its way to a different (possibly internal) address after the administrator
+// named a benign one - the same reasoning as the "webhooks" and "url-attachments" clients below. NOT an
+// LLM client: it spends no tokens, so LlmTelemetryHandler would only ever record an empty call.
+builder.Services.AddHttpClient<ILlmModelDiscoveryClient, LlmModelDiscoveryClient>()
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
 // The single rule for which models chat may use. Both LLM resolvers and the picker endpoint read it, so
 // that "offered for chat" cannot mean three slightly different things.
 builder.Services.AddScoped<IChatModelCatalog, ChatModelCatalog>();

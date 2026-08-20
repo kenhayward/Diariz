@@ -183,6 +183,25 @@ public sealed class FakeLlmSettingsResolver : ILlmSettingsResolver
     }
 }
 
+/// <summary>Returns a scripted model listing and records what it was asked for, so the controller's
+/// filtering and import can be tested without a server to talk to.</summary>
+public sealed class FakeLlmModelDiscoveryClient : ILlmModelDiscoveryClient
+{
+    public List<DiscoveredModel> Models { get; set; } = [];
+    public string? LastApiBase { get; private set; }
+    public string? LastApiKey { get; private set; }
+    public int Calls { get; private set; }
+
+    public Task<IReadOnlyList<DiscoveredModel>> ListAsync(
+        string apiBase, string? apiKey, CancellationToken ct = default)
+    {
+        Calls++;
+        LastApiBase = apiBase;
+        LastApiKey = apiKey;
+        return Task.FromResult<IReadOnlyList<DiscoveredModel>>(Models);
+    }
+}
+
 /// <summary>Reversible stand-in for the Data Protection key protector (prefixes instead of encrypts).</summary>
 public sealed class FakeApiKeyProtector : IApiKeyProtector
 {

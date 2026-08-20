@@ -25,7 +25,8 @@ public class LlmModelsControllerTests
         new(db, new FakeApiKeyProtector(),
             Options.Create(new SummarizationOptions { ApiBase = "http://env/v1", Model = "env-model" }),
             Options.Create(defaults ?? new LlmDefaultsOptions()),
-            probe ?? new FakeLlmTestProbe())
+            probe ?? new FakeLlmTestProbe(),
+            new FakeLlmModelDiscoveryClient())
         { ControllerContext = Http.Context(Guid.NewGuid()) };
 
     private static LlmModel Seed(DiarizDbContext db, string name = "m", string? key = "enc:secret")
