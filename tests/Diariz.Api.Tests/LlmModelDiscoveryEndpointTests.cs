@@ -1,6 +1,7 @@
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
+using Diariz.Api.Services;
 using Diariz.Api.Services.Llm;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
@@ -23,7 +24,9 @@ public class LlmModelDiscoveryEndpointTests
             Options.Create(new SummarizationOptions { ApiBase = "http://env/v1", Model = "env-model" }),
             Options.Create(new LlmDefaultsOptions()),
             new FakeLlmTestProbe(),
-            discovery)
+            discovery,
+            // Discovery never builds a prompt; supplied only because the controller needs one.
+            new LlmTestPromptFactory(db, new FilePromptTemplateProvider("prompts")))
         { ControllerContext = Http.Context(Guid.NewGuid()) };
 
     private static FakeLlmModelDiscoveryClient Found(params DiscoveredModel[] models) =>

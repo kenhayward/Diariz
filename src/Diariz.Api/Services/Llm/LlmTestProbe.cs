@@ -32,7 +32,17 @@ public sealed record LlmTestOutcome(
     string? Message,
     /// <summary>Which of the thirteen parameters the endpoint blamed, when it named one. Drives the
     /// editor's one-click "omit this here" fix.</summary>
-    string? OffendingParameter);
+    string? OffendingParameter,
+    /// <summary>Which shape <see cref="ParsedJson"/> holds - Tags, Actions or Summary - or null when this
+    /// group ran the built-in sample, or the call failed.</summary>
+    string? ParsedKind = null,
+    /// <summary>The reply run through the pipeline's OWN parser, serialised. An empty array is a real and
+    /// important answer: it means the pipeline would have extracted nothing from this model's reply.
+    /// Null when nothing was parsed.
+    ///
+    /// <para>Defaulted, so the probe's own construction sites are unchanged - it never parses. Parsing is
+    /// the controller's job, because only it knows which call group ran.</para></summary>
+    string? ParsedJson = null);
 
 public interface ILlmTestProbe
 {
