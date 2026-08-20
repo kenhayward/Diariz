@@ -40,6 +40,7 @@ import {
   type DictationEngine,
 } from "../lib/dictationEngine";
 import ChatModelPicker from "./ChatModelPicker";
+import { CHAT_MODELS_KEY } from "../lib/modelQueryKeys";
 import ContextDial from "./ContextDial";
 import PickRecordingModal from "./PickRecordingModal";
 
@@ -89,7 +90,7 @@ export default function ChatPanel() {
   const { data: settings } = useQuery({ queryKey: ["user-settings"], queryFn: api.getUserSettings });
   // The models an administrator offers for chat. Always fetched, even on a single-model platform: the
   // picker is always shown, so there is always a list to render.
-  const { data: chatModels } = useQuery({ queryKey: ["chat-models"], queryFn: api.listChatModels });
+  const { data: chatModels } = useQuery({ queryKey: CHAT_MODELS_KEY, queryFn: api.listChatModels });
 
   // The chosen model. Seeded once from the remembered user setting, then owned locally so a pick takes
   // effect immediately rather than after a settings refetch.

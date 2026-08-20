@@ -64,7 +64,13 @@ export default function LlmModels({ embedded = false, onOpenUsageLog }: Props = 
   const saveAssignments = useMutation({
     mutationFn: (next: { defaultModelId: string | null; assignments: Record<string, string> }) =>
       api.setLlmAssignments(next),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["llm-assignments"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["llm-assignments"] });
+      // Routing is a different resource, but moving the Chat dot changes which model the chat picker marks
+      // as the default and offers implicitly - so the picker, keyed under ["llm-models"], has to hear about
+      // it too. Every other model write reaches it by prefix already; this is the one that would not.
+      queryClient.invalidateQueries({ queryKey: ["llm-models"] });
+    },
     onError: (e) => setError(apiErrorMessage(e, t("llmModelsAssignError"))),
   });
 

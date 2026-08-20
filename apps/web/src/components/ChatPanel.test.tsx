@@ -79,6 +79,7 @@ function Seed({ ids }: { ids: string[] }) {
 
 function renderPanel(route = "/recordings/rec-1", seedSelected: string[] = []) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  lastClient = qc;
   return render(
     <QueryClientProvider client={qc}>
       <SelectionProvider>
@@ -90,6 +91,9 @@ function renderPanel(route = "/recordings/rec-1", seedSelected: string[] = []) {
     </QueryClientProvider>,
   );
 }
+
+/// The QueryClient of the most recent renderPanel, so a test can invalidate exactly as the admin page does.
+let lastClient: QueryClient;
 
 const mock = (fn: unknown) => fn as ReturnType<typeof vi.fn>;
 
@@ -578,6 +582,22 @@ describe("ChatPanel", () => {
 
       expect((screen.getByRole("button", { name: /model/i }) as HTMLButtonElement).disabled).toBe(true);
       await act(async () => release!());
+    });
+
+    it("reloads its models when the admin model list is invalidated", async () => {
+      // The contract that keeps the picker in step with the AI models screen: this query must live UNDER
+      // ["llm-models"], so every admin write reaches it by prefix. Keyed independently - as it first was -
+      // an administrator could tick a model into the picker and the picker would never hear about it,
+      // because the settings modal opens over the app without blurring the window, so refetch-on-focus
+      // never fires either.
+      renderPanel("/recordings/rec-1");
+      await waitFor(() => expect(api.listChatModels).toHaveBeenCalledTimes(1));
+
+      await act(async () => {
+        await lastClient.invalidateQueries({ queryKey: ["llm-models"] });
+      });
+
+      await waitFor(() => expect(api.listChatModels).toHaveBeenCalledTimes(2));
     });
 
     it("saves the conversation's model and restores it on reopen", async () => {

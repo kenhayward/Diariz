@@ -65,6 +65,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.232.1",
+    date: "2026-08-20",
+    pr: 558,
+    headline: "Chat model picker: long names fit, and the list keeps up with your changes",
+    summary:
+      "Two problems with the new chat model picker, both found in real use.\n\nLong model names broke the list. A name imported from a server is whatever that server calls it, which is often far too long for the menu - and instead of being shortened it ran off the side, giving the list a sideways scrollbar and pushing the context length onto a second line where it could not be seen at all. Names are now shortened with an ellipsis, the context length always sits on the same line, and hovering a row shows the full name.\n\nThe picker also did not notice changes made on the AI models screen. Ticking a model into the picker, renaming one or deleting one updated that screen but left the picker showing the previous set until the whole app was reloaded. It now refreshes as soon as anything about the models changes, including moving which model chat runs on by default.",
+    fixed: [
+      "A long model name no longer overflows the chat model picker; names are shortened with an ellipsis and the full name is shown on hover.",
+      "The context length is always visible beside the model name, instead of wrapping out of sight on longer names.",
+      "The picker reloads as soon as models are added, renamed, deleted, or offered for chat, rather than waiting for the whole app to be reloaded.",
+    ],
+  },
+  {
     version: "0.232.0",
     date: "2026-08-20",
     pr: 557,

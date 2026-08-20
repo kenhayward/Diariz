@@ -84,6 +84,15 @@ describe("ChatModelPicker", () => {
     expect(screen.getByRole("button", { name: /QWEN 3\.8/ })).toBeTruthy();
   });
 
+  it("keeps the full name reachable when a long one is shortened", () => {
+    // Imported models carry the endpoint's own slug, which is routinely too long for the menu. The row
+    // ellipsises rather than overflowing, so the whole name has to stay available somewhere.
+    open();
+
+    const row = screen.getByRole("menuitemradio", { name: /QWEN 3\.8/ });
+    expect(row.getAttribute("title")).toBe("QWEN 3.8");
+  });
+
   it("closes on Escape without selecting", () => {
     const onSelect = open();
 
