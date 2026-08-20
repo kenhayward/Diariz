@@ -495,6 +495,24 @@ const GENERATED: GeneratedResource[] = [
     ]
   },
   {
+    "tag": "ChatModels",
+    "displayName": "Chat Model",
+    "value": "chatModels",
+    "operations": [
+      {
+        "value": "listTheModelsYouCanChatWith",
+        "displayName": "List the models you can chat with",
+        "description": "The models a Platform Administrator offers for chat: the default first, then the rest by name. Pass an id from this list as modelId on a chat request to have that model answer the turn; a model that is not in this list is ignored and the default answers instead.",
+        "method": "GET",
+        "path": "/api/chat/models",
+        "pathParams": [],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": true
+      }
+    ]
+  },
+  {
     "tag": "Feedback",
     "displayName": "Feedback",
     "value": "feedback",
