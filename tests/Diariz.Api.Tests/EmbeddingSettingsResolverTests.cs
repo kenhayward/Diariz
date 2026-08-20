@@ -14,7 +14,8 @@ public class EmbeddingSettingsResolverTests
     private static EmbeddingSettingsResolver Build(
         Diariz.Domain.DiarizDbContext db, EmbeddingOptions emb, SummarizationOptions summary) =>
         new(db, Options.Create(emb), new LlmSettingsResolver(
-            db, Options.Create(new LlmDefaultsOptions()), Options.Create(summary), new FakeApiKeyProtector()));
+            db, Options.Create(new LlmDefaultsOptions()), Options.Create(summary), new FakeApiKeyProtector(),
+            new ChatModelCatalog(db)));
 
     private static LlmModel Seed(Diariz.Domain.DiarizDbContext db, string apiBase, string? key = null)
     {

@@ -169,9 +169,16 @@ public sealed class FakeLlmSettingsResolver : ILlmSettingsResolver
     /// right.</summary>
     public LlmCallKind? LastKind { get; private set; }
 
-    public Task<LlmRequestConfig> ResolveAsync(LlmCallKind kind, CancellationToken ct = default)
+    /// <summary>The model override of the last call. Chat is the only caller that sends one, so this is how
+    /// a test proves a request's ModelId actually reached the resolver - the decision about whether to
+    /// honour it belongs to the real resolver, not here.</summary>
+    public Guid? LastModelOverride { get; private set; }
+
+    public Task<LlmRequestConfig> ResolveAsync(
+        LlmCallKind kind, Guid? modelOverride, CancellationToken ct = default)
     {
         LastKind = kind;
+        LastModelOverride = modelOverride;
         return Task.FromResult(Config);
     }
 }

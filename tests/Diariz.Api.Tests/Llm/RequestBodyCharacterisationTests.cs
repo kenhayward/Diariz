@@ -51,6 +51,7 @@ public class RequestBodyCharacterisationTests
                 ApiBase = "http://llm.test/v1", ApiKey = "k", Model = "test-model",
             }),
             new FakeApiKeyProtector(),
+            new ChatModelCatalog(db),
             Options.Create(new ChatOptions()));
 
         return await resolver.ResolveAsync(kind);

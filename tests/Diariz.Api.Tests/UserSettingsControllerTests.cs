@@ -22,9 +22,9 @@ public class UserSettingsControllerTests
         var registry = new Diariz.Api.Tools.ChatToolRegistry(tools ?? []);
         var toolResolver = new ChatToolSettingsResolver(db, registry, Options.Create(chatOpts));
         return new(db, Options.Create(chatOpts), toolResolver,
-            new ChatContextResolver(db, Options.Create(chatOpts)),
+            new ChatContextResolver(db, Options.Create(chatOpts), new ChatModelCatalog(db)),
             new LlmSettingsResolver(db, Options.Create(new LlmDefaultsOptions()),
-                Options.Create(server ?? new SummarizationOptions()), new FakeApiKeyProtector()),
+                Options.Create(server ?? new SummarizationOptions()), new FakeApiKeyProtector(), new ChatModelCatalog(db)),
             Options.Create(dictation ?? new DictationOptions()))
         {
             ControllerContext = Http.Context(userId),

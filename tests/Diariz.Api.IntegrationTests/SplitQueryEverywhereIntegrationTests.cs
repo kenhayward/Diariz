@@ -184,7 +184,7 @@ public class SplitQueryEverywhereIntegrationTests(ContainersFixture fx)
             };
             var controller = new ChatController(
                 db, new FakeChatStreamClient(), settings,
-                new ChatContextResolver(db, Options.Create(new ChatOptions { ContextLength = 50000 })),
+                new ChatContextResolver(db, Options.Create(new ChatOptions { ContextLength = 50000 }), new ChatModelCatalog(db)),
                 new AttachmentExtractor(), new FakeAudioStorage(), new FakeUrlFetcher(),
                 new FakeChatToolSettingsResolver(), new ChatToolOrchestrator(new FakeChatStreamClient()),
                 new RoomScope(db), null!, Options.Create(new DictationOptions()))

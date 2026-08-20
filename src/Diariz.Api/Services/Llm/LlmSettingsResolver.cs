@@ -40,8 +40,18 @@ public interface ILlmSettingsResolver
     /// The kind is a parameter rather than being read from the ambient <see cref="LlmCallScope"/>, even
     /// though the scope already carries it. Ambient is fine for telemetry, where a missing scope logs
     /// <c>Unknown</c> and is visible and fixable; it is not fine for behaviour, where a missing scope would
-    /// silently apply the wrong model. Every caller already knows its kind - it pushes the scope with it.</summary>
-    Task<LlmRequestConfig> ResolveAsync(LlmCallKind kind, CancellationToken ct = default);
+    /// silently apply the wrong model. Every caller already knows its kind - it pushes the scope with it.
+    ///
+    /// <paramref name="modelOverride"/> is a model the END USER chose in the chat picker. It is honoured
+    /// only for <see cref="LlmCallKind.ChatMessage"/>, and only for a model an administrator offers -
+    /// <see cref="IChatModelCatalog"/> decides, and that check is the security boundary. It lives here
+    /// rather than in the controller so that no future caller can skip it.</summary>
+    Task<LlmRequestConfig> ResolveAsync(
+        LlmCallKind kind, Guid? modelOverride, CancellationToken ct = default);
+
+    /// <summary>No user-chosen model: every call site except a chat turn.</summary>
+    Task<LlmRequestConfig> ResolveAsync(LlmCallKind kind, CancellationToken ct = default) =>
+        ResolveAsync(kind, null, ct);
 }
 
 public class LlmSettingsResolver : ILlmSettingsResolver
@@ -50,6 +60,7 @@ public class LlmSettingsResolver : ILlmSettingsResolver
     private readonly LlmDefaultsOptions _defaults;
     private readonly SummarizationOptions _summary;
     private readonly IApiKeyProtector _protector;
+    private readonly IChatModelCatalog _chatModels;
     private readonly ChatOptions _chat;
 
     /// <param name="summary">The environment endpoint, used only to synthesize a fallback model when the
@@ -57,22 +68,36 @@ public class LlmSettingsResolver : ILlmSettingsResolver
     /// /admin/llm-models.</param>
     public LlmSettingsResolver(
         DiarizDbContext db, IOptions<LlmDefaultsOptions> defaults, IOptions<SummarizationOptions> summary,
-        IApiKeyProtector protector, IOptions<ChatOptions>? chat = null)
+        IApiKeyProtector protector, IChatModelCatalog chatModels, IOptions<ChatOptions>? chat = null)
     {
         _db = db;
         _defaults = defaults.Value;
         _summary = summary.Value;
         _protector = protector;
+        _chatModels = chatModels;
         _chat = chat?.Value ?? new ChatOptions();
     }
 
-    public async Task<LlmRequestConfig> ResolveAsync(LlmCallKind kind, CancellationToken ct = default)
+    /// <summary>The no-override form. Declared on the class as well as defaulted on the interface, because
+    /// a default interface method is reachable only through the interface - and the test harnesses, plus
+    /// TestSupport's controller builders, construct this type directly.</summary>
+    public Task<LlmRequestConfig> ResolveAsync(LlmCallKind kind, CancellationToken ct = default) =>
+        ResolveAsync(kind, null, ct);
+
+    public async Task<LlmRequestConfig> ResolveAsync(
+        LlmCallKind kind, Guid? modelOverride, CancellationToken ct = default)
     {
         var group = LlmCallGroups.GroupFor(kind);
         var ps = await _db.PlatformSettings
             .FirstOrDefaultAsync(p => p.Id == PlatformSettings.SingletonId, ct);
 
-        var model = await ChooseModelAsync(group, ps, ct);
+        // A user-chosen model applies to a chat MESSAGE only. ChatTitle shares the Chat group but is
+        // background housekeeping the user never sees, so it stays on whatever the administrator routed.
+        var chosen = kind == LlmCallKind.ChatMessage
+            ? await _chatModels.ResolveOfferedAsync(modelOverride, ct)
+            : null;
+
+        var model = await ChooseModelAsync(group, chosen, ps, ct);
 
         // Most specific first. A null layer is skipped, so a model with no override row for this group
         // inherits rather than omitting everything.
@@ -106,11 +131,15 @@ public class LlmSettingsResolver : ILlmSettingsResolver
     /// <summary>The group's assigned model, else the platform default, else null - which means fall back to
     /// the environment endpoint. The fallback is synthesized per call and never persisted: writing it would
     /// resurrect a row an admin had deliberately deleted.</summary>
-    private async Task<LlmModel?> ChooseModelAsync(LlmCallGroup? group, PlatformSettings? ps, CancellationToken ct)
+    /// <param name="chosen">A model the user picked, already validated as offered by
+    /// <see cref="IChatModelCatalog"/>. It outranks the routing table - that is the point of picking one -
+    /// so nothing here re-checks it.</param>
+    private async Task<LlmModel?> ChooseModelAsync(
+        LlmCallGroup? group, Guid? chosen, PlatformSettings? ps, CancellationToken ct)
     {
-        Guid? id = null;
+        Guid? id = chosen;
 
-        if (group is not null)
+        if (id is null && group is not null)
             id = await _db.LlmCallAssignments
                 .Where(a => a.Group == group.Value)
                 .Select(a => (Guid?)a.LlmModelId)

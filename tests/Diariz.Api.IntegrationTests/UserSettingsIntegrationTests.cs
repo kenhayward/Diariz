@@ -24,9 +24,9 @@ public class UserSettingsIntegrationTests(ContainersFixture fx)
         var chat = new ChatOptions();
         var resolver = new ChatToolSettingsResolver(
             db, new Diariz.Api.Tools.ChatToolRegistry([]), Options.Create(chat));
-        return new(db, Options.Create(chat), resolver, new ChatContextResolver(db, Options.Create(chat)),
+        return new(db, Options.Create(chat), resolver, new ChatContextResolver(db, Options.Create(chat), new ChatModelCatalog(db)),
             new LlmSettingsResolver(db, Options.Create(new LlmDefaultsOptions()),
-                Options.Create(new SummarizationOptions()), Protector),
+                Options.Create(new SummarizationOptions()), Protector, new ChatModelCatalog(db)),
             Options.Create(new DictationOptions()))
         { ControllerContext = Http.Context(userId) };
     }
@@ -96,7 +96,7 @@ public class UserSettingsIntegrationTests(ContainersFixture fx)
                 {
                     ApiBase = "https://server", ApiKey = "sk-server", Model = "srv",
                 }),
-                Protector);
+                Protector, new ChatModelCatalog(ctx));
 
             var cfg = await resolver.ResolveAsync(LlmCallKind.Summarize);
 

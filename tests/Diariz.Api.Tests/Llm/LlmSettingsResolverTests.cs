@@ -16,7 +16,7 @@ public class LlmSettingsResolverTests
         DiarizDbContext db, LlmDefaultsOptions? defaults = null, SummarizationOptions? summary = null) =>
         new(db, Options.Create(defaults ?? new LlmDefaultsOptions()),
             Options.Create(summary ?? new SummarizationOptions { ApiBase = "http://env/v1", Model = "env-model" }),
-            new FakeApiKeyProtector(), Options.Create(new ChatOptions()));
+            new FakeApiKeyProtector(), new ChatModelCatalog(db), Options.Create(new ChatOptions()));
 
     [Fact]
     public async Task Falls_back_to_the_environment_model_when_no_rows_exist()
@@ -203,15 +203,126 @@ public class LlmSettingsResolverTests
         Assert.False((await Build(db).ResolveAsync(LlmCallKind.ChatMessage)).IncludeStreamUsage);
     }
 
-    private static LlmModel Seed(DiarizDbContext db, string name, string apiBase)
+    private static LlmModel Seed(DiarizDbContext db, string name, string apiBase,
+        bool chatEnabled = false, int contextLength = 8192)
     {
         var m = new LlmModel
         {
-            Id = Guid.NewGuid(), Name = name, ApiBase = apiBase, ContextLength = 8192,
+            Id = Guid.NewGuid(), Name = name, ApiBase = apiBase, ContextLength = contextLength,
+            ChatEnabled = chatEnabled,
             CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
         };
         db.LlmModels.Add(m);
         db.SaveChanges();
         return m;
+    }
+
+    // ---- A user's chosen chat model ----
+
+    /// <summary>Seeds a chat-assigned model plus one the administrator has offered in the picker.</summary>
+    private static (LlmModel chat, LlmModel offered) SeedChatPair(DiarizDbContext db)
+    {
+        var chat = Seed(db, "chat-model", "http://chat/v1", contextLength: 8_192);
+        var offered = Seed(db, "big-model", "http://big/v1", chatEnabled: true, contextLength: 200_000);
+        db.LlmCallAssignments.Add(new LlmCallAssignment { Group = LlmCallGroup.Chat, LlmModelId = chat.Id });
+        db.SaveChanges();
+        return (chat, offered);
+    }
+
+    [Fact]
+    public async Task Honours_a_chat_model_override_the_administrator_offers()
+    {
+        using var db = TestDb.Create();
+        var (_, offered) = SeedChatPair(db);
+
+        var cfg = await Build(db).ResolveAsync(LlmCallKind.ChatMessage, offered.Id);
+
+        Assert.Equal("big-model", cfg.Model);
+        Assert.Equal("http://big/v1", cfg.ApiBase);
+    }
+
+    [Fact]
+    public async Task Ignores_an_override_for_a_model_that_is_not_offered_for_chat()
+    {
+        using var db = TestDb.Create();
+        var chat = Seed(db, "chat-model", "http://chat/v1");
+        var secret = Seed(db, "expensive-model", "http://secret/v1");   // ChatEnabled stays false
+        db.LlmCallAssignments.Add(new LlmCallAssignment { Group = LlmCallGroup.Chat, LlmModelId = chat.Id });
+        await db.SaveChangesAsync();
+
+        var cfg = await Build(db).ResolveAsync(LlmCallKind.ChatMessage, secret.Id);
+
+        Assert.Equal("chat-model", cfg.Model);
+    }
+
+    [Fact]
+    public async Task Ignores_an_override_for_a_chat_title()
+    {
+        // Titling is background housekeeping the user never sees, so it stays on the chat default - a slow
+        // or expensive picked model has no business generating a one-line title.
+        using var db = TestDb.Create();
+        var (_, offered) = SeedChatPair(db);
+
+        var cfg = await Build(db).ResolveAsync(LlmCallKind.ChatTitle, offered.Id);
+
+        Assert.Equal("chat-model", cfg.Model);
+    }
+
+    [Fact]
+    public async Task Ignores_an_override_for_a_non_chat_call_kind()
+    {
+        using var db = TestDb.Create();
+        var summaries = Seed(db, "summary-model", "http://sum/v1");
+        var big = Seed(db, "big-model", "http://big/v1", chatEnabled: true);
+        db.LlmCallAssignments.Add(
+            new LlmCallAssignment { Group = LlmCallGroup.Summaries, LlmModelId = summaries.Id });
+        await db.SaveChangesAsync();
+
+        var cfg = await Build(db).ResolveAsync(LlmCallKind.Summarize, big.Id);
+
+        Assert.Equal("summary-model", cfg.Model);
+    }
+
+    [Fact]
+    public async Task Sizes_the_context_budget_from_the_overridden_model()
+    {
+        // The budget is what actually truncates transcript text. Were it still taken from the default
+        // model, picking a 200k model would silently keep cutting context at the small model's size.
+        using var db = TestDb.Create();
+        var (_, offered) = SeedChatPair(db);
+
+        var cfg = await Build(db).ResolveAsync(LlmCallKind.ChatMessage, offered.Id);
+
+        Assert.Equal(LlmContextBudget.CharsFor(200_000), cfg.ContextCharBudget);
+    }
+
+    [Fact]
+    public async Task Applies_the_overridden_models_own_chat_parameters()
+    {
+        // Parameters are per (model, group), so switching model must bring that model's Chat overrides -
+        // not the default model's.
+        using var db = TestDb.Create();
+        var (_, offered) = SeedChatPair(db);
+        db.LlmModelParameters.Add(new LlmModelParameters
+        {
+            Id = Guid.NewGuid(), LlmModelId = offered.Id, Group = LlmCallGroup.Chat,
+            ParametersJson = """{"temperature":0.91}""",
+        });
+        await db.SaveChangesAsync();
+
+        var cfg = await Build(db).ResolveAsync(LlmCallKind.ChatMessage, offered.Id);
+
+        Assert.Equal(0.91, cfg.Parameters.Temperature);
+    }
+
+    [Fact]
+    public async Task A_null_override_resolves_exactly_as_before()
+    {
+        using var db = TestDb.Create();
+        var (_, _) = SeedChatPair(db);
+
+        var cfg = await Build(db).ResolveAsync(LlmCallKind.ChatMessage, null);
+
+        Assert.Equal("chat-model", cfg.Model);
     }
 }

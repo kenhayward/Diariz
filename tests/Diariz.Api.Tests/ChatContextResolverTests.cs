@@ -4,6 +4,7 @@ using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.Extensions.Options;
+using Diariz.Api.Services.Llm;
 
 namespace Diariz.Api.Tests;
 
@@ -12,7 +13,7 @@ namespace Diariz.Api.Tests;
 public class ChatContextResolverTests
 {
     private static ChatContextResolver Build(DiarizDbContext db, int serverDefault = 131072) =>
-        new(db, Options.Create(new ChatOptions { ContextLength = serverDefault }));
+        new(db, Options.Create(new ChatOptions { ContextLength = serverDefault }), new ChatModelCatalog(db));
 
     private static LlmModel Seed(DiarizDbContext db, int contextLength)
     {
@@ -77,5 +78,46 @@ public class ChatContextResolverTests
         await db.SaveChangesAsync();
 
         Assert.Equal(4096, await Build(db, serverDefault: 4096).ResolveContextWindowAsync());
+    }
+
+    // ---- A user's chosen chat model ----
+
+    [Fact]
+    public async Task Reports_the_window_of_an_offered_override()
+    {
+        using var db = TestDb.Create();
+        var chat = Seed(db, 8_192);
+        var big = Seed(db, 200_000);
+        big.ChatEnabled = true;
+        db.LlmCallAssignments.Add(new LlmCallAssignment { Group = LlmCallGroup.Chat, LlmModelId = chat.Id });
+        await db.SaveChangesAsync();
+
+        Assert.Equal(200_000, await Build(db).ResolveContextWindowAsync(big.Id));
+    }
+
+    [Fact]
+    public async Task Ignores_an_override_that_is_not_offered()
+    {
+        // The dial must report the window that will actually be used. Following a model the settings
+        // resolver then refuses would put the gauge and the real truncation back into disagreement - the
+        // exact defect this resolver exists to prevent.
+        using var db = TestDb.Create();
+        var chat = Seed(db, 8_192);
+        var secret = Seed(db, 200_000);   // ChatEnabled stays false
+        db.LlmCallAssignments.Add(new LlmCallAssignment { Group = LlmCallGroup.Chat, LlmModelId = chat.Id });
+        await db.SaveChangesAsync();
+
+        Assert.Equal(8_192, await Build(db).ResolveContextWindowAsync(secret.Id));
+    }
+
+    [Fact]
+    public async Task A_null_override_resolves_exactly_as_before()
+    {
+        using var db = TestDb.Create();
+        var chat = Seed(db, 8_192);
+        db.LlmCallAssignments.Add(new LlmCallAssignment { Group = LlmCallGroup.Chat, LlmModelId = chat.Id });
+        await db.SaveChangesAsync();
+
+        Assert.Equal(8_192, await Build(db).ResolveContextWindowAsync(null));
     }
 }

@@ -29,7 +29,7 @@ public class ChatControllerTests
                 ? new LlmRequestConfig("https://llm.test/v1", "sk-test", "test-model", new LlmParameters { TimeoutSeconds = 60 })
                 : new LlmRequestConfig("", "", "test-model", new LlmParameters { TimeoutSeconds = 60 }),
         };
-        var ctxResolver = new ChatContextResolver(db, Options.Create(new ChatOptions { ContextLength = 40000 }));
+        var ctxResolver = new ChatContextResolver(db, Options.Create(new ChatOptions { ContextLength = 40000 }), new ChatModelCatalog(db));
         var orchestrator = new ChatToolOrchestrator(chat);
         var controller = new ChatController(db, chat, settings, ctxResolver, new AttachmentExtractor(),
             storage ?? new FakeAudioStorage(), urlFetcher ?? new FakeUrlFetcher(),
