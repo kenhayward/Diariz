@@ -883,12 +883,19 @@ public record FeedbackDto(Guid Id, Guid UserId, string? UserEmail, DateTimeOffse
 /// The key itself is never returned, only <paramref name="HasApiKey"/>: same write-only contract the
 /// per-user key had, so a stored secret cannot leak back out through the admin UI.</summary>
 public record LlmModelDto(Guid Id, string Name, string ApiBase, bool HasApiKey, int ContextLength,
-    Dictionary<string, string> Parameters);
+    Dictionary<string, string> Parameters, string? DisplayName = null, bool ChatEnabled = false);
 
 /// <summary>Create or replace a model. A null <c>ApiKey</c> on update means "keep the stored key" - the UI
-/// was never given it, so it cannot send it back.</summary>
+/// was never given it, so it cannot send it back.
+///
+/// <c>ChatEnabled</c> is deliberately ABSENT. The editor drawer does not show that control, so were it a
+/// field here every save from the drawer would post whatever stale value the client held and silently
+/// un-offer the model. It has its own route instead.</summary>
 public record LlmModelUpsert(string Name, string ApiBase, string? ApiKey, int ContextLength,
-    Dictionary<string, string> Parameters);
+    Dictionary<string, string> Parameters, string? DisplayName = null);
+
+/// <summary>Whether a model appears in the chat model picker.</summary>
+public record SetChatEnabledRequest(bool Enabled);
 
 /// <summary>Run one sample call against a model, with the parameters an administrator is currently
 /// editing rather than the saved ones - so a change can be tried before it is committed.

@@ -63,6 +63,7 @@ public class LlmModelsController : ControllerBase
         {
             Id = Guid.NewGuid(),
             Name = req.Name.Trim(),
+            DisplayName = Trim(req.DisplayName),
             ApiBase = req.ApiBase.Trim(),
             ApiKeyEncrypted = _protector.Protect(req.ApiKey),
             ContextLength = req.ContextLength,
@@ -88,6 +89,7 @@ public class LlmModelsController : ControllerBase
             return Conflict($"A model named '{req.Name.Trim()}' already exists.");
 
         model.Name = req.Name.Trim();
+        model.DisplayName = Trim(req.DisplayName);
         model.ApiBase = req.ApiBase.Trim();
         model.ContextLength = req.ContextLength;
         model.UpdatedAt = DateTimeOffset.UtcNow;
@@ -305,7 +307,29 @@ public class LlmModelsController : ControllerBase
         return ToDto(model);
     }
 
+    /// <summary>Whether this model appears in the chat model picker.
+    ///
+    /// Its own route rather than a field on the upsert: the editor drawer does not show this control, so an
+    /// upsert carrying it would let a save from the drawer silently reset an administrator's choice.</summary>
+    [HttpPut("{id:guid}/chat-enabled")]
+    public async Task<IActionResult> SetChatEnabled(Guid id, SetChatEnabledRequest req)
+    {
+        var model = await _db.LlmModels.FirstOrDefaultAsync(m => m.Id == id);
+        if (model is null) return NotFound();
+
+        model.ChatEnabled = req.Enabled;
+        model.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return NoContent();
+    }
+
     // ---- helpers ----
+
+    /// <summary>Blank means "use the slug", so it is stored as null rather than as an empty string - one
+    /// representation of absent, so LlmModel.Label has a single thing to test.</summary>
+    private static string? Trim(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private BadRequestObjectResult? Validate(LlmModelUpsert req)
     {
@@ -378,5 +402,6 @@ public class LlmModelsController : ControllerBase
         m.Id, m.Name, m.ApiBase,
         HasApiKey: !string.IsNullOrEmpty(m.ApiKeyEncrypted),
         m.ContextLength,
-        m.Parameters.ToDictionary(p => p.Group.ToString(), p => p.ParametersJson));
+        m.Parameters.ToDictionary(p => p.Group.ToString(), p => p.ParametersJson),
+        m.DisplayName, m.ChatEnabled);
 }
