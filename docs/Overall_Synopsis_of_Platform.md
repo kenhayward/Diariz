@@ -509,6 +509,24 @@ selection. `LlmModels.DisplayName` supplies the user-facing label, falling back 
 `GET /api/chat/models` returns that list to **any signed-in user** and carries no endpoint and no API key -
 which is why it is its own controller rather than an action on the administrator-only model listing.
 
+**Model discovery (0.232.0).** `POST /api/admin/llm-models/discover` and `.../discover/import` ask an
+endpoint what models it has and create rows for the chosen ones. `LlmModelDiscoveryClient` tries LM Studio's
+`/api/v0/models` first (which reports a `type` and a real `max_context_length`) and falls back to the
+OpenAI-compatible `/models`, which reports neither; `LlmModelDiscovery` is a **pure** parse-and-filter with
+no HTTP, so the interesting decision - what counts as a chat model - is testable without a server. A model
+whose window is not reported is created at `LlmModelDiscovery.DefaultContextLength` (16,384) and named in the
+import summary, because that number sizes both the chat dial and the real context budget.
+
+**This is the only route in the platform that fetches an administrator-supplied URL**, which is exactly what
+`POST /{id}/test` refuses to do. The relaxation was deliberate and is bounded: `ManagePlatform` only, a 10
+second timeout, redirects not followed (`AllowAutoRedirect = false` on the primary handler), a capped read,
+and **only parsed model ids returned** - the endpoint's response body never reaches the caller, so it cannot
+serve as a general-purpose fetch. There is deliberately **no IP guard**, unlike `UrlFetchGuard` on URL
+attachments and webhooks: those fetch a URL a user supplied about the outside world, whereas the platform's
+own models routinely live on localhost or the LAN, so blocking private ranges would block the primary use
+case. `Import` re-checks each requested name against the endpoint's own listing, so a request cannot create a
+row for a model discovery never reported.
+
 **With what parameters.** Four layers, most specific first, merged by `LlmParameterLayers.Resolve`: the
 model's row for **this group**, the model's **`ModelBase`** row, the app defaults **for this group**, then
 the app **base** defaults. Each key is in one of three states, and the last two are different instructions:

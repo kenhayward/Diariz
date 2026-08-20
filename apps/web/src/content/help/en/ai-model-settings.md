@@ -35,6 +35,24 @@ address `/admin/llm-models` still works if you have it bookmarked. Each model th
 A server that has an endpoint set in its environment but no models configured keeps working exactly as
 it did. The page offers to import that endpoint as your first model when you are ready.
 
+## Adding every model on a server at once
+
+**Add all**, beside **Add model**, saves typing each one in by hand. Give it a server address and a key if
+it needs one, press **Discover**, and it lists the chat models that server reports. Embeddings, speech
+recognition and similar are left out - they are not models chat or summaries could use.
+
+Nothing is added until you press the button at the bottom, which tells you how many you have ticked. Models
+you have already configured appear in the list but cannot be picked again, so you can see the server has
+them rather than wondering where they went.
+
+Watch for **context length not reported**. Some servers do not say how much context a model holds, and
+Diariz has to pick a number. It uses 16,384 - enough to be useful, but a guess. That number decides how much
+of a meeting is sent to the model, so it is worth opening those models afterwards and setting the real
+figure.
+
+Imported models are **not** offered in chat until you tick them in the **In chat** column, so adding forty
+models does not put forty entries in everyone's picker.
+
 ## Parameters
 
 Every model has a full set of parameters: temperature, top P, top K, repeat penalty, frequency and
