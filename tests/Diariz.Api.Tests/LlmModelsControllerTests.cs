@@ -29,6 +29,29 @@ public class LlmModelsControllerTests
             new FakeLlmModelDiscoveryClient())
         { ControllerContext = Http.Context(Guid.NewGuid()) };
 
+    /// <summary>The same controller, but as a KNOWN administrator. The recording endpoints are scoped to the
+    /// caller's own rows, so their tests cannot use the random id <see cref="Build"/> hands out.</summary>
+    private static LlmModelsController BuildAs(
+        DiarizDbContext db, Guid userId, ILlmTestProbe? probe = null) =>
+        new(db, new FakeApiKeyProtector(),
+            Options.Create(new SummarizationOptions { ApiBase = "http://env/v1", Model = "env-model" }),
+            Options.Create(new LlmDefaultsOptions()),
+            probe ?? new FakeLlmTestProbe(),
+            new FakeLlmModelDiscoveryClient())
+        { ControllerContext = Http.Context(userId) };
+
+    private static Recording SeedRecording(DiarizDbContext db, Guid ownerId, string title = "Team sync")
+    {
+        var rec = new Recording
+        {
+            Id = Guid.NewGuid(), UserId = ownerId, Title = title, Status = RecordingStatus.Transcribed,
+            CreatedAt = DateTimeOffset.UtcNow,
+        };
+        db.Recordings.Add(rec);
+        db.SaveChanges();
+        return rec;
+    }
+
     private static LlmModel Seed(DiarizDbContext db, string name = "m", string? key = "enc:secret")
     {
         var m = new LlmModel
@@ -608,6 +631,72 @@ public class LlmModelsControllerTests
         var dto = Assert.Single(Assert.IsType<List<LlmModelDto>>((await Build(db).List()).Value));
 
         Assert.True(dto.ChatEnabled);
+    }
+
+    [Fact]
+    public async Task Remembers_the_recording_an_administrator_chose()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = SeedRecording(db, userId, "Quarterly planning");
+
+        await BuildAs(db, userId).SetTestRecording(new SetLlmTestRecordingRequest(rec.Id));
+        var result = await BuildAs(db, userId).GetTestRecording();
+
+        Assert.Equal(rec.Id, result.Value!.RecordingId);
+        Assert.Equal("Quarterly planning", result.Value.Title);
+    }
+
+    [Fact]
+    public async Task Forgets_a_recording_that_has_since_been_deleted()
+    {
+        // Nulled on READ rather than held by a foreign key: an admin's convenience setting must never be a
+        // reason a user's recording cannot be deleted.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        db.UserSettings.Add(new UserSettings { UserId = userId, LlmTestRecordingId = Guid.NewGuid() });
+        db.SaveChanges();
+
+        var result = await BuildAs(db, userId).GetTestRecording();
+
+        Assert.Null(result.Value!.RecordingId);
+        Assert.Null(result.Value.Title);
+    }
+
+    [Fact]
+    public async Task Refuses_to_remember_another_users_recording()
+    {
+        using var db = TestDb.Create();
+        var admin = Guid.NewGuid();
+        var someoneElse = SeedRecording(db, Guid.NewGuid());
+
+        var response = await BuildAs(db, admin).SetTestRecording(new SetLlmTestRecordingRequest(someoneElse.Id));
+
+        Assert.IsType<NotFoundObjectResult>(response);
+        Assert.Null(db.UserSettings.FirstOrDefault(s => s.UserId == admin)?.LlmTestRecordingId);
+    }
+
+    [Fact]
+    public async Task Clears_the_choice_when_given_nothing()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = SeedRecording(db, userId);
+        await BuildAs(db, userId).SetTestRecording(new SetLlmTestRecordingRequest(rec.Id));
+
+        await BuildAs(db, userId).SetTestRecording(new SetLlmTestRecordingRequest(null));
+
+        Assert.Null((await BuildAs(db, userId).GetTestRecording()).Value!.RecordingId);
+    }
+
+    [Fact]
+    public async Task Reports_nothing_for_an_administrator_with_no_settings_row_at_all()
+    {
+        using var db = TestDb.Create();
+
+        var result = await BuildAs(db, Guid.NewGuid()).GetTestRecording();
+
+        Assert.Null(result.Value!.RecordingId);
     }
 
     private sealed class ScopeCapturingProbe : ILlmTestProbe

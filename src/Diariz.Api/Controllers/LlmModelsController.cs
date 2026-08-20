@@ -279,6 +279,61 @@ public class LlmModelsController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>The calling administrator. Their OWN recordings are the only ones a test may run against,
+    /// so this is an authorisation input, not just attribution.</summary>
+    private Guid? CallerId =>
+        User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value is { } uid
+            && Guid.TryParse(uid, out var parsed)
+            ? parsed
+            : null;
+
+    /// <summary>The recording this administrator tests models against, shared by every call group that runs
+    /// against real content.</summary>
+    [HttpGet("test-recording")]
+    public async Task<ActionResult<LlmTestRecordingDto>> GetTestRecording()
+    {
+        if (CallerId is not { } userId) return new LlmTestRecordingDto(null, null);
+
+        var chosen = await _db.UserSettings
+            .AsNoTracking()
+            .Where(s => s.UserId == userId)
+            .Select(s => s.LlmTestRecordingId)
+            .FirstOrDefaultAsync();
+        if (chosen is not { } recordingId) return new LlmTestRecordingDto(null, null);
+
+        // Resolved on read, and scoped to the owner again: a recording deleted (or a stored id that never
+        // belonged to them) reports as "nothing chosen" rather than a dangling label the picker cannot show.
+        var title = await _db.Recordings
+            .AsNoTracking()
+            .Where(r => r.Id == recordingId && r.UserId == userId)
+            .Select(r => r.Name ?? r.Title)
+            .FirstOrDefaultAsync();
+
+        return title is null
+            ? new LlmTestRecordingDto(null, null)
+            : new LlmTestRecordingDto(recordingId, title);
+    }
+
+    [HttpPut("test-recording")]
+    public async Task<IActionResult> SetTestRecording(SetLlmTestRecordingRequest req)
+    {
+        if (CallerId is not { } userId) return Unauthorized();
+
+        if (req.RecordingId is { } recordingId
+            && !await _db.Recordings.AnyAsync(r => r.Id == recordingId && r.UserId == userId))
+            return NotFound($"No recording {recordingId} belonging to you.");
+
+        var settings = await _db.UserSettings.FindAsync(userId);
+        if (settings is null)
+        {
+            settings = new UserSettings { UserId = userId };
+            _db.UserSettings.Add(settings);
+        }
+        settings.LlmTestRecordingId = req.RecordingId;
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
     /// <summary>Creates the first model from the endpoint already configured in the environment, so an
     /// upgraded deployment has something to edit rather than a blank page.
     ///
