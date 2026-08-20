@@ -188,17 +188,21 @@ public sealed class FakeLlmSettingsResolver : ILlmSettingsResolver
 public sealed class FakeLlmModelDiscoveryClient : ILlmModelDiscoveryClient
 {
     public List<DiscoveredModel> Models { get; set; } = [];
+
+    /// <summary>The endpoint the real client would have resolved. Defaults to a working one; set it to null
+    /// to model a server that reports models but serves no OpenAI-compatible listing.</summary>
+    public string? ChatApiBase { get; set; } = "http://lm.test/v1";
+
     public string? LastApiBase { get; private set; }
     public string? LastApiKey { get; private set; }
     public int Calls { get; private set; }
 
-    public Task<IReadOnlyList<DiscoveredModel>> ListAsync(
-        string apiBase, string? apiKey, CancellationToken ct = default)
+    public Task<ModelListing> ListAsync(string apiBase, string? apiKey, CancellationToken ct = default)
     {
         Calls++;
         LastApiBase = apiBase;
         LastApiKey = apiKey;
-        return Task.FromResult<IReadOnlyList<DiscoveredModel>>(Models);
+        return Task.FromResult(new ModelListing(ChatApiBase, Models));
     }
 }
 

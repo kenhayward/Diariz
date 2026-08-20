@@ -45,6 +45,11 @@ Nothing is added until you press the button at the bottom, which tells you how m
 you have already configured appear in the list but cannot be picked again, so you can see the server has
 them rather than wondering where they went.
 
+**The address must be the one that accepts chat requests** - for LM Studio that means it ends in `/v1`.
+Add all checks this rather than taking your word for it, and corrects the address where it can; the dialog
+shows the endpoint the models will be created against, so you can see what will be saved. If nothing at the
+address you gave accepts chat requests, it says so rather than adding models that could never answer.
+
 Watch for **context length not reported**. Some servers do not say how much context a model holds, and
 Diariz has to pick a number. It uses 16,384 - enough to be useful, but a guess. That number decides how much
 of a meeting is sent to the model, so it is worth opening those models afterwards and setting the real

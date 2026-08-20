@@ -494,6 +494,58 @@ describe("ChatPanel", () => {
     });
   });
 
+  describe("stopping a turn", () => {
+    /// A turn whose endpoint accepts the request and then never streams - the shape a misconfigured
+    /// endpoint produces, and the reason the panel has to be escapable rather than merely eventually
+    /// timing out.
+    function hangingTurn() {
+      mock(api.chatStream).mockImplementation(
+        (_body: any, h: any) =>
+          new Promise((_resolve, reject) => {
+            h.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+          }),
+      );
+    }
+
+    it("offers stop in place of send while a reply is pending", async () => {
+      hangingTurn();
+      renderPanel("/recordings/rec-1");
+      await ask("Who spoke?");
+
+      expect(screen.getByRole("button", { name: /stop/i })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: /^send$/i })).toBeNull();
+    });
+
+    it("returns to send once stopped, leaving the panel usable", async () => {
+      // Without this the box stays unsendable until the server-side idle timeout expires - two minutes of
+      // a panel that looks broken.
+      hangingTurn();
+      renderPanel("/recordings/rec-1");
+      await ask("Who spoke?");
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: /stop/i }));
+      });
+
+      expect(await screen.findByRole("button", { name: /^send$/i })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: /stop/i })).toBeNull();
+    });
+
+    it("can send again after stopping", async () => {
+      hangingTurn();
+      renderPanel("/recordings/rec-1");
+      await ask("Who spoke?");
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: /stop/i }));
+      });
+
+      mock(api.chatStream).mockResolvedValue({ model: "gpt-oss", contextUsed: 1, contextTotal: 100 });
+      await ask("Second question");
+
+      expect(mock(api.chatStream).mock.calls.length).toBe(2);
+    });
+  });
+
   describe("model picker", () => {
     async function pickQwen() {
       renderPanel("/recordings/rec-1");

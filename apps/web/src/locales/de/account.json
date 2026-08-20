@@ -520,6 +520,7 @@
   "llmModelsAddAllIntro": "Einen Server nach seinen Modellen fragen und dann auswählen, welche hinzugefügt werden. Nicht-Chat-Modelle wie Embeddings und Spracherkennung bleiben außen vor.",
   "llmModelsDiscover": "Suchen",
   "llmModelsDiscoverEmpty": "An diesem Endpunkt wurden keine Modelle gefunden.",
+  "llmModelsWillUseEndpoint": "Modelle werden mit dem Endpunkt {{endpoint}} hinzugefügt",
   "llmModelsDiscoverError": "Dieser Endpunkt war nicht erreichbar.",
   "llmModelsImportFailed": "Diese Modelle konnten nicht hinzugefügt werden.",
   "llmModelsAddCount": "{{count}} Modell hinzufügen",

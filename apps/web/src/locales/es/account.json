@@ -520,6 +520,7 @@
   "llmModelsAddAllIntro": "Pregunta a un servidor que modelos tiene y elige cuales anadir. Los modelos que no son de chat, como embeddings y reconocimiento de voz, quedan fuera.",
   "llmModelsDiscover": "Buscar",
   "llmModelsDiscoverEmpty": "No se encontraron modelos en ese endpoint.",
+  "llmModelsWillUseEndpoint": "Los modelos se anadiran con el endpoint {{endpoint}}",
   "llmModelsDiscoverError": "No se pudo acceder a ese endpoint.",
   "llmModelsImportFailed": "No se pudieron anadir esos modelos.",
   "llmModelsAddCount": "Anadir {{count}} modelo",

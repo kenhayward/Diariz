@@ -624,7 +624,10 @@ itself goes back to the endpoint configured in the server environment. The disti
 call type following the default moves with it when the default changes, while one assigned to the model that
 happens to be the default stays where it was put.
   **Add all from an endpoint.** Beside **Add model** sits **Add all**: give it a server address and an
-optional key, press Discover, and it lists the chat models that server reports. Embeddings, speech
+optional key, press Discover, and it lists the chat models that server reports. The address is **verified as
+one that accepts chat requests** rather than merely reachable - for LM Studio that means it ends in `/v1` -
+and corrected where it can be, with the endpoint the models will be created against shown in the dialog; an
+address nothing can be called on is refused rather than turned into models that never answer. Embeddings, speech
 recognition, rerankers and the like are filtered out - by the type the server declares where it declares one
 (LM Studio's own listing does), otherwise by name. Models already configured are shown but cannot be picked
 again, so it is visible that the server has them rather than looking as though they went missing. Nothing is

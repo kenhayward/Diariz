@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../../lib/api";
-import type { DiscoveredModel } from "../../lib/types";
+import type { DiscoverModelsResult } from "../../lib/types";
 
 interface Props {
   onClose: () => void;
@@ -19,7 +19,7 @@ export default function DiscoverModelsDialog({ onClose, onImported }: Props) {
   const { t } = useTranslation("account");
   const [apiBase, setApiBase] = useState("");
   const [apiKey, setApiKey] = useState("");
-  const [found, setFound] = useState<DiscoveredModel[] | null>(null);
+  const [found, setFound] = useState<DiscoverModelsResult | null>(null);
   const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,11 +30,11 @@ export default function DiscoverModelsDialog({ onClose, onImported }: Props) {
     setError(null);
     setFound(null);
     try {
-      const models = await api.discoverModels({ apiBase: apiBase.trim(), apiKey: apiKey.trim() || null });
-      setFound(models);
+      const result = await api.discoverModels({ apiBase: apiBase.trim(), apiKey: apiKey.trim() || null });
+      setFound(result);
       // Everything new is pre-ticked; an existing model cannot be chosen, so it is left out of the set
       // rather than merely rendered differently.
-      setChosen(new Set(models.filter((m) => !m.alreadyExists).map((m) => m.id)));
+      setChosen(new Set(result.models.filter((m) => !m.alreadyExists).map((m) => m.id)));
     } catch (e) {
       setError(apiErrorMessage(e, t("llmModelsDiscoverError")));
     } finally {
@@ -47,7 +47,10 @@ export default function DiscoverModelsDialog({ onClose, onImported }: Props) {
     setError(null);
     try {
       await api.importModels({
-        apiBase: apiBase.trim(),
+        // The RESOLVED endpoint the server reported, not what was typed - an address without its /v1 is
+        // corrected during discovery, and importing against the typed one is what created models that
+        // could never be called.
+        apiBase: found?.apiBase ?? apiBase.trim(),
         apiKey: apiKey.trim() || null,
         names: [...chosen],
       });
@@ -110,11 +113,14 @@ export default function DiscoverModelsDialog({ onClose, onImported }: Props) {
 
         {found !== null && (
           <div className="max-h-64 overflow-y-auto border-t border-gray-200 px-5 py-3 dark:border-gray-800">
-            {found.length === 0 ? (
+            <p className="mb-2 text-[11px] text-gray-500 dark:text-gray-400">
+              {t("llmModelsWillUseEndpoint", { endpoint: found.apiBase })}
+            </p>
+            {found.models.length === 0 ? (
               <p className="text-xs text-gray-500 dark:text-gray-400">{t("llmModelsDiscoverEmpty")}</p>
             ) : (
               <ul className="space-y-1.5">
-                {found.map((m) => (
+                {found.models.map((m) => (
                   <li key={m.id} className="flex items-start gap-2 text-[12px]">
                     <input
                       type="checkbox"
