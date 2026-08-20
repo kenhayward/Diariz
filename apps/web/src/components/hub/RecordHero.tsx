@@ -151,7 +151,13 @@ export default function RecordHero({
             {t("recPaused")}
           </span>
         ) : (
-          <HubLevelMeter stream={stream} onSilentChange={onSilentChange} />
+          // Hidden, never unmounted: HubLevelMeter is what detects silence via onSilentChange, and that is
+          // what raises the "no sound" hint. Dropping it from the tree on a narrow bar would disable that
+          // hint with no other sign. The recording cluster is ~290px wider than the idle one, so it sheds
+          // at its own, much earlier threshold.
+          <div data-testid="hub-meter-slot" className="@max-[690px]:hidden">
+            <HubLevelMeter stream={stream} onSilentChange={onSilentChange} />
+          </div>
         )}
         <CircleButton
           onClick={paused ? onResume : onPause}

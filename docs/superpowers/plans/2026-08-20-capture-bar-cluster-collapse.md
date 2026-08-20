@@ -123,3 +123,19 @@ The eight numbers in the spec's tier table are the actual claim of this change, 
 - [ ] **Step 3:** No `CAPABILITIES` / README / `docs/features.md` edit: the bar offers the same controls and does the same things. No architecture or schema change. Say so in the PR.
 - [ ] **Step 4:** `npm test` and `npm run build` in `apps/web` - both clean.
 - [ ] **Step 5:** Push the branch and open a PR stating the deployment surface: **server redeploy only**, no desktop release.
+
+---
+
+## Correction found during Task 4
+
+The thresholds first planned here were wrong in the recording state, and the browser sweep is what caught
+it. The audio-source chip had been given one shared threshold on the reasoning that it looks the same in
+both states - but what differs is how much room it has, not how it looks. That left three windows in the
+recording state (614-630, 478-533 and 438-445 outer px) where one step had fired and the next had not.
+
+The fix: every threshold is now derived from the **measured requirement of the step above it**, and the
+chip takes a `recording` prop so its two steps come earlier while recording (label at 740 rather than
+`@xl`'s 576, pill and chevron at 560 rather than 400). The corrected table is in the spec.
+
+Measured floors after the fix, with no overflow window anywhere above them: **217px** idle (was 376) and
+**367px** recording (was 666).

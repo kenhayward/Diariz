@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage, getToken } from "../lib/api";
 import { userIdFromToken } from "../lib/jwt";
@@ -49,6 +49,8 @@ import AudioSourcePopover from "./hub/AudioSourcePopover";
 import AutoStopPopover from "./hub/AutoStopPopover";
 import NotesPopover from "./hub/NotesPopover";
 import HubIconButton from "./hub/HubIconButton";
+import MoreControlsPopover from "./hub/MoreControlsPopover";
+import { IconCamera, IconClock, IconPencil, IconUpload, IconMore } from "./hub/hubIcons";
 import { useHubPopover } from "./hub/hubPopovers";
 import { MEDIA_ACCEPT_ATTR } from "../lib/mediaKinds";
 import { pickMediaFiles } from "../lib/mediaPicker";
@@ -118,44 +120,6 @@ export const MAX_LIVE_SCREENSHOTS = 200;
 // Whether this environment can capture system audio at all (Chromium/desktop). Drives the System audio
 // checkbox + the "No microphone" dropdown option; false in Firefox/Safari.
 const CAN_SYSTEM_AUDIO = supportsDisplayAudio() || isElectron;
-
-// Command-hub icon-button glyphs (Feather/Lucide-style, 18px, drawn in `currentColor` so the button's own
-// text colour applies). Auto-stop = clock, Upload = tray/upload-arrow, Notes = pencil. The buttons are
-// icon-only: the label lives on aria-label + title. (The record/pause/resume/stop glyphs live in RecordHero.)
-function HubIcon({ children }: { children: ReactNode }) {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true" focusable="false"
-      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      {children}
-    </svg>
-  );
-}
-
-const IconClock = () => (
-  <HubIcon>
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 7.5V12l3 2" />
-  </HubIcon>
-);
-
-const IconUpload = () => (
-  <HubIcon>
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />
-  </HubIcon>
-);
-
-const IconPencil = () => (
-  <HubIcon>
-    <path d="M17 3a2.83 2.83 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-  </HubIcon>
-);
-
-const IconCamera = () => (
-  <HubIcon>
-    <path d="M9 4l-1.5 2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3.5L15 4H9z" />
-    <circle cx="12" cy="13" r="3.5" />
-  </HubIcon>
-);
 
 function loadSavedSource(): PersistedSource | null {
   try {
@@ -1391,6 +1355,24 @@ export default function Recorder({
     [setStatus],
   );
 
+  // Two container-query tiers below the label one (`@xl`, on the chip and the hero). The capture bar is the
+  // `@container`, so these ask it - not the window - how much room there is: the bar spans
+  // `window - left panel - chat panel`, and a viewport breakpoint measures the wrong box. Each has two
+  // thresholds because the recording cluster is ~290px wider than the idle one and so stops fitting much
+  // sooner. The strings are written out in full rather than composed: Tailwind generates utilities by
+  // scanning source for complete class names and would never see a concatenated variant. The numbers come
+  // from measuring the real cluster in a browser - see
+  // docs/superpowers/specs/2026-08-20-capture-bar-cluster-collapse-design.md for the widths behind them.
+  const clusterGap = recording ? "gap-2 @max-[690px]:gap-1.5" : "gap-2 @max-[400px]:gap-1.5";
+  const hideWhenCramped = recording ? "@max-[440px]:hidden" : "@max-[240px]:hidden";
+  const showWhenCramped = recording ? "hidden @max-[440px]:block" : "hidden @max-[240px]:block";
+  // Upload sheds a tier early while recording: it is disabled for the whole of a recording, so it is the
+  // one control that costs its 44px and buys nothing in that state.
+  const hideUpload = recording ? "@max-[690px]:hidden" : "@max-[240px]:hidden";
+  // What the overflow menu's rows say when they are inert. The inline buttons carry the same gates; the
+  // menu stands in for them, so a control unavailable in the bar must be unavailable in the menu too.
+  const unavailableReason = !canRecord ? t("recNoPermission") : busy ? t("recUploading") : undefined;
+
   return (
     // `relative` anchors the recovery popover below the controls without adding to the bar's height.
     <div
@@ -1398,7 +1380,7 @@ export default function Recorder({
         compact ? "relative" : "relative rounded-lg border bg-white p-4 dark:border-gray-700 dark:bg-gray-900"
       }
     >
-      <div className="flex items-center gap-2">
+      <div className={`flex items-center ${clusterGap}`}>
         {/* Single "Audio source" chip - opens the Audio source popover (mic select + system toggle +
             processing chips). Anchored in a `relative` wrapper so the popover positions under the chip. */}
         <div className="relative">
@@ -1406,6 +1388,7 @@ export default function Recorder({
             systemAudio={systemAudio}
             expanded={hub.isOpen("source")}
             disabled={recording}
+            recording={recording}
             onClick={() => hub.toggle("source")}
           />
           <AudioSourcePopover
@@ -1456,16 +1439,20 @@ export default function Recorder({
           onSilentChange={setSilent}
         />
 
-        {/* Auto-stop: clock icon button -> Auto-stop popover. Same choice/time state as the old select. */}
+        {/* Auto-stop: clock icon button -> Auto-stop popover. Same choice/time state as the old select.
+            Only the BUTTON is hidden when the bar is cramped, never this `relative` wrapper: the wrapper is
+            what the popover is positioned against, and the overflow menu still opens it. */}
         <div className="relative">
-          <HubIconButton
-            label={t("autoStopLabel")}
-            onClick={() => hub.toggle("stop")}
-            disabled={busy || !canRecord}
-            expanded={hub.isOpen("stop")}
-          >
-            <IconClock />
-          </HubIconButton>
+          <div className={hideWhenCramped}>
+            <HubIconButton
+              label={t("autoStopLabel")}
+              onClick={() => hub.toggle("stop")}
+              disabled={busy || !canRecord}
+              expanded={hub.isOpen("stop")}
+            >
+              <IconClock />
+            </HubIconButton>
+          </div>
           <AutoStopPopover
             open={hub.isOpen("stop")}
             onClose={hub.close}
@@ -1477,15 +1464,18 @@ export default function Recorder({
           />
         </div>
 
-        {/* Upload: icon button (restyled) + the unchanged hidden file input. */}
-        <HubIconButton
-          label={t("recUpload")}
-          title={!canRecord ? t("recNoPermission") : t("recUploadTitle")}
-          onClick={() => void openFileDialog()}
-          disabled={recording || busy || !canRecord}
-        >
-          <IconUpload />
-        </HubIconButton>
+        {/* Upload: icon button (restyled) + the unchanged hidden file input. The input stays outside the
+            hiding wrapper - it is the file dialog the overflow menu's Upload row opens. */}
+        <div className={hideUpload}>
+          <HubIconButton
+            label={t("recUpload")}
+            title={!canRecord ? t("recNoPermission") : t("recUploadTitle")}
+            onClick={() => void openFileDialog()}
+            disabled={recording || busy || !canRecord}
+          >
+            <IconUpload />
+          </HubIconButton>
+        </div>
         <input
           ref={fileRef}
           type="file"
@@ -1501,6 +1491,7 @@ export default function Recorder({
             while the notes popover is open - it offers its own capture button in that state, and showing
             both at once would just be two identically-labelled controls doing the same thing. */}
         {recording && canCaptureScreenshots() && !hub.isOpen("notes") && (
+          <div className={hideWhenCramped}>
           <HubIconButton
             label={t("screenshotCaptureButton")}
             title={t("screenshotCaptureButtonHint")}
@@ -1513,18 +1504,22 @@ export default function Recorder({
           >
             <IconCamera />
           </HubIconButton>
+          </div>
         )}
 
-        {/* Notes: pencil icon button (recording-only) -> Notes popover. */}
+        {/* Notes: pencil icon button (recording-only) -> Notes popover. Same rule as auto-stop: the button
+            hides when cramped, the `relative` wrapper that hosts the popover does not. */}
         {recording && (
           <div className="relative">
-            <HubIconButton
-              label={t("liveNotesToggle")}
-              onClick={toggleNotes}
-              expanded={hub.isOpen("notes")}
-            >
-              <IconPencil />
-            </HubIconButton>
+            <div className={hideWhenCramped}>
+              <HubIconButton
+                label={t("liveNotesToggle")}
+                onClick={toggleNotes}
+                expanded={hub.isOpen("notes")}
+              >
+                <IconPencil />
+              </HubIconButton>
+            </div>
             <NotesPopover
               open={hub.isOpen("notes")}
               onClose={closeNotes}
@@ -1545,6 +1540,50 @@ export default function Recorder({
             />
           </div>
         )}
+
+        {/* The overflow menu, hidden until the bar is too narrow to hold the buttons above - at which point
+            it stands in for them, so nothing the bar offers becomes unreachable however narrow the window
+            gets. Choosing Auto-stop or Notes does not nest a popover: those panels are absolute children of
+            their own `relative` wrappers in this row, so they drop from the bar wherever they were opened
+            from, and toggling their id closes this menu on the way (one open popover at a time). */}
+        <div className="relative">
+          <div className={showWhenCramped}>
+            <HubIconButton
+              label={t("moreControls")}
+              onClick={() => hub.toggle("more")}
+              expanded={hub.isOpen("more")}
+            >
+              <IconMore />
+            </HubIconButton>
+          </div>
+          <MoreControlsPopover
+            open={hub.isOpen("more")}
+            onClose={hub.close}
+            onAutoStop={() => hub.toggle("stop")}
+            autoStopDisabledReason={unavailableReason}
+            // Absent while recording, where upload is disabled anyway. The two rows that act rather than
+            // open a popover close the menu themselves - nothing else would.
+            onUpload={
+              recording
+                ? undefined
+                : () => {
+                    hub.close();
+                    void openFileDialog();
+                  }
+            }
+            uploadDisabledReason={unavailableReason}
+            onCapture={
+              recording && canCaptureScreenshots()
+                ? () => {
+                    hub.close();
+                    requestCapture();
+                  }
+                : undefined
+            }
+            captureDisabledReason={captureAreaSet ? undefined : t("screenshotCaptureNeedsArea")}
+            onNotes={recording ? toggleNotes : undefined}
+          />
+        </div>
       </div>
 
       {/* The meeting overran. Floated below the bar for the same reason the recovery banners are: the capture

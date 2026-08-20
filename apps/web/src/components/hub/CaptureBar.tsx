@@ -22,10 +22,15 @@ export default function CaptureBar() {
       // `window - left panel - chat panel`, which is not tied to any viewport breakpoint, so the cluster's
       // collapsible labels ask THIS box how much room there is (see AudioSourceChip / RecordHero's
       // `@xl:inline`) rather than asking the window and getting the wrong answer.
-      className="@container flex shrink-0 items-center gap-4 bg-[var(--hub-bar-bg)]"
+      // The bar's own chrome is 68px of dead space around the cluster - 36px of padding plus the two gap-4
+      // gutters to the centring spacers - which is a quarter of the bar once the cluster is down to its
+      // icons, so it tightens too. The padding lives on the class rather than the inline style below
+      // because an inline style beats a class and the container query could never win. One shared
+      // threshold, not the per-state ones the cluster uses: this bar does not know whether a recording is
+      // running, and 44px is noise at the recording tier's 690px.
+      className="@container flex shrink-0 items-center gap-4 px-[18px] bg-[var(--hub-bar-bg)] @max-[480px]:gap-1 @max-[480px]:px-2"
       style={{
         height: 72,
-        padding: "0 18px",
         boxSizing: "border-box",
         borderBottom: "1px solid var(--hub-bar-border-bottom)",
       }}

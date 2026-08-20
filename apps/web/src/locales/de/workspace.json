@@ -575,6 +575,7 @@
   "recTitlePrefixMic": "Mikro",
   "recTitlePrefixBoth": "Mikro+System",
   "autoStopLabel": "Automatisch stoppen",
+  "moreControls": "Weitere Steuerelemente",
   "autoStopOff": "Kein automatisches Stoppen",
   "autoStopIn15": "In 15 Minuten stoppen",
   "autoStopIn30": "In 30 Minuten stoppen",

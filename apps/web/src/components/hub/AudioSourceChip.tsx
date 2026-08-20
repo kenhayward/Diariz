@@ -26,14 +26,29 @@ export default function AudioSourceChip({
   systemAudio,
   expanded,
   disabled,
+  recording = false,
   onClick,
 }: {
   systemAudio: boolean;
   expanded: boolean;
   disabled?: boolean;
+  /**
+   * Whether a recording is running. Not a look - the chip is identical either way - but a measure of how
+   * much room it has: the recording cluster is ~290px wider than the idle one, so both of the chip's
+   * collapse steps have to come earlier. Separate from `disabled` (which the recorder also derives from
+   * the recording state) because these are two different reasons to care about the same fact.
+   */
+  recording?: boolean;
   onClick: () => void;
 }) {
   const { t } = useTranslation("workspace");
+  // Measured requirements, as bar container widths: everything on needs 725px while recording against
+  // 575px idle, and mic + pill + chevron needs 531px against 343px. Each threshold sits just above the
+  // requirement of the step above it, so there is no width at which the wider layout is still rendering
+  // and no longer fits. Written out in full because Tailwind only generates class names it can see whole.
+  const labelStep = recording ? "@min-[740px]:inline" : "@xl:inline";
+  const chromeStep = recording ? "@max-[560px]:hidden" : "@max-[400px]:hidden";
+  const dotStep = recording ? "@max-[560px]:block" : "@max-[400px]:block";
   return (
     <button
       type="button"
@@ -70,27 +85,44 @@ export default function AudioSourceChip({
           instead. The mic icon (+ "+System" pill + chevron) still carry the chip at any width, and the
           button's aria-label keeps the accessible name "Audio source" in every layout. */}
       <span
-        className="hidden min-w-0 truncate @xl:inline"
+        className={`hidden min-w-0 truncate ${labelStep}`}
         style={{ fontFamily: "system-ui", fontWeight: 500, fontSize: 14.5, color: "var(--hub-text)" }}
       >
         {t("audioSourceChip")}
       </span>
+      {/* Second, tighter step below the label one. With the label gone, "+System" is 72px of the 144px the
+          chip then occupies - the biggest thing left to shed - and the chevron another 26px. Below a 400px
+          bar the pill becomes a green dot and the chevron goes, leaving a 44px icon chip. The threshold is
+          the idle one in both states: the chip looks the same whether or not a recording is running. */}
       {systemAudio && (
-        <span
-          style={{
-            fontFamily: "system-ui",
-            fontWeight: 500,
-            fontSize: 12,
-            color: "var(--hub-green-text)",
-            background: "var(--hub-green-soft-bg)",
-            padding: "2px 7px",
-            borderRadius: 6,
-          }}
-        >
-          +System
-        </span>
+        <>
+          <span
+            className={chromeStep}
+            style={{
+              fontFamily: "system-ui",
+              fontWeight: 500,
+              fontSize: 12,
+              color: "var(--hub-green-text)",
+              background: "var(--hub-green-soft-bg)",
+              padding: "2px 7px",
+              borderRadius: 6,
+            }}
+          >
+            +System
+          </span>
+          {/* Stands in for the pill, so it appears exactly when the pill would have. No accessible text of
+              its own: the chip's aria-label names the control and the popover states the source. */}
+          <span
+            data-testid="system-audio-dot"
+            aria-hidden
+            className={`hidden shrink-0 ${dotStep}`}
+            style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--hub-green-text)" }}
+          />
+        </>
       )}
-      <IconChevron />
+      <span data-testid="source-chevron" className={`flex ${chromeStep}`}>
+        <IconChevron />
+      </span>
     </button>
   );
 }

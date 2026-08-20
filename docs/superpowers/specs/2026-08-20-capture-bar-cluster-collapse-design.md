@@ -55,19 +55,36 @@ an ordinary window size, so the recording cluster is the real offender.
 The bar is already a `@container` and the existing labels already ask it (not the viewport) how much room
 there is. This design adds two more tiers to that same mechanism.
 
-| Tier | What changes | Idle floor | Recording floor (desktop) |
+Each step's threshold is set just above the **measured requirement of the step above it**, so there is no
+width at which the wider layout is still rendering and no longer fits. Requirements below are bar
+*container* widths (the bar's content box), which is what a container query compares against.
+
+| Step | Requirement of the layout above it | Idle threshold | Recording threshold |
 |---|---|---|---|
-| **A** roomy (`≥576`, today) | labels shown | 609px | - |
-| **B** snug (`<576`, today) | labels hidden | 376px | 666px |
-| **C** tight | `+System` pill becomes a green dot on the mic; chevron hidden; bar padding and gaps tightened; the level meter drops from the recording pill; Upload hides while recording | **226px** | **421px** |
-| **D** cramped | the secondary controls fold into a `...` overflow button | **176px** | **321px** |
+| Labels drop (existing) | idle 575px / recording 725px | `@xl` = 576 | **740** |
+| Level meter + Upload drop | recording 628px | - | **690** |
+| `+System` pill becomes a dot, chevron drops | idle 343px / recording 531px | **400** | **560** |
+| Bar padding and gutters tighten | idle 240px / recording 434px | 480 | 480 |
+| Secondary controls fold into `...` | idle 216px / recording 410px | **240** | **440** |
 
-Thresholds, chosen from those measurements with slack:
+Resulting floors, measured in a browser against the compiled Tailwind CSS by narrowing the bar a pixel at a
+time and checking every control still sits inside it:
 
-|  | tight | cramped |
+| State | Floor today | Floor after |
 |---|---|---|
-| Idle | `< 400px` | `< 240px` |
-| Recording | `< 690px` | `< 440px` |
+| Idle | 376px | **217px** |
+| Recording (desktop) | 666px | **367px** |
+
+### The chip needs its own thresholds per state, and this is where the design first went wrong
+
+The audio-source chip looks identical whether or not a recording is running, so the first draft gave it one
+shared threshold. That was wrong: what differs is not how the chip looks but **how much room it has**. The
+recording cluster is ~290px wider, so at a 618px bar the chip was still showing its full 241px self while
+the meter had already gone - and the cluster spilled anyway.
+
+Measuring found three such windows in the recording state (614-630, 478-533 and 438-445 outer px) where one
+step had fired and the next had not yet. They are gone now because every threshold is derived from a
+measured requirement rather than chosen for tidiness. This is the reason the numbers are not round.
 
 ### Why container queries and not JavaScript measurement
 
@@ -110,14 +127,14 @@ The overflow menu is a new hub popover id, `"more"`. Its rows:
 | Screenshot | recording, desktop shell, area-gated | close menu, `requestCapture()` |
 | Notes | recording | `hub.toggle("notes")` |
 
-Upload is absent while recording for the same reason it is hidden inline at tier C: it is already disabled
-in that state, so it is dead weight rather than a lost action.
+Upload is absent while recording for the same reason it is hidden inline a step early: it is already
+disabled in that state, so it is dead weight rather than a lost action.
 
 Each row carries the same disabled state as its inline button, and the same reason text where there is one
 (the screenshot row is inert with "Set a capture area first" until an area exists).
 
 The audio-source chip and the record hero never fold into the menu. They are the bar's two primary
-controls and are what the floors in the tier table are built around: 44px + 52px at tiers C and D.
+controls and are what the floors are built around: a 44px chip and a 52px hero once both have collapsed.
 
 ### Three mechanical constraints the implementation must respect
 
@@ -129,8 +146,8 @@ controls and are what the floors in the tier table are built around: 44px + 52px
    considered; a wrapper is less invasive to a component shared by five call sites.
 3. **The level meter is hidden, not unmounted.** `HubLevelMeter` is what detects silence - it drives
    `onSilentChange`, and that is what raises the "no sound" hint during a recording. Dropping it from the
-   tree at tier C would silently disable that hint at narrow widths. It stays mounted and is hidden with
-   CSS, so it keeps listening.
+   tree when it collapses would silently disable that hint at narrow widths. It stays mounted and is
+   hidden with CSS, so it keeps listening.
 
 ## Testing
 
@@ -142,13 +159,14 @@ dialog, Screenshot gated on a capture area, and the menu closing when a row is c
 are present - jsdom computes no geometry and no Tailwind CSS is loaded. They are worth pinning (a deleted
 class is a silent regression) and are documented in the test as proving nothing about layout.
 
-**The floors, browser:** the eight numbers in the tier table are the actual claim of this change, and they
-get measured in a browser against the app's real classes and compiled CSS - the same method used to verify
-PR #560.
+**The floors, browser:** the numbers in the tables above are the actual claim of this change, and they get
+measured in a browser against the app's real classes and compiled CSS - the same method used to verify
+PR #560. The check that matters is not the floor but the **absence of any overflow window above it**: a
+sweep, a pixel at a time, over the whole width range in both states.
 
 ### A known jsdom consequence
 
-The `...` button is always in the DOM, hidden by CSS above tier D. In a browser it is `display:none` and so
+The `...` button is always in the DOM, hidden by CSS until the cluster folds. In a browser it is `display:none` and so
 out of the accessibility tree; in jsdom, where no CSS is applied, it is present and visible. That is
 harmless for existing tests (its accessible name is new and collides with nothing), but a test that opens
 the menu sees both the menu's "Auto-stop" row and the inline "Auto-stop" button. New tests scope their
