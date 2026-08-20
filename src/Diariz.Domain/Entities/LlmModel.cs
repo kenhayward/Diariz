@@ -12,6 +12,21 @@ public class LlmModel
     /// Unique.</summary>
     public string Name { get; set; } = string.Empty;
 
+    /// <summary>A user-facing name for this model, e.g. "QWEN 3.8". Null or blank means "use the slug" -
+    /// see <see cref="Label"/>. Nullable rather than defaulted to a copy of the slug, so that renaming the
+    /// model moves the label with it instead of stranding the old slug as a label nobody set.</summary>
+    public string? DisplayName { get; set; }
+
+    /// <summary>Whether this model is offered in the chat model picker. The model assigned to
+    /// <see cref="LlmCallGroup.Chat"/> is offered whether or not this is set (see <c>ChatModelCatalog</c>),
+    /// so an administrator cannot produce an empty picker, or one that excludes the model actually in
+    /// use.</summary>
+    public bool ChatEnabled { get; set; }
+
+    /// <summary>What a human reads. Never stored: deriving it means a slug rename cannot leave a stale
+    /// label behind.</summary>
+    public string Label => string.IsNullOrWhiteSpace(DisplayName) ? Name : DisplayName;
+
     /// <summary>Base URL of the OpenAI-compatible endpoint, e.g. <c>http://localhost:1234/v1</c>.</summary>
     public string ApiBase { get; set; } = string.Empty;
 

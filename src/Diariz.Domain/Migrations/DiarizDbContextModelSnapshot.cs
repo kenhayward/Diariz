@@ -18,7 +18,7 @@ namespace Diariz.Domain.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.10")
+                .HasAnnotation("ProductVersion", "10.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "vector");
@@ -596,11 +596,20 @@ namespace Diariz.Domain.Migrations
                     b.Property<string>("ApiKeyEncrypted")
                         .HasColumnType("text");
 
+                    b.Property<bool>("ChatEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<int>("ContextLength")
                         .HasColumnType("integer");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -2038,6 +2047,9 @@ namespace Diariz.Domain.Migrations
                         .HasColumnType("integer")
                         .HasDefaultValue(30);
 
+                    b.Property<Guid?>("ChatModelId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ChatToolOverridesJson")
                         .HasColumnType("jsonb");
 
@@ -2101,6 +2113,8 @@ namespace Diariz.Domain.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("UserId");
+
+                    b.HasIndex("ChatModelId");
 
                     b.ToTable("UserSettings");
                 });
@@ -3210,6 +3224,11 @@ namespace Diariz.Domain.Migrations
 
             modelBuilder.Entity("Diariz.Domain.Entities.UserSettings", b =>
                 {
+                    b.HasOne("Diariz.Domain.Entities.LlmModel", null)
+                        .WithMany()
+                        .HasForeignKey("ChatModelId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Diariz.Domain.Entities.ApplicationUser", "User")
                         .WithOne("Settings")
                         .HasForeignKey("Diariz.Domain.Entities.UserSettings", "UserId")

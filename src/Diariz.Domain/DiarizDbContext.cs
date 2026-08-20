@@ -649,6 +649,15 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
                 .WithOne(u => u.Settings)
                 .HasForeignKey<UserSettings>(s => s.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+            // SetNull, unlike the Restrict on LlmCallAssignment and PlatformSettings.DefaultLlmModelId
+            // below. Those two express "the platform is using this model, refuse the delete". A user's pick
+            // is a preference, and blocking an administrator's delete because one user once chose that
+            // model would make models effectively undeletable. So LlmModelsController.Delete must NOT grow
+            // a check for this column - the user simply falls back to the platform's chat model.
+            e.HasOne<LlmModel>()
+                .WithMany()
+                .HasForeignKey(s => s.ChatModelId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         // ---- Platform LLM model management ----
@@ -660,6 +669,11 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.HasIndex(m => m.Name).IsUnique();
             e.Property(m => m.Name).IsRequired().HasMaxLength(256);
             e.Property(m => m.ApiBase).IsRequired().HasMaxLength(512);
+            e.Property(m => m.DisplayName).HasMaxLength(128);
+            // A column default, not just the C# initialiser: the column is added to a table that already
+            // has rows, and those must come out of the migration as "not offered in chat".
+            e.Property(m => m.ChatEnabled).HasDefaultValue(false);
+            e.Ignore(m => m.Label);   // computed in C#; there is no column behind it
         });
 
         builder.Entity<LlmModelParameters>(e =>
