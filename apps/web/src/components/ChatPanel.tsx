@@ -39,6 +39,7 @@ import {
   createServerEngine,
   type DictationEngine,
 } from "../lib/dictationEngine";
+import ChatModelPicker from "./ChatModelPicker";
 import ContextDial from "./ContextDial";
 import PickRecordingModal from "./PickRecordingModal";
 
@@ -86,6 +87,14 @@ export default function ChatPanel() {
   }
   // The model's context-window size for the dial (per-user override, else server default).
   const { data: settings } = useQuery({ queryKey: ["user-settings"], queryFn: api.getUserSettings });
+  // The models an administrator offers for chat. Always fetched, even on a single-model platform: the
+  // picker is always shown, so there is always a list to render.
+  const { data: chatModels } = useQuery({ queryKey: ["chat-models"], queryFn: api.listChatModels });
+
+  // The chosen model. Seeded once from the remembered user setting, then owned locally so a pick takes
+  // effect immediately rather than after a settings refetch.
+  const [modelId, setModelId] = useState<string | null>(null);
+  const seededModel = useRef(false);
 
   const [messages, setMessages] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState("");
@@ -220,11 +229,25 @@ export default function ChatPanel() {
 
   // Dial: show the configured context window from the start (used 0), then the live figures the
   // server reports on each turn via the meta/done events.
-  const dialTotal = usage?.contextTotal || settings?.contextWindow || 0;
+  const models = chatModels ?? [];
+  // Falls back to the default when the stored pick is no longer offered - the same rule the server applies
+  // to the turn itself, so the dial cannot advertise a model the reply will not come from.
+  const selectedModel = models.find((m) => m.id === modelId) ?? models.find((m) => m.isDefault) ?? null;
+
+  // Prefer the picked model's own window, so the dial moves the moment a model is chosen rather than at
+  // the next turn. Once a turn has run the server reports the same number for that model anyway.
+  const dialTotal = selectedModel?.contextLength || usage?.contextTotal || settings?.contextWindow || 0;
   const dialUsed = usage?.contextUsed ?? 0;
   // The server's per-turn figure wins once a turn has run; before that, the model the platform assigns
   // to chat (there is no per-user model any more).
-  const dialModel = usage?.model || settings?.chatModel || "";
+  // The stream reports the SLUG. Map it back to a label, or the dial would flip from the readable name to
+  // the raw slug as soon as the first turn's meta event landed.
+  const dialModel =
+    selectedModel?.label ??
+    models.find((m) => m.name === usage?.model)?.label ??
+    usage?.model ??
+    settings?.chatModel ??
+    "";
 
   // Keep the thread scrolled to the newest message as tokens stream in.
   useEffect(() => {
@@ -498,6 +521,7 @@ export default function ChatPanel() {
           messages: history,
           includeAttachments: includeAttachments && hasContext,
           searchAllMeetings: contextMode === "all",
+          modelId: selectedModel?.id ?? null,
         },
         {
           onToken: (tok) => {
@@ -622,12 +646,33 @@ export default function ChatPanel() {
           : null,
       );
       setIncludeAttachments(c.context.includeAttachments ?? false);
+      // A model can be un-ticked between saving and reopening. Null falls through to the default, which is
+      // what the picker and the server both do with an id they no longer recognise.
+      setModelId(c.context.modelId ?? null);
       setOpenedId(id);
       setUsage(null);
       setSaveStatus(null);
     } catch (e) {
       setError(apiErrorMessage(e));
     }
+  }
+
+  // Seeded once, not kept in sync: after the first read the local state is authoritative, so a settings
+  // refetch triggered by our own save cannot overwrite a newer choice with the value it is echoing back.
+  useEffect(() => {
+    if (seededModel.current || settings === undefined) return;
+    seededModel.current = true;
+    setModelId(settings.chatModelId ?? null);
+  }, [settings]);
+
+  /// Remembers the pick for next time. Fire and forget: the local state has already moved, and a failed
+  /// save should not undo a choice the user can simply make again.
+  function chooseModel(id: string) {
+    setModelId(id);
+    api.updateUserSettings({ chatModelId: id }).then(
+      () => qc.invalidateQueries({ queryKey: ["user-settings"] }),
+      () => {},
+    );
   }
 
   async function saveConversation() {
@@ -643,6 +688,7 @@ export default function ChatPanel() {
         attachmentText: attachment?.text ?? null,
         includeAttachments,
         searchAllMeetings: contextMode === "all",
+        modelId: selectedModel?.id ?? null,
       },
     };
     try {
@@ -732,7 +778,13 @@ export default function ChatPanel() {
         </IconButton>
         {saveStatus && <span className="ml-1 text-xs text-green-600 dark:text-green-400">{saveStatus}</span>}
         {/* flex so the inline-flex dial is a flex item (centred) rather than baseline-aligned in a line box. */}
-        <div className="ml-auto flex items-center">
+        <div className="ml-auto flex items-center gap-1">
+          <ChatModelPicker
+            models={models}
+            selectedId={selectedModel?.id ?? null}
+            disabled={streaming}
+            onSelect={chooseModel}
+          />
           {dialTotal > 0 && <ContextDial model={dialModel} used={dialUsed} total={dialTotal} />}
         </div>
       </div>

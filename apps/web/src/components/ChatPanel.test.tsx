@@ -12,6 +12,8 @@ vi.mock("../lib/api", () => ({
     listRecordings: vi.fn(),
     listRooms: vi.fn(),
     getUserSettings: vi.fn(),
+    updateUserSettings: vi.fn(),
+    listChatModels: vi.fn(),
     getSection: vi.fn(),
     chatStream: vi.fn(),
     uploadChatAttachment: vi.fn(),
@@ -91,14 +93,21 @@ function renderPanel(route = "/recordings/rec-1", seedSelected: string[] = []) {
 
 const mock = (fn: unknown) => fn as ReturnType<typeof vi.fn>;
 
+const CHAT_MODELS = [
+  { id: "a", label: "GPT OSS 20B", name: "gpt-oss", contextLength: 131072, isDefault: true },
+  { id: "b", label: "QWEN 3.8", name: "qwen3.8-27b@q4_k_xl", contextLength: 200000, isDefault: false },
+];
+
 describe("ChatPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mock(api.listRecordings).mockResolvedValue([rec("rec-1", "Standup"), rec("rec-2", "Retro", "Summarized")]);
     mock(api.getUserSettings).mockResolvedValue({
       apiBase: null, model: "gpt-oss", hasApiKey: false, defaultApiBase: null, defaultModel: "gpt-oss",
-      contextWindow: 131072, chatModel: "test-model",
+      contextWindow: 131072, chatModel: "test-model", chatModelId: null,
     });
+    mock(api.updateUserSettings).mockResolvedValue(undefined);
+    mock(api.listChatModels).mockResolvedValue(CHAT_MODELS);
     mock(api.chatStream).mockImplementation(async (_body: any, h: any) => {
       h.onMeta?.({ model: "gpt-oss", contextUsed: 10, contextTotal: 100 });
       h.onToken("Hello ");
@@ -478,6 +487,110 @@ describe("ChatPanel", () => {
       expect(box.disabled).toBe(false);
       await ask("A normal question");
       await waitFor(() => expect(api.chatStream).toHaveBeenCalled());
+    });
+  });
+
+  describe("model picker", () => {
+    async function pickQwen() {
+      renderPanel("/recordings/rec-1");
+      // Wait for the models to LAND, not merely for the request to go out - the button exists either way,
+      // and clicking too early opens an empty menu.
+      await screen.findByRole("button", { name: /GPT OSS 20B/ });
+      fireEvent.click(screen.getByRole("button", { name: /model/i }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole("menuitemradio", { name: /QWEN 3\.8/ }));
+      });
+    }
+
+    it("updates the context dial as soon as a model is picked, before any turn", async () => {
+      // The dial has to move on selection. Waiting for the next turn's meta event would show the previous
+      // model's window for as long as the user sat there reading it.
+      await pickQwen();
+
+      expect(await screen.findByText(/0 \/ 200,000 \(0%\)/)).toBeTruthy();
+      expect(api.chatStream).not.toHaveBeenCalled();
+    });
+
+    it("sends the picked model on the next turn", async () => {
+      await pickQwen();
+      await ask("Who spoke?");
+
+      await waitFor(() => expect(api.chatStream).toHaveBeenCalled());
+      expect(mock(api.chatStream).mock.calls[0][0].modelId).toBe("b");
+    });
+
+    it("sends the default model when the user has picked nothing", async () => {
+      renderPanel("/recordings/rec-1");
+      await waitFor(() => expect(api.listChatModels).toHaveBeenCalled());
+      await ask("Who spoke?");
+
+      await waitFor(() => expect(api.chatStream).toHaveBeenCalled());
+      expect(mock(api.chatStream).mock.calls[0][0].modelId).toBe("a");
+    });
+
+    it("remembers the choice as a user setting", async () => {
+      await pickQwen();
+
+      await waitFor(() =>
+        expect(api.updateUserSettings).toHaveBeenCalledWith(expect.objectContaining({ chatModelId: "b" })),
+      );
+    });
+
+    it("starts on the model the user chose last time", async () => {
+      mock(api.getUserSettings).mockResolvedValue({
+        apiBase: null, model: "gpt-oss", hasApiKey: false, defaultApiBase: null, defaultModel: "gpt-oss",
+        contextWindow: 200000, chatModel: "qwen3.8-27b@q4_k_xl", chatModelId: "b",
+      });
+      renderPanel("/recordings/rec-1");
+      await waitFor(() => expect(api.listChatModels).toHaveBeenCalled());
+
+      expect(await screen.findByText(/0 \/ 200,000 \(0%\)/)).toBeTruthy();
+    });
+
+    it("keeps the label on the dial after a turn reports the slug", async () => {
+      // The stream's meta event carries the slug the endpoint needs. Rendering it raw would flip the dial
+      // from "QWEN 3.8" to "qwen3.8-27b@q4_k_xl" the instant the first token arrived.
+      mock(api.chatStream).mockImplementation(async (_body: any, h: any) => {
+        h.onMeta?.({ model: "qwen3.8-27b@q4_k_xl", contextUsed: 10, contextTotal: 200000 });
+        h.onToken("hi");
+        return { model: "qwen3.8-27b@q4_k_xl", contextUsed: 12, contextTotal: 200000 };
+      });
+      await pickQwen();
+      await ask("Who spoke?");
+      await waitFor(() => expect(api.chatStream).toHaveBeenCalled());
+
+      expect(screen.queryByText(/qwen3\.8-27b@q4_k_xl/)).toBeNull();
+      expect(screen.getByText("QWEN 3.8")).toBeTruthy();
+    });
+
+    it("disables the picker while a reply is streaming", async () => {
+      let release: (() => void) | null = null;
+      mock(api.chatStream).mockImplementation(
+        (_body: any, h: any) =>
+          new Promise((resolve) => {
+            h.onMeta?.({ model: "gpt-oss", contextUsed: 10, contextTotal: 100 });
+            release = () => resolve({ model: "gpt-oss", contextUsed: 12, contextTotal: 100 });
+          }),
+      );
+      renderPanel("/recordings/rec-1");
+      await waitFor(() => expect(api.listChatModels).toHaveBeenCalled());
+      await ask("Who spoke?");
+
+      expect((screen.getByRole("button", { name: /model/i }) as HTMLButtonElement).disabled).toBe(true);
+      await act(async () => release!());
+    });
+
+    it("saves the conversation's model and restores it on reopen", async () => {
+      await pickQwen();
+      await ask("Who spoke?");
+      await waitFor(() => expect(api.chatStream).toHaveBeenCalled());
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: /save conversation/i }));
+      });
+
+      await waitFor(() => expect(api.createChatConversation).toHaveBeenCalled());
+      expect(mock(api.createChatConversation).mock.calls[0][0].context.modelId).toBe("b");
     });
   });
 });
