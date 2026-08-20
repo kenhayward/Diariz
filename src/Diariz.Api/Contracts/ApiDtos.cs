@@ -916,6 +916,28 @@ public record LlmModelUpsert(string Name, string ApiBase, string? ApiKey, int Co
 /// <summary>Whether a model appears in the chat model picker.</summary>
 public record SetChatEnabledRequest(bool Enabled);
 
+/// <summary>Ask an OpenAI-compatible server what models it has.
+///
+/// This is the only request in the platform that carries an endpoint the caller chose. See
+/// <c>LlmModelDiscoveryClient</c> for why that was accepted here and what bounds it.</summary>
+public record DiscoverModelsRequest(string ApiBase, string? ApiKey);
+
+/// <summary>One model an endpoint reported, as offered for import.
+///
+/// <paramref name="ContextLength"/> is always a usable number, but <paramref name="ContextLengthReported"/>
+/// says whether the endpoint actually supplied it or it was defaulted. The distinction matters: the value
+/// sizes both the chat dial and the real context budget, so an administrator who cannot tell a measurement
+/// from a guess has no reason to correct the guess.</summary>
+public record DiscoveredModelDto(string Id, int ContextLength, bool ContextLengthReported, bool AlreadyExists);
+
+/// <summary>Create a model row for each named model on this endpoint. Names are re-checked against the
+/// endpoint's own listing, so this cannot be used to create a row for a model it never reported.</summary>
+public record ImportModelsRequest(string ApiBase, string? ApiKey, IReadOnlyList<string> Names);
+
+/// <summary>What an import did. <paramref name="NeedContextLength"/> names the models whose context window
+/// was defaulted rather than reported, so the administrator knows which to check.</summary>
+public record ImportModelsResultDto(int Added, int Skipped, IReadOnlyList<string> NeedContextLength);
+
 /// <summary>Run one sample call against a model, with the parameters an administrator is currently
 /// editing rather than the saved ones - so a change can be tried before it is committed.
 ///

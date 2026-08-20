@@ -623,6 +623,16 @@ is where a call type goes to *follow* the default rather than be pointed at a mo
 itself goes back to the endpoint configured in the server environment. The distinction is load-bearing: a
 call type following the default moves with it when the default changes, while one assigned to the model that
 happens to be the default stays where it was put.
+  **Add all from an endpoint.** Beside **Add model** sits **Add all**: give it a server address and an
+optional key, press Discover, and it lists the chat models that server reports. Embeddings, speech
+recognition, rerankers and the like are filtered out - by the type the server declares where it declares one
+(LM Studio's own listing does), otherwise by name. Models already configured are shown but cannot be picked
+again, so it is visible that the server has them rather than looking as though they went missing. Nothing is
+created until the confirm button, which names how many are ticked. Where a server does not report a model's
+context window - the plain OpenAI-compatible listing never does - the row says so and the model is created
+at **16,384**, enough to be useful and flagged as a guess rather than a measurement, since that number sizes
+both the chat dial and how much of a meeting is actually sent. Imported models are **not** offered in chat
+until they are ticked.
   A final **In chat** column sits beside the grid, and it is checkboxes rather than a dot: it marks which
 models the chat model picker offers, and any number may be ticked. It does not change routing - the Chat
 column still decides which model answers when the user has chosen nothing. The model that column points at

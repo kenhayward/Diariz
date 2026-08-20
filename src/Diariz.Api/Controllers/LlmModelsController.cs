@@ -28,16 +28,18 @@ public class LlmModelsController : ControllerBase
     private readonly SummarizationOptions _env;
     private readonly LlmDefaultsOptions _defaults;
     private readonly ILlmTestProbe _probe;
+    private readonly ILlmModelDiscoveryClient _discovery;
 
     public LlmModelsController(
         DiarizDbContext db, IApiKeyProtector protector, IOptions<SummarizationOptions> env,
-        IOptions<LlmDefaultsOptions> defaults, ILlmTestProbe probe)
+        IOptions<LlmDefaultsOptions> defaults, ILlmTestProbe probe, ILlmModelDiscoveryClient discovery)
     {
         _db = db;
         _protector = protector;
         _env = env.Value;
         _defaults = defaults.Value;
         _probe = probe;
+        _discovery = discovery;
     }
 
     [HttpGet]
@@ -322,6 +324,94 @@ public class LlmModelsController : ControllerBase
         await _db.SaveChangesAsync();
 
         return NoContent();
+    }
+
+    // ---- Discovery (Add all from an endpoint) ----
+
+    /// <summary>Lists the chat models on an endpoint, marking which are already configured.
+    ///
+    /// <b>This is the only route that fetches a URL the caller supplied.</b> Its bounds live in
+    /// <see cref="LlmModelDiscoveryClient"/>, whose doc comment explains why the rule its neighbour
+    /// <see cref="Test"/> follows - never accept an endpoint from the caller - was relaxed here, and what
+    /// contains the relaxation. Only parsed model ids are returned; the endpoint's response body never
+    /// reaches the caller, so this cannot be used as a general-purpose fetch.</summary>
+    [HttpPost("discover")]
+    public async Task<ActionResult<List<DiscoveredModelDto>>> Discover(
+        DiscoverModelsRequest req, CancellationToken ct = default)
+    {
+        var apiBase = req.ApiBase?.Trim();
+        if (string.IsNullOrWhiteSpace(apiBase)) return BadRequest("An endpoint URL is required.");
+
+        var found = await _discovery.ListAsync(apiBase, req.ApiKey, ct);
+        var chat = found.Where(LlmModelDiscovery.IsChatModel).ToList();
+
+        var existing = await _db.LlmModels
+            .Where(m => chat.Select(c => c.Id).Contains(m.Name))
+            .Select(m => m.Name)
+            .ToListAsync(ct);
+
+        return chat
+            .Select(m => new DiscoveredModelDto(
+                m.Id,
+                m.ContextLength ?? LlmModelDiscovery.DefaultContextLength,
+                ContextLengthReported: m.ContextLength is not null,
+                AlreadyExists: existing.Contains(m.Id)))
+            .ToList();
+    }
+
+    /// <summary>Creates a model row for each named model on this endpoint.
+    ///
+    /// <b>The names are re-checked against the endpoint's own listing.</b> They arrive from the client, so
+    /// they are caller input: trusting them would let an administrator's session create a row for any model
+    /// string against any endpoint without discovery ever having seen it - and the row is the audit trail
+    /// this endpoint exists to leave. A name the endpoint does not report, or reports as something other
+    /// than a chat model, is skipped rather than refused, since the same thing happens to a name that is
+    /// simply already configured.</summary>
+    [HttpPost("discover/import")]
+    public async Task<ActionResult<ImportModelsResultDto>> Import(
+        ImportModelsRequest req, CancellationToken ct = default)
+    {
+        var apiBase = req.ApiBase?.Trim();
+        if (string.IsNullOrWhiteSpace(apiBase)) return BadRequest("An endpoint URL is required.");
+
+        var found = (await _discovery.ListAsync(apiBase, req.ApiKey, ct))
+            .Where(LlmModelDiscovery.IsChatModel)
+            .ToDictionary(m => m.Id);
+
+        var wanted = (req.Names ?? []).Distinct().Where(found.ContainsKey).ToList();
+        var existing = await _db.LlmModels
+            .Where(m => wanted.Contains(m.Name))
+            .Select(m => m.Name)
+            .ToListAsync(ct);
+
+        var key = _protector.Protect(req.ApiKey);
+        var added = new List<string>();
+        var guessed = new List<string>();
+
+        foreach (var name in wanted.Except(existing))
+        {
+            var model = found[name];
+            _db.LlmModels.Add(new LlmModel
+            {
+                Id = Guid.NewGuid(),
+                Name = name,
+                ApiBase = apiBase,
+                ApiKeyEncrypted = key,
+                ContextLength = model.ContextLength ?? LlmModelDiscovery.DefaultContextLength,
+                // Not offered in chat, and no display name. Importing forty models from a server must not
+                // put forty rows in everyone's picker, and inventing a label would only be a stored copy of
+                // the slug that a later rename would strand.
+                ChatEnabled = false,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            });
+            added.Add(name);
+            if (model.ContextLength is null) guessed.Add(name);
+        }
+
+        await _db.SaveChangesAsync(ct);
+
+        return new ImportModelsResultDto(added.Count, (req.Names ?? []).Distinct().Count() - added.Count, guessed);
     }
 
     // ---- helpers ----
