@@ -65,6 +65,7 @@ export default function ModelEditorDrawer({
 }: Props) {
   const { t } = useTranslation("account");
   const [name, setName] = useState(model?.name ?? "");
+  const [displayName, setDisplayName] = useState(model?.displayName ?? "");
   const [apiBase, setApiBase] = useState(model?.apiBase ?? "");
   const [contextLength, setContextLength] = useState(model?.contextLength ?? 8192);
   /// Undefined means "not touched": the drawer is never given the stored key, so it must omit the field
@@ -85,6 +86,7 @@ export default function ModelEditorDrawer({
     JSON.stringify(layers) !== initial ||
     apiKey !== undefined ||
     name !== (model?.name ?? "") ||
+    displayName !== (model?.displayName ?? "") ||
     apiBase !== (model?.apiBase ?? "") ||
     contextLength !== (model?.contextLength ?? 8192);
 
@@ -156,6 +158,9 @@ export default function ModelEditorDrawer({
     try {
       const payload = {
         name: name.trim(),
+        // Blank means "use the slug". Sent as null rather than "" so there is one representation of
+        // absent, which is what lets LlmModel.Label have a single thing to fall back on.
+        displayName: displayName.trim() || null,
         apiBase: apiBase.trim(),
         contextLength,
         parameters: toWire(layers),
@@ -233,6 +238,7 @@ export default function ModelEditorDrawer({
         {showConnection && (
           <ConnectionPanel
             name={name} setName={setName}
+            displayName={displayName} setDisplayName={setDisplayName}
             apiBase={apiBase} setApiBase={setApiBase}
             apiKey={apiKey} setApiKey={setApiKey}
             contextLength={contextLength} setContextLength={setContextLength}
@@ -368,10 +374,13 @@ export default function ModelEditorDrawer({
 /// Name, endpoint, key and context length. Secondary now: they are set once when a model is added and
 /// rarely touched again, so they sit behind a button rather than above every parameter.
 function ConnectionPanel({
-  name, setName, apiBase, setApiBase, apiKey, setApiKey, contextLength, setContextLength, hasApiKey,
+  name, setName, displayName, setDisplayName, apiBase, setApiBase, apiKey, setApiKey,
+  contextLength, setContextLength, hasApiKey,
 }: {
   name: string;
   setName: (v: string) => void;
+  displayName: string;
+  setDisplayName: (v: string) => void;
   apiBase: string;
   setApiBase: (v: string) => void;
   apiKey: string | undefined;
@@ -390,6 +399,18 @@ function ConnectionPanel({
         <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("llmModelsName")}</span>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="openai/gpt-oss-20b" className={field} />
         <span className="mt-0.5 block text-[10.5px] text-gray-400 dark:text-gray-500">{t("llmModelsNameHint")}</span>
+      </label>
+      <label className="block text-[11.5px]">
+        <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("llmModelsDisplayName")}</span>
+        {/* The placeholder is the live `name` state, so it tracks a slug being edited in the same
+            session rather than showing the one the model was opened with. */}
+        <input
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+          placeholder={name}
+          className={field}
+        />
+        <span className="mt-0.5 block text-[10.5px] text-gray-400 dark:text-gray-500">{t("llmModelsDisplayNameHint")}</span>
       </label>
       <label className="block text-[11.5px]">
         <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("llmModelsEndpoint")}</span>
