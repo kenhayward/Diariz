@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { usageFilterToParams } from "../llmusage/usageFilterParams";
 import type { LlmTestOutcome } from "../../lib/types";
 import { PARAMETERS, type ParameterValue } from "./parameterSchema";
+import ParsedResult from "./ParsedResult";
 
 interface Props {
   result: LlmTestOutcome;
@@ -134,12 +135,35 @@ export default function TestResultCard({
 
       <div className="border-t border-gray-100 px-3.5 py-2.5 dark:border-gray-800/60">
         <h4 className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-          {result.ok ? t("llmTestResponse") : t("llmTestWhatCameBack")}
+          {!result.ok
+            ? t("llmTestWhatCameBack")
+            : result.parsedKind
+              ? t("llmTestParsedResult")
+              : t("llmTestResponse")}
         </h4>
         {result.ok ? (
-          <p className="mt-1 max-h-[132px] overflow-auto text-xs leading-relaxed text-gray-700 dark:text-gray-300">
-            {result.response}
-          </p>
+          result.parsedKind && result.parsedJson ? (
+            <>
+              {/* Parsed first, raw behind a disclosure: for a recording-backed test the useful answer is
+                  what the pipeline WOULD have stored, and the model's own prose is the follow-up question.
+                  The four sample-transcript groups have nothing to parse and keep the plain paragraph. */}
+              <div className="mt-1.5">
+                <ParsedResult parsedKind={result.parsedKind} parsedJson={result.parsedJson} />
+              </div>
+              <details className="mt-2">
+                <summary className="cursor-pointer text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                  {t("llmTestRawReply")}
+                </summary>
+                <p className="mt-1 max-h-[132px] overflow-auto text-xs leading-relaxed text-gray-700 dark:text-gray-300">
+                  {result.response}
+                </p>
+              </details>
+            </>
+          ) : (
+            <p className="mt-1 max-h-[132px] overflow-auto text-xs leading-relaxed text-gray-700 dark:text-gray-300">
+              {result.response}
+            </p>
+          )
         ) : (
           <p className="mt-1 max-h-[132px] overflow-auto font-mono text-[11px] leading-relaxed text-red-600 dark:text-red-400">
             {result.message}
