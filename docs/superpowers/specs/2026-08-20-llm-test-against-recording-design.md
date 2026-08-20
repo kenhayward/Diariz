@@ -83,11 +83,16 @@ the **whole `/chat/completions` response JSON** while the streaming probe only a
   `choices[0].message.content` out and delegates. Pure extraction, no behaviour change, and it keeps one
   parsing implementation rather than two.
 
-`LlmTestOutcome` gains three fields:
+`LlmTestOutcome` gains two fields:
 
 - `ParsedKind` - `"Tags" | "Actions" | "Summary" | null` (null for the fixed-sample groups)
 - `ParsedJson` - the parsed structure, serialised
-- `ParseError` - the message when parsing threw
+
+**There is no `ParseError`.** All three parsers are total: they never throw on bad content. `TagsPrompt`
+and `ActionsPrompt` return an **empty list** when the array is missing or malformed, and
+`SummarizationPrompt` falls through to treating the whole reply as plain text. That is the real signal and
+it is more useful than an exception would be - an empty list is precisely what the pipeline would have
+stored. The UI says "the pipeline would have extracted nothing from this" rather than "parsing failed".
 
 **Segment loading.** The `Speaker.DisplayName` lookup into `SegmentDto` is copy-pasted across ten call
 sites. The factory needs it, so it gets extracted once into a shared helper. The other nine sites are left
@@ -136,7 +141,7 @@ row showing name, date and duration.
 | Tags | chips with weights |
 | Actions | read-only table: text / actor / deadline |
 | Summary | title line (when the model was asked for one) plus the paragraph |
-| Parse failed | a plain banner saying the pipeline would have rejected this, raw text expanded |
+| Tags/Actions, empty | a plain banner saying the pipeline would have extracted nothing, raw text expanded |
 
 Read-only renderings, purpose-built for the rail. `ActionsTable` and `TagCloud` are bound to real recording
 state and mutations and are not reused.
@@ -148,8 +153,8 @@ TDD throughout - failing test first.
 **Unit (`Diariz.Api.Tests`, no Docker)**
 
 - `ParseContent` on each of the three prompt classes: happy path, and the malformed shapes each parser
-  already guards. Plus a test that `ParseResponse(json)` and `ParseContent(content)` agree, so the
-  extraction cannot drift.
+  already guards (which return empty rather than throwing). Plus a test that `ParseResponse(json)` and
+  `ParseContent(content)` agree, so the extraction cannot drift.
 - `LlmTestPromptFactory`: each group produces the same messages as its real builder called directly, with a
   fake template provider.
 - Controller: 400 with no recording on a content tab, 404 for another user's recording, 400 for a recording
@@ -169,7 +174,7 @@ TDD throughout - failing test first.
 - `RecordingPicker` filters out untranscribed recordings and calls the PUT on selection.
 - `TestRail` shows the picker on the three content tabs and the static text on the other four; Run is
   disabled with no recording.
-- `TestResultCard` renders each parsed kind, and the parse-failure banner with the raw text expanded.
+- `TestResultCard` renders each parsed kind, and the extracted-nothing banner with the raw text expanded.
 - Use `userEvent`, not `fireEvent`: `fireEvent` fires handlers on disabled controls, so the disabled-Run
   assertion would pass for a reason the browser never reproduces.
 
