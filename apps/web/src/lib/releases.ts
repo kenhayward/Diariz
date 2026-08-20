@@ -65,6 +65,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.233.1",
+    date: "2026-08-20",
+    pr: 560,
+    headline: "The chat panel no longer has the record controls printed over it in a narrow window",
+    summary:
+      "In a narrow window - a small desktop-app window, or a browser window dragged in - the record controls at the top of the page were drawn on top of the chat panel. The clock and upload buttons ended up sitting over the word CHAT and the panel's own toolbar, so two sets of controls occupied the same corner and it was not obvious which one a click would reach.\n\nThe record controls are centred over the page you are reading, and that column gets narrower as the window does. Past a point the controls no longer fit it, and the overflow ran across the chat panel instead of behind it.\n\nThe chat panel now sits above the record controls, so the overflow disappears behind it and the panel stays clean and readable. Nothing about the controls themselves changed - widen the window, or collapse the chat panel, and they are all there as before. The recorder's own pop-ups (audio source, auto-stop) still open across the chat panel, so nothing you can open from the bar is hidden by this.",
+    fixed: [
+      "In a narrow window, the record controls are no longer drawn over the open chat panel or its collapsed rail - the chat panel is now in front of them.",
+    ],
+  },
+  {
     version: "0.233.0",
     date: "2026-08-20",
     pr: 559,

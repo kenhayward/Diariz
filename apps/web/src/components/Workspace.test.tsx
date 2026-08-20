@@ -114,6 +114,30 @@ describe("Workspace", () => {
     }
   });
 
+  // At a narrow window the capture bar's cluster is wider than the content column and spills past that
+  // column's right edge (the cluster is min-w-0 so the box shrinks, but the flex row inside does not clip -
+  // and it cannot, because the recorder's popovers are absolute children that overflow-hidden would cut).
+  // The Recorder's root is `position: relative`, so the spill paints in the positioned-descendant phase,
+  // above any plain in-flow sibling - which is what the chat rail was, so the clock and upload buttons
+  // landed on top of the chat panel's header. Giving the rail its own positive layer puts the chat panel
+  // over the spill instead. jsdom computes no geometry, so this pins the class contract; the layering
+  // itself was measured in a browser.
+  it("puts the open chat panel on a layer above the capture bar's overflow", () => {
+    renderWorkspace();
+    fireEvent.click(screen.getByRole("button", { name: /expand chat panel/i }));
+    const panel = screen.getByText("CHAT").closest("[data-tour='chat']")!;
+    expect(panel.className).toContain("relative");
+    expect(panel.className).toContain("z-10");
+  });
+
+  // Same spill, same rule: collapsed, the chat is a 36px rail in the same sibling position.
+  it("puts the collapsed chat rail on that layer too", () => {
+    renderWorkspace();
+    const rail = screen.getByRole("button", { name: /expand chat panel/i }).parentElement!;
+    expect(rail.className).toContain("relative");
+    expect(rail.className).toContain("z-10");
+  });
+
   it("drag-resizes the right panel and persists the width", () => {
     renderWorkspace();
     fireEvent.click(screen.getByRole("button", { name: /expand chat panel/i }));

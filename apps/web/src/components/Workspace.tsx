@@ -117,8 +117,19 @@ export default function Workspace() {
       </div>
 
       {/* The chat panel stays mounted even when collapsed (hidden via CSS) so its conversation
-          state survives collapse/expand. The rail is shown alongside when collapsed. */}
-      <div data-tour="chat" className={rightOpen ? "flex shrink-0" : "hidden"}>
+          state survives collapse/expand. The rail is shown alongside when collapsed.
+
+          `relative z-10` is what keeps the chat above the capture bar at a narrow window. The bar's
+          cluster is min-w-0, so its box shrinks with the content column, but the flex row inside it does
+          not clip once the column is narrower than the cluster - and it must not, because the recorder's
+          popovers are absolute children that overflow-hidden would cut off (CaptureBar.tsx). The spill
+          therefore runs past the column's right edge, and because the Recorder's root is `position:
+          relative` it paints in the positioned-descendant phase - above any plain in-flow sibling. This
+          rail was such a sibling, so the clock and upload buttons landed on top of the chat panel's
+          header. A positive layer here puts the panel over the spill instead, and stays below the
+          recorder's own popovers (z-40/z-50), modals (z-50+) and the help popover (z-[70]), so those
+          still open across the chat. */}
+      <div data-tour="chat" className={rightOpen ? "relative z-10 flex shrink-0" : "hidden"}>
         <div
           role="separator"
           aria-orientation="vertical"
@@ -188,7 +199,10 @@ function CollapsedRail({
   return (
     <div
       data-tour={tour}
-      className="flex w-9 shrink-0 flex-col items-center border-r bg-white py-2 dark:border-gray-700 dark:bg-gray-900"
+      // `relative z-10` for the same reason as the open chat panel above: collapsed, the chat is still the
+      // sibling immediately right of the content column and the capture bar's overflow lands on it. It is
+      // inert on the left rail, which the bar cannot overflow into (the cluster spills rightwards).
+      className="relative z-10 flex w-9 shrink-0 flex-col items-center border-r bg-white py-2 dark:border-gray-700 dark:bg-gray-900"
     >
       <button
         type="button"
