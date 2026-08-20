@@ -25,7 +25,7 @@ public class ScreenshotMergeBreakTests(ContainersFixture fx)
             .Build();
         var resolver = new LlmSettingsResolver(
             db, Options.Create(new LlmDefaultsOptions()),
-            Options.Create(new SummarizationOptions { ApiBase = "http://llm.test/v1" }), new FakeApiKeyProtector());
+            Options.Create(new SummarizationOptions { ApiBase = "http://llm.test/v1" }), new FakeApiKeyProtector(), new ChatModelCatalog(db));
         return new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config,
             resolver, new FakeEmailSender(), new FakeSpeakerIdentifier(), Options.Create(new UploadOptions()), new RoomScope(db),
             new PeopleDirectory(db), new CapturingWebhookPublisher(), Options.Create(new AppPublicOptions()))

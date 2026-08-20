@@ -16,11 +16,11 @@ import ModelEditorDrawer from "./ModelEditorDrawer";
 
 const MODELS: LlmModel[] = [
   {
-    id: "a", name: "gpt-oss-20b", apiBase: "http://a/v1", hasApiKey: true, contextLength: 8192,
+    id: "a", name: "gpt-oss-20b", displayName: null, apiBase: "http://a/v1", hasApiKey: true, chatEnabled: false, contextLength: 8192,
     parameters: { ModelBase: '{"temperature":0.5}' },
   },
   {
-    id: "b", name: "qwen3-27b", apiBase: "http://b/v1", hasApiKey: false, contextLength: 32768,
+    id: "b", name: "qwen3-27b", displayName: null, apiBase: "http://b/v1", hasApiKey: false, chatEnabled: false, contextLength: 32768,
     parameters: { ModelBase: '{"temperature":0.9,"top_k":40}', Translation: '{"temperature":0.1}' },
   },
 ];
@@ -154,6 +154,45 @@ describe("ModelEditorDrawer", () => {
 
     await vi.waitFor(() => expect(api.updateModel).toHaveBeenCalled());
     expect(api.updateModel.mock.calls[0][1].apiKey).toBeUndefined();
+  });
+
+  it("saves a display name from the connection panel", async () => {
+    api.updateModel.mockResolvedValue(MODELS[0]);
+    open(MODELS[0]);
+
+    // The connection fields sit behind a toggle for a saved model - they are set once and rarely touched.
+    fireEvent.click(screen.getByRole("button", { name: /connection/i }));
+    fireEvent.change(screen.getByLabelText(/display name/i), { target: { value: "QWEN 3.8" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await vi.waitFor(() => expect(api.updateModel).toHaveBeenCalled());
+    expect(api.updateModel.mock.calls[0][1].displayName).toBe("QWEN 3.8");
+  });
+
+  it("sends a blank display name as null, so the slug shows through", async () => {
+    // "" and null would be two spellings of the same state; the server stores one, so the client sends one.
+    api.updateModel.mockResolvedValue(MODELS[0]);
+    open({ ...MODELS[0], displayName: "Old Label" });
+
+    fireEvent.click(screen.getByRole("button", { name: /connection/i }));
+    fireEvent.change(screen.getByLabelText(/display name/i), { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await vi.waitFor(() => expect(api.updateModel).toHaveBeenCalled());
+    expect(api.updateModel.mock.calls[0][1].displayName).toBeNull();
+  });
+
+  it("counts a display-name edit as an unsaved change", () => {
+    // `dirty` does not gate Save - it drives the status line and the discard prompt on close. A field
+    // missing from that check makes the drawer report "no unsaved changes" while holding an edit, and
+    // then throw it away on close without asking.
+    open(MODELS[0]);
+    expect(screen.getByText(/override\(s\) on/).textContent).not.toContain("unsaved");
+
+    fireEvent.click(screen.getByRole("button", { name: /connection/i }));
+    fireEvent.change(screen.getByLabelText(/display name/i), { target: { value: "QWEN 3.8" } });
+
+    expect(screen.getByText(/override\(s\) on/).textContent).toContain("unsaved");
   });
 
   it("copies another model's parameters into the open drawer without saving", () => {

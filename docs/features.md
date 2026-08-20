@@ -286,6 +286,14 @@ OpenAI-compatible LLM endpoint (see **AI models** below), with the API key encry
 box. When a **folder** is open, chat is about that folder — its roll-up **summary, minutes, and aggregated
 actions** are the context, and "Include attachments" pulls in every attachment across the folder and its
 sub-folders.
+  **Choosing a model.** Where an administrator has marked more than one model as available for chat (see
+**AI models** below), a sparkle button beside the context dial opens a picker listing each one by its
+display name with its context window in brackets. The choice can be changed **part-way through a
+conversation** - chat is stateless per turn, so the whole conversation is resent and the new model picks up
+where the previous one left off. The dial follows the choice immediately rather than waiting for the next
+reply, so it always reports the window of the model that will actually answer. The choice is remembered
+between visits and stored with a saved conversation; if the model is later withdrawn, the conversation falls
+back to the platform's chat model rather than failing.
 - **Search the panel** - a search box sits above the meetings list. Typing takes the list over with results and
 clearing drops you back exactly where you were browsing. It searches the **folder you are in** by default (the
 chip tells you which), and each hit shows the matching words in context, the folder it lives in, and clicking
@@ -597,7 +605,8 @@ the call genuinely succeeded; truncation is a separate signal, not a kind of fai
 flagged when any of its calls was cut off, so the default view shows it without drilling in.
 - **AI models** (Platform Administrator, `/admin/llm-models`, reachable from Settings -> AI): every model the
 platform calls is configured here, and nowhere else. A model carries its **name** (sent verbatim as the
-`model` in each request), **endpoint**, an optional **API key** (encrypted at rest, write-only - it is never
+`model` in each request), an optional **display name** (what users see in place of that name - blank means
+the name is shown), **endpoint**, an optional **API key** (encrypted at rest, write-only - it is never
 returned to the browser once saved) and its **context window**, which is what the chat context dial reports
 against. Every sampling parameter is then exposed per model: **temperature**, **top P**, **top K**,
 **repeat penalty**, **frequency** and **presence penalties**, **max tokens**, **max completion tokens**,
@@ -614,6 +623,11 @@ is where a call type goes to *follow* the default rather than be pointed at a mo
 itself goes back to the endpoint configured in the server environment. The distinction is load-bearing: a
 call type following the default moves with it when the default changes, while one assigned to the model that
 happens to be the default stays where it was put.
+  A final **In chat** column sits beside the grid, and it is checkboxes rather than a dot: it marks which
+models the chat model picker offers, and any number may be ticked. It does not change routing - the Chat
+column still decides which model answers when the user has chosen nothing. The model that column points at
+is ticked and locked, because it is the model in use and a picker that could exclude it would be unable to
+show the current selection.
   The editor is a right-hand **drawer** with a tab per call type, each showing how many parameters it
 overrides, and the thirteen parameters in two columns. Connection details (name, endpoint, key, context
 window) sit behind a **Connection** button, since they are set once when a model is added. A panel beside

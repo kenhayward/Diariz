@@ -66,6 +66,16 @@ export default function LlmModels({ embedded = false, onOpenUsageLog }: Props = 
     onError: (e) => setError(apiErrorMessage(e, t("llmModelsAssignError"))),
   });
 
+  /// Its own mutation rather than part of saveAssignments: routing replaces the whole assignment set,
+  /// while this flips one model's own flag. Sending them together would make a checkbox click rewrite
+  /// every route.
+  const setChatEnabled = useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      api.setModelChatEnabled(id, enabled),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["llm-models"] }),
+    onError: (e) => setError(apiErrorMessage(e, t("llmModelsAssignError"))),
+  });
+
   /// A row test runs the model's SAVED parameters against its own Defaults scope - it answers "can we
   /// reach this at all", which is a different question from the drawer's per-call-type test.
   async function runTest(model: LlmModel) {
@@ -165,6 +175,7 @@ export default function LlmModels({ embedded = false, onOpenUsageLog }: Props = 
             tests={tests}
             onTest={runTest}
             onTestAll={runTestAll}
+            onChatEnabledChange={(id, enabled) => setChatEnabled.mutate({ id, enabled })}
           />
         )}
       </div>

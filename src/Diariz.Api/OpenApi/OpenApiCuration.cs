@@ -50,6 +50,7 @@ public static class OpenApiCuration
         ["CalendarFeeds"] = "Your external iCalendar (.ics) feed subscriptions - list, add, update, and remove. Feed URLs are validated (https only) before they are stored.",
         ["OutlookCalendar"] = "Mirror a classic desktop Outlook calendar into Diariz from the Windows app, and manage the machines you have connected. Unlike Google and .ics calendars, which are read live, Outlook is only reachable from your own PC - so its events are pushed here and stored, which is what lets them keep working in a browser and after the desktop app is closed.",
         ["Chat"] = "Multi-turn chat over your transcripts: stream answers over selected recordings and save, load, or delete conversations.",
+        ["ChatModels"] = "The models a Platform Administrator offers for chat, so a client can let you pick which one answers. Endpoints and API keys are never returned here.",
         ["Feedback"] = "Submit a bug or UX report about the app, captured with the SPA route, app release, and a scrubbed client trail.",
         ["FormulaResults"] = "The Markdown documents a formula produced for a recording - list, read, edit, delete, email, and download.",
         ["Formulas"] = "Manage Formulas (a saved prompt plus context) and run one over a recording to generate a document.",

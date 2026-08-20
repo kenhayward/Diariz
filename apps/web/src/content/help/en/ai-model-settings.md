@@ -1,6 +1,6 @@
 ---
 title: AI and model settings
-summary: Summaries, minutes, actions, tags, chat, and formulas all need an OpenAI-compatible endpoint. A Platform Administrator configures the models for everyone on the AI models page, where a grid decides which model runs which kind of call.
+summary: Summaries, minutes, actions, tags, chat, and formulas all need an OpenAI-compatible endpoint. A Platform Administrator sets them up on the AI models page, whose grid decides which model runs each job, and which people may pick for chat.
 group: settings
 order: 10
 ---
@@ -23,6 +23,9 @@ address `/admin/llm-models` still works if you have it bookmarked. Each model th
 
 - **A name.** Sent to the endpoint exactly as written, so it must match what that endpoint calls the
   model.
+- **A display name**, optional. What everyone else sees in place of that name - "QWEN 3.8" rather than
+  "qwen3.8-27b@q4_k_xl". Leave it blank and the name is shown instead. Changing the name later moves the
+  display name with it, because nothing is copied.
 - **An endpoint.** Any OpenAI-compatible `/chat/completions` URL. This includes hosted providers and
   local runtimes such as LM Studio or Ollama.
 - **An API key**, if the endpoint needs one. It is encrypted at rest and write-only: once saved, Diariz
@@ -87,7 +90,22 @@ Each row has a **Test** button that checks the model is reachable - the endpoint
 name - and **Test all** in the footer runs them one at a time.
 
 A model that is still in use cannot be deleted. Diariz refuses and names the jobs still pointing at it,
-so you know exactly what to move first. **Delete model** lives at the foot of the model's own drawer.
+so you know exactly what to move first. **Delete model** lives at the foot of the model's own drawer. A
+model someone has chosen for their own chat does not count as in use - they simply fall back to the
+standard chat model.
+
+## Letting people choose their chat model
+
+The last column, **In chat**, is checkboxes rather than a dot, and you can tick as many as you like. It
+does not change routing: the **Chat** column still decides which model answers when someone has chosen
+nothing. What it controls is which models appear in the picker beside the chat context dial, so people
+can switch between them - including part-way through a conversation.
+
+The model the **Chat** column points at is always ticked and cannot be un-ticked. It is the one actually
+answering, so the picker has to be able to show it.
+
+Un-ticking a model does not erase anyone's choice. They fall back to the standard chat model while it is
+un-ticked, and tick it again and their choice comes back.
 
 ## The context window
 

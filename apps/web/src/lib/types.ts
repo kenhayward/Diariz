@@ -508,8 +508,12 @@ export interface UserSettings {
   /// The context window (tokens) of the model serving chat, for the chat dial. READ-ONLY from 0.221.0:
   /// LLM configuration is platform-wide and edited at /admin/llm-models.
   contextWindow: number;
-  /// The model serving chat, for the dial's label before the first turn reports one. Read-only.
+  /// The model serving chat, for the dial's label before the first turn reports one. Read-only, and
+  /// derived from `chatModelId` below - it names the model that will actually answer, not the platform's.
   chatModel: string;
+  /// The model chosen in the chat picker, or null to follow the platform's chat routing. Writable, unlike
+  /// the two fields above, which are derived from it.
+  chatModelId: string | null;
   /// Effective master switch for chat tool calling (user override ?? server default).
   toolsEnabled: boolean;
   defaultToolsEnabled: boolean;
@@ -968,6 +972,9 @@ export interface UpdateUserSettings {
   autoMergeSpeakerSegments?: boolean;
   /// Tri-state: omit = leave unchanged, 0 = clear the override, 5+ = set it (1-4 is rejected by the server).
   llmTimeoutSeconds?: number;
+  /// The chat model picker's choice; omit to leave unchanged. An all-zero GUID clears it and follows the
+  /// platform's chat routing.
+  chatModelId?: string | null;
 }
 
 // ---- Chat ----
@@ -993,6 +1000,10 @@ export interface SavedChatContext {
   searchAllMeetings?: boolean;
   /// Folder chat: the conversation was about this folder (its summary/minutes/actions were the context).
   sectionId?: string | null;
+  /// The model this conversation was using when saved. Null for conversations saved before 0.231.0, and
+  /// for one on the platform default. Restored on reopen, falling back to the default when the model is
+  /// no longer offered.
+  modelId?: string | null;
 }
 
 export interface ChatConversationSummary {
@@ -1484,18 +1495,39 @@ export interface FeedbackDto {
 export interface LlmModel {
   id: string;
   name: string;
+  /// A user-facing name shown in place of the slug. Null or blank means "use the slug".
+  displayName: string | null;
   apiBase: string;
   hasApiKey: boolean;
   contextLength: number;
+  /// Whether this model appears in the chat model picker. Written through its own endpoint
+  /// (`setModelChatEnabled`), never through an upsert - see LlmModelUpsert.
+  chatEnabled: boolean;
   parameters: Record<string, string>;
 }
 
+/// Note there is no `chatEnabled` here, deliberately: the editor drawer does not show that control, so
+/// carrying it would let every save from the drawer post a stale value and silently un-offer the model.
 export interface LlmModelUpsert {
   name: string;
   apiBase: string;
   apiKey?: string;
   contextLength: number;
+  /// Blank is sent as null, which the server stores as "not set" so the slug shows through.
+  displayName?: string | null;
   parameters: Record<string, string>;
+}
+
+/// One model the chat picker offers. Endpoint and key are absent by design - this comes from
+/// /api/chat/models, which every signed-in user may read, unlike the administrator-only LlmModel listing.
+export interface ChatModelOption {
+  id: string;
+  /// What the user reads. The server falls back to the slug when no display name is set.
+  label: string;
+  /// The slug the server sends as `model`, so a streamed usage snapshot can be matched back to a label.
+  name: string;
+  contextLength: number;
+  isDefault: boolean;
 }
 
 /// One administrator-initiated test call. `response` is the model's actual reply - the only LLM output the

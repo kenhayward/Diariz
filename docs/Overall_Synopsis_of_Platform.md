@@ -488,6 +488,27 @@ persisted** - writing it would resurrect a model an administrator had deliberate
 as a seeder that undoes a change on every boot - and it is what makes an upgrade with no configured models
 behave exactly as before.
 
+**A user-chosen chat model (0.231.0).** `ResolveAsync` takes an optional `modelOverride` - the model the
+user picked in the chat toolbar. It is honoured **only** for `LlmCallKind.ChatMessage`, and only for a model
+an administrator offers; `IChatModelCatalog` decides, and **that check is the security boundary**, since
+without it any signed-in user could route their chat at any endpoint the platform has configured by posting
+an id. It lives in the resolver rather than in `ChatController` so no future caller can skip it.
+`LlmCallKind.ChatTitle` shares the Chat group but is deliberately excluded: it is background housekeeping
+the user never sees, so it stays on whatever the administrator routed.
+
+**`ChatModelCatalog` is the single authority on which models chat may use.** Three callers need the same
+answer - `LlmSettingsResolver` (which endpoint to call), `ChatContextResolver` (which window to report), and
+`ChatModelsController` (what to offer). Written separately in each they would agree by coincidence and
+diverge on the first change, producing a picker that offers a model the resolver then silently refuses. It
+exposes `DefaultModelIdAsync` (the Chat assignment, else the platform default), `ListAsync` (the default
+first, then every `LlmModels.ChatEnabled` row by label) and `ResolveOfferedAsync` (the request's choice when
+offered, else null meaning "fall through to normal routing"). The chat-assigned model is offered **whether or
+not its flag is set** - it is the model in use, so a picker that excluded it could not show the current
+selection. `LlmModels.DisplayName` supplies the user-facing label, falling back to `Name`.
+
+`GET /api/chat/models` returns that list to **any signed-in user** and carries no endpoint and no API key -
+which is why it is its own controller rather than an action on the administrator-only model listing.
+
 **With what parameters.** Four layers, most specific first, merged by `LlmParameterLayers.Resolve`: the
 model's row for **this group**, the model's **`ModelBase`** row, the app defaults **for this group**, then
 the app **base** defaults. Each key is in one of three states, and the last two are different instructions:
@@ -800,7 +821,12 @@ large folders silently rolled up only their first ~18 meetings. The old per-work
   **Summary** + **Actions** text in place; speaker/actor names are kept. `POST .../segments/{segId}/translate`
   does one segment, and `POST .../segments/translate { ids, language? }` does a selected set in one batched call.
   The English language name is resolved from `SupportedLanguages`.
-- **Chat (streaming).** `POST /api/chat/stream` builds a system prompt from the selected transcripts
+- **Chat (streaming).** `POST /api/chat/stream` accepts an optional **`ModelId`** naming which of the
+  offered models answers this turn (see *Platform model configuration*); an id that is not offered is
+  ignored rather than rejected, so a model an administrator withdraws degrades to the default instead of
+  breaking a saved conversation. Because the endpoint is **stateless per turn** and the full history is
+  resent every time, switching model part-way through a conversation needs nothing else on the wire. It
+  builds a system prompt from the selected transcripts
   **plus their action items** and an optional uploaded attachment (`ChatContextBuilder`), then streams tokens
   back via **Server-Sent Events** (`ChatStreamClient`). The web infers the context from what's open rather
   than a manual pick (`lib/chatContext.ts`): the open recording, the open **folder**, the 2+ ticked

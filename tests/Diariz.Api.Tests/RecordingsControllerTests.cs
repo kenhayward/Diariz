@@ -36,7 +36,7 @@ public class RecordingsControllerTests
             new ConfigurationBuilder().AddInMemoryCollection(
                 new Dictionary<string, string?> { ["Transcription:DefaultModel"] = "whisperx-large-v3" }).Build(),
             new LlmSettingsResolver(db, Options.Create(new LlmDefaultsOptions()), Options.Create(new SummarizationOptions { ApiBase = "http://llm.test/v1" }),
-                new FakeApiKeyProtector()),
+                new FakeApiKeyProtector(), new ChatModelCatalog(db)),
             new FakeEmailSender(), new FakeSpeakerIdentifier(), Options.Create(new UploadOptions()),
             new RoomScope(db), new PeopleDirectory(db), new CapturingWebhookPublisher(),
             Options.Create(new AppPublicOptions()), null,
@@ -57,7 +57,7 @@ public class RecordingsControllerTests
         var resolver = new LlmSettingsResolver(
             db,
             Options.Create(new LlmDefaultsOptions()), Options.Create(new SummarizationOptions { ApiBase = summarizationEnabled ? "http://llm.test/v1" : "" }),
-            new FakeApiKeyProtector());
+            new FakeApiKeyProtector(), new ChatModelCatalog(db));
         return new RecordingsController(db, storage ?? new FakeAudioStorage(), queue, new FakeHubContext(), config,
             resolver, email ?? new FakeEmailSender(), identifier ?? new FakeSpeakerIdentifier(),
             Options.Create(uploads ?? new UploadOptions()), new RoomScope(db), new PeopleDirectory(db), new CapturingWebhookPublisher(),

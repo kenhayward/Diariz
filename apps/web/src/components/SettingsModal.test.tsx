@@ -22,7 +22,7 @@ vi.mock("../lib/api", () => ({
     listPlatformWebhooks: vi.fn().mockResolvedValue([]),
     // The admin panels this modal now hosts.
     listModels: vi.fn().mockResolvedValue([
-      { id: "m1", name: "gpt-oss-20b", apiBase: "http://a/v1", hasApiKey: false, contextLength: 8192, parameters: {} },
+      { id: "m1", name: "gpt-oss-20b", displayName: null, apiBase: "http://a/v1", hasApiKey: false, chatEnabled: false, contextLength: 8192, parameters: {} },
     ]),
     getLlmAssignments: vi.fn().mockResolvedValue({ defaultModelId: null, assignments: {} }),
     getLlmModelDefaults: vi.fn().mockResolvedValue({}),

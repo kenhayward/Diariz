@@ -617,8 +617,12 @@ public record SaveCalendarSelectionRequest(IReadOnlyList<string> Ids);
 public record UserSettingsDto(
     int ContextWindow,
     /// <summary>The model serving chat, for the context dial's label before the first turn reports one.
-    /// Read-only: an administrator chooses it at /admin/llm-models.</summary>
+    /// Read-only: an administrator chooses which models are available at /admin/llm-models.</summary>
     string ChatModel,
+    /// <summary>The model this user last chose in the chat picker, or null to follow the platform's chat
+    /// routing. Unlike <c>ContextWindow</c> and <c>ChatModel</c> above it, this one IS writable - those two
+    /// are derived from it.</summary>
+    Guid? ChatModelId,
     bool ToolsEnabled, bool DefaultToolsEnabled, IReadOnlyList<ChatToolDto> Tools,
     // Where a new recording lands in the user's Personal room. The mode serialises as its enum name
     // ("SelectedFolder" etc.) via the global string-enum converter, same as MinutesGenerationMode.
@@ -672,7 +676,17 @@ public record UpdateUserSettingsRequest(
     /// non-positive value resets to the default.</summary>
     int? CalendarSilenceStopSeconds = null,
     /// <summary>Whether transcripts are auto-merged by speaker. Null leaves it unchanged.</summary>
-    bool? AutoMergeSpeakerSegments = null);
+    bool? AutoMergeSpeakerSegments = null,
+    /// <summary>The chat model picker's choice. Null leaves it unchanged; <c>Guid.Empty</c> clears the pick
+    /// and follows the platform's chat routing; a value sets it. Empty-as-clear mirrors the
+    /// "non-positive clears" rule the numeric fields use - a separate boolean would be a second way to say
+    /// the same thing.
+    ///
+    /// Not validated against the offered set here, on purpose: an administrator can un-tick a model at any
+    /// time, so a stored pick is always provisional. The read path and every chat turn ignore one that is
+    /// not offered, which makes an un-tick reversible - rejecting or clearing it here would destroy the
+    /// user's choice permanently.</summary>
+    Guid? ChatModelId = null);
 
 // ---- MCP access tokens ----
 /// <summary>A stored MCP token, listed in Preferences. The secret is never returned — only a short display
@@ -704,12 +718,25 @@ public record CreateApiTokenRequest(string? Name, bool ReadOnly = false, DateTim
 // ---- Chat ----
 public record ChatTurnDto(string Role, string Content);
 
+/// <summary>One model a chat user may pick.
+///
+/// Deliberately carries no endpoint and no API key: every signed-in user reads this, unlike
+/// <see cref="LlmModelDto"/>, which is administrator-only for exactly that reason.
+/// <paramref name="Name"/> is the slug the server sends as <c>model</c>, present so a client can match a
+/// streamed usage snapshot back to a label rather than rendering the raw slug.</summary>
+public record ChatModelDto(Guid Id, string Label, string Name, int ContextLength, bool IsDefault);
+
 /// <summary>The context a chat turn (or a saved conversation) runs against. <paramref name="SearchAllMeetings"/>
 /// is the "All meetings" mode: no transcripts are pre-loaded and the assistant is told to answer by searching
 /// the user's whole library on demand.</summary>
 public record SavedChatContextDto(
     IReadOnlyList<Guid> RecordingIds, string? AttachmentName, string? AttachmentText,
-    bool IncludeAttachments = false, bool SearchAllMeetings = false, Guid? SectionId = null);
+    bool IncludeAttachments = false, bool SearchAllMeetings = false, Guid? SectionId = null,
+    /// <summary>The model this conversation was using when it was saved, so reopening it puts the user back
+    /// on that model. Null for conversations saved before 0.231.0, and for one on the platform default.
+    /// Stored, not validated: if the model is no longer offered the client falls back to the default, the
+    /// same way a chat turn does.</summary>
+    Guid? ModelId = null);
 
 /// <summary>A streaming chat request: the selected context + the full conversation so far.
 /// <paramref name="SectionId"/> (when set) makes the chat about a folder - its roll-up summary, minutes and
@@ -722,7 +749,13 @@ public record ChatStreamRequest(
     IReadOnlyList<ChatTurnDto> Messages,
     bool IncludeAttachments = false,
     bool SearchAllMeetings = false,
-    Guid? SectionId = null);
+    Guid? SectionId = null,
+    /// <summary>A model from <c>GET /api/chat/models</c> to answer this turn. Null, unknown, or a model the
+    /// platform does not offer for chat all mean the same thing: the administrator's chat model answers.
+    ///
+    /// The request is stateless, so switching model part-way through a conversation needs nothing else -
+    /// the full history is resent every turn and reaches the new model as a matter of course.</summary>
+    Guid? ModelId = null);
 
 /// <summary>Extracted attachment text returned to the client (held and resent with each turn).</summary>
 public record ChatAttachmentDto(string Name, int Chars, string Text);
@@ -869,12 +902,19 @@ public record FeedbackDto(Guid Id, Guid UserId, string? UserEmail, DateTimeOffse
 /// The key itself is never returned, only <paramref name="HasApiKey"/>: same write-only contract the
 /// per-user key had, so a stored secret cannot leak back out through the admin UI.</summary>
 public record LlmModelDto(Guid Id, string Name, string ApiBase, bool HasApiKey, int ContextLength,
-    Dictionary<string, string> Parameters);
+    Dictionary<string, string> Parameters, string? DisplayName = null, bool ChatEnabled = false);
 
 /// <summary>Create or replace a model. A null <c>ApiKey</c> on update means "keep the stored key" - the UI
-/// was never given it, so it cannot send it back.</summary>
+/// was never given it, so it cannot send it back.
+///
+/// <c>ChatEnabled</c> is deliberately ABSENT. The editor drawer does not show that control, so were it a
+/// field here every save from the drawer would post whatever stale value the client held and silently
+/// un-offer the model. It has its own route instead.</summary>
 public record LlmModelUpsert(string Name, string ApiBase, string? ApiKey, int ContextLength,
-    Dictionary<string, string> Parameters);
+    Dictionary<string, string> Parameters, string? DisplayName = null);
+
+/// <summary>Whether a model appears in the chat model picker.</summary>
+public record SetChatEnabledRequest(bool Enabled);
 
 /// <summary>Run one sample call against a model, with the parameters an administrator is currently
 /// editing rather than the saved ones - so a change can be tried before it is committed.

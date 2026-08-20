@@ -539,6 +539,76 @@ public class LlmModelsControllerTests
         Assert.Equal(db.Users.Single(u => u.Id == userId).Email, probe.UserEmail);
     }
 
+    // ---- Display name and the chat-offered flag ----
+
+    [Fact]
+    public async Task Round_trips_a_display_name()
+    {
+        using var db = TestDb.Create();
+        var created = await Build(db).Create(Upsert("m") with { DisplayName = "QWEN 3.8" });
+
+        var dto = Assert.IsType<LlmModelDto>(created.Value);
+        Assert.Equal("QWEN 3.8", dto.DisplayName);
+    }
+
+    [Fact]
+    public async Task Stores_a_blank_display_name_as_absent()
+    {
+        // One representation of "not set", so Label has a single thing to test rather than two spellings
+        // of the same state.
+        using var db = TestDb.Create();
+        await Build(db).Create(Upsert("m") with { DisplayName = "   " });
+
+        Assert.Null(db.LlmModels.Single().DisplayName);
+    }
+
+    [Fact]
+    public async Task Toggling_chat_enabled_persists()
+    {
+        using var db = TestDb.Create();
+        var model = Seed(db);
+
+        var result = await Build(db).SetChatEnabled(model.Id, new SetChatEnabledRequest(true));
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.True(db.LlmModels.Single(m => m.Id == model.Id).ChatEnabled);
+    }
+
+    [Fact]
+    public async Task Toggling_chat_enabled_on_a_missing_model_is_not_found()
+    {
+        using var db = TestDb.Create();
+        Assert.IsType<NotFoundResult>(
+            await Build(db).SetChatEnabled(Guid.NewGuid(), new SetChatEnabledRequest(true)));
+    }
+
+    [Fact]
+    public async Task Saving_the_editor_does_not_reset_chat_enabled()
+    {
+        // The drawer never edits this flag, so an upsert must leave it alone. Were ChatEnabled part of
+        // LlmModelUpsert, every save from the editor would post a stale value and silently un-offer the
+        // model - and a setting that quietly reverts is worse than one that cannot be changed at all.
+        using var db = TestDb.Create();
+        var model = Seed(db);
+        await Build(db).SetChatEnabled(model.Id, new SetChatEnabledRequest(true));
+
+        await Build(db).Update(model.Id, Upsert("m") with { DisplayName = "Renamed" });
+
+        Assert.True(db.LlmModels.Single(m => m.Id == model.Id).ChatEnabled);
+    }
+
+    [Fact]
+    public async Task The_listing_reports_the_chat_flag()
+    {
+        using var db = TestDb.Create();
+        var model = Seed(db);
+        await Build(db).SetChatEnabled(model.Id, new SetChatEnabledRequest(true));
+
+        var dto = Assert.Single(Assert.IsType<List<LlmModelDto>>((await Build(db).List()).Value));
+
+        Assert.True(dto.ChatEnabled);
+    }
+
     private sealed class ScopeCapturingProbe : ILlmTestProbe
     {
         public LlmCallKind? Kind { get; private set; }

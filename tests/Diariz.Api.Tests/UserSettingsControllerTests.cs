@@ -22,9 +22,9 @@ public class UserSettingsControllerTests
         var registry = new Diariz.Api.Tools.ChatToolRegistry(tools ?? []);
         var toolResolver = new ChatToolSettingsResolver(db, registry, Options.Create(chatOpts));
         return new(db, Options.Create(chatOpts), toolResolver,
-            new ChatContextResolver(db, Options.Create(chatOpts)),
+            new ChatContextResolver(db, Options.Create(chatOpts), new ChatModelCatalog(db)),
             new LlmSettingsResolver(db, Options.Create(new LlmDefaultsOptions()),
-                Options.Create(server ?? new SummarizationOptions()), new FakeApiKeyProtector()),
+                Options.Create(server ?? new SummarizationOptions()), new FakeApiKeyProtector(), new ChatModelCatalog(db)),
             Options.Create(dictation ?? new DictationOptions()))
         {
             ControllerContext = Http.Context(userId),
@@ -307,5 +307,114 @@ public class UserSettingsControllerTests
         await Build(db, userId).Update(new UpdateUserSettingsRequest(CalendarAutoStopEnabled: true));
 
         Assert.True((await Build(db, userId).Get()).AutoMergeSpeakerSegments);
+    }
+
+    // ---- The remembered chat model ----
+
+    /// <summary>A model offered in the chat picker, plus the routing that makes something else the default,
+    /// so a test that reads back the user's pick cannot pass by accident.</summary>
+    private static LlmModel SeedOfferedChatModel(DiarizDbContext db, int contextLength = 32_768)
+    {
+        var offered = new LlmModel
+        {
+            Id = Guid.NewGuid(), Name = $"offered-{Guid.NewGuid():N}", ApiBase = "http://offered/v1",
+            ContextLength = contextLength, ChatEnabled = true,
+            CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
+        };
+        var fallback = new LlmModel
+        {
+            Id = Guid.NewGuid(), Name = $"fallback-{Guid.NewGuid():N}", ApiBase = "http://fallback/v1",
+            ContextLength = 4_096,
+            CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
+        };
+        db.LlmModels.AddRange(offered, fallback);
+        db.LlmCallAssignments.Add(new LlmCallAssignment { Group = LlmCallGroup.Chat, LlmModelId = fallback.Id });
+        db.SaveChanges();
+        return offered;
+    }
+
+    [Fact]
+    public async Task Returns_the_remembered_chat_model()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var model = SeedOfferedChatModel(db);
+        db.UserSettings.Add(new UserSettings { UserId = userId, ChatModelId = model.Id });
+        await db.SaveChangesAsync();
+
+        Assert.Equal(model.Id, (await Build(db, userId).Get()).ChatModelId);
+    }
+
+    [Fact]
+    public async Task Reports_the_window_and_name_of_the_remembered_model()
+    {
+        // These two seed the chat dial before the first turn. Reporting the platform's chat model instead
+        // would leave the gauge wrong from the moment the panel opened until something was sent.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var model = SeedOfferedChatModel(db, contextLength: 200_000);
+        db.UserSettings.Add(new UserSettings { UserId = userId, ChatModelId = model.Id });
+        await db.SaveChangesAsync();
+
+        var dto = await Build(db, userId).Get();
+
+        Assert.Equal(200_000, dto.ContextWindow);
+        Assert.Equal(model.Name, dto.ChatModel);
+    }
+
+    [Fact]
+    public async Task Reports_the_platform_chat_model_when_the_pick_is_no_longer_offered()
+    {
+        // Un-ticking a model does not clear anyone's stored pick, so the read path has to be the thing
+        // that ignores it - and it must ignore it exactly the way a chat turn will.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var model = SeedOfferedChatModel(db, contextLength: 200_000);
+        model.ChatEnabled = false;
+        db.UserSettings.Add(new UserSettings { UserId = userId, ChatModelId = model.Id });
+        await db.SaveChangesAsync();
+
+        Assert.Equal(4_096, (await Build(db, userId).Get()).ContextWindow);
+    }
+
+    [Fact]
+    public async Task Setting_the_chat_model_persists_it()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var model = SeedOfferedChatModel(db);
+
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(ChatModelId: model.Id));
+
+        Assert.Equal(model.Id, (await db.UserSettings.FindAsync(userId))!.ChatModelId);
+    }
+
+    [Fact]
+    public async Task An_empty_guid_clears_the_pick()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var model = SeedOfferedChatModel(db);
+        db.UserSettings.Add(new UserSettings { UserId = userId, ChatModelId = model.Id });
+        await db.SaveChangesAsync();
+
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(ChatModelId: Guid.Empty));
+
+        Assert.Null((await db.UserSettings.FindAsync(userId))!.ChatModelId);
+    }
+
+    [Fact]
+    public async Task Omitting_the_field_leaves_the_pick_alone()
+    {
+        // Each settings tab PUTs only its own fields, so an unrelated save must not wipe this one.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var model = SeedOfferedChatModel(db);
+        db.UserSettings.Add(new UserSettings { UserId = userId, ChatModelId = model.Id });
+        await db.SaveChangesAsync();
+
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(CalendarAutoStopEnabled: true));
+
+        Assert.Equal(model.Id, (await db.UserSettings.FindAsync(userId))!.ChatModelId);
     }
 }

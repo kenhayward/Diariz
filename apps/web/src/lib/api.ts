@@ -10,6 +10,7 @@ declare module "axios" {
 
 import type {
   TemplateContent,
+  ChatModelOption,
   AdminUser,
   Attachment,
   AttachmentDraft,
@@ -1257,6 +1258,13 @@ export const api = {
 
   // ---- Chat ----
 
+  /// The models this user may choose between for chat. Never carries an endpoint or a key - unlike
+  /// `listModels`, which is administrator-only for exactly that reason.
+  async listChatModels(): Promise<ChatModelOption[]> {
+    const { data } = await http.get<ChatModelOption[]>("/api/chat/models");
+    return data;
+  },
+
   /// Stream a chat reply. Uses raw fetch (not the axios instance) so the response body can be read
   /// incrementally; the JWT bearer must therefore be attached manually here. Resolves with the final
   /// context-usage snapshot.
@@ -1269,6 +1277,10 @@ export const api = {
       messages: ChatTurn[];
       includeAttachments?: boolean;
       searchAllMeetings?: boolean;
+      /// Which model answers this turn (an id from `listChatModels`). Omit or null for the platform's
+      /// chat model. Chat is stateless per turn, so changing it mid-conversation needs nothing else - the
+      /// full history is resent and reaches the new model with the request.
+      modelId?: string | null;
     },
     handlers: {
       onToken: (token: string) => void;
@@ -1678,6 +1690,12 @@ export const api = {
   async updateModel(id: string, model: LlmModelUpsert): Promise<LlmModel> {
     const { data } = await http.put<LlmModel>(`/api/admin/llm-models/${id}`, model);
     return data;
+  },
+
+  /// Whether a model appears in the chat model picker. Its own route rather than a field on updateModel,
+  /// so a save from the editor drawer cannot post a stale value and silently un-offer the model.
+  async setModelChatEnabled(id: string, enabled: boolean): Promise<void> {
+    await http.put(`/api/admin/llm-models/${id}/chat-enabled`, { enabled });
   },
 
   /// 409 while any call group or the platform default still points at the model.

@@ -34,7 +34,7 @@ public class RecordingWebhookEmitTests
         var hub = new FakeHubContext();
         var queue = new FakeJobQueue();
         var summaryOpts = new SummarizationOptions { ApiBase = summarizationEnabled ? "http://llm.test/v1" : "" };
-        var resolver = new LlmSettingsResolver(db, Options.Create(new LlmDefaultsOptions()), Options.Create(summaryOpts), new FakeApiKeyProtector());
+        var resolver = new LlmSettingsResolver(db, Options.Create(new LlmDefaultsOptions()), Options.Create(summaryOpts), new FakeApiKeyProtector(), new ChatModelCatalog(db));
         var embedding = new EmbeddingSettingsResolver(db, Options.Create(new EmbeddingOptions()), resolver);
         var publisher = new CapturingWebhookPublisher();
         var controller = new WorkerCallbackController(
@@ -122,7 +122,7 @@ public class RecordingWebhookEmitTests
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Transcription:DefaultModel"] = "whisperx-large-v3" })
             .Build();
         var resolver = new LlmSettingsResolver(
-            db, Options.Create(new LlmDefaultsOptions()), Options.Create(new SummarizationOptions()), new FakeApiKeyProtector());
+            db, Options.Create(new LlmDefaultsOptions()), Options.Create(new SummarizationOptions()), new FakeApiKeyProtector(), new ChatModelCatalog(db));
         publisher = new CapturingWebhookPublisher();
         return new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config,
             resolver, new FakeEmailSender(), new FakeSpeakerIdentifier(), Options.Create(new UploadOptions()),

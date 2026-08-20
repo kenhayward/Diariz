@@ -1,17 +1,30 @@
 import { render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import type { LlmModel } from "../../lib/types";
 import RoutingMatrix from "./RoutingMatrix";
 
 const MODELS: LlmModel[] = [
-  { id: "a", name: "gpt-oss-20b", apiBase: "http://a/v1", hasApiKey: true, contextLength: 8192, parameters: {} },
-  { id: "b", name: "qwen3-27b", apiBase: "http://b/v1", hasApiKey: false, contextLength: 200000, parameters: {} },
+  {
+    id: "a", name: "gpt-oss-20b", displayName: null, apiBase: "http://a/v1", hasApiKey: true,
+    contextLength: 8192, chatEnabled: false, parameters: {},
+  },
+  {
+    id: "b", name: "qwen3-27b", displayName: null, apiBase: "http://b/v1", hasApiKey: false,
+    contextLength: 200000, chatEnabled: false, parameters: {},
+  },
 ];
 
-function show(assignments: Record<string, string>, defaultModelId: string | null, onRoute = vi.fn()) {
+function show(
+  assignments: Record<string, string>,
+  defaultModelId: string | null,
+  onRoute = vi.fn(),
+  models: LlmModel[] = MODELS,
+  onChatEnabledChange = vi.fn(),
+) {
   render(
     <RoutingMatrix
-      models={MODELS}
+      models={models}
       assignments={assignments}
       defaultModelId={defaultModelId}
       onRoute={onRoute}
@@ -19,6 +32,7 @@ function show(assignments: Record<string, string>, defaultModelId: string | null
       tests={{}}
       onTest={vi.fn()}
       onTestAll={vi.fn()}
+      onChatEnabledChange={onChatEnabledChange}
     />,
   );
   return onRoute;
@@ -115,6 +129,7 @@ describe("RoutingMatrix", () => {
         tests={{}}
         onTest={vi.fn()}
         onTestAll={vi.fn()}
+        onChatEnabledChange={vi.fn()}
       />,
     );
 
@@ -135,6 +150,7 @@ describe("RoutingMatrix", () => {
         tests={{}}
         onTest={onTest}
         onTestAll={vi.fn()}
+        onChatEnabledChange={vi.fn()}
       />,
     );
 
@@ -164,6 +180,7 @@ describe("RoutingMatrix", () => {
         }}
         onTest={vi.fn()}
         onTestAll={vi.fn()}
+        onChatEnabledChange={vi.fn()}
       />,
     );
 
@@ -193,9 +210,84 @@ describe("RoutingMatrix", () => {
         }}
         onTest={vi.fn()}
         onTestAll={vi.fn()}
+        onChatEnabledChange={vi.fn()}
       />,
     );
 
     expect(screen.getByText(/no connection could be made/i)).toBeTruthy();
+  });
+
+  // ---- Display names and the In-chat column ----
+
+  it("leads with the display name and keeps the slug beneath it", () => {
+    // The slug is what the endpoint needs and the administrator still has to be able to read it; the
+    // label is what everyone else sees, so the row has to carry both.
+    show({}, null, vi.fn(), [{ ...MODELS[1], displayName: "QWEN 3.8" }]);
+
+    expect(screen.getByText("QWEN 3.8")).toBeTruthy();
+    // The slug lives in the subtitle line, alongside the endpoint and context length.
+    expect(screen.getByText(/^qwen3-27b · http/)).toBeTruthy();
+  });
+
+  it("shows only the slug when no display name is set", () => {
+    show({}, null, vi.fn(), [MODELS[1]]);
+
+    expect(screen.getByText("qwen3-27b")).toBeTruthy();
+  });
+
+  it("toggles whether a model is offered in chat", () => {
+    const onChatEnabledChange = vi.fn();
+    show({}, null, vi.fn(), MODELS, onChatEnabledChange);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /qwen3-27b/i }));
+
+    expect(onChatEnabledChange).toHaveBeenCalledWith("b", true);
+  });
+
+  it("un-ticks a model that is currently offered", () => {
+    const onChatEnabledChange = vi.fn();
+    show({}, null, vi.fn(), [{ ...MODELS[1], chatEnabled: true }], onChatEnabledChange);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /qwen3-27b/i }));
+
+    expect(onChatEnabledChange).toHaveBeenCalledWith("b", false);
+  });
+
+  it("ticks and locks the chat model, so the picker can never exclude it", () => {
+    // The chat model is the one actually serving the conversation. An administrator who could un-offer it
+    // would leave the picker unable to show the current selection at all.
+    show({ Chat: "a" }, null);
+
+    const box = screen.getByRole("checkbox", { name: /gpt-oss-20b/i }) as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    expect(box.disabled).toBe(true);
+  });
+
+  it("locks the platform default when no model is assigned to chat", () => {
+    // With no Chat assignment the default IS the chat model, so it is the one that must stay offered.
+    show({}, "a");
+
+    expect((screen.getByRole("checkbox", { name: /gpt-oss-20b/i }) as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByRole("checkbox", { name: /qwen3-27b/i }) as HTMLInputElement).disabled).toBe(false);
+  });
+
+  it("does not report a click on the locked checkbox", async () => {
+    // userEvent, not fireEvent: fireEvent dispatches straight at the node and so fires onChange even on a
+    // disabled input, which would make this pass for a reason the browser never reproduces.
+    const onChatEnabledChange = vi.fn();
+    show({ Chat: "a" }, null, vi.fn(), MODELS, onChatEnabledChange);
+
+    await userEvent.click(screen.getByRole("checkbox", { name: /gpt-oss-20b/i }), {
+      pointerEventsCheck: 0,
+    });
+
+    expect(onChatEnabledChange).not.toHaveBeenCalled();
+  });
+
+  it("gives the No model row no in-chat checkbox", () => {
+    // That row means "one level up from this column"; there is no model there to offer.
+    show({}, null);
+
+    expect(screen.getAllByRole("checkbox")).toHaveLength(MODELS.length);
   });
 });

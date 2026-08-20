@@ -16,7 +16,8 @@ namespace Diariz.Api.Tests;
 
 public class ChatControllerTests
 {
-    private static (ChatController controller, DiarizDbContext db, FakeChatStreamClient chat) Build(
+    private static (ChatController controller, DiarizDbContext db, FakeChatStreamClient chat,
+        FakeLlmSettingsResolver settings) Build(
         Guid userId, bool llmEnabled = true, FakeAudioStorage? storage = null, FakeUrlFetcher? urlFetcher = null,
         FakeChatToolSettingsResolver? toolSettings = null, FakeChatStreamClient? chat = null)
     {
@@ -29,7 +30,7 @@ public class ChatControllerTests
                 ? new LlmRequestConfig("https://llm.test/v1", "sk-test", "test-model", new LlmParameters { TimeoutSeconds = 60 })
                 : new LlmRequestConfig("", "", "test-model", new LlmParameters { TimeoutSeconds = 60 }),
         };
-        var ctxResolver = new ChatContextResolver(db, Options.Create(new ChatOptions { ContextLength = 40000 }));
+        var ctxResolver = new ChatContextResolver(db, Options.Create(new ChatOptions { ContextLength = 40000 }), new ChatModelCatalog(db));
         var orchestrator = new ChatToolOrchestrator(chat);
         var controller = new ChatController(db, chat, settings, ctxResolver, new AttachmentExtractor(),
             storage ?? new FakeAudioStorage(), urlFetcher ?? new FakeUrlFetcher(),
@@ -38,7 +39,7 @@ public class ChatControllerTests
         {
             ControllerContext = Http.Context(userId),
         };
-        return (controller, db, chat);
+        return (controller, db, chat, settings);
     }
 
     /// <summary>A tool resolver with one active tool, so the tool-usage instructions are appended.</summary>
@@ -74,7 +75,7 @@ public class ChatControllerTests
     public async Task Create_PersistsConversation_WithLlmTitle()
     {
         var userId = Guid.NewGuid();
-        var (controller, db, _) = Build(userId);
+        var (controller, db, _, _) = Build(userId);
 
         var res = await controller.CreateConversation(Convo(("user", "What did we decide?"), ("assistant", "To ship Friday.")), default);
 
@@ -97,7 +98,7 @@ public class ChatControllerTests
             seenOperation = LlmCallScope.Active?.OperationId;
             seenKind = LlmCallScope.Active?.Kind;
         });
-        var (controller, _, _) = Build(Guid.NewGuid(), chat: chat);
+        var (controller, _, _, _) = Build(Guid.NewGuid(), chat: chat);
 
         await controller.CreateConversation(
             Convo(("user", "What did we decide?"), ("assistant", "To ship Friday.")), default);
@@ -109,7 +110,7 @@ public class ChatControllerTests
     [Fact]
     public async Task Create_Empty_ReturnsBadRequest()
     {
-        var (controller, _, _) = Build(Guid.NewGuid());
+        var (controller, _, _, _) = Build(Guid.NewGuid());
         var res = await controller.CreateConversation(new SaveChatConversationRequest([], new SavedChatContextDto([], null, null)), default);
         Assert.IsType<BadRequestObjectResult>(res.Result);
     }
@@ -117,7 +118,7 @@ public class ChatControllerTests
     [Fact]
     public async Task Create_WhenLlmDisabled_TitleFallsBackToFirstUserMessage()
     {
-        var (controller, _, _) = Build(Guid.NewGuid(), llmEnabled: false);
+        var (controller, _, _, _) = Build(Guid.NewGuid(), llmEnabled: false);
 
         var res = await controller.CreateConversation(Convo(("user", "Summarise the standup")), default);
 
@@ -130,7 +131,7 @@ public class ChatControllerTests
     public async Task List_ReturnsOnlyOwn_NewestFirst()
     {
         var me = Guid.NewGuid();
-        var (controller, db, _) = Build(me);
+        var (controller, db, _, _) = Build(me);
         var meRoom = await new RoomScope(db).PersonalRoomIdAsync(me); // chats are room-scoped now
         db.ChatSessions.Add(new ChatSession { Id = Guid.NewGuid(), UserId = me, RoomId = meRoom, Title = "Older", UpdatedAt = DateTimeOffset.UtcNow.AddMinutes(-5) });
         db.ChatSessions.Add(new ChatSession { Id = Guid.NewGuid(), UserId = me, RoomId = meRoom, Title = "Newer", UpdatedAt = DateTimeOffset.UtcNow });
@@ -146,7 +147,7 @@ public class ChatControllerTests
     public async Task Get_Owned_RoundTripsMessagesAndContext()
     {
         var me = Guid.NewGuid();
-        var (controller, db, _) = Build(me);
+        var (controller, db, _, _) = Build(me);
         var rid = Guid.NewGuid();
         var save = await controller.CreateConversation(
             new SaveChatConversationRequest(
@@ -168,7 +169,7 @@ public class ChatControllerTests
     public async Task Get_RoundTripsAFolderChatSectionId()
     {
         var me = Guid.NewGuid();
-        var (controller, _, _) = Build(me);
+        var (controller, _, _, _) = Build(me);
         var sectionId = Guid.NewGuid();
         var save = await controller.CreateConversation(
             new SaveChatConversationRequest(
@@ -184,7 +185,7 @@ public class ChatControllerTests
     [Fact]
     public async Task Get_OtherUsers_Returns404()
     {
-        var (controller, db, _) = Build(Guid.NewGuid());
+        var (controller, db, _, _) = Build(Guid.NewGuid());
         var foreignId = Guid.NewGuid();
         db.ChatSessions.Add(new ChatSession { Id = foreignId, UserId = Guid.NewGuid(), Title = "theirs" });
         await db.SaveChangesAsync();
@@ -196,7 +197,7 @@ public class ChatControllerTests
     public async Task Update_ChangesMessages_AndBumpsUpdatedAt()
     {
         var me = Guid.NewGuid();
-        var (controller, db, _) = Build(me);
+        var (controller, db, _, _) = Build(me);
         var save = await controller.CreateConversation(Convo(("user", "first")), default);
         var id = Assert.IsType<SaveChatConversationResult>(save.Value).Id;
         var before = (await db.ChatSessions.AsNoTracking().SingleAsync()).UpdatedAt;
@@ -216,7 +217,7 @@ public class ChatControllerTests
     [Fact]
     public async Task Update_OtherUsers_Returns404()
     {
-        var (controller, db, _) = Build(Guid.NewGuid());
+        var (controller, db, _, _) = Build(Guid.NewGuid());
         var foreignId = Guid.NewGuid();
         db.ChatSessions.Add(new ChatSession { Id = foreignId, UserId = Guid.NewGuid(), Title = "theirs" });
         await db.SaveChangesAsync();
@@ -228,7 +229,7 @@ public class ChatControllerTests
     public async Task Delete_Owned_Removes()
     {
         var me = Guid.NewGuid();
-        var (controller, db, _) = Build(me);
+        var (controller, db, _, _) = Build(me);
         var save = await controller.CreateConversation(Convo(("user", "hi")), default);
         var id = Assert.IsType<SaveChatConversationResult>(save.Value).Id;
 
@@ -241,7 +242,7 @@ public class ChatControllerTests
     [Fact]
     public async Task Delete_OtherUsers_Returns404()
     {
-        var (controller, db, _) = Build(Guid.NewGuid());
+        var (controller, db, _, _) = Build(Guid.NewGuid());
         var foreignId = Guid.NewGuid();
         db.ChatSessions.Add(new ChatSession { Id = foreignId, UserId = Guid.NewGuid(), Title = "theirs" });
         await db.SaveChangesAsync();
@@ -254,7 +255,7 @@ public class ChatControllerTests
     [Fact]
     public async Task Stream_WhenLlmDisabled_ReturnsBadRequest()
     {
-        var (controller, _, _) = Build(Guid.NewGuid(), llmEnabled: false);
+        var (controller, _, _, _) = Build(Guid.NewGuid(), llmEnabled: false);
         var res = await controller.Stream(new ChatStreamRequest([], null, null, [new ChatTurnDto("user", "hi")]), default);
         Assert.IsType<BadRequestObjectResult>(res);
     }
@@ -262,7 +263,7 @@ public class ChatControllerTests
     [Fact]
     public async Task Stream_ForeignRecording_Returns404()
     {
-        var (controller, _, _) = Build(Guid.NewGuid());
+        var (controller, _, _, _) = Build(Guid.NewGuid());
         var notMine = Guid.NewGuid();
         var res = await controller.Stream(new ChatStreamRequest([notMine], null, null, [new ChatTurnDto("user", "hi")]), default);
         Assert.IsType<NotFoundResult>(res);
@@ -272,7 +273,7 @@ public class ChatControllerTests
     public async Task Stream_EmitsMetaTokensAndDone()
     {
         var me = Guid.NewGuid();
-        var (controller, db, _) = Build(me);
+        var (controller, db, _, _) = Build(me);
         var rid = await SeedTranscribedRecording(db, me);
 
         var body = new MemoryStream();
@@ -297,7 +298,7 @@ public class ChatControllerTests
     public async Task Stream_IncludesExtractedActions_InTheSystemContext()
     {
         var me = Guid.NewGuid();
-        var (controller, db, chat) = Build(me);
+        var (controller, db, chat, _) = Build(me);
         var rid = await SeedTranscribedRecording(db, me);
         db.RecordingActions.Add(new RecordingAction
         {
@@ -318,7 +319,7 @@ public class ChatControllerTests
     public async Task Stream_WithFolder_LoadsSummaryMinutesAndActionsIntoContext()
     {
         var me = Guid.NewGuid();
-        var (controller, db, chat) = Build(me); // seeds the user row
+        var (controller, db, chat, _) = Build(me); // seeds the user row
         var meRoom = await new RoomScope(db).PersonalRoomIdAsync(me); // folders are room-scoped now
         var section = new Section { Id = Guid.NewGuid(), UserId = me, RoomId = meRoom, Name = "Q3 Planning" };
         db.Sections.Add(section);
@@ -360,7 +361,7 @@ public class ChatControllerTests
                 [new ChatStreamDelta("Alice said it.", null, null)],
             ],
         };
-        var (controller, _, _) = Build(Guid.NewGuid(), chat: chat);
+        var (controller, _, _, _) = Build(Guid.NewGuid(), chat: chat);
         controller.ControllerContext.HttpContext.Response.Body = new MemoryStream();
 
         await controller.Stream(
@@ -374,7 +375,7 @@ public class ChatControllerTests
     [Fact]
     public async Task Stream_WithUnownedSection_Returns404()
     {
-        var (controller, db, _) = Build(Guid.NewGuid());
+        var (controller, db, _, _) = Build(Guid.NewGuid());
         var theirs = new Section { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" };
         db.Sections.Add(theirs);
         await db.SaveChangesAsync();
@@ -389,7 +390,7 @@ public class ChatControllerTests
     [Fact]
     public async Task Attachment_Text_ReturnsExtractedText()
     {
-        var (controller, _, _) = Build(Guid.NewGuid());
+        var (controller, _, _, _) = Build(Guid.NewGuid());
         var file = TextFile("notes.txt", "text/plain", "The widget must be blue.");
 
         var res = await controller.Attachment(file, default);
@@ -402,7 +403,7 @@ public class ChatControllerTests
     [Fact]
     public async Task Attachment_Unsupported_ReturnsBadRequest()
     {
-        var (controller, _, _) = Build(Guid.NewGuid());
+        var (controller, _, _, _) = Build(Guid.NewGuid());
         var file = TextFile("photo.png", "image/png", "not really an image");
 
         Assert.IsType<BadRequestObjectResult>((await controller.Attachment(file, default)).Result);
@@ -422,7 +423,7 @@ public class ChatControllerTests
         var me = Guid.NewGuid();
         var storage = new FakeAudioStorage();
         var fetcher = new FakeUrlFetcher();
-        var (controller, db, chat) = Build(me, storage: storage, urlFetcher: fetcher);
+        var (controller, db, chat, _) = Build(me, storage: storage, urlFetcher: fetcher);
         var rid = await SeedTranscribedRecording(db, me);
 
         storage.Objects["k1"] = Encoding.UTF8.GetBytes("The widget must be blue.");
@@ -455,7 +456,7 @@ public class ChatControllerTests
     public async Task Stream_AllMeetings_AddsSearchLibraryInstruction_WhenToolsActive()
     {
         var me = Guid.NewGuid();
-        var (controller, _, chat) = Build(me, toolSettings: WithTools());
+        var (controller, _, chat, _) = Build(me, toolSettings: WithTools());
         controller.ControllerContext.HttpContext.Response.Body = new MemoryStream();
 
         await controller.Stream(
@@ -471,7 +472,7 @@ public class ChatControllerTests
     public async Task Stream_NotAllMeetings_OmitsSearchLibraryInstruction()
     {
         var me = Guid.NewGuid();
-        var (controller, _, chat) = Build(me, toolSettings: WithTools());
+        var (controller, _, chat, _) = Build(me, toolSettings: WithTools());
         controller.ControllerContext.HttpContext.Response.Body = new MemoryStream();
 
         await controller.Stream(
@@ -486,7 +487,7 @@ public class ChatControllerTests
     {
         var me = Guid.NewGuid();
         var storage = new FakeAudioStorage();
-        var (controller, db, chat) = Build(me, storage: storage);
+        var (controller, db, chat, _) = Build(me, storage: storage);
         var rid = await SeedTranscribedRecording(db, me);
         storage.Objects["k1"] = Encoding.UTF8.GetBytes("The widget must be blue.");
         db.Attachments.Add(new Attachment
@@ -501,5 +502,36 @@ public class ChatControllerTests
             new ChatStreamRequest([rid], null, null, [new ChatTurnDto("user", "What colour?")]), default);
 
         Assert.DoesNotContain("The widget must be blue.", chat.LastMessages![0].Content);
+    }
+
+    // ---- The user's chosen chat model ----
+
+    [Fact]
+    public async Task Passes_the_requested_model_to_the_settings_resolver()
+    {
+        // Proves the request's ModelId actually reaches the resolver. Whether to HONOUR it is the
+        // resolver's decision - a controller-side check would be a second copy of that rule, and the two
+        // would drift.
+        var (controller, _, _, settings) = Build(Guid.NewGuid());
+        var chosen = Guid.NewGuid();
+
+        controller.ControllerContext.HttpContext.Response.Body = new MemoryStream();
+        await controller.Stream(
+            new ChatStreamRequest([], null, null, [new ChatTurnDto("user", "hello")], false, false, null, chosen),
+            default);
+
+        Assert.Equal(chosen, settings.LastModelOverride);
+    }
+
+    [Fact]
+    public async Task Sends_no_override_when_the_request_names_no_model()
+    {
+        var (controller, _, _, settings) = Build(Guid.NewGuid());
+
+        controller.ControllerContext.HttpContext.Response.Body = new MemoryStream();
+        await controller.Stream(
+            new ChatStreamRequest([], null, null, [new ChatTurnDto("user", "hello")]), default);
+
+        Assert.Null(settings.LastModelOverride);
     }
 }

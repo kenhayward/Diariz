@@ -103,4 +103,16 @@ public class UserSettings
     /// version, so it is opted into rather than assumed. Turning it off and re-transcribing is the way back
     /// to granular segments.</summary>
     public bool AutoMergeSpeakerSegments { get; set; }
+
+    // ---- Chat ----
+
+    /// <summary>The model this user last chose in the chat picker, or null to follow the platform's chat
+    /// routing. FK to <see cref="LlmModel"/> with <c>ON DELETE SET NULL</c>: deleting a model must not be
+    /// blocked because one user once picked it, and those users simply fall back to the default. That is
+    /// the opposite of the Restrict on the routing table, where "in use" really should refuse the delete.
+    ///
+    /// Un-ticking a model's <see cref="LlmModel.ChatEnabled"/> does NOT clear this. The value is left
+    /// pointing at the model and ignored while it is not offered, so re-ticking restores everyone's pick -
+    /// a cleanup pass would have destroyed it.</summary>
+    public Guid? ChatModelId { get; set; }
 }

@@ -25,7 +25,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Summaries & minutes** | Auto summary plus full professional meeting minutes, editable in a rich editor and emailable. A meeting type carries no prompts of its own: it names the **formula** that generates its minutes, plus any others to run alongside (their documents appear in the Formulas tab). Minutes and formulas are the same machinery - any formula you can use can produce your minutes. Templates are built from blocks (H1-H3 headings, literal text, substituted details, model prompts, rules, drag-to-reorder) with JSON import/export. |
 | **Action items** | Auto-extracted with owner and deadline, tracked across every meeting with completion and a person filter, linking back to the transcript. |
 | **Tag cloud** | Tags are yours to add - a Tags pill on each meeting suggests topics automatically extracted from it, and adopting one builds the weighted cloud on the Tags tab, which shows the meetings behind each tag. |
-| **Chat over transcripts** | Stream answers over one meeting, a folder (its summary/minutes/actions), several selected, or all meetings - context inferred from what you're viewing - via the platform's OpenAI-compatible model, with attachments and saved conversations. |
+| **Chat over transcripts** | Stream answers over one meeting, a folder (its summary/minutes/actions), several selected, or all meetings - context inferred from what you're viewing - with attachments and saved conversations. Where more than one model is offered, pick which one answers and change it part-way through a conversation; the whole conversation goes across to the new model. |
 | **Formulas** | Build a document from headings, literal text, substituted meeting details and instructions to the model; choose what it may see (transcript, notes, summary, minutes, actions) and run it over a recording - or a whole folder and its sub-folders - to generate a Markdown document you can edit, download, or email. Runs in the background (\"Generating...\" then fills in); re-running one replaces its previous document, and a document you edited by hand is left alone. Personal, platform-wide, or built-in; from the Formulas tab (on a recording or a folder), \`/formula\` in chat, or Claude via MCP; share a personal one so others can find and add it (a live link); admins manage the shared ones. |
 | **Search** | A search box above the meetings list, scoped by default to the folder you are browsing: typing takes the list over, each hit shows the matching words in context plus the folder it lives in, and clicking one opens the transcript at that moment. Matching folders show up too. **Search everywhere** widens it to every room you can see, grouping the results by folder with Folder / Date / Speaker chips to narrow them. Keyword search across your library, upgraded to semantic (meaning-based) search when an embeddings endpoint is configured. |
 | **Chat tools** | The assistant searches your library with built-in tools (who-said-what, attendees, talk time, summaries, email-to-self) and links to the exact segment. Turn the set on or off, and pick tool by tool, on the **Assistant** tab in Preferences. |
@@ -64,6 +64,23 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.231.0",
+    date: "2026-08-20",
+    pr: 556,
+    headline: "Choose which AI model answers your chat",
+    summary:
+      "Chat used to run on the one model an administrator had assigned to it, with no say for the person asking the questions. Now an administrator can mark any number of models as available for chat, and a new control in the chat toolbar - the purple sparkle, beside the context gauge - lets you pick between them.\n\nYou can change model part-way through a conversation. Everything said so far goes across with your next question, so the new model picks up where the last one left off; there is no need to start again to try a second opinion, or to move up to a model with a larger context window when a conversation outgrows the one you started on. The gauge follows your choice immediately, so it always shows the window of the model that will actually answer you.\n\nModels can also be given a display name. The picker then reads \"QWEN 3.8\" rather than \"qwen3.8-27b@q4_k_xl\" - the identifier the server needs is still there for administrators, on the model's own row, but nobody else has to read it.\n\nYour choice is remembered between visits, and saved with a conversation, so reopening one puts you back on the model it was using. If an administrator later stops offering that model, the conversation quietly falls back to the standard one rather than breaking.",
+    added: [
+      "A model picker in the chat toolbar, listing each available model with its context window.",
+      "An In chat column on the AI models screen, marking which models the picker offers.",
+      "A display name per model, shown wherever a model is named to a user, in place of the raw model identifier.",
+    ],
+    changed: [
+      "The chat context gauge now reports the window of the model you have chosen, rather than the platform's default.",
+      "Switching model mid-conversation carries the whole conversation across to the new model.",
+    ],
+  },
   {
     version: "0.230.2",
     date: "2026-08-19",
