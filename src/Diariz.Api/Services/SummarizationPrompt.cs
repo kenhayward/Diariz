@@ -58,19 +58,24 @@ Respond in plain text, not JSON. {output_shape}
         return [new ChatMessage("system", system), new ChatMessage("user", user)];
     }
 
+    /// <summary>Parse a whole /chat/completions response. A streamed caller has only the assembled content
+    /// and should call <see cref="ParseContent"/> directly.</summary>
     public static SummaryResult ParseResponse(string responseJson, bool needName)
     {
-        string content;
-        using (var doc = JsonDocument.Parse(responseJson))
-        {
-            content = doc.RootElement
-                .GetProperty("choices")[0]
-                .GetProperty("message")
-                .GetProperty("content")
-                .GetString()?.Trim() ?? "";
-        }
+        using var doc = JsonDocument.Parse(responseJson);
+        var content = doc.RootElement
+            .GetProperty("choices")[0]
+            .GetProperty("message")
+            .GetProperty("content")
+            .GetString()?.Trim() ?? "";
+        return ParseContent(content, needName);
+    }
 
-        content = StripCodeFence(content);
+    /// <summary>Parse the model's reply text itself. Total: see <see cref="TagsPrompt.ParseContent"/>. There
+    /// is no unparseable case here - the plain-text path accepts whatever is left.</summary>
+    public static SummaryResult ParseContent(string content, bool needName)
+    {
+        content = StripCodeFence(content.Trim());
 
         // The prompt asks for plain text, but stay tolerant of a model that still emits a JSON object
         // (possibly wrapped in prose or gpt-oss "harmony" tokens like <|channel|>final<|constrain|>{...}) -

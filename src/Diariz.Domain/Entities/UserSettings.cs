@@ -74,6 +74,17 @@ public class UserSettings
     /// modes (and null = Ungrouped even in SpecificFolder mode, if the chosen folder was later deleted).</summary>
     public Guid? RecordingPlacementSectionId { get; set; }
 
+    /// <summary>The recording an administrator last chose to test an AI model against, in the model editor's
+    /// test rail. Null = they have never chosen, or the recording has since been deleted.
+    ///
+    /// <para>Deliberately NOT a foreign key. It is resolved on read instead: an administrator's convenience
+    /// setting must never be a reason a user's recording cannot be deleted, and a nullable tracked FK would
+    /// not enforce anything anyway (EF nulls it before the delete).</para>
+    ///
+    /// <para>Per user rather than per platform: the test runs against the caller's OWN recordings, so a
+    /// shared value would point most administrators at a recording they cannot use.</para></summary>
+    public Guid? LlmTestRecordingId { get; set; }
+
     // ---- Recording started from a calendar event ----
     // These apply only to a take started by Join-and-record on a calendar event, where the meeting's end time
     // is known. A recording started from the Record button is unaffected.

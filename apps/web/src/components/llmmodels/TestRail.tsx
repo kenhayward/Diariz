@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
-import type { LlmTestOutcome } from "../../lib/types";
+import type { LlmTestOutcome, LlmTestRecording } from "../../lib/types";
+import RecordingPicker from "./RecordingPicker";
 import TestResultCard from "./TestResultCard";
 import type { ParameterValue } from "./parameterSchema";
 import type { ResolvedRequest } from "./requestPreview";
@@ -22,12 +23,17 @@ interface Props {
   modelName: string;
   onFix: (fix: { key: string; value: ParameterValue }) => void;
   onOpenUsageLog?: (query: string) => void;
+  /// Whether this call group runs the real prompt against a real recording rather than the built-in sample.
+  needsRecording: boolean;
+  recording: LlmTestRecording;
+  onPickRecording: (recordingId: string, title: string) => void;
 }
 
 /// The drawer's right-hand column: run a real call, see what came back, and see the exact body that would
 /// be sent as it is typed.
 export default function TestRail({
   group, preview, test, onRun, onFix, apiBase, modelName, onOpenUsageLog,
+  needsRecording, recording, onPickRecording,
 }: Props) {
   const { t } = useTranslation("account");
 
@@ -46,14 +52,16 @@ export default function TestRail({
             {t("llmTestTitle")}
           </h3>
           <p className="truncate text-[11px] text-gray-400 dark:text-gray-500">
-            {t("llmTestSubtitle", { group: t(group) })}
+            {needsRecording && !recording.recordingId
+              ? t("llmTestChooseRecordingFirst")
+              : t(needsRecording ? "llmTestSubtitleRecording" : "llmTestSubtitle", { group: t(group) })}
           </p>
         </div>
         {onRun ? (
           <button
             type="button"
             onClick={onRun}
-            disabled={test.status === "running"}
+            disabled={test.status === "running" || (needsRecording && !recording.recordingId)}
             className="shrink-0 rounded-md border border-indigo-500 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 disabled:opacity-60 dark:bg-indigo-600/20 dark:text-indigo-100"
           >
             {runLabel}
@@ -62,6 +70,28 @@ export default function TestRail({
           <span className="shrink-0 text-[11px] text-gray-400 dark:text-gray-500">{t("llmTestSaveFirst")}</span>
         )}
       </div>
+
+      <div className="flex items-center gap-2 border-b border-gray-200 px-4 py-2 dark:border-gray-800">
+        <span className="shrink-0 text-[11px] text-gray-500 dark:text-gray-400">{t("llmTestAgainst")}</span>
+        {needsRecording ? (
+          // min-w-0 on the flex child, or the picker's truncation cannot take effect and a long recording
+          // name pushes the Run button out of the rail.
+          <div className="min-w-0 flex-1">
+            <RecordingPicker value={recording} onChange={onPickRecording} />
+          </div>
+        ) : (
+          <span className="min-w-0 flex-1 truncate text-[11px] text-gray-400 dark:text-gray-500">
+            {t("llmTestSampleTranscript")}
+          </span>
+        )}
+      </div>
+      {needsRecording && (
+        // Stated, not buried: the transcript leaves the platform for whatever endpoint is under test, and
+        // the reply comes back on screen.
+        <p className="border-b border-gray-200 px-4 py-1.5 text-[10.5px] text-gray-400 dark:border-gray-800 dark:text-gray-500">
+          {t("llmTestTranscriptWarning")}
+        </p>
+      )}
 
       <div className="space-y-3 p-3">
         {test.status === "running" && (

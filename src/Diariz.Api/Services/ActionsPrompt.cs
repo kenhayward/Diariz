@@ -79,19 +79,23 @@ Meeting date: {calendar_date}
         return [new ChatMessage("system", system), new ChatMessage("user", user)];
     }
 
+    /// <summary>Parse a whole /chat/completions response. A streamed caller has only the assembled content
+    /// and should call <see cref="ParseContent"/> directly.</summary>
     public static IReadOnlyList<ExtractedAction> ParseResponse(string responseJson)
     {
-        string content;
-        using (var doc = JsonDocument.Parse(responseJson))
-        {
-            content = doc.RootElement
-                .GetProperty("choices")[0]
-                .GetProperty("message")
-                .GetProperty("content")
-                .GetString()?.Trim() ?? "";
-        }
+        using var doc = JsonDocument.Parse(responseJson);
+        var content = doc.RootElement
+            .GetProperty("choices")[0]
+            .GetProperty("message")
+            .GetProperty("content")
+            .GetString()?.Trim() ?? "";
+        return ParseContent(content);
+    }
 
-        content = StripCodeFence(content);
+    /// <summary>Parse the model's reply text itself. Total: see <see cref="TagsPrompt.ParseContent"/>.</summary>
+    public static IReadOnlyList<ExtractedAction> ParseContent(string content)
+    {
+        content = StripCodeFence(content.Trim());
 
         var json = ExtractJsonArray(content);
         if (json is null) return [];

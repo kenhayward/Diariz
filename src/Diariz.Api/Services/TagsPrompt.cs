@@ -70,19 +70,24 @@ fewer rather than padding with weak tags.
         return [new ChatMessage("system", template ?? DefaultTemplate), new ChatMessage("user", user)];
     }
 
+    /// <summary>Parse a whole /chat/completions response. A streamed caller has only the assembled content
+    /// and should call <see cref="ParseContent"/> directly.</summary>
     public static IReadOnlyList<ExtractedTag> ParseResponse(string responseJson)
     {
-        string content;
-        using (var doc = JsonDocument.Parse(responseJson))
-        {
-            content = doc.RootElement
-                .GetProperty("choices")[0]
-                .GetProperty("message")
-                .GetProperty("content")
-                .GetString()?.Trim() ?? "";
-        }
+        using var doc = JsonDocument.Parse(responseJson);
+        var content = doc.RootElement
+            .GetProperty("choices")[0]
+            .GetProperty("message")
+            .GetProperty("content")
+            .GetString()?.Trim() ?? "";
+        return ParseContent(content);
+    }
 
-        content = ActionsPrompt.StripCodeFence(content);
+    /// <summary>Parse the model's reply text itself. Total: an unusable reply yields an empty list rather
+    /// than an exception, because "the pipeline would have stored no tags" is the honest outcome.</summary>
+    public static IReadOnlyList<ExtractedTag> ParseContent(string content)
+    {
+        content = ActionsPrompt.StripCodeFence(content.Trim());
 
         var json = ActionsPrompt.ExtractJsonArray(content);
         if (json is null) return [];

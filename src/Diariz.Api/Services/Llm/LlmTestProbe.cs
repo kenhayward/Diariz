@@ -32,21 +32,33 @@ public sealed record LlmTestOutcome(
     string? Message,
     /// <summary>Which of the thirteen parameters the endpoint blamed, when it named one. Drives the
     /// editor's one-click "omit this here" fix.</summary>
-    string? OffendingParameter);
+    string? OffendingParameter,
+    /// <summary>Which shape <see cref="ParsedJson"/> holds - Tags, Actions or Summary - or null when this
+    /// group ran the built-in sample, or the call failed.</summary>
+    string? ParsedKind = null,
+    /// <summary>The reply run through the pipeline's OWN parser, serialised. An empty array is a real and
+    /// important answer: it means the pipeline would have extracted nothing from this model's reply.
+    /// Null when nothing was parsed.
+    ///
+    /// <para>Defaulted, so the probe's own construction sites are unchanged - it never parses. Parsing is
+    /// the controller's job, because only it knows which call group ran.</para></summary>
+    string? ParsedJson = null);
 
 public interface ILlmTestProbe
 {
-    /// <summary>Runs one fixed sample call against the given endpoint and parameters.</summary>
-    Task<LlmTestOutcome> RunAsync(LlmRequestConfig config, CancellationToken ct = default);
+    /// <summary>Runs one call with the given messages, streaming so time-to-first-token exists.</summary>
+    Task<LlmTestOutcome> RunAsync(
+        LlmRequestConfig config, IReadOnlyList<ChatMessage> messages, int maxResponseChars,
+        CancellationToken ct = default);
 }
 
 /// <summary>Sends one sample call to a model so an administrator can see whether their endpoint and
 /// parameters actually work, and what it costs when they do.
 ///
-/// <b>The prompt is fixed and the same for every call group.</b> It would be more faithful to run the real
-/// per-group prompt, but those need real segments and their replies vary in length by an order of
-/// magnitude, which would make the timings incomparable between tabs - and comparing them is most of the
-/// point. This measures the connection and the parameters, not prompt quality.
+/// <b>The caller supplies the prompt.</b> Four call groups pass <see cref="LlmTestSample"/> - a fixed
+/// miniature transcript that keeps their timings comparable between models. Tags, Actions and Summaries
+/// pass the real prompt for a real recording, built by <c>LlmTestPromptFactory</c>, because for those the
+/// question is not only "does this endpoint answer" but "is this model any good at the job".
 ///
 /// <b>Streamed, always.</b> Time-to-first-token is the number the result leads with, and it does not exist
 /// on a buffered response. It is also the number that distinguishes "the model is slow" from "the model
@@ -56,36 +68,19 @@ public interface ILlmTestProbe
 /// from our own API in response would tell the admin nothing about theirs.</summary>
 public sealed class LlmTestProbe : ILlmTestProbe
 {
-    private const string SystemPrompt =
-        "You are a meeting assistant. Answer in one short sentence, with no preamble.";
-
-    /// <summary>A fixed miniature transcript. Short enough that the reply time is dominated by the model
-    /// rather than the prompt, and self-contained so the test never touches a user's data.</summary>
-    private const string UserPrompt =
-        "Summarise this meeting excerpt in one sentence.\n\n" +
-        "Priya: The Q3 forecast needs revising before Friday.\n" +
-        "Sam: Agreed. I will take the vendor review.\n" +
-        "Priya: Thanks - let us confirm the numbers on Thursday.";
-
-    /// <summary>Caps what a misbehaving endpoint can make the API hold in memory. The reply is one
-    /// sentence; anything past this is a server that ignored the prompt, not an answer worth showing.</summary>
-    private const int MaxResponseChars = 8000;
-
     private readonly HttpClient _http;
 
     public LlmTestProbe(HttpClient http) => _http = http;
 
-    public async Task<LlmTestOutcome> RunAsync(LlmRequestConfig config, CancellationToken ct = default)
+    public async Task<LlmTestOutcome> RunAsync(
+        LlmRequestConfig config, IReadOnlyList<ChatMessage> messages, int maxResponseChars,
+        CancellationToken ct = default)
     {
         var body = new Dictionary<string, object?>
         {
             ["model"] = config.Model,
             ["stream"] = true,
-            ["messages"] = new object[]
-            {
-                new { role = "system", content = SystemPrompt },
-                new { role = "user", content = UserPrompt },
-            },
+            ["messages"] = messages.Select(m => new { role = m.Role, content = m.Content }).ToArray(),
             ["stream_options"] = new Dictionary<string, object?> { ["include_usage"] = true },
         };
         LlmRequestBody.Apply(body, config.Parameters);
@@ -141,7 +136,7 @@ public sealed class LlmTestProbe : ILlmTestProbe
                 // role delta has not answered anything yet, and reporting that as the first token would
                 // flatter a cold model into looking instant.
                 ttft ??= clock.Elapsed;
-                if (text.Length < MaxResponseChars) text.Append(delta);
+                if (text.Length < maxResponseChars) text.Append(delta);
             }
 
             clock.Stop();

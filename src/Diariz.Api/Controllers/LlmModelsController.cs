@@ -29,10 +29,12 @@ public class LlmModelsController : ControllerBase
     private readonly LlmDefaultsOptions _defaults;
     private readonly ILlmTestProbe _probe;
     private readonly ILlmModelDiscoveryClient _discovery;
+    private readonly ILlmTestPromptFactory _prompts;
 
     public LlmModelsController(
         DiarizDbContext db, IApiKeyProtector protector, IOptions<SummarizationOptions> env,
-        IOptions<LlmDefaultsOptions> defaults, ILlmTestProbe probe, ILlmModelDiscoveryClient discovery)
+        IOptions<LlmDefaultsOptions> defaults, ILlmTestProbe probe, ILlmModelDiscoveryClient discovery,
+        ILlmTestPromptFactory prompts)
     {
         _db = db;
         _protector = protector;
@@ -40,6 +42,7 @@ public class LlmModelsController : ControllerBase
         _defaults = defaults.Value;
         _probe = probe;
         _discovery = discovery;
+        _prompts = prompts;
     }
 
     [HttpGet]
@@ -207,18 +210,62 @@ public class LlmModelsController : ControllerBase
         // Read from the users table rather than a claim, the same way every other call site attributes its
         // scope: the email is a denormalised snapshot on LlmCalls, and a blank one puts every test call in
         // a single nameless bucket in the usage log's by-user grouping.
-        Guid? userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value is { } uid
-            && Guid.TryParse(uid, out var parsed)
-            ? parsed
-            : null;
+        var userId = CallerId;
         var userEmail = userId is null
             ? null
             : await _db.Users.Where(u => u.Id == userId).Select(u => u.Email).FirstOrDefaultAsync();
 
-        using var scope = LlmCallScope.Push(LlmCallKind.AdminTest, userId, userEmail);
+        // Three groups run the REAL prompt against one of the caller's own recordings; the rest run the
+        // built-in sample. Which is which is the factory's to decide, so the two cannot drift.
+        var messages = LlmTestSample.Messages;
+        var maxResponseChars = LlmTestSample.MaxResponseChars;
+        LlmTestPrompt? recordingPrompt = null;
+        Recording? recording = null;
 
-        return await _probe.RunAsync(config, HttpContext.RequestAborted);
+        if (_prompts.NeedsRecording(group))
+        {
+            if (req.RecordingId is not { } recordingId)
+                return BadRequest($"A recording is required to test the {group} call.");
+            if (userId is not { } callerId) return Unauthorized();
+
+            recordingPrompt = await _prompts.BuildAsync(
+                group, recordingId, callerId, config.ContextCharBudget, HttpContext.RequestAborted);
+            if (recordingPrompt is null)
+                return NotFound("That recording does not exist, is not yours, or has no transcript yet.");
+
+            recording = await _db.Recordings.AsNoTracking().FirstOrDefaultAsync(r => r.Id == recordingId);
+            messages = recordingPrompt.Messages;
+            maxResponseChars = LlmTestPromptFactory.RecordingMaxResponseChars;
+        }
+
+        using var scope = LlmCallScope.Push(
+            LlmCallKind.AdminTest, userId, userEmail,
+            recording?.Id, recording is null ? null : recording.Name ?? recording.Title);
+
+        var outcome = await _probe.RunAsync(config, messages, maxResponseChars, HttpContext.RequestAborted);
+
+        // Parsed through the pipeline's own parser, so an unusable reply shows up here exactly as it would
+        // show up as a recording with no tags. A failed call has no reply to parse.
+        if (recordingPrompt is null || !outcome.Ok || outcome.Response is null) return outcome;
+
+        return outcome with
+        {
+            ParsedKind = recordingPrompt.ParsedKind,
+            ParsedJson = ParseForDisplay(recordingPrompt.ParsedKind, outcome.Response, recording),
+        };
     }
+
+    /// <summary>The reply as the pipeline would have understood it. Not a validation step - all three
+    /// parsers are total, and an empty array is the meaningful answer "this model gave us nothing".</summary>
+    private static string ParseForDisplay(string parsedKind, string response, Recording? recording) =>
+        parsedKind switch
+        {
+            "Tags" => JsonSerializer.Serialize(TagsPrompt.ParseContent(response)),
+            "Actions" => JsonSerializer.Serialize(ActionsPrompt.ParseContent(response)),
+            "Summary" => JsonSerializer.Serialize(
+                SummarizationPrompt.ParseContent(response, needName: string.IsNullOrWhiteSpace(recording?.Name))),
+            _ => "null",
+        };
 
     private static string? Layer(Dictionary<string, string> parameters, LlmCallGroup group) =>
         parameters.TryGetValue(group.ToString(), out var json) ? json : null;
@@ -274,6 +321,61 @@ public class LlmModelsController : ControllerBase
         }
         settings.DefaultLlmModelId = req.DefaultModelId;
 
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// <summary>The calling administrator. Their OWN recordings are the only ones a test may run against,
+    /// so this is an authorisation input, not just attribution.</summary>
+    private Guid? CallerId =>
+        User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value is { } uid
+            && Guid.TryParse(uid, out var parsed)
+            ? parsed
+            : null;
+
+    /// <summary>The recording this administrator tests models against, shared by every call group that runs
+    /// against real content.</summary>
+    [HttpGet("test-recording")]
+    public async Task<ActionResult<LlmTestRecordingDto>> GetTestRecording()
+    {
+        if (CallerId is not { } userId) return new LlmTestRecordingDto(null, null);
+
+        var chosen = await _db.UserSettings
+            .AsNoTracking()
+            .Where(s => s.UserId == userId)
+            .Select(s => s.LlmTestRecordingId)
+            .FirstOrDefaultAsync();
+        if (chosen is not { } recordingId) return new LlmTestRecordingDto(null, null);
+
+        // Resolved on read, and scoped to the owner again: a recording deleted (or a stored id that never
+        // belonged to them) reports as "nothing chosen" rather than a dangling label the picker cannot show.
+        var title = await _db.Recordings
+            .AsNoTracking()
+            .Where(r => r.Id == recordingId && r.UserId == userId)
+            .Select(r => r.Name ?? r.Title)
+            .FirstOrDefaultAsync();
+
+        return title is null
+            ? new LlmTestRecordingDto(null, null)
+            : new LlmTestRecordingDto(recordingId, title);
+    }
+
+    [HttpPut("test-recording")]
+    public async Task<IActionResult> SetTestRecording(SetLlmTestRecordingRequest req)
+    {
+        if (CallerId is not { } userId) return Unauthorized();
+
+        if (req.RecordingId is { } recordingId
+            && !await _db.Recordings.AnyAsync(r => r.Id == recordingId && r.UserId == userId))
+            return NotFound($"No recording {recordingId} belonging to you.");
+
+        var settings = await _db.UserSettings.FindAsync(userId);
+        if (settings is null)
+        {
+            settings = new UserSettings { UserId = userId };
+            _db.UserSettings.Add(settings);
+        }
+        settings.LlmTestRecordingId = req.RecordingId;
         await _db.SaveChangesAsync();
         return NoContent();
     }

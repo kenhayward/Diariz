@@ -955,7 +955,17 @@ public record ImportModelsResultDto(int Added, int Skipped, IReadOnlyList<string
 ///
 /// <c>Parameters</c> is the same group -> layer-JSON map as <see cref="LlmModelUpsert"/>, so the layer walk
 /// is identical to the one the saved model would get.</summary>
-public record LlmModelTestRequest(string Group, Dictionary<string, string> Parameters);
+/// <summary><c>RecordingId</c> is required for Tags, Actions and Summaries, whose test runs the real prompt
+/// against a real transcript, and ignored for the four groups that use the built-in sample.</summary>
+public record LlmModelTestRequest(string Group, Dictionary<string, string> Parameters, Guid? RecordingId = null);
+
+/// <summary>The recording an administrator has chosen to test models against. <c>Title</c> is the display
+/// name (<c>Name ?? Title</c>) so the picker can label the choice without a second fetch; both fields are
+/// null when nothing is chosen or the recording has since been deleted.</summary>
+public record LlmTestRecordingDto(Guid? RecordingId, string? Title);
+
+/// <summary>Null clears the choice.</summary>
+public record SetLlmTestRecordingRequest(Guid? RecordingId);
 
 /// <summary>Which model serves which call group, plus the fallback for groups with no entry. Group names
 /// are <c>LlmCallGroup</c> members; <c>ModelBase</c> is rejected - it is a parameter scope, not a call

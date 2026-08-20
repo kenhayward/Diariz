@@ -661,12 +661,33 @@ lives at the foot of that model's drawer.
   The application defaults themselves are readable by the editor (`GET /api/admin/llm-models/defaults`), which
 is what lets an inherited row name the value it inherits even on the Defaults tab, where the layer below is
 the application's baseline rather than the model's own.
-  **Run test** (`POST /api/admin/llm-models/{id}/test`) sends one fixed sample call with the parameters
-currently on screen - saved or not - and reports **time to the first token**, **total duration**, **tokens
-per second** (completion tokens over duration, as in the usage log), the token counts, and the model's actual
-reply. Each call type keeps its own result, since they ran with different parameters. First-token time is
-separated from duration deliberately: together they distinguish a model that was still LOADING from one that
-is simply slow, which need opposite fixes and otherwise look identical.
+  **Run test** (`POST /api/admin/llm-models/{id}/test`) sends one call with the parameters currently on
+screen - saved or not - and reports **time to the first token**, **total duration**, **tokens per second**
+(completion tokens over duration, as in the usage log), the token counts, and the model's actual reply. Each
+call type keeps its own result, since they ran with different parameters. First-token time is separated from
+duration deliberately: together they distinguish a model that was still LOADING from one that is simply slow,
+which need opposite fixes and otherwise look identical.
+  **What that call contains depends on the call type.** For **Tags**, **Actions** and **Summaries** it is the
+real thing: the same prompt the pipeline builds, from the same editable template file under `prompts/`, over
+a real recording's transcript with its speaker display names. The administrator picks that recording in the
+test panel from their **own** recordings that have finished transcribing, and the choice is remembered
+against their account (`GET`/`PUT /api/admin/llm-models/test-recording`) so all three tabs, and every model
+tried afterwards, are compared against the same meeting. Run test stays disabled on those tabs until one is
+chosen. The other four call types - **Defaults** (a parameter scope nothing is dispatched to), **Minutes and
+formulas** (several calls rather than one), **Translation** (needs a target language) and **Chat** (needs a
+question) - keep a fixed built-in sample transcript.
+  A recording-backed reply is also run through **the pipeline's own parser**, and the card shows the result
+that would really have been stored: tags as weighted chips, action items as a table of task, owner and
+deadline, a summary with the title it suggests (asked for only when the recording has no name, exactly as the
+summariser decides). The model's raw words sit behind a **Raw reply** toggle. Those parsers are total - they
+return nothing rather than throwing - so a confident reply the platform cannot read is reported as
+"the pipeline would have extracted no tags from this reply" rather than as a silent pass. That is the most
+diagnostic result the panel produces.
+  Two consequences worth stating. The transcript is sent to the endpoint under test, and the panel says so;
+the reply is returned to the browser and, as with every test call, never persisted - the usage log records
+counts only. And because the reply length now depends on the meeting, first-token times are only comparable
+between models when the same recording is remembered, which is why the choice is per administrator rather
+than per tab. Test calls name the recording they ran against in the usage log.
   On a failure the card carries the endpoint's own words plus **the single change that would address them**:
 a timeout offers to raise the timeout, and an endpoint that rejects a parameter by name offers to **omit**
 that parameter - for the open call type only. That is what makes the omit state discoverable: it is the least

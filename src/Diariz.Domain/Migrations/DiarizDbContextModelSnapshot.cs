@@ -2087,6 +2087,9 @@ namespace Diariz.Domain.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<Guid?>("LlmTestRecordingId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("NativeLanguage")
                         .HasColumnType("text");
 

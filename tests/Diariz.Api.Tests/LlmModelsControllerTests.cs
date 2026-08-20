@@ -20,14 +20,65 @@ namespace Diariz.Api.Tests;
 /// sibling controller.</summary>
 public class LlmModelsControllerTests
 {
+    /// <summary>Every template resolves to its built-in default, which is what a deployment with no
+    /// prompts/ volume gets.</summary>
+    private sealed class FallbackTemplates : IPromptTemplateProvider
+    {
+        public string Get(string name, string fallback) => fallback;
+    }
+
     private static LlmModelsController Build(
         DiarizDbContext db, LlmDefaultsOptions? defaults = null, ILlmTestProbe? probe = null) =>
         new(db, new FakeApiKeyProtector(),
             Options.Create(new SummarizationOptions { ApiBase = "http://env/v1", Model = "env-model" }),
             Options.Create(defaults ?? new LlmDefaultsOptions()),
             probe ?? new FakeLlmTestProbe(),
-            new FakeLlmModelDiscoveryClient())
+            new FakeLlmModelDiscoveryClient(),
+            new LlmTestPromptFactory(db, new FallbackTemplates()))
         { ControllerContext = Http.Context(Guid.NewGuid()) };
+
+    /// <summary>The same controller, but as a KNOWN administrator. The recording endpoints are scoped to the
+    /// caller's own rows, so their tests cannot use the random id <see cref="Build"/> hands out.</summary>
+    private static LlmModelsController BuildAs(
+        DiarizDbContext db, Guid userId, ILlmTestProbe? probe = null) =>
+        new(db, new FakeApiKeyProtector(),
+            Options.Create(new SummarizationOptions { ApiBase = "http://env/v1", Model = "env-model" }),
+            Options.Create(new LlmDefaultsOptions()),
+            probe ?? new FakeLlmTestProbe(),
+            new FakeLlmModelDiscoveryClient(),
+            // A REAL factory over the same context, not a fake: these tests assert the controller wires the
+            // real prompt through, and a fake would make every transcript assertion vacuous.
+            new LlmTestPromptFactory(db, new FallbackTemplates()))
+        { ControllerContext = Http.Context(userId) };
+
+    private static Recording SeedRecording(DiarizDbContext db, Guid ownerId, string title = "Team sync")
+    {
+        var rec = new Recording
+        {
+            Id = Guid.NewGuid(), UserId = ownerId, Title = title, Status = RecordingStatus.Transcribed,
+            CreatedAt = DateTimeOffset.UtcNow,
+        };
+        db.Recordings.Add(rec);
+        db.SaveChanges();
+        return rec;
+    }
+
+    private static Recording SeedTranscribedRecording(DiarizDbContext db, Guid ownerId, string title = "Team sync")
+    {
+        var rec = SeedRecording(db, ownerId, title);
+        var transcription = new Transcription
+        {
+            Id = Guid.NewGuid(), RecordingId = rec.Id, Version = 1, CreatedAt = DateTimeOffset.UtcNow,
+        };
+        db.Transcriptions.Add(transcription);
+        db.Segments.Add(new Segment
+        {
+            Id = Guid.NewGuid(), TranscriptionId = transcription.Id, Ordinal = 0, SpeakerLabel = "SPEAKER_00",
+            StartMs = 0, EndMs = 3000, Original = "The Q3 forecast needs revising before Friday.",
+        });
+        db.SaveChanges();
+        return rec;
+    }
 
     private static LlmModel Seed(DiarizDbContext db, string name = "m", string? key = "enc:secret")
     {
@@ -374,8 +425,12 @@ public class LlmModelsControllerTests
 
     // ---- the administrator's test call ----
 
+    /// <summary>A test call for the parameter-resolution cases below. The group is <b>Translation</b>, not
+    /// a content group: those run the real prompt against a real recording, which these tests neither have
+    /// nor care about. Translation is still a non-base group, so group-over-base layering is exercised
+    /// exactly as before.</summary>
     private static LlmModelTestRequest TestReq(
-        string group = "Summaries", Dictionary<string, string>? parameters = null) =>
+        string group = "Translation", Dictionary<string, string>? parameters = null) =>
         new(group, parameters ?? []);
 
     [Fact]
@@ -403,10 +458,10 @@ public class LlmModelsControllerTests
         using var db = TestDb.Create();
         var model = Seed(db);
         var probe = new FakeLlmTestProbe();
-        var request = TestReq("Summaries", new Dictionary<string, string>
+        var request = TestReq("Translation", new Dictionary<string, string>
         {
             ["ModelBase"] = "{\"temperature\":0.9,\"top_k\":40}",
-            ["Summaries"] = "{\"temperature\":0.2}",
+            ["Translation"] = "{\"temperature\":0.2}",
         });
 
         await Build(db, probe: probe).Test(model.Id, request);
@@ -443,10 +498,10 @@ public class LlmModelsControllerTests
         using var db = TestDb.Create();
         var model = Seed(db);
         var probe = new FakeLlmTestProbe();
-        var request = TestReq("Summaries", new Dictionary<string, string>
+        var request = TestReq("Translation", new Dictionary<string, string>
         {
             ["ModelBase"] = "{\"top_k\":40}",
-            ["Summaries"] = "{\"top_k\":null}",
+            ["Translation"] = "{\"top_k\":null}",
         });
 
         await Build(db, probe: probe).Test(model.Id, request);
@@ -482,9 +537,9 @@ public class LlmModelsControllerTests
         // silently proved nothing about the setting the admin thought they were testing.
         using var db = TestDb.Create();
         var model = Seed(db);
-        var request = TestReq("Summaries", new Dictionary<string, string>
+        var request = TestReq("Translation", new Dictionary<string, string>
         {
-            ["Summaries"] = "{\"temprature\":0.2}",
+            ["Translation"] = "{\"temprature\":0.2}",
         });
 
         var result = await Build(db).Test(model.Id, request);
@@ -610,12 +665,201 @@ public class LlmModelsControllerTests
         Assert.True(dto.ChatEnabled);
     }
 
+    [Fact]
+    public async Task Remembers_the_recording_an_administrator_chose()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = SeedRecording(db, userId, "Quarterly planning");
+
+        await BuildAs(db, userId).SetTestRecording(new SetLlmTestRecordingRequest(rec.Id));
+        var result = await BuildAs(db, userId).GetTestRecording();
+
+        Assert.Equal(rec.Id, result.Value!.RecordingId);
+        Assert.Equal("Quarterly planning", result.Value.Title);
+    }
+
+    [Fact]
+    public async Task Forgets_a_recording_that_has_since_been_deleted()
+    {
+        // Nulled on READ rather than held by a foreign key: an admin's convenience setting must never be a
+        // reason a user's recording cannot be deleted.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        db.UserSettings.Add(new UserSettings { UserId = userId, LlmTestRecordingId = Guid.NewGuid() });
+        db.SaveChanges();
+
+        var result = await BuildAs(db, userId).GetTestRecording();
+
+        Assert.Null(result.Value!.RecordingId);
+        Assert.Null(result.Value.Title);
+    }
+
+    [Fact]
+    public async Task Refuses_to_remember_another_users_recording()
+    {
+        using var db = TestDb.Create();
+        var admin = Guid.NewGuid();
+        var someoneElse = SeedRecording(db, Guid.NewGuid());
+
+        var response = await BuildAs(db, admin).SetTestRecording(new SetLlmTestRecordingRequest(someoneElse.Id));
+
+        Assert.IsType<NotFoundObjectResult>(response);
+        Assert.Null(db.UserSettings.FirstOrDefault(s => s.UserId == admin)?.LlmTestRecordingId);
+    }
+
+    [Fact]
+    public async Task Clears_the_choice_when_given_nothing()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = SeedRecording(db, userId);
+        await BuildAs(db, userId).SetTestRecording(new SetLlmTestRecordingRequest(rec.Id));
+
+        await BuildAs(db, userId).SetTestRecording(new SetLlmTestRecordingRequest(null));
+
+        Assert.Null((await BuildAs(db, userId).GetTestRecording()).Value!.RecordingId);
+    }
+
+    [Fact]
+    public async Task Reports_nothing_for_an_administrator_with_no_settings_row_at_all()
+    {
+        using var db = TestDb.Create();
+
+        var result = await BuildAs(db, Guid.NewGuid()).GetTestRecording();
+
+        Assert.Null(result.Value!.RecordingId);
+    }
+
+    [Fact]
+    public async Task Runs_the_real_tags_prompt_against_the_chosen_recording()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var model = Seed(db);
+        var rec = SeedTranscribedRecording(db, userId);
+        var probe = new FakeLlmTestProbe();
+
+        await BuildAs(db, userId, probe).Test(model.Id, new LlmModelTestRequest("Tags", [], rec.Id));
+
+        // The real transcript reached the model, not the built-in sample's Priya/Sam excerpt.
+        Assert.Contains("Q3 forecast", probe.LastMessages![1].Content);
+        Assert.DoesNotContain("vendor review", probe.LastMessages[1].Content);
+    }
+
+    [Fact]
+    public async Task Still_uses_the_built_in_sample_for_a_group_with_no_real_prompt()
+    {
+        // Chat needs a question and MinutesAndFormulas is a multi-call pipeline; both keep the old behaviour,
+        // and neither may demand a recording.
+        using var db = TestDb.Create();
+        var model = Seed(db);
+        var probe = new FakeLlmTestProbe();
+
+        var result = await BuildAs(db, Guid.NewGuid(), probe).Test(model.Id, new LlmModelTestRequest("Chat", []));
+
+        Assert.NotNull(result.Value);
+        Assert.Contains("Priya", probe.LastMessages![1].Content);
+        Assert.Equal(LlmTestSample.MaxResponseChars, probe.LastMaxResponseChars);
+    }
+
+    [Fact]
+    public async Task Rejects_a_content_group_with_no_recording()
+    {
+        using var db = TestDb.Create();
+        var model = Seed(db);
+
+        var result = await BuildAs(db, Guid.NewGuid()).Test(model.Id, new LlmModelTestRequest("Summaries", []));
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Rejects_another_users_recording()
+    {
+        using var db = TestDb.Create();
+        var model = Seed(db);
+        var someoneElse = SeedTranscribedRecording(db, Guid.NewGuid());
+
+        var result = await BuildAs(db, Guid.NewGuid())
+            .Test(model.Id, new LlmModelTestRequest("Tags", [], someoneElse.Id));
+
+        Assert.IsType<NotFoundObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Rejects_a_recording_with_no_transcript()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var model = Seed(db);
+        var rec = SeedRecording(db, userId); // no transcription, no segments
+
+        var result = await BuildAs(db, userId).Test(model.Id, new LlmModelTestRequest("Tags", [], rec.Id));
+
+        Assert.IsType<NotFoundObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Parses_the_reply_the_way_the_pipeline_would()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var model = Seed(db);
+        var rec = SeedTranscribedRecording(db, userId);
+        var probe = new FakeLlmTestProbe(new LlmTestOutcome(
+            true, 200, 10, 100, 1, 2, null, 3, "stop",
+            """[{"tag":"Forecast","weight":0.8}]""", "{}", null, null, null));
+
+        var result = await BuildAs(db, userId, probe).Test(model.Id, new LlmModelTestRequest("Tags", [], rec.Id));
+
+        Assert.Equal("Tags", result.Value!.ParsedKind);
+        Assert.Contains("Forecast", result.Value.ParsedJson);
+    }
+
+    [Fact]
+    public async Task Reports_an_empty_extraction_rather_than_failing()
+    {
+        // The parsers are total. A model that ignores the format leaves the pipeline with nothing, and that
+        // is exactly what the administrator needs to see - not a 500, and not a success with no detail.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var model = Seed(db);
+        var rec = SeedTranscribedRecording(db, userId);
+        var probe = new FakeLlmTestProbe(new LlmTestOutcome(
+            true, 200, 10, 100, 1, 2, null, 3, "stop",
+            "I could not identify any topics.", "{}", null, null, null));
+
+        var result = await BuildAs(db, userId, probe).Test(model.Id, new LlmModelTestRequest("Tags", [], rec.Id));
+
+        Assert.True(result.Value!.Ok);
+        Assert.Equal("Tags", result.Value.ParsedKind);
+        Assert.Equal("[]", result.Value.ParsedJson);
+    }
+
+    [Fact]
+    public async Task Does_not_parse_a_failed_call()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var model = Seed(db);
+        var rec = SeedTranscribedRecording(db, userId);
+        var probe = new FakeLlmTestProbe(new LlmTestOutcome(
+            false, 500, null, 100, null, null, null, null, null, null, "{}", "Http500", "boom", null));
+
+        var result = await BuildAs(db, userId, probe).Test(model.Id, new LlmModelTestRequest("Tags", [], rec.Id));
+
+        Assert.Null(result.Value!.ParsedJson);
+    }
+
     private sealed class ScopeCapturingProbe : ILlmTestProbe
     {
         public LlmCallKind? Kind { get; private set; }
         public string? UserEmail { get; private set; }
 
-        public Task<LlmTestOutcome> RunAsync(LlmRequestConfig config, CancellationToken ct = default)
+        public Task<LlmTestOutcome> RunAsync(
+            LlmRequestConfig config, IReadOnlyList<ChatMessage> messages, int maxResponseChars,
+            CancellationToken ct = default)
         {
             Kind = LlmCallScope.Active?.Kind;
             UserEmail = LlmCallScope.Active?.UserEmail;
