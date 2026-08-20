@@ -16,11 +16,11 @@ import ModelEditorDrawer from "./ModelEditorDrawer";
 
 const MODELS: LlmModel[] = [
   {
-    id: "a", name: "gpt-oss-20b", apiBase: "http://a/v1", hasApiKey: true, contextLength: 8192,
+    id: "a", name: "gpt-oss-20b", displayName: null, apiBase: "http://a/v1", hasApiKey: true, chatEnabled: false, contextLength: 8192,
     parameters: { ModelBase: '{"temperature":0.5}' },
   },
   {
-    id: "b", name: "qwen3-27b", apiBase: "http://b/v1", hasApiKey: false, contextLength: 32768,
+    id: "b", name: "qwen3-27b", displayName: null, apiBase: "http://b/v1", hasApiKey: false, chatEnabled: false, contextLength: 32768,
     parameters: { ModelBase: '{"temperature":0.9,"top_k":40}', Translation: '{"temperature":0.1}' },
   },
 ];

@@ -16,6 +16,9 @@ interface Props {
   tests: Record<string, TestState>;
   onTest: (model: LlmModel) => void;
   onTestAll: () => void;
+  /// Toggles whether a model appears in the chat model picker. Separate from `onRoute` because it writes a
+  /// different resource: routing replaces the whole assignment set, this flips one model's own flag.
+  onChatEnabledChange: (modelId: string, enabled: boolean) => void;
 }
 
 /// The routing grid: models down the side, call types across the top, one selection per column.
@@ -29,7 +32,7 @@ interface Props {
 const STICKY = "sticky left-0 z-10 bg-white dark:bg-gray-900";
 
 export default function RoutingMatrix({
-  models, assignments, defaultModelId, onRoute, onEdit, tests, onTest, onTestAll,
+  models, assignments, defaultModelId, onRoute, onEdit, tests, onTest, onTestAll, onChatEnabledChange,
 }: Props) {
   const { t } = useTranslation("account");
 
@@ -48,6 +51,11 @@ export default function RoutingMatrix({
 
   const columns = [{ key: "__default__", label: t("llmModelsRoleDefault") }, ...ASSIGNABLE_GROUPS.map((g) => ({ key: g.key, label: t(g.column) }))];
 
+  /// The model that actually serves chat: its own assignment, else the platform default. It is offered in
+  /// the picker implicitly (ChatModelCatalog does the same on the server), so its checkbox is ticked and
+  /// locked - an administrator must not be able to produce a picker that excludes the model in use.
+  const chatDefaultId = assignments["Chat"] ?? defaultModelId;
+
   function selectedIn(columnKey: string): string | null {
     return columnKey === "__default__" ? defaultModelId : (assignments[columnKey] ?? null);
   }
@@ -64,14 +72,14 @@ export default function RoutingMatrix({
     return ASSIGNABLE_GROUPS.filter((g) => assignments[g.key] === model.id).length;
   }
 
-  const grid = "grid grid-cols-[minmax(0,1fr)_repeat(7,86px)_128px] items-center";
+  const grid = "grid grid-cols-[minmax(0,1fr)_repeat(7,86px)_76px_128px] items-center";
   // The model column stays put while the call types scroll under it: at a narrow width the dots are
   // meaningless without the name they belong to, and a horizontal scroll is exactly when the name is the
   // first thing to leave the screen. Needs its own opaque background, or the cells scroll through it.
 
   return (
     <div className="overflow-x-auto">
-      <div className="min-w-[900px] rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+      <div className="min-w-[976px] rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
         <div className={`${grid} items-end border-b border-gray-200 px-3.5 pb-2 pt-2.5 dark:border-gray-800`}>
           <span className={`${STICKY} text-[10.5px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400`}>
             {t("llmModelsColModel")}
@@ -84,6 +92,9 @@ export default function RoutingMatrix({
               {c.label}
             </span>
           ))}
+          <span className="px-1 text-center text-[10.5px] font-semibold leading-tight tracking-wide text-gray-500 dark:text-gray-400">
+            {t("llmModelsColInChat")}
+          </span>
           <span />
         </div>
 
@@ -93,11 +104,11 @@ export default function RoutingMatrix({
               <div className="flex items-center gap-2">
                 <span className={`size-[7px] shrink-0 rounded-full ${statusDot(tests[m.id])}`} />
                 <span className="truncate text-[13.5px] font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-                  {m.name}
+                  {m.displayName || m.name}
                 </span>
               </div>
               <p className="mt-[3px] truncate pl-[15px] text-[11px] tabular-nums text-gray-500 dark:text-gray-400">
-                {m.apiBase} · {m.contextLength.toLocaleString()} ctx
+                {`${m.displayName ? `${m.name} · ` : ""}${m.apiBase} · ${m.contextLength.toLocaleString()} ctx`}
               </p>
               <TestLine test={tests[m.id]} />
             </div>
@@ -110,6 +121,18 @@ export default function RoutingMatrix({
                 onSelect={() => choose(c.key, m.id)}
               />
             ))}
+
+            <div className="flex justify-center">
+              <input
+                type="checkbox"
+                aria-label={t("llmModelsInChatAria", { model: m.displayName || m.name })}
+                title={m.id === chatDefaultId ? t("llmModelsInChatLocked") : undefined}
+                checked={m.chatEnabled || m.id === chatDefaultId}
+                disabled={m.id === chatDefaultId}
+                onChange={(e) => onChatEnabledChange(m.id, e.target.checked)}
+                className="size-4 accent-indigo-600 disabled:opacity-60"
+              />
+            </div>
 
             <div className="flex justify-end gap-1.5">
               <button
@@ -153,6 +176,8 @@ export default function RoutingMatrix({
               onSelect={() => choose(c.key, null)}
             />
           ))}
+          {/* No model to offer in chat, so no checkbox - this row means "one level up from this column". */}
+          <span />
           <span />
         </div>
 
