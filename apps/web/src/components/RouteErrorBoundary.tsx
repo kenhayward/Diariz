@@ -11,7 +11,18 @@ export default function RouteErrorBoundary({ children }: { children: ReactNode }
   const { pathname } = useLocation();
   const { t } = useTranslation("workspace");
   return (
-    <ErrorBoundary resetKey={pathname} message={t("detailErrorTitle")} hint={t("detailErrorHint")}>
+    <ErrorBoundary
+      resetKey={pathname}
+      message={t("detailErrorTitle")}
+      hint={t("detailErrorHint")}
+      // The missing-chunk case gets its own copy: it is not a crash, it is a deploy the running session has
+      // not caught up with, and it is one reload from fixed.
+      staleChunk={{
+        title: t("staleChunkTitle"),
+        hint: t("staleChunkHint"),
+        action: t("staleChunkReload"),
+      }}
+    >
       {children}
     </ErrorBoundary>
   );

@@ -7,10 +7,23 @@ import { ThemeProvider } from "./theme";
 import { LanguageProvider } from "./language";
 import { HelpProvider } from "./lib/help/HelpContext";
 import { initTelemetry } from "./lib/telemetry";
+import { installChunkReloadHandler } from "./lib/chunkReload";
+import { installUnloadGuard } from "./lib/unloadGuard";
 import App from "./App";
 import "./index.css";
 
 const queryClient = new QueryClient();
+
+// A deploy replaces every content-hashed chunk, so a session that started before it asks for files the
+// server no longer has the moment the user opens a page it had not loaded yet. Installed before first
+// render, and outside it, because the failing import can happen at any point in the session's life - which
+// for the tray app is days. See lib/chunkReload.
+installChunkReloadHandler({ reload: () => window.location.reload(), storage: window.sessionStorage });
+
+// Ask before the page is torn down mid-capture: a live recording exists only in this page's memory until
+// the recorder stops. Browser only - the desktop shell hides to tray rather than unloading, and confirms its
+// own Quit in the main process, because Electron cancels a close without showing anything. See lib/unloadGuard.
+installUnloadGuard();
 
 // Start reporting before the app renders, so a crash during first render is captured. Never blocks
 // for long: initTelemetry resolves false rather than throwing if the config request fails, and it
