@@ -1580,6 +1580,36 @@ export interface LlmTestOutcome {
   message: string | null;
   /// Which parameter the endpoint blamed, when it named one.
   offendingParameter: string | null;
+  /// Which shape `parsedJson` holds - "Tags" | "Actions" | "Summary" - or null when this group ran the
+  /// built-in sample, or the call failed.
+  parsedKind: string | null;
+  /// The reply run through the pipeline's own parser, serialised. An empty array is a real answer: the
+  /// pipeline would have extracted nothing.
+  parsedJson: string | null;
+}
+
+/// The recording an administrator tests models against. Both null when nothing is chosen, or the chosen
+/// recording has since been deleted.
+export interface LlmTestRecording {
+  recordingId: string | null;
+  title: string | null;
+}
+
+/// The three shapes `LlmTestOutcome.parsedJson` can hold, matching the server's own extraction records.
+export interface ParsedTag {
+  tag: string;
+  weight: number;
+}
+
+export interface ParsedAction {
+  text: string;
+  actor: string;
+  deadline: string;
+}
+
+export interface ParsedSummary {
+  summary: string;
+  name: string | null;
 }
 
 /// Which model serves which call group, plus the fallback for groups with no entry.

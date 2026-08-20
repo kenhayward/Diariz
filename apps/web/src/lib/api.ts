@@ -101,6 +101,7 @@ import type {
   LlmModelUpsert,
   LlmAssignments,
   LlmTestOutcome,
+  LlmTestRecording,
 } from "./types";
 
 const TOKEN_KEY = "diariz.token";
@@ -1733,12 +1734,25 @@ export const api = {
 
   /// Run one sample call against a model with the parameters currently on screen, saved or not. The
   /// endpoint, key and model name come from the stored row - this never sends them.
+  ///
+  /// `recordingId` is required for Tags, Actions and Summaries, which run the real prompt against a real
+  /// transcript, and ignored by the other four groups.
   async testModel(
     id: string,
-    body: { group: string; parameters: Record<string, string> },
+    body: { group: string; parameters: Record<string, string>; recordingId?: string | null },
   ): Promise<LlmTestOutcome> {
     const { data } = await http.post<LlmTestOutcome>(`/api/admin/llm-models/${id}/test`, body);
     return data;
+  },
+
+  /// The recording this administrator tests models against, shared by every content call group.
+  async getTestRecording(): Promise<LlmTestRecording> {
+    const { data } = await http.get<LlmTestRecording>("/api/admin/llm-models/test-recording");
+    return data;
+  },
+
+  async setTestRecording(recordingId: string | null): Promise<void> {
+    await http.put("/api/admin/llm-models/test-recording", { recordingId });
   },
 
   async getLlmAssignments(): Promise<LlmAssignments> {
