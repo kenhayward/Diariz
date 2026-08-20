@@ -8,6 +8,7 @@ import type { LlmModel } from "../lib/types";
 import RoutingMatrix from "../components/llmmodels/RoutingMatrix";
 import type { TestState } from "../components/llmmodels/TestRail";
 import ModelEditorDrawer from "../components/llmmodels/ModelEditorDrawer";
+import DiscoverModelsDialog from "../components/llmmodels/DiscoverModelsDialog";
 
 interface Props {
   /// Rendered inside the settings modal rather than as its own route: drops the top bar and the
@@ -27,6 +28,7 @@ export default function LlmModels({ embedded = false, onOpenUsageLog }: Props = 
 
   const [editing, setEditing] = useState<LlmModel | null>(null);
   const [adding, setAdding] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /// Model id -> its last connection test. Lives here rather than in the matrix so it survives the
   /// re-render a routing write causes, and so Test all can drive it.
@@ -133,13 +135,22 @@ export default function LlmModels({ embedded = false, onOpenUsageLog }: Props = 
               {t("llmModelsIntro")}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-3 py-1.5 text-[12.5px] text-white"
-          >
-            {t("llmModelsAdd")}
-          </button>
+          <div className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              className="whitespace-nowrap rounded-md bg-indigo-600 px-3 py-1.5 text-[12.5px] text-white"
+            >
+              {t("llmModelsAdd")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setDiscovering(true)}
+              className="whitespace-nowrap rounded-md border border-gray-300 px-3 py-1.5 text-[12.5px] dark:border-gray-700"
+            >
+              {t("llmModelsAddAll")}
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -179,6 +190,16 @@ export default function LlmModels({ embedded = false, onOpenUsageLog }: Props = 
           />
         )}
       </div>
+
+      {discovering && (
+        <DiscoverModelsDialog
+          onClose={() => setDiscovering(false)}
+          onImported={() => {
+            setDiscovering(false);
+            queryClient.invalidateQueries({ queryKey: ["llm-models"] });
+          }}
+        />
+      )}
 
       {(editing || adding) && (
         <ModelEditorDrawer

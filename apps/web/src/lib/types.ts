@@ -1508,6 +1508,23 @@ export interface LlmModel {
 
 /// Note there is no `chatEnabled` here, deliberately: the editor drawer does not show that control, so
 /// carrying it would let every save from the drawer post a stale value and silently un-offer the model.
+/// One model an endpoint reported, as offered for import. `contextLength` is always usable, but
+/// `contextLengthReported` says whether the endpoint supplied it or it was defaulted - the value sizes both
+/// the chat dial and the real context budget, so a guess has to be visible as one.
+export interface DiscoveredModel {
+  id: string;
+  contextLength: number;
+  contextLengthReported: boolean;
+  alreadyExists: boolean;
+}
+
+/// What an import did. `needContextLength` names the models whose window was defaulted rather than reported.
+export interface ImportModelsResult {
+  added: number;
+  skipped: number;
+  needContextLength: string[];
+}
+
 export interface LlmModelUpsert {
   name: string;
   apiBase: string;
