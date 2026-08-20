@@ -561,6 +561,39 @@
         ],
         "type": "object"
       },
+      "ChatModelDto": {
+        "properties": {
+          "contextLength": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "isDefault": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "name",
+          "contextLength",
+          "isDefault"
+        ],
+        "type": "object"
+      },
       "ChatStreamRequest": {
         "properties": {
           "attachmentName": {
@@ -6699,6 +6732,46 @@
         "summary": "Update a saved conversation",
         "tags": [
           "Chat"
+        ]
+      }
+    },
+    "/api/chat/models": {
+      "get": {
+        "description": "The models a Platform Administrator offers for chat: the default first, then the rest by name. Pass an `id` from this list as `modelId` on a chat request to have that model answer the turn; a model that is not in this list is ignored and the default answers instead.\n\nEndpoints and API keys are never returned - those are administrator-only.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ChatModelDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ChatModelDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ChatModelDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List the models you can chat with",
+        "tags": [
+          "ChatModels"
         ]
       }
     },
@@ -14011,6 +14084,10 @@
     {
       "description": "Multi-turn chat over your transcripts: stream answers over selected recordings and save, load, or delete conversations.",
       "name": "Chat"
+    },
+    {
+      "description": "The models a Platform Administrator offers for chat, so a client can let you pick which one answers. Endpoints and API keys are never returned here.",
+      "name": "ChatModels"
     },
     {
       "description": "Submit a bug or UX report about the app, captured with the SPA route, app release, and a scrubbed client trail.",
