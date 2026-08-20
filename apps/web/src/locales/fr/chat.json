@@ -85,6 +85,8 @@
   "couldNotReadFile": "Impossible de lire le fichier.",
   "contextUsedAria": "Contexte utilisé à {{pct}} %",
   "modelFallback": "modèle",
+  "modelPicker": "Modèle : {{model}}",
+  "ctxSuffix": "ctx",
   "tokens": "jetons",
   "toolCallPrefix": "Appel d'outil :",
   "toolLabels": {
