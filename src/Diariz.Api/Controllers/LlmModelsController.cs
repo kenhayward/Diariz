@@ -217,7 +217,8 @@ public class LlmModelsController : ControllerBase
 
         using var scope = LlmCallScope.Push(LlmCallKind.AdminTest, userId, userEmail);
 
-        return await _probe.RunAsync(config, HttpContext.RequestAborted);
+        return await _probe.RunAsync(
+            config, LlmTestSample.Messages, LlmTestSample.MaxResponseChars, HttpContext.RequestAborted);
     }
 
     private static string? Layer(Dictionary<string, string> parameters, LlmCallGroup group) =>

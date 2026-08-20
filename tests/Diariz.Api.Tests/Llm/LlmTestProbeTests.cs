@@ -21,12 +21,19 @@ public class LlmTestProbeTests
 
     private static LlmTestProbe Probe(HttpMessageHandler handler) => new(new HttpClient(handler));
 
+    /// <summary>The built-in sample call, which is what four of the seven call groups still run.</summary>
+    private static Task<LlmTestOutcome> Run(LlmTestProbe probe, LlmRequestConfig config) =>
+        probe.RunAsync(config, LlmTestSample.Messages, LlmTestSample.MaxResponseChars, CancellationToken.None);
+
+    private static IReadOnlyList<Diariz.Api.Services.ChatMessage> Messages(string user) =>
+        [new("system", "You are a test."), new("user", user)];
+
     [Fact]
     public async Task Returns_what_the_model_actually_said()
     {
         var handler = new SseHandler([Delta("The team "), Delta("agreed."), "[DONE]"]);
 
-        var result = await Probe(handler).RunAsync(Config(), CancellationToken.None);
+        var result = await Run(Probe(handler), Config());
 
         Assert.True(result.Ok);
         Assert.Equal("The team agreed.", result.Response);
@@ -38,7 +45,7 @@ public class LlmTestProbeTests
         // Time-to-first-token only exists on a stream, and it is the number the result leads with.
         var handler = new SseHandler([Delta("hi"), "[DONE]"]);
 
-        await Probe(handler).RunAsync(Config(), CancellationToken.None);
+        await Run(Probe(handler), Config());
 
         var body = JsonDocument.Parse(handler.LastBodyRaw!).RootElement;
         Assert.True(body.GetProperty("stream").GetBoolean());
@@ -54,7 +61,7 @@ public class LlmTestProbeTests
         var handler = new SseHandler([Delta("hi"), "[DONE]"]);
         var parameters = new LlmParameters { Temperature = 0.25, TopK = 20, TimeoutSeconds = 600, ToolsSupported = false };
 
-        await Probe(handler).RunAsync(Config(parameters), CancellationToken.None);
+        await Run(Probe(handler), Config(parameters));
 
         var body = JsonDocument.Parse(handler.LastBodyRaw!).RootElement;
         Assert.Equal(0.25, body.GetProperty("temperature").GetDouble());
@@ -68,7 +75,7 @@ public class LlmTestProbeTests
     {
         var handler = new SseHandler([Delta("hi"), "[DONE]"]);
 
-        await Probe(handler).RunAsync(Config(), CancellationToken.None);
+        await Run(Probe(handler), Config());
 
         Assert.Equal("Bearer sk-secret", handler.LastAuthorization);
     }
@@ -89,7 +96,7 @@ public class LlmTestProbeTests
         });
         var handler = new SseHandler([Delta("hi"), usage, "[DONE]"]);
 
-        var result = await Probe(handler).RunAsync(Config(), CancellationToken.None);
+        var result = await Run(Probe(handler), Config());
 
         Assert.Equal(1240, result.PromptTokens);
         Assert.Equal(44, result.CompletionTokens);
@@ -107,7 +114,7 @@ public class LlmTestProbeTests
             [Delta("first"), Delta("last"), "[DONE]"],
             delayBefore: TimeSpan.FromMilliseconds(400), delayAtIndex: 1);
 
-        var result = await Probe(handler).RunAsync(Config(), CancellationToken.None);
+        var result = await Run(Probe(handler), Config());
 
         Assert.NotNull(result.TtftMs);
         Assert.True(
@@ -121,7 +128,7 @@ public class LlmTestProbeTests
         var handler = new SseHandler(
             [Delta("hi"), "[DONE]"], delayBefore: TimeSpan.FromSeconds(30), delayAtIndex: 0);
 
-        var result = await Probe(handler).RunAsync(Config(timeoutSeconds: 1), CancellationToken.None);
+        var result = await Run(Probe(handler), Config(timeoutSeconds: 1));
 
         Assert.False(result.Ok);
         Assert.Equal("Timeout", result.ErrorKind);
@@ -136,7 +143,7 @@ public class LlmTestProbeTests
             HttpStatusCode.BadRequest,
             """{"error":{"message":"Unrecognized request argument supplied: top_k"}}""");
 
-        var result = await Probe(handler).RunAsync(Config(), CancellationToken.None);
+        var result = await Run(Probe(handler), Config());
 
         Assert.False(result.Ok);
         Assert.Equal(400, result.HttpStatus);
@@ -150,7 +157,7 @@ public class LlmTestProbeTests
     {
         // A wrong endpoint is the single most likely thing an admin is testing FOR, so it has to come back
         // as a result they can read rather than a 500 from the API.
-        var result = await Probe(new ThrowingHandler()).RunAsync(Config(), CancellationToken.None);
+        var result = await Run(Probe(new ThrowingHandler()), Config());
 
         Assert.False(result.Ok);
         Assert.Equal("Transport", result.ErrorKind);
@@ -162,7 +169,7 @@ public class LlmTestProbeTests
         var stop = JsonSerializer.Serialize(new { choices = new[] { new { finish_reason = "length" } } });
         var handler = new SseHandler([Delta("hi"), stop, "[DONE]"]);
 
-        var result = await Probe(handler).RunAsync(Config(), CancellationToken.None);
+        var result = await Run(Probe(handler), Config());
 
         Assert.Equal("length", result.FinishReason);
     }
@@ -174,7 +181,7 @@ public class LlmTestProbeTests
         // from the editor's state afterwards.
         var handler = new SseHandler([Delta("hi"), "[DONE]"]);
 
-        var result = await Probe(handler).RunAsync(Config(new LlmParameters { Temperature = 0.25 }), CancellationToken.None);
+        var result = await Run(Probe(handler), Config(new LlmParameters { Temperature = 0.25 }));
 
         var sent = JsonDocument.Parse(handler.LastBodyRaw!).RootElement;
         var reported = JsonDocument.Parse(result.RequestBodyJson).RootElement;
@@ -188,11 +195,52 @@ public class LlmTestProbeTests
         // The result goes to a browser. The key is write-only everywhere else and must stay that way here.
         var handler = new SseHandler([Delta("hi"), "[DONE]"]);
 
-        var result = await Probe(handler).RunAsync(Config(), CancellationToken.None);
+        var result = await Run(Probe(handler), Config());
 
         Assert.DoesNotContain("sk-secret", result.RequestBodyJson);
         // ...and the body really is the one it sent: an absence assertion alone passes against "{}".
         Assert.Contains("test-model", result.RequestBodyJson);
+    }
+
+    [Fact]
+    public async Task Sends_exactly_the_messages_it_was_given()
+    {
+        // The probe stopped owning a prompt: a probe that quietly substituted its own would make every
+        // recording-backed test a measurement of the wrong call.
+        var handler = new SseHandler([Delta("hi"), "[DONE]"]);
+
+        await Probe(handler).RunAsync(Config(), Messages("Summarise the Q3 forecast discussion."), 8000);
+
+        var sent = JsonDocument.Parse(handler.LastBodyRaw!).RootElement.GetProperty("messages");
+        Assert.Equal(2, sent.GetArrayLength());
+        Assert.Equal("system", sent[0].GetProperty("role").GetString());
+        Assert.Equal("You are a test.", sent[0].GetProperty("content").GetString());
+        Assert.Equal("Summarise the Q3 forecast discussion.", sent[1].GetProperty("content").GetString());
+    }
+
+    [Fact]
+    public async Task Stops_accumulating_at_the_cap_it_was_given()
+    {
+        // The cap bounds what a misbehaving endpoint can make the API hold. It is an argument now because a
+        // real extraction reply is legitimately far longer than the built-in sample's one sentence.
+        //
+        // It is a FLOOR check, not a hard limit: the probe appends a whole delta whenever it is still under
+        // the cap, so a reply can overshoot by up to one chunk. That is deliberate - splitting a delta would
+        // cut a token in half - and the cap is a memory bound, not a display budget. This asserts the
+        // accumulation actually stops, which is the property that matters.
+        var handler = new SseHandler([Delta(new string('x', 40)), Delta(new string('y', 40)), "[DONE]"]);
+
+        var result = await Probe(handler).RunAsync(Config(), Messages("go"), maxResponseChars: 40);
+
+        Assert.Equal(40, result.Response!.Length);
+    }
+
+    [Fact]
+    public void The_built_in_sample_is_still_a_two_turn_meeting_excerpt()
+    {
+        // Four call groups still use it, so it has to keep working after being moved out of the probe.
+        Assert.Equal(["system", "user"], LlmTestSample.Messages.Select(m => m.Role));
+        Assert.Contains("Priya", LlmTestSample.Messages[1].Content);
     }
 
     private sealed class ThrowingHandler : HttpMessageHandler

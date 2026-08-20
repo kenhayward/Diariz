@@ -615,7 +615,9 @@ public class LlmModelsControllerTests
         public LlmCallKind? Kind { get; private set; }
         public string? UserEmail { get; private set; }
 
-        public Task<LlmTestOutcome> RunAsync(LlmRequestConfig config, CancellationToken ct = default)
+        public Task<LlmTestOutcome> RunAsync(
+            LlmRequestConfig config, IReadOnlyList<ChatMessage> messages, int maxResponseChars,
+            CancellationToken ct = default)
         {
             Kind = LlmCallScope.Active?.Kind;
             UserEmail = LlmCallScope.Active?.UserEmail;

@@ -1024,10 +1024,16 @@ public sealed class FakeLlmTestProbe : ILlmTestProbe
             true, 200, 10, 100, 1, 2, null, 3, "stop", "ok", "{}", null, null, null);
 
     public LlmRequestConfig? LastConfig { get; private set; }
+    public IReadOnlyList<ChatMessage>? LastMessages { get; private set; }
+    public int? LastMaxResponseChars { get; private set; }
 
-    public Task<LlmTestOutcome> RunAsync(LlmRequestConfig config, CancellationToken ct = default)
+    public Task<LlmTestOutcome> RunAsync(
+        LlmRequestConfig config, IReadOnlyList<ChatMessage> messages, int maxResponseChars,
+        CancellationToken ct = default)
     {
         LastConfig = config;
+        LastMessages = messages;
+        LastMaxResponseChars = maxResponseChars;
         return Task.FromResult(_outcome);
     }
 }
