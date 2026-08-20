@@ -579,14 +579,33 @@ saved), so the two can drift - `requestPreview.test.ts` is what holds them toget
 that the four **behaviour flags** (`timeout_seconds`, `tools_supported`, `images_supported`,
 `reasoning_enabled`) never appear in the previewed body, since no endpoint ever receives them.
 
-`POST /api/admin/llm-models/{id}/test` runs one sample call through `LlmTestProbe` so an administrator can
-see whether an endpoint and a set of parameters actually work. Three things about it are deliberate:
+`POST /api/admin/llm-models/{id}/test` runs one call through `LlmTestProbe` so an administrator can see
+whether an endpoint and a set of parameters actually work - and, for three call groups, whether the model is
+any good at the job. Four things about it are deliberate:
 
-- **The parameters come from the request, the credentials never do.** The body carries only a group name and
-  the same group -> layer-JSON map an upsert sends, so an admin can test before saving; the endpoint URL, API
-  key and model name are read from the stored row alone. Accepting a caller-supplied URL would turn the
-  endpoint into a way of reaching arbitrary hosts with an administrator's session and no model row left
-  behind, and the row is the audit trail.
+- **The parameters come from the request, the credentials never do.** The body carries a group name, the
+  same group -> layer-JSON map an upsert sends, and (for the recording-backed groups) a recording id, so an
+  admin can test before saving; the endpoint URL, API key and model name are read from the stored row alone.
+  Accepting a caller-supplied URL would turn the endpoint into a way of reaching arbitrary hosts with an
+  administrator's session and no model row left behind, and the row is the audit trail.
+- **The prompt belongs to the caller, not the probe (0.235.0).** `LlmTestProbe` is transport: it takes
+  `messages` and a response cap. `ILlmTestPromptFactory` decides what those are. For **Tags**, **Actions**
+  and **Summaries** it builds the messages from the same pure builders (`TagsPrompt`, `ActionsPrompt`,
+  `SummarizationPrompt`) and the same `IPromptTemplateProvider` template files the pipeline uses, over a real
+  recording's segments - so the test cannot drift from the call the platform actually makes. The remaining
+  four groups pass `LlmTestSample`, a fixed miniature transcript: **ModelBase** is a parameter scope nothing
+  is dispatched to, **MinutesAndFormulas** is a multi-call pipeline (template resolution, an optional notes
+  pre-pass, then a possibly per-section strategy), and **Translation** and **Chat** need a target language
+  and a question a recording does not supply.
+  The recording is **the caller's own** - ownership is part of the query, not a check afterwards, because
+  the endpoint is `ManagePlatform`-gated and an admin could otherwise name any row and send another user's
+  meeting to a third-party endpoint. It is remembered per administrator on `UserSettings.LlmTestRecordingId`
+  via `GET`/`PUT /api/admin/llm-models/test-recording` (deliberately on the admin controller, not the
+  public `api/user/settings` DTO), shared by all three tabs so timings stay comparable between models.
+  The reply is then run back through the pipeline's own parsers, which gained content-only overloads
+  (`ParseContent`) because the probe streams and never holds a `/chat/completions` envelope. Those parsers
+  are **total** - an unreadable reply yields an empty list, not an exception - so `ParsedJson` of `[]` is the
+  real and useful answer "this model would have produced nothing", not an error.
 - **It always streams** (`ResponseHeadersRead` + `stream_options.include_usage`), because time-to-first-token
   is the number that separates "the model was loading" from "the model is slow" and does not exist on a
   buffered response. `LlmTestProbeTests.Measures_the_first_token_separately_from_the_whole_call` is what

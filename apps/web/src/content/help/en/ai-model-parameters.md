@@ -1,6 +1,6 @@
 ---
 title: Editing a model's parameters
-summary: The model drawer sets a model's connection details and every sampling parameter. Each parameter is inherited, omitted, or set, and omitted is not the same as inherited. Run test makes a real call so you can see the effect before saving.
+summary: The model drawer sets a model's connection details and every sampling parameter. Each parameter is inherited, omitted, or set, and omitted is not the same as inherited. Run test makes a real call, against one of your own recordings.
 group: advanced
 order: 20
 ---
@@ -87,8 +87,26 @@ body instead.
 ## Testing before you save
 
 **Run test** sends one real call to the model with whatever is on screen, saved or not, and shows you what
-came back. It uses a fixed sample transcript rather than your own meetings, so the timings are comparable
-between tabs and between models.
+came back.
+
+### What the test call contains
+
+On the **Tags**, **Actions** and **Summaries** tabs the test runs the real job. Pick one of your own
+recordings with **Test against** and Diariz sends the same instruction it would really send for that call
+type, over that meeting's actual transcript. Run test stays greyed out on those tabs until you have chosen
+one. The choice is remembered against your account and shared by all three tabs, so every model you try
+afterwards is judged on the same meeting - which is what makes their times and their answers comparable.
+
+Only your own recordings are offered, and only ones that have finished transcribing. The transcript is sent
+to the endpoint you are testing, which is worth knowing if that endpoint is not yours. The reply is shown to
+you and never stored.
+
+The other four tabs - **Defaults**, **Minutes and formulas**, **Translation** and **Chat** - use a short
+built-in sample transcript instead. Defaults is not a call type at all, minutes are built from several calls
+rather than one, and translation and chat need a target language and a question that a recording cannot
+supply.
+
+### What came back
 
 Four numbers come back, and the first two are the ones to read together:
 
@@ -104,6 +122,18 @@ counts the reply only, not the prompt the model read.
 
 Each tab keeps its own result. They are not comparable across tabs, because each ran with that tab's
 parameters.
+
+### Whether the answer was any good
+
+On the three tabs that run against a recording, the reply is also put through the same reader the rest of
+Diariz uses, and you see what would actually have been kept: tags with their weights, action items as a
+table of task, owner and deadline, or the summary and the name it suggests. The model's own words are still
+there behind **Raw reply**.
+
+Read that panel before the numbers. A model can answer quickly, confidently, and in a shape Diariz cannot
+use - which looks like a success until real meetings start coming back empty. When that happens the panel
+says so: *the pipeline would have extracted no tags from this reply*. That is usually a sign to try a
+different model for this call type, or a larger one.
 
 ### When it fails
 
