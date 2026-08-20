@@ -48,14 +48,17 @@ public class PlatformSettings
     /// authenticates until the Platform Administrator opts in.</summary>
     public bool ApiAccessEnabled { get; set; }
 
-    /// <summary>OBSOLETE from 0.221.0: the request timeout is now a parameter on a model's set, edited at
-    /// /admin/llm-models.
+    /// <summary>The platform-wide request timeout, edited in Settings and applied to EVERY LLM call.
     ///
-    /// Kept rather than dropped because a migration cannot fold it into a model row - the endpoint lives in
-    /// configuration, not the database, so there is no row to fold it into - and dropping it would silently
-    /// reset a tuned production timeout to the app default. It is read only by the synthesized
-    /// environment-fallback model, and becomes unreachable once any LlmModel row exists. Removable in a
-    /// later release once every deployment has configured a model.</summary>
+    /// Declared obsolete in 0.221.0 - the timeout had become a per-model parameter - and read only on the
+    /// environment-fallback path. That made it inert the moment a deployment configured its first model,
+    /// while the Settings control went on promising "a platform-wide request timeout for every AI call".
+    /// An administrator who raised it to 600 for a large local model still got 120 and a failure
+    /// indistinguishable from a dead endpoint, so 0.235.1 made the control honest rather than removing it.
+    ///
+    /// It is a FLOOR, not an override: <see cref="Diariz.Api.Services.Llm.LlmPlatformLayers"/> places it
+    /// below a model's own layers, so per-model tuning still wins, and it stays silent at its default so an
+    /// operator's LlmDefaults__TimeoutSeconds is not outranked by a row that merely exists.</summary>
     public int LlmTimeoutSeconds { get; set; } = DefaultLlmTimeoutSeconds;
 
     /// <summary>The model used by any call group with no explicit assignment. Null falls through to the

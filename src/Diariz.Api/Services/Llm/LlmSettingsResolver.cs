@@ -105,16 +105,12 @@ public class LlmSettingsResolver : ILlmSettingsResolver
         {
             group is null || model is null ? null : ParametersFor(model, group.Value),
             model is null ? null : ParametersFor(model, LlmCallGroup.ModelBase),
-            _defaults.LayerFor(group),
-            _defaults.BaseLayer,
         };
+        // Shared with the model editor's test call, so the panel cannot disagree with the pipeline about
+        // what a parameter resolves to. Carries the admin's platform timeout.
+        layers.AddRange(LlmPlatformLayers.Below(_defaults, group, ps));
 
         var parameters = LlmParameterLayers.Resolve(layers);
-
-        // The environment fallback keeps the admin's tuned platform timeout, which a migration could not
-        // move into a model row - the endpoint lives in configuration, so there was no row to fold it into.
-        if (model is null && ps is not null)
-            parameters = parameters with { TimeoutSeconds = ps.LlmTimeoutSeconds };
 
         return new LlmRequestConfig(
             ApiBase: model?.ApiBase ?? _summary.ApiBase,

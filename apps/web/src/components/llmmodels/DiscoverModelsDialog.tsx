@@ -32,9 +32,10 @@ export default function DiscoverModelsDialog({ onClose, onImported }: Props) {
     try {
       const result = await api.discoverModels({ apiBase: apiBase.trim(), apiKey: apiKey.trim() || null });
       setFound(result);
-      // Everything new is pre-ticked; an existing model cannot be chosen, so it is left out of the set
-      // rather than merely rendered differently.
-      setChosen(new Set(result.models.filter((m) => !m.alreadyExists).map((m) => m.id)));
+      // NOTHING new is pre-ticked. The ticks describe what the main panel already holds, so adding a model
+      // is always a deliberate choice - pre-ticking every model on a busy server made pressing Add all a
+      // forty-model commitment taken by default. Select all is one press away for the bulk case.
+      setChosen(new Set());
     } catch (e) {
       setError(apiErrorMessage(e, t("llmModelsDiscoverError")));
     } finally {
@@ -69,6 +70,10 @@ export default function DiscoverModelsDialog({ onClose, onImported }: Props) {
       return next;
     });
   }
+
+  /// Every model that CAN be added - an existing one is rendered ticked to show it is already in the panel,
+  /// but it is not a candidate and must never reach the import.
+  const addable = (found?.models ?? []).filter((m) => !m.alreadyExists);
 
   const field =
     "w-full rounded-md border border-gray-300 px-2 py-1 text-xs dark:border-gray-700 dark:bg-gray-900";
@@ -113,9 +118,24 @@ export default function DiscoverModelsDialog({ onClose, onImported }: Props) {
 
         {found !== null && (
           <div className="max-h-64 overflow-y-auto border-t border-gray-200 px-5 py-3 dark:border-gray-800">
-            <p className="mb-2 text-[11px] text-gray-500 dark:text-gray-400">
-              {t("llmModelsWillUseEndpoint", { endpoint: found.apiBase })}
-            </p>
+            <div className="mb-2 flex items-baseline justify-between gap-3">
+              <p className="min-w-0 text-[11px] text-gray-500 dark:text-gray-400">
+                {t("llmModelsWillUseEndpoint", { endpoint: found.apiBase })}
+              </p>
+              {addable.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setChosen(
+                      chosen.size === addable.length ? new Set() : new Set(addable.map((m) => m.id)),
+                    )
+                  }
+                  className="shrink-0 text-[11px] text-indigo-600 hover:underline dark:text-indigo-400"
+                >
+                  {chosen.size === addable.length ? t("llmModelsClearAll") : t("llmModelsSelectAll")}
+                </button>
+              )}
+            </div>
             {found.models.length === 0 ? (
               <p className="text-xs text-gray-500 dark:text-gray-400">{t("llmModelsDiscoverEmpty")}</p>
             ) : (
@@ -125,7 +145,7 @@ export default function DiscoverModelsDialog({ onClose, onImported }: Props) {
                     <input
                       type="checkbox"
                       aria-label={m.id}
-                      checked={chosen.has(m.id)}
+                      checked={m.alreadyExists || chosen.has(m.id)}
                       disabled={m.alreadyExists}
                       onChange={() => toggle(m.id)}
                       className="mt-0.5 size-3.5 shrink-0 accent-indigo-600 disabled:opacity-60"
@@ -153,11 +173,14 @@ export default function DiscoverModelsDialog({ onClose, onImported }: Props) {
           >
             {t("llmModelsCancel")}
           </button>
-          {chosen.size > 0 ? (
+          {found !== null && found.models.length > 0 ? (
+            // Keyed on having found something, not on having ticked something: nothing is ticked by default
+            // now, and flipping back to Discover at that moment would look like the search had been lost.
+            // A search that found nothing keeps Discover, so the endpoint can be corrected and retried.
             <button
               type="button"
               onClick={importChosen}
-              disabled={busy}
+              disabled={busy || chosen.size === 0}
               className="rounded-md bg-indigo-600 px-3 py-1 text-xs text-white disabled:opacity-60"
             >
               {t("llmModelsAddCount", { count: chosen.size })}

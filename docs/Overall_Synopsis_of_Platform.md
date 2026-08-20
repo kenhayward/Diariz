@@ -225,8 +225,11 @@ Every stream consumer acks in a `finally`, which handles a job that *throws* but
 - **API workers** use `StreamReclaimer` with a **30-minute** idle threshold, checked at most once a
   minute per stream. It has to clear the longest legitimate run or one instance would steal a job another
   was still working on and run it twice (a duplicated LLM call and charge). That length is set by the LLM
-  timeout, which is resolved per call as `UserSettings.LlmTimeoutSeconds` ?? `PlatformSettings.LlmTimeoutSeconds`
-  ?? the server option - so it is **not** capped by the platform default, and any user can raise their own.
+  timeout, which is resolved per call through the parameter layers: a model group override, then the
+  model base set, then the application group default, then `PlatformSettings.LlmTimeoutSeconds` when an
+  administrator has changed it, then the application base default. (The per-user override this used to name
+  was dropped in 0.221.0 with the rest of the per-user LLM settings.) So it is **not** capped by the
+  platform value - a single model can be tuned above it.
   Half an hour clears the slow-local-model values that setting exists for (900s and the like) with margin;
   a user who sets a timeout beyond it can still see a duplicate delivery, bounded by the redelivery cap
   below. The threshold is a compile-time constant (the constructor's overrides are for tests only).

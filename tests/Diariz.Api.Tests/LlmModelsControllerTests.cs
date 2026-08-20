@@ -942,6 +942,85 @@ public class LlmModelsControllerTests
         Assert.Equal(0, parsed.GetArrayLength());
     }
 
+    [Fact]
+    public async Task The_test_call_uses_the_same_timeout_the_real_call_would()
+    {
+        // The panel's whole purpose is to show what a real call does. It read only the application
+        // defaults, so an administrator who raised the platform timeout to 600 saw a test give up at 120 -
+        // and could not tell whether the endpoint or the setting was at fault (0.235.1).
+        using var db = TestDb.Create();
+        var model = Seed(db);
+        db.PlatformSettings.Add(new PlatformSettings
+        {
+            Id = PlatformSettings.SingletonId, LlmTimeoutSeconds = 600,
+        });
+        db.SaveChanges();
+        var probe = new FakeLlmTestProbe();
+
+        await BuildAs(db, Guid.NewGuid(), probe).Test(model.Id, new LlmModelTestRequest("Chat", []));
+
+        Assert.Equal(600, probe.LastConfig!.TimeoutSeconds);
+    }
+
+    [Fact]
+    public async Task An_unsaved_timeout_still_beats_the_platform_one_in_a_test_call()
+    {
+        // Testing a change before saving is what the endpoint takes parameters for; the platform value is
+        // the floor beneath them, not an override.
+        using var db = TestDb.Create();
+        var model = Seed(db);
+        db.PlatformSettings.Add(new PlatformSettings
+        {
+            Id = PlatformSettings.SingletonId, LlmTimeoutSeconds = 600,
+        });
+        db.SaveChanges();
+        var probe = new FakeLlmTestProbe();
+        var request = TestReq("Translation", new Dictionary<string, string>
+        {
+            ["ModelBase"] = "{\"timeout_seconds\":30}",
+        });
+
+        await BuildAs(db, Guid.NewGuid(), probe).Test(model.Id, request);
+
+        Assert.Equal(30, probe.LastConfig!.TimeoutSeconds);
+    }
+
+    [Fact]
+    public async Task The_defaults_endpoint_reports_the_administrators_platform_timeout()
+    {
+        // The drawer resolves the inherited value and the request preview CLIENT-side, from this endpoint.
+        // If it reported the shipped 120 while the server used 600, the panel would state a timeout no call
+        // ever uses - the same two-derivations trap that produced the parsed-result bug (0.235.1).
+        using var db = TestDb.Create();
+        db.PlatformSettings.Add(new PlatformSettings
+        {
+            Id = PlatformSettings.SingletonId, LlmTimeoutSeconds = 600,
+        });
+        db.SaveChanges();
+
+        var layers = (await Build(db).Defaults()).Value!;
+
+        using var modelBase = JsonDocument.Parse(layers["ModelBase"]);
+        Assert.Equal(600, modelBase.RootElement.GetProperty("timeout_seconds").GetInt32());
+    }
+
+    [Fact]
+    public async Task The_defaults_endpoint_keeps_the_configured_timeout_when_the_admin_never_changed_it()
+    {
+        using var db = TestDb.Create();
+        db.PlatformSettings.Add(new PlatformSettings
+        {
+            Id = PlatformSettings.SingletonId, LlmTimeoutSeconds = PlatformSettings.DefaultLlmTimeoutSeconds,
+        });
+        db.SaveChanges();
+        var defaults = new LlmDefaultsOptions { TimeoutSeconds = 45 };
+
+        var layers = (await Build(db, defaults).Defaults()).Value!;
+
+        using var modelBase = JsonDocument.Parse(layers["ModelBase"]);
+        Assert.Equal(45, modelBase.RootElement.GetProperty("timeout_seconds").GetInt32());
+    }
+
     private sealed class ScopeCapturingProbe : ILlmTestProbe
     {
         public LlmCallKind? Kind { get; private set; }

@@ -168,8 +168,6 @@ describe("ModelEditorDrawer", () => {
     api.updateModel.mockResolvedValue(MODELS[0]);
     open(MODELS[0]);
 
-    // The connection fields sit behind a toggle for a saved model - they are set once and rarely touched.
-    fireEvent.click(screen.getByRole("button", { name: /connection/i }));
     fireEvent.change(screen.getByLabelText(/display name/i), { target: { value: "QWEN 3.8" } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
@@ -182,7 +180,6 @@ describe("ModelEditorDrawer", () => {
     api.updateModel.mockResolvedValue(MODELS[0]);
     open({ ...MODELS[0], displayName: "Old Label" });
 
-    fireEvent.click(screen.getByRole("button", { name: /connection/i }));
     fireEvent.change(screen.getByLabelText(/display name/i), { target: { value: "   " } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
@@ -197,7 +194,6 @@ describe("ModelEditorDrawer", () => {
     open(MODELS[0]);
     expect(screen.getByText(/override\(s\) on/).textContent).not.toContain("unsaved");
 
-    fireEvent.click(screen.getByRole("button", { name: /connection/i }));
     fireEvent.change(screen.getByLabelText(/display name/i), { target: { value: "QWEN 3.8" } });
 
     expect(screen.getByText(/override\(s\) on/).textContent).toContain("unsaved");
@@ -225,7 +221,6 @@ describe("ModelEditorDrawer", () => {
     open(MODELS[0]);
     fireEvent.change(screen.getByLabelText(/copy parameters from/i), { target: { value: "b" } });
 
-    fireEvent.click(screen.getByRole("button", { name: /connection/i }));
 
     // These are what make an entry distinct; copying them would produce a duplicate pointing elsewhere.
     expect((screen.getByLabelText(/^name/i) as HTMLInputElement).value).toBe("gpt-oss-20b");
@@ -443,5 +438,13 @@ describe("ModelEditorDrawer", () => {
       group: "Chat",
       parameters: { ModelBase: '{"temperature":0.5}' },
     });
+  });
+
+  it("opens with the connection panel already expanded", async () => {
+    // The endpoint and context window are what an admin most often opens the drawer to check; hiding them
+    // behind a disclosure made the first action on every visit the same click.
+    open();
+
+    expect((screen.getByLabelText(/endpoint/i) as HTMLInputElement).value).toBe("http://a/v1");
   });
 });

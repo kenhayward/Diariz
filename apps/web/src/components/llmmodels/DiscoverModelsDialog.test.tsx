@@ -51,14 +51,45 @@ describe("DiscoverModelsDialog", () => {
     expect(api.discoverModels).not.toHaveBeenCalled();
   });
 
-  it("pre-ticks new models and locks off ones already defined", async () => {
+  it("ticks only the models already in the main panel, leaving new ones for the admin to choose", async () => {
+    // Pre-ticking every new model made pressing Add all against a busy server a forty-model commitment
+    // taken by default. The ticks now describe what is already there; anything new is a deliberate choice.
     open();
     await screen.findByRole("checkbox", { name: /gpt-4o/ });
 
-    expect((screen.getByRole("checkbox", { name: /gpt-4o/ }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole("checkbox", { name: /gpt-4o/ }) as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByRole("checkbox", { name: /llama-3\.3-70b/ }) as HTMLInputElement).checked).toBe(false);
+
+    // Already defined: shown ticked because it IS in the panel, and locked because it cannot be re-added.
     const existing = screen.getByRole("checkbox", { name: /already-here/ }) as HTMLInputElement;
-    expect(existing.checked).toBe(false);
+    expect(existing.checked).toBe(true);
     expect(existing.disabled).toBe(true);
+  });
+
+  it("offers select-all so adding every model is still one press", async () => {
+    // The dialog is called Add all. Removing the blanket pre-tick must not turn that into forty clicks.
+    open();
+    fireEvent.click(await screen.findByRole("button", { name: /select all/i }));
+
+    expect((screen.getByRole("checkbox", { name: /gpt-4o/ }) as HTMLInputElement).checked).toBe(true);
+    expect(await screen.findByRole("button", { name: /add 2 models/i })).toBeTruthy();
+  });
+
+  it("select-all never ticks a model that already exists", async () => {
+    open();
+    fireEvent.click(await screen.findByRole("button", { name: /select all/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add 2 models/i }));
+
+    await waitFor(() => expect(api.importModels).toHaveBeenCalled());
+    expect((api.importModels as Mock).mock.calls[0][0].names).not.toContain("already-here");
+  });
+
+  it("clears the selection again", async () => {
+    open();
+    fireEvent.click(await screen.findByRole("button", { name: /select all/i }));
+    fireEvent.click(screen.getByRole("button", { name: /clear/i }));
+
+    expect((screen.getByRole("checkbox", { name: /gpt-4o/ }) as HTMLInputElement).checked).toBe(false);
   });
 
   it("flags a context length the endpoint did not report", async () => {
@@ -73,14 +104,17 @@ describe("DiscoverModelsDialog", () => {
 
   it("counts the ticked models in the confirm button", async () => {
     open();
+    fireEvent.click(await screen.findByRole("checkbox", { name: /gpt-4o/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /llama-3\.3-70b/ }));
+
     expect(await screen.findByRole("button", { name: /add 2 models/i })).toBeTruthy();
   });
 
   it("imports exactly what is ticked", async () => {
     open();
-    await screen.findByRole("checkbox", { name: /llama-3\.3-70b/ });
+    await screen.findByRole("checkbox", { name: /gpt-4o/ });
 
-    fireEvent.click(screen.getByRole("checkbox", { name: /llama-3\.3-70b/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /gpt-4o/ }));
     fireEvent.click(screen.getByRole("button", { name: /add 1 model/i }));
 
     await waitFor(() => expect(api.importModels).toHaveBeenCalled());
@@ -110,7 +144,7 @@ describe("DiscoverModelsDialog", () => {
     render(<DiscoverModelsDialog onClose={vi.fn()} onImported={vi.fn()} />);
     fireEvent.change(screen.getByLabelText(/endpoint/i), { target: { value: "http://lm.test:1234" } });
     fireEvent.click(screen.getByRole("button", { name: /discover/i }));
-    await screen.findByRole("checkbox", { name: /gpt-4o/ });
+    fireEvent.click(await screen.findByRole("button", { name: /select all/i }));
 
     fireEvent.click(screen.getByRole("button", { name: /add 1 model/i }));
 
@@ -120,7 +154,7 @@ describe("DiscoverModelsDialog", () => {
 
   it("never offers to import a model that already exists", async () => {
     open();
-    await screen.findByRole("checkbox", { name: /gpt-4o/ });
+    fireEvent.click(await screen.findByRole("button", { name: /select all/i }));
 
     fireEvent.click(screen.getByRole("button", { name: /add 2 models/i }));
 
@@ -130,7 +164,7 @@ describe("DiscoverModelsDialog", () => {
 
   it("tells the caller once models have been imported", async () => {
     const onImported = open();
-    await screen.findByRole("checkbox", { name: /gpt-4o/ });
+    fireEvent.click(await screen.findByRole("button", { name: /select all/i }));
 
     fireEvent.click(screen.getByRole("button", { name: /add 2 models/i }));
 

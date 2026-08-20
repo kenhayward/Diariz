@@ -104,4 +104,23 @@ describe("RecordingPicker", () => {
 
     expect(screen.queryByText("Finished meeting")).toBeNull();
   });
+
+  it("lists the newest recording first", async () => {
+    // The one you want to test against is almost always the one you just made, and the API returns them in
+    // its own order.
+    api.listRecordings.mockResolvedValue([
+      recording({ id: "old", name: "Last year", createdAt: "2025-01-05T09:00:00Z" }),
+      recording({ id: "new", name: "This morning", createdAt: "2026-08-20T09:00:00Z" }),
+      recording({ id: "mid", name: "Last month", createdAt: "2026-07-11T09:00:00Z" }),
+    ]);
+
+    render(<RecordingPicker value={NOTHING} onChange={vi.fn()} />);
+    await userEvent.click(await screen.findByRole("button"));
+    await screen.findByText("This morning");
+
+    const names = screen.getAllByRole("listitem").map((li) => li.textContent);
+    expect(names[0]).toContain("This morning");
+    expect(names[1]).toContain("Last month");
+    expect(names[2]).toContain("Last year");
+  });
 });

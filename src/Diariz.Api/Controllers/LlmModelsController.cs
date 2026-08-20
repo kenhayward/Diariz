@@ -153,18 +153,25 @@ public class LlmModelsController : ControllerBase
     /// these the same way <see cref="LlmSettingsResolver"/> does, where a layer that mentions no key decides
     /// nothing and an empty object is indistinguishable from one that does.</summary>
     [HttpGet("defaults")]
-    public Task<ActionResult<Dictionary<string, string>>> Defaults()
+    public async Task<ActionResult<Dictionary<string, string>>> Defaults()
     {
         var layers = new Dictionary<string, string>();
 
-        if (_defaults.BaseLayer is { } baseLayer)
+        // The administrator's platform timeout is folded into the base layer rather than sent separately:
+        // the client walks these to show what a parameter inherits and to preview the request body, and it
+        // must arrive at the number the SERVER will use. Reporting the shipped default here while the call
+        // used 600 would make the panel state a timeout no call ever has.
+        var platform = await _db.PlatformSettings
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == PlatformSettings.SingletonId);
+        if (LlmPlatformLayers.BaseWithPlatformTimeout(_defaults, platform) is { } baseLayer)
             layers[nameof(LlmCallGroup.ModelBase)] = baseLayer;
 
         foreach (var group in Enum.GetValues<LlmCallGroup>())
             if (group != LlmCallGroup.ModelBase && _defaults.LayerFor(group) is { } layer)
                 layers[group.ToString()] = layer;
 
-        return Task.FromResult<ActionResult<Dictionary<string, string>>>(layers);
+        return layers;
     }
 
     /// <summary>Runs one sample call against this model with the parameters the administrator is editing,
@@ -189,14 +196,18 @@ public class LlmModelsController : ControllerBase
         if (model is null) return NotFound();
 
         // The same order LlmSettingsResolver walks, with the request's unsaved layers standing in for the
-        // model's stored rows.
+        // model's stored rows. The layers below them come from the SHARED helper, so the panel cannot
+        // report a timeout (or anything else) the real call would not use.
+        var platform = await _db.PlatformSettings
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == PlatformSettings.SingletonId);
         var layers = new List<string?>
         {
             group == LlmCallGroup.ModelBase ? null : Layer(req.Parameters, group),
             Layer(req.Parameters, LlmCallGroup.ModelBase),
-            group == LlmCallGroup.ModelBase ? null : _defaults.LayerFor(group),
-            _defaults.BaseLayer,
         };
+        layers.AddRange(LlmPlatformLayers.Below(
+            _defaults, group == LlmCallGroup.ModelBase ? null : group, platform));
 
         var config = new LlmRequestConfig(
             ApiBase: model.ApiBase,
