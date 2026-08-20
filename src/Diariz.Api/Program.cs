@@ -372,6 +372,10 @@ var promptsDir = Directory.Exists(Path.Combine(builder.Environment.ContentRootPa
     : Path.Combine(AppContext.BaseDirectory, "prompts");
 builder.Services.AddSingleton<IPromptTemplateProvider>(_ => new FilePromptTemplateProvider(promptsDir));
 
+// Scoped, not singleton: it holds a DbContext. Builds the real per-group prompt for the model editor's
+// test call, from the same templates the pipeline reads above.
+builder.Services.AddScoped<ILlmTestPromptFactory, LlmTestPromptFactory>();
+
 // Prefer the content root's formulas/ (dev + published output), else the app base dir. Loaded once at boot.
 var formulasDir = Directory.Exists(Path.Combine(builder.Environment.ContentRootPath, "formulas"))
     ? Path.Combine(builder.Environment.ContentRootPath, "formulas")
