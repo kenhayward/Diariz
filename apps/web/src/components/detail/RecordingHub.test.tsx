@@ -218,4 +218,55 @@ describe("RecordingHub", () => {
     renderHub(h, {}, [{ id: "sh1" }, { id: "sh2" }, { id: "sh3" }]);
     expect(screen.getByText("1 note · 3 screenshots")).toBeTruthy();
   });
+
+  // The hub's width is `window - recordings panel - chat panel`, so it is not tied to the viewport at all:
+  // on a wide window with the chat panel dragged out, an `xl:` media query kept three columns in a pane a
+  // third that wide, and the tile contents (the "+ New"/"+ Add"/"Run" buttons, the nav chevrons) painted
+  // outside the card border, because Tailwind's tracks are `minmax(0, 1fr)` and squeeze below min-content.
+  // The columns are therefore gated on the hub's own width via container queries, the same way the capture
+  // bar's cluster is (AudioSourceChip/RecordHero against CaptureBar's `@container`). jsdom computes no
+  // geometry and loads no Tailwind CSS, so this only proves the gating classes are present; that nothing
+  // spills was measured in a browser across pane widths.
+  it("gates its columns on the hub's own width, not the window's", () => {
+    renderHub(h);
+    const classes = screen.getByTestId("hub-tiles").className.split(/\s+/);
+    expect(classes).toContain("grid-cols-1");
+    expect(classes).toContain("@lg:grid-cols-2");
+    expect(classes).toContain("@3xl:grid-cols-3");
+    // The viewport breakpoints are not a fallback: two rules would fight, and `xl:` winning on a wide
+    // window is exactly the overflow this replaced.
+    expect(classes).not.toContain("md:grid-cols-2");
+    expect(classes).not.toContain("xl:grid-cols-3");
+    // A container query measures the nearest `@container` ancestor. Without one it resolves against the
+    // small-viewport default and every tile silently stays one per row, however wide the pane.
+    expect(screen.getByTestId("hub").className.split(/\s+/)).toContain("@container");
+  });
+
+  // The last resort beneath the column gating: a track can still be narrower than a tile's natural header
+  // (`minmax(0, 1fr)` zeroes a grid item's automatic minimum), and the header must give way rather than
+  // spill. The title block is the part that gives - `min-w-0` plus a `truncate` on each line - so the
+  // glyph and the action pill stay whole. Class presence only; the widths were measured in a browser, at
+  // which point a 163px tile still drew its "+ New" pill entirely inside the card.
+  it("lets a tile header shrink instead of painting outside the card", () => {
+    renderHub(h);
+    const title = screen.getByText("Notes");
+    expect(title.className).toContain("truncate");
+    expect(title.parentElement!.className.split(/\s+/)).toContain("min-w-0");
+    // The subtitle truncates too: it is the longer of the two lines and would otherwise set the floor.
+    expect(screen.getByText("1 note").className).toContain("truncate");
+  });
+
+  // A `truncate` that is a flex item shrinks only if it is also `min-w-0`: on its own, `min-width: auto`
+  // floors the item at the nowrap text's full width, so the row runs straight through the card border
+  // instead of ellipsising. Measured in the browser before the fix as 33px of a long action item hanging
+  // outside a three-column tile.
+  it("ellipsises a long preview row rather than letting it run past the card edge", () => {
+    renderHub(h);
+    for (const text of [/Draft consolidated matrix/, "QnR-matrix.pdf", "Risk register extract"]) {
+      const row = screen.getByText(text);
+      const classes = row.className.split(/\s+/);
+      expect(classes).toContain("truncate");
+      expect(classes).toContain("min-w-0");
+    }
+  });
 });

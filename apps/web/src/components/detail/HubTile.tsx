@@ -11,6 +11,12 @@ import { ChevronRightIcon } from "./SectionIcons";
 ///
 /// Tiles are content-height and top-aligned by the grid (`align-content: start`); they must not stretch
 /// to fill the row, or short tiles gain a slab of dead space.
+///
+/// A tile must survive a column narrower than its own header: the grid's tracks are `minmax(0, 1fr)`,
+/// which zeroes a grid item's automatic minimum size, so nothing stops a track from going below what the
+/// header needs. The title/subtitle block is the part that gives - it is `min-w-0` and both its lines
+/// `truncate`, so it shrinks to nothing while the glyph and the action pill stay whole. Those three
+/// classes are load-bearing, not cosmetic: drop any of them and the pill paints through the card border.
 
 const COLORS = {
   blue: { tint: "bg-blue-500/15", fg: "text-blue-600 dark:text-blue-400" },

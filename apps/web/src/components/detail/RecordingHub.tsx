@@ -26,6 +26,14 @@ import {
 ///
 /// Tiles are content-height and top-aligned (`auto-rows-min`); stretching them to fill the row is what
 /// produced the slab of dead space the redesign set out to remove.
+///
+/// The column count is gated on the **hub's own width**, not the window's. The hub sits in the middle of
+/// the three-panel workspace, so its width is `window - recordings panel - chat panel` and has nothing to
+/// do with the viewport: with a viewport `xl:` query, widening the chat panel on a wide window kept three
+/// columns in a pane a third that wide, and - because Tailwind's tracks are `minmax(0, 1fr)`, which will
+/// squeeze a track below its contents' min-content width rather than overflow the grid - the tile headers
+/// painted outside their own card borders. The capture bar already solves the same problem the same way
+/// (AudioSourceChip/RecordHero query CaptureBar's `@container`).
 
 /// A fixed silhouette for the Transcript tile's waveform. It is decoration, not data — the real audio's
 /// amplitudes aren't available client-side, and drawing them would mean decoding the whole blob.
@@ -83,7 +91,7 @@ export default function RecordingHub({
       : notesSubtitle;
 
   return (
-    <div className="flex flex-col gap-3.5">
+    <div data-testid="hub" className="@container flex flex-col gap-3.5">
       <HeroSummaryCard
         rec={rec}
         speakerNameOf={speakerNameOf}
@@ -97,7 +105,12 @@ export default function RecordingHub({
         onResummarise={onResummarise}
       />
 
-      <div className="grid auto-rows-min grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+      {/* The thresholds are where a column stops being wide enough for a tile header (icon, title, and
+          either an action pill or a chevron): ~250px each, so two columns from 32rem and three from 48rem. */}
+      <div
+        data-testid="hub-tiles"
+        className="grid auto-rows-min grid-cols-1 gap-3 @lg:grid-cols-2 @3xl:grid-cols-3"
+      >
         <HubTile
           color="blue"
           icon={<TranscriptGlyph />}
@@ -138,7 +151,10 @@ export default function RecordingHub({
                       : "border-gray-400 dark:border-gray-500"
                   }`}
                 />
-                <span className="truncate">
+                {/* `truncate` alone does not shrink a flex item: its `min-width: auto` floors it at the
+                    nowrap text's full width, so a long action pushed straight through the card's border.
+                    Same reason the Files and Formulas rows below carry `min-w-0`. */}
+                <span className="min-w-0 truncate">
                   {a.text}
                   {a.actor && <span className="text-gray-400 dark:text-gray-500"> - {a.actor}</span>}
                 </span>
@@ -198,7 +214,7 @@ export default function RecordingHub({
                 <span className="shrink-0 text-gray-400 dark:text-gray-500">
                   {a.kind === "Url" ? <LinkIcon size={13} /> : <FileIcon />}
                 </span>
-                <span className="flex-1 truncate">{a.name}</span>
+                <span className="min-w-0 flex-1 truncate">{a.name}</span>
                 {a.kind === "File" && (
                   <span className="shrink-0 text-[11px] text-gray-400 dark:text-gray-500">
                     {formatBytes(a.sizeBytes)}
@@ -234,7 +250,7 @@ export default function RecordingHub({
                         : "bg-amber-500"
                   }`}
                 />
-                <span className="flex-1 truncate">{r.name}</span>
+                <span className="min-w-0 flex-1 truncate">{r.name}</span>
                 <span
                   className={`shrink-0 text-[11px] ${
                     r.status === "Ready"
@@ -260,7 +276,7 @@ export default function RecordingHub({
                 <span className="shrink-0">
                   <TemplateIcon />
                 </span>
-                <span className="truncate">{t("workspace:hubFromTemplate", { template: meetingTypeTitle })}</span>
+                <span className="min-w-0 truncate">{t("workspace:hubFromTemplate", { template: meetingTypeTitle })}</span>
               </div>
             )}
           </div>
