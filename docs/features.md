@@ -33,7 +33,14 @@ extractions show progress and can be cancelled. Dropped files land in **the fold
 showing** - where you dropped them beats the placement preference, which decides for the Upload
 button (and for a new recording) instead.
 - **Record a meeting straight from your calendar.** Opening a calendar event gives you **Join meeting**, which
-opens the meeting link and starts recording in one click. The recording is **named after the invite**, so your
+opens the meeting link and starts recording in one click. Diariz recognises the major conferencing services by
+name - Teams (both the long meetup-join links and the short teams.microsoft.com/meet ones, on work, personal and
+government tenants), Zoom, Google Meet, Webex, Whereby and GoToMeeting - which matters because services do not
+agree on where the link lives. A Zoom invite puts it in the meeting's location on its own; a Teams invite leaves
+the location reading "Microsoft Teams Meeting" and buries the link in the body next to a help article, a dial-in
+page and the organiser's meeting options. Knowing the services apart means the button opens the one that joins,
+never one of the look-alikes, and it works on links your mail system has rewritten for safety. A service Diariz
+does not know still joins on the first link in the invite. The recording is **named after the invite**, so your
 library reads as the meetings you attended rather than a list of timestamps - and the name sticks, rather than
 being replaced later by an AI-generated one. It is also **linked to that meeting straight away**: everywhere else
 Diariz infers the link by finding the calendar entry that best overlaps the recording, and only when you first

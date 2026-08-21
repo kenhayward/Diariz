@@ -120,6 +120,36 @@ describe("CalendarEventDetail: Join the Meeting", () => {
     expect((button as HTMLButtonElement).disabled).toBe(true);
   });
 
+  /// The case that had the button greyed out for every Teams meeting: Outlook hands over no join link (its
+  /// OnlineMeetingUrl property is empty for Teams) and the location is the words "Microsoft Teams Meeting",
+  /// so the only copy of the join link is in the invite body - behind a help article that used to win.
+  it("enables the button for a Teams meeting whose join link is only in the body", async () => {
+    (api.getCalendarEvent as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...event,
+      calendarId: "outlook:2f1c",
+      htmlLink: null,
+      location: "Microsoft Teams Meeting",
+      description: [
+        "Need help? <https://aka.ms/JoinTeamsMeeting?omkt=en-GB>",
+        "Join the meeting now <https://teams.microsoft.com/meet/258415563749704?p=kijQrCIWUgpxieaIyI>",
+      ].join("\n"),
+    });
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    try {
+      renderPage();
+      const button = await screen.findByRole("button", { name: /join the meeting/i });
+      expect((button as HTMLButtonElement).disabled).toBe(false);
+      fireEvent.click(button);
+      expect(open).toHaveBeenCalledWith(
+        "https://teams.microsoft.com/meet/258415563749704?p=kijQrCIWUgpxieaIyI",
+        "_blank",
+        "noopener,noreferrer",
+      );
+    } finally {
+      open.mockRestore();
+    }
+  });
+
   it("finds a Google meeting's join link in its location", async () => {
     (api.getCalendarEvent as ReturnType<typeof vi.fn>).mockResolvedValue({
       ...event,

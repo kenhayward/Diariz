@@ -2079,7 +2079,7 @@ into it with no URL or per-user setup at all.
   **Change meeting** (a browse-events modal - date-range + title filter, `CalendarLinkModal`) and **Unlink**
   actions. A manually-linked event is never overwritten by the auto-match.
 - **Recording started from a calendar event (Join and record).** The Join button on `CalendarEventDetail` opens the
-  meeting URL and asks the recorder to start, over the one-line `lib/recordRequest.ts` channel (the recorder is
+  meeting URL - resolved by `lib/meetingJoin.ts`, which recognises the conferencing services by name rather than taking the first URL in the invite - and asks the recorder to start, over the one-line `lib/recordRequest.ts` channel (the recorder is
   mounted once in the capture bar; a plain subscription keeps the page ignorant of where it is). The request now carries
   a **`CalendarEventContext`** - `{ id, summary, endsAt }` - which is what makes the take *about* the meeting:
   - **Naming.** The invite's subject becomes the upload's `Title` **and** is pinned as `Recording.Name` (a follow-up
@@ -2279,7 +2279,11 @@ into it with no URL or per-user setup at all.
   - **Reading back.** `IOutlookCalendarStore` is shaped like `IIcsCalendarClient` and projects rows into the
     **existing** `CalendarEvent` record, so nothing downstream knows the source; the join URL stands in for
     `HtmlLink` (a local appointment has no web permalink) and attendee response statuses use **Google's**
-    vocabulary so every existing renderer works unchanged. *(Wiring it into `CalendarController` and
+    vocabulary so every existing renderer works unchanged. `HtmlLink` is **advisory rather than authoritative**:
+    Outlook does not populate its `OnlineMeetingUrl` property for a Teams appointment and that appointment's
+    `Location` is the literal words "Microsoft Teams Meeting", so the reader has nothing to send and the field
+    arrives null on exactly the meetings that most need it. `lib/meetingJoin.ts` therefore treats it as a
+    preferred answer, not the only one, falling back to the invite text as it does for Google and ICS. *(Wiring it into `CalendarController` and
     recording↔meeting matching is the following change.)*
   - **Privacy.** `UserSettings.OutlookSyncEnabled` is the opt-in, **default false**: the push 403s until it is
     set, so an installed desktop app stores nothing on its own. `SkipPrivate` (default on) drops private items
