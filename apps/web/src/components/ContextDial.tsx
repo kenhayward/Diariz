@@ -6,6 +6,23 @@ export function contextFraction(used: number, total: number): number {
   return Math.min(1, Math.max(0, used / total));
 }
 
+/// Which attention band a fill level falls into. Its own exported function, mirroring `contextFraction`,
+/// so the thresholds are testable without rendering anything.
+///
+/// Boundaries land on the UPPER band: exactly 50% is medium, exactly 75% is high.
+export function contextBand(frac: number): "low" | "medium" | "high" {
+  if (frac >= 0.75) return "high";
+  if (frac >= 0.5) return "medium";
+  return "low";
+}
+
+/// Tailwind needs whole class names at build time, so these cannot be assembled from the band string.
+const BAND_STROKE = {
+  low: "stroke-blue-500",
+  medium: "stroke-orange-500",
+  high: "stroke-red-500",
+} as const;
+
 /// A small ring gauge showing how much of the model's context window is used, with a hover tooltip
 /// ("model  used / total tokens (pct%)"). The token figures are estimates (~4 chars/token).
 export default function ContextDial({
@@ -22,7 +39,10 @@ export default function ContextDial({
   const pct = Math.round(frac * 100);
   const r = 9;
   const circ = 2 * Math.PI * r;
-  const danger = frac >= 0.9;
+  // Three bands, not two. Red used to begin at 90%, which is far too late to be useful - by then the next
+  // turn is already at risk of truncation. It matters more now that chat attachments are uncapped: this
+  // gauge is the only signal that a tray of screenshots has grown expensive.
+  const band = contextBand(frac);
 
   return (
     <div
@@ -40,7 +60,7 @@ export default function ContextDial({
           strokeLinecap="round"
           strokeDasharray={`${frac * circ} ${circ}`}
           transform="rotate(-90 13 13)"
-          className={danger ? "stroke-red-500" : "stroke-blue-500"}
+          className={BAND_STROKE[band]}
         />
       </svg>
       {/* Always-visible usage: used / total (pct%). */}
