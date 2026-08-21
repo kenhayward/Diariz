@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
+import { SCREENSHOT_DRAG_TYPE } from "../lib/dragTypes";
 import { formatDuration } from "../lib/format";
 import type { Screenshot } from "../lib/types";
 
@@ -12,9 +13,9 @@ import type { Screenshot } from "../lib/types";
 /// With `draggable`, a thumbnail can be dragged into the chat composer to attach it to a prompt for a
 /// vision model. The payload goes under its own MIME type rather than `text/plain` so the composer cannot
 /// mistake an arbitrary dragged word or link for a capture, and so dragging a thumbnail anywhere else in
-/// the page does nothing surprising.
-export const SCREENSHOT_DRAG_TYPE = "application/x-diariz-screenshot";
-
+/// the page does nothing surprising. The type itself lives in lib/dragTypes, beside the app's other drag
+/// payloads - the upload drop zones have to know about it too, so they do not mistake an image drag for a
+/// file drag.
 export default function ScreenshotStrip({
   recordingId,
   shots,

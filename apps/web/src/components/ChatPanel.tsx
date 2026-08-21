@@ -10,6 +10,7 @@ import { renderMarkdown } from "../lib/markdown";
 import { useActiveRecordingId, useActiveSectionId } from "../lib/activeRoute";
 import { useRoomBasePath } from "../lib/rooms";
 import { useSelection } from "../lib/selection";
+import { SCREENSHOT_DRAG_TYPE } from "../lib/dragTypes";
 import {
   inferCurrentContext, currentContextLabelKey, currentContextRequest, type CurrentContext,
 } from "../lib/chatContext";
@@ -43,7 +44,6 @@ import {
 } from "../lib/dictationEngine";
 import ChatModelPicker from "./ChatModelPicker";
 import ChatScreenshotTray from "./ChatScreenshotTray";
-import { SCREENSHOT_DRAG_TYPE } from "./ScreenshotStrip";
 import { CHAT_MODELS_KEY } from "../lib/modelQueryKeys";
 import ContextDial from "./ContextDial";
 import PickRecordingModal from "./PickRecordingModal";

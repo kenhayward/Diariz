@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { DragEvent } from "react";
-import { dragHasFiles, SECTION_MIME } from "./dragTypes";
+import { dragHasFiles, SCREENSHOT_DRAG_TYPE, SECTION_MIME } from "./dragTypes";
 
 /// A drag event carries only what the handler reads: the payload types it advertises.
 const drag = (types: string[] | undefined) => ({ dataTransfer: { types } }) as unknown as DragEvent;
@@ -24,5 +24,20 @@ describe("dragHasFiles", () => {
   it("is false when the browser reports no types at all", () => {
     expect(dragHasFiles(drag([]))).toBe(false);
     expect(dragHasFiles(drag(undefined))).toBe(false);
+  });
+
+  /// Dragging one of our screenshot thumbnails means dragging an <img>, and Chrome advertises "Files" on
+  /// an image drag (it can be dropped into the OS as a file). Every upload drop zone in the app therefore
+  /// lit up as though a file were incoming, and because the drop landed on the chat composer instead, the
+  /// zone never saw a drop or a matching dragleave and stayed highlighted indefinitely.
+  it("is false for an in-app screenshot drag, even though the browser advertises Files", () => {
+    expect(dragHasFiles(drag(["Files", SCREENSHOT_DRAG_TYPE]))).toBe(false);
+    expect(dragHasFiles(drag([SCREENSHOT_DRAG_TYPE, "text/uri-list", "Files"]))).toBe(false);
+  });
+
+  it("is still true for a real file drag that happens to carry an image type", () => {
+    // The guard must key on OUR type, not on "there is an image involved" - dragging a PNG in from the
+    // desktop is a genuine upload.
+    expect(dragHasFiles(drag(["Files", "text/uri-list", "text/html"]))).toBe(true);
   });
 });

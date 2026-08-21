@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
 import { createHub } from "../lib/signalr";
+import { dragHasFiles } from "../lib/dragTypes";
 import { isProcessing } from "../lib/recordingStatus";
 import { useStatus } from "../lib/status";
 import ActionsTable from "../components/ActionsTable";
@@ -1604,8 +1605,10 @@ export default function RecordingDetail() {
     <div
       className="relative space-y-2.5"
       onDragOver={(e) => {
-        // Only react to file drags (ignore in-app text/section drags).
-        if (Array.from(e.dataTransfer.types).includes("Files")) {
+        // Only react to file drags (ignore the app's own drag payloads). Shared with the recordings
+        // panel rather than reimplemented here - this used to be an inline `types.includes("Files")`,
+        // which is how it missed that an in-app screenshot drag also advertises Files.
+        if (dragHasFiles(e)) {
           e.preventDefault();
           setDragging(true);
         }
