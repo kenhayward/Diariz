@@ -269,4 +269,109 @@ public class ChatModelCatalogTests
         Assert.Equal(expected, offered.SupportsImages);
         Assert.Equal(cfg.Parameters.ImagesSupported, offered.SupportsImages);
     }
+
+    // ---- SupportsTools: the flag the chat picker's briefcase icon reports ----
+
+    [Fact]
+    public async Task SupportsTools_IsTrueWhenNoLayerMentionsIt()
+    {
+        // The shipped app default is TRUE, the opposite of images. That is deliberate and load-bearing:
+        // before parameters were platform-managed the platform always offered tools and let the model
+        // ignore them, so defaulting to false here would silently stop tool calls on every existing
+        // deployment. The consequence for the picker is that the briefcase shows on every model until an
+        // administrator turns it off - low signal, not false.
+        using var db = TestDb.Create();
+        var chat = Seed(db, "plain-model");
+        AssignChat(db, chat.Id);
+
+        Assert.True(Assert.Single(await Catalog(db).ListAsync()).SupportsTools);
+    }
+
+    [Fact]
+    public async Task SupportsTools_ComesFromTheChatOverride()
+    {
+        using var db = TestDb.Create();
+        var chat = Seed(db, "no-tools-model");
+        AssignChat(db, chat.Id);
+        SetParameters(db, chat, LlmCallGroup.Chat, """{"tools_supported":false}""");
+
+        Assert.False(Assert.Single(await Catalog(db).ListAsync()).SupportsTools);
+    }
+
+    [Fact]
+    public async Task SupportsTools_FallsThroughToTheModelBaseLayer()
+    {
+        using var db = TestDb.Create();
+        var chat = Seed(db, "no-tools-model");
+        AssignChat(db, chat.Id);
+        SetParameters(db, chat, LlmCallGroup.ModelBase, """{"tools_supported":false}""");
+
+        Assert.False(Assert.Single(await Catalog(db).ListAsync()).SupportsTools);
+    }
+
+    [Fact]
+    public async Task SupportsTools_ChatOverrideOfTrueBeatsAModelBaseFalse()
+    {
+        using var db = TestDb.Create();
+        var chat = Seed(db, "model");
+        AssignChat(db, chat.Id);
+        SetParameters(db, chat, LlmCallGroup.ModelBase, """{"tools_supported":false}""");
+        SetParameters(db, chat, LlmCallGroup.Chat, """{"tools_supported":true}""");
+
+        Assert.True(Assert.Single(await Catalog(db).ListAsync()).SupportsTools);
+    }
+
+    [Fact]
+    public async Task SupportsTools_HonoursThePlatformDefaultLayer()
+    {
+        using var db = TestDb.Create();
+        var chat = Seed(db, "model");
+        AssignChat(db, chat.Id);
+
+        var defaults = new LlmDefaultsOptions { ToolsSupported = false };
+
+        Assert.False(Assert.Single(await Catalog(db, defaults).ListAsync()).SupportsTools);
+    }
+
+    /// <summary>The same guard the images theory applies, for the other flag: the picker's briefcase and
+    /// the tools the pipeline actually sends must not merely happen to agree.</summary>
+    [Theory]
+    [InlineData(null, null, true)]
+    [InlineData("""{"tools_supported":false}""", null, false)]
+    [InlineData(null, """{"tools_supported":false}""", false)]
+    [InlineData("""{"tools_supported":true}""", """{"tools_supported":false}""", true)]
+    public async Task SupportsTools_AgreesWithWhatTheSettingsResolverWillSend(
+        string? chatLayer, string? baseLayer, bool expected)
+    {
+        using var db = TestDb.Create();
+        var model = Seed(db, "some-model");
+        AssignChat(db, model.Id);
+        if (chatLayer is not null) SetParameters(db, model, LlmCallGroup.Chat, chatLayer);
+        if (baseLayer is not null) SetParameters(db, model, LlmCallGroup.ModelBase, baseLayer);
+
+        var defaults = new LlmDefaultsOptions();
+        var catalog = Catalog(db, defaults);
+        var offered = Assert.Single(await catalog.ListAsync());
+
+        var resolver = new LlmSettingsResolver(
+            db, Options.Create(defaults),
+            Options.Create(new SummarizationOptions { ApiBase = "http://env/v1", Model = "env" }),
+            new FakeApiKeyProtector(), catalog, Options.Create(new ChatOptions()));
+        var cfg = await resolver.ResolveAsync(LlmCallKind.ChatMessage, model.Id);
+
+        Assert.Equal(expected, offered.SupportsTools);
+        Assert.Equal(cfg.Parameters.ToolsSupported, offered.SupportsTools);
+    }
+
+    [Fact]
+    public async Task Description_is_carried_through_verbatim()
+    {
+        using var db = TestDb.Create();
+        var chat = Seed(db, "model");
+        chat.Description = "Use this for most chats";
+        db.SaveChanges();
+        AssignChat(db, chat.Id);
+
+        Assert.Equal("Use this for most chats", Assert.Single(await Catalog(db).ListAsync()).Description);
+    }
 }
