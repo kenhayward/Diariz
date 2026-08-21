@@ -740,7 +740,7 @@ Saved chat conversations; stateless server (thread + context stored as JSON).
 | `RoomId` | uuid not-null | the owner's personal room. Plain column, no FK yet (Phase 4); populated on create, still queried by `UserId` for now |
 | `Title` | varchar(256) | LLM-generated on save, falls back to the first user message |
 | `MessagesJson` | **jsonb** | array of `{ role, content }` turns (`text` under the in-memory provider) |
-| `ContextJson` | **jsonb** | `{ recordingIds, attachmentName?, attachmentText? }` |
+| `ContextJson` | **jsonb** | `{ recordingIds, attachmentName?, attachmentText?, includeAttachments?, searchAllMeetings?, sectionId?, modelId?, screenshots? }`. `screenshots` is `[{ recordingId, screenshotId }]` - the captures attached to the conversation (0.238.0). Additive keys in an existing blob, so no DDL and no migration: an older row reads a missing key as null |
 | `CreatedAt` / `UpdatedAt` | timestamptz | |
 
 Index: `(UserId, UpdatedAt)`.

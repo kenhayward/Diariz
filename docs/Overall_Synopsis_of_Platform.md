@@ -883,8 +883,29 @@ large folders silently rolled up only their first ~18 meetings. The old per-work
   offered models answers this turn (see *Platform model configuration*); an id that is not offered is
   ignored rather than rejected, so a model an administrator withdraws degrades to the default instead of
   breaking a saved conversation. Because the endpoint is **stateless per turn** and the full history is
-  resent every time, switching model part-way through a conversation needs nothing else on the wire. It
-  builds a system prompt from the selected transcripts
+  resent every time, switching model part-way through a conversation needs nothing else on the wire.
+
+  It also accepts **`Screenshots`** - a list of `{ RecordingId, ScreenshotId }` **references**, never image
+  bytes. The controller re-checks `IRoomScope.CanReadRecordingAsync` per distinct recording (404), refuses a
+  shot id paired with a recording it does not belong to (404, rather than skipping it - skipping would let a
+  caller probe which ids exist), and refuses a model whose resolved **`images_supported`** parameter is off
+  (400). All three happen **before any blob is read**, so a rejected request costs no storage IO. Surviving
+  captures go through **`IVisionImageEncoder`**: a capture already inside **1920x1080** is streamed out of
+  MinIO and base64'd **verbatim** (never decoded), and one outside it is resampled to fit - ratio preserved,
+  never enlarged - and re-encoded as **JPEG q92**, because resampling antialiases text and destroys PNG's
+  flat-colour compression. Nothing is cached; the same capture re-encodes per turn, which is tens of
+  milliseconds against a multi-second model call. **SkiaSharp** (MIT over Google's BSD Skia) is a new API
+  dependency, chosen over ImageSharp for its licence; `SkiaSharp.NativeAssets.Linux.NoDependencies` carries
+  its own `libSkiaSharp.so` and needs no fontconfig, so the runtime image is unchanged. The data URLs ride
+  the **last user message** as OpenAI `image_url` content parts - `ChatMessage.ImageDataUrls`, shaped in
+  `ChatToolOrchestrator`; a message with no images keeps `content` a plain **string**, so every existing
+  caller (tool rounds, summariser) is byte-identically unaffected. Images are billed into the context meter
+  separately (`ChatContextMeter.EstimateImageTokens`, pixels/750), since they are in no message's `Content`.
+  The web's **`images_supported`** answer comes from `ChatModelCatalog`, which resolves it through the same
+  **`LlmParameterStack`** the settings resolver uses, so the picker cannot offer a capability the pipeline
+  then refuses.
+
+  It builds a system prompt from the selected transcripts
   **plus their action items** and an optional uploaded attachment (`ChatContextBuilder`), then streams tokens
   back via **Server-Sent Events** (`ChatStreamClient`). The web infers the context from what's open rather
   than a manual pick (`lib/chatContext.ts`): the open recording, the open **folder**, the 2+ ticked

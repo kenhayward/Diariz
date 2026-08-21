@@ -122,7 +122,8 @@ thumbnails that open a full-size viewer with previous/next, a position counter, 
 jump-to-moment, download, and delete; **zoom and pan** (mouse wheel toward the pointer, a zoom cluster,
 double-click, keyboard shortcuts, drag once zoomed in) let a dense capture be read at native resolution and
 scrolled around instead of downloading it. The Notes tab also lists a recording's captures in a collapsed
-Screenshots section. A note or screenshot sitting between two turns by the same speaker now stops those
+Screenshots section, from where one can be **dragged into the chat prompt** to ask a vision-capable model
+about it. A note or screenshot sitting between two turns by the same speaker now stops those
 turns from being merged past it.
 - **Auto-capture (desktop app).** A sticky toggle beside the capture buttons: while it is on, Diariz watches
 the capture area and takes a screenshot **every time the screen settles on something new**, which captures a
@@ -302,6 +303,19 @@ where the previous one left off. The dial follows the choice immediately rather 
 reply, so it always reports the window of the model that will actually answer. The choice is remembered
 between visits and stored with a saved conversation; if the model is later withdrawn, the conversation falls
 back to the platform's chat model rather than failing.
+  **Asking about a screenshot.** A capture in the Notes tab's Screenshots section can be **dragged into the
+chat prompt box**, where it appears as a thumbnail above the input and goes to the model with the question.
+Several can be attached, one drop at a time, and each thumbnail carries an X to take it back out. They are
+**sticky** - they ride every turn until removed, so a follow-up about the same image needs no second drag -
+and they are stored with a saved conversation, so reopening it restores them (a capture deleted in the
+meantime is simply dropped). Reading images requires a model whose **Supports image input** parameter is set:
+with captures attached to a model that cannot, **Send is refused** with "Select a vision model" rather than
+answering about a picture the model never received, and the model picker marks which models can read images.
+Before sending, a capture is **rescaled to fit inside 1920x1080** (ratio preserved, never enlarged) because
+the models read that size more reliably than full 4K; one already within those bounds is sent byte-for-byte
+as captured. The bound is a cap rather than a target, so the smallest text in a dense 4K capture may not
+survive the resize. Attached captures are counted into the context dial, which now shades **orange above 50%
+and red above 75%** of the window.
 - **Search the panel** - a search box sits above the meetings list. Typing takes the list over with results and
 clearing drops you back exactly where you were browsing. It searches the **folder you are in** by default (the
 chip tells you which), and each hit shows the matching words in context, the folder it lives in, and clicking

@@ -74,7 +74,7 @@ export default function AboutModal({ onClose }: { onClose: () => void }) {
           <p>
             Diariz is built on open-source software — including ASP.NET Core, React, react-i18next,
             @sentry/react, WhisperX, pyannote.audio, SpeechBrain, mediabunny, PostgreSQL/pgvector, Redis, MinIO/S3, MailKit/MimeKit,
-            PdfPig, Open XML SDK, Markdig, Ical.Net, TipTap/ProseMirror, marked, DOMPurify, OpenIddict, and
+            PdfPig, Open XML SDK, Markdig, Ical.Net, SkiaSharp, TipTap/ProseMirror, marked, DOMPurify, OpenIddict, and
             the Model Context Protocol C# SDK — each under its own licence.
           </p>
           <p className="mt-2">
