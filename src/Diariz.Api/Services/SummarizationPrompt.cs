@@ -5,7 +5,16 @@ using Diariz.Api.Contracts;
 namespace Diariz.Api.Services;
 
 /// <summary>One OpenAI chat message.</summary>
-public record ChatMessage(string Role, string Content);
+public record ChatMessage(string Role, string Content)
+{
+    /// <summary><c>data:</c> URLs to send alongside <see cref="Content"/> as <c>image_url</c> parts, for a
+    /// model that can read images.
+    ///
+    /// <para>Null (the default) is the ordinary case and keeps the wire shape a plain string, so every
+    /// existing caller - chat turns, tool rounds, the summariser - is byte-identically unaffected. Only a
+    /// message that actually carries images is shaped as a content array.</para></summary>
+    public IReadOnlyList<string>? ImageDataUrls { get; init; }
+}
 
 /// <summary>What the LLM produced: a summary and (optionally) a short recording name.</summary>
 public record SummaryResult(string Summary, string? Name);

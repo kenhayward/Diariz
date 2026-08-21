@@ -19,7 +19,8 @@ public class ChatControllerTests
     private static (ChatController controller, DiarizDbContext db, FakeChatStreamClient chat,
         FakeLlmSettingsResolver settings) Build(
         Guid userId, bool llmEnabled = true, FakeAudioStorage? storage = null, FakeUrlFetcher? urlFetcher = null,
-        FakeChatToolSettingsResolver? toolSettings = null, FakeChatStreamClient? chat = null)
+        FakeChatToolSettingsResolver? toolSettings = null, FakeChatStreamClient? chat = null,
+        bool imagesSupported = false)
     {
         var db = TestDb.Create();
         Users.Ensure(db, userId); // create paths mint the owner's personal room, which needs a real user row
@@ -27,15 +28,17 @@ public class ChatControllerTests
         var settings = new FakeLlmSettingsResolver
         {
             Config = llmEnabled
-                ? new LlmRequestConfig("https://llm.test/v1", "sk-test", "test-model", new LlmParameters { TimeoutSeconds = 60 })
+                ? new LlmRequestConfig("https://llm.test/v1", "sk-test", "test-model",
+                    new LlmParameters { TimeoutSeconds = 60, ImagesSupported = imagesSupported })
                 : new LlmRequestConfig("", "", "test-model", new LlmParameters { TimeoutSeconds = 60 }),
         };
         var ctxResolver = new ChatContextResolver(db, Options.Create(new ChatOptions { ContextLength = 40000 }), new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())));
         var orchestrator = new ChatToolOrchestrator(chat);
+        var blobs = storage ?? new FakeAudioStorage();
         var controller = new ChatController(db, chat, settings, ctxResolver, new AttachmentExtractor(),
-            storage ?? new FakeAudioStorage(), urlFetcher ?? new FakeUrlFetcher(),
+            blobs, urlFetcher ?? new FakeUrlFetcher(),
             toolSettings ?? new FakeChatToolSettingsResolver(), orchestrator, new RoomScope(db),
-            null!, Options.Create(new DictationOptions()))
+            null!, Options.Create(new DictationOptions()), new VisionImageEncoder(blobs))
         {
             ControllerContext = Http.Context(userId),
         };
@@ -533,5 +536,159 @@ public class ChatControllerTests
             new ChatStreamRequest([], null, null, [new ChatTurnDto("user", "hello")]), default);
 
         Assert.Null(settings.LastModelOverride);
+    }
+
+    // ---- Vision: screenshots attached to a turn ----
+
+    private static async Task<(Guid RecordingId, Guid ShotId)> SeedScreenshot(
+        DiarizDbContext db, FakeAudioStorage storage, Guid ownerId, int width = 800, int height = 600)
+    {
+        var rec = new Recording
+        {
+            Id = Guid.NewGuid(), UserId = ownerId, Title = "Demo", Status = RecordingStatus.Transcribed,
+        };
+        db.Recordings.Add(rec);
+        var key = $"screenshots/{Guid.NewGuid()}.png";
+        storage.Objects[key] = MakePng(width, height);
+        var shot = new MeetingScreenshot
+        {
+            Id = Guid.NewGuid(), UserId = ownerId, RecordingId = rec.Id, CapturedAtMs = 1000,
+            BlobKey = key, ThumbBlobKey = key + ".thumb", Width = width, Height = height,
+            SizeBytes = storage.Objects[key].Length, Ordinal = 0,
+        };
+        db.MeetingScreenshots.Add(shot);
+        await db.SaveChangesAsync();
+        return (rec.Id, shot.Id);
+    }
+
+    private static byte[] MakePng(int width, int height)
+    {
+        using var bitmap = new SkiaSharp.SKBitmap(width, height);
+        using var canvas = new SkiaSharp.SKCanvas(bitmap);
+        canvas.Clear(SkiaSharp.SKColors.White);
+        canvas.Flush();
+        using var image = SkiaSharp.SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+        return data.ToArray();
+    }
+
+    [Fact]
+    public async Task Stream_ScreenshotsWithATextOnlyModel_ReturnsBadRequest()
+    {
+        var me = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var (controller, db, _, _) = Build(me, storage: storage, imagesSupported: false);
+        var (rid, sid) = await SeedScreenshot(db, storage, me);
+
+        var res = await controller.Stream(
+            new ChatStreamRequest([rid], null, null, [new ChatTurnDto("user", "what is this?")],
+                Screenshots: [new ChatScreenshotRefDto(rid, sid)]),
+            default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(res);
+        Assert.Contains("test-model", bad.Value?.ToString());
+        // Rejected BEFORE any blob was read. A version that loads first and refuses afterwards satisfies
+        // every assertion about the response while doing the expensive thing anyway.
+        Assert.Empty(storage.Reads);
+    }
+
+    [Fact]
+    public async Task Stream_ScreenshotOnARecordingICannotRead_Returns404()
+    {
+        var me = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var (controller, db, _, _) = Build(me, storage: storage, imagesSupported: true);
+        var (theirRec, theirShot) = await SeedScreenshot(db, storage, Guid.NewGuid());
+
+        var res = await controller.Stream(
+            new ChatStreamRequest([], null, null, [new ChatTurnDto("user", "what is this?")],
+                Screenshots: [new ChatScreenshotRefDto(theirRec, theirShot)]),
+            default);
+
+        Assert.IsType<NotFoundResult>(res);
+        Assert.Empty(storage.Reads);
+    }
+
+    /// <summary>Pairing a real shot id with a different recording must be refused outright, not silently
+    /// skipped - skipping would let a caller probe which ids exist by watching what comes back.</summary>
+    [Fact]
+    public async Task Stream_ScreenshotIdNotOnThePairedRecording_Returns404()
+    {
+        var me = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var (controller, db, _, _) = Build(me, storage: storage, imagesSupported: true);
+        var (mineA, shotA) = await SeedScreenshot(db, storage, me);
+        var (mineB, _) = await SeedScreenshot(db, storage, me);
+
+        var res = await controller.Stream(
+            new ChatStreamRequest([], null, null, [new ChatTurnDto("user", "what is this?")],
+                Screenshots: [new ChatScreenshotRefDto(mineB, shotA)]),
+            default);
+
+        Assert.IsType<NotFoundResult>(res);
+        Assert.Empty(storage.Reads);
+    }
+
+    [Fact]
+    public async Task Stream_ScreenshotsWithAVisionModel_ReachTheModelOnTheLastUserMessage()
+    {
+        var me = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var chat = new FakeChatStreamClient { Tokens = ["ok"] };
+        var (controller, db, _, _) = Build(me, storage: storage, chat: chat, imagesSupported: true);
+        var (rid, sid) = await SeedScreenshot(db, storage, me);
+        controller.ControllerContext.HttpContext.Response.Body = new MemoryStream();
+
+        var res = await controller.Stream(
+            new ChatStreamRequest([rid], null, null, [new ChatTurnDto("user", "what is this?")],
+                Screenshots: [new ChatScreenshotRefDto(rid, sid)]),
+            default);
+
+        Assert.IsType<EmptyResult>(res);
+        var sent = System.Text.Json.JsonSerializer.Serialize(chat.ChunkCallMessages[0]);
+        Assert.Contains("\"image_url\"", sent);
+        Assert.Contains("data:image/png;base64,", sent);
+        // On the user turn, never the system prompt.
+        Assert.DoesNotContain("\"role\":\"system\",\"content\":[", sent);
+    }
+
+    [Fact]
+    public async Task Stream_NoScreenshots_SendsNoImagePartsAndReadsNoBlobs()
+    {
+        var me = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var chat = new FakeChatStreamClient { Tokens = ["ok"] };
+        var (controller, db, _, _) = Build(me, storage: storage, chat: chat, imagesSupported: true);
+        var rid = await SeedTranscribedRecording(db, me);
+        controller.ControllerContext.HttpContext.Response.Body = new MemoryStream();
+
+        await controller.Stream(
+            new ChatStreamRequest([rid], null, null, [new ChatTurnDto("user", "Who spoke?")]), default);
+
+        Assert.DoesNotContain("image_url", System.Text.Json.JsonSerializer.Serialize(chat.ChunkCallMessages[0]));
+        Assert.Empty(storage.Reads);
+    }
+
+    [Fact]
+    public async Task Stream_ScreenshotsBillTheContextMeter()
+    {
+        var me = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var (controller, db, _, _) = Build(me, storage: storage, imagesSupported: true);
+        var (rid, sid) = await SeedScreenshot(db, storage, me, 800, 600);
+        var body = new MemoryStream();
+        controller.ControllerContext.HttpContext.Response.Body = body;
+
+        await controller.Stream(
+            new ChatStreamRequest([rid], null, null, [new ChatTurnDto("user", "hi")],
+                Screenshots: [new ChatScreenshotRefDto(rid, sid)]),
+            default);
+
+        body.Position = 0;
+        var text = new StreamReader(body).ReadToEnd();
+        var meta = text.Split("\n\n").First(l => l.Contains("\"type\":\"meta\""));
+        var used = int.Parse(System.Text.RegularExpressions.Regex.Match(meta, @"""contextUsed"":(\d+)").Groups[1].Value);
+        // 800x600 is 640 tokens on its own - a turn this short could not reach that on text alone.
+        Assert.True(used >= 640, $"expected the image to be billed, got contextUsed={used}");
     }
 }

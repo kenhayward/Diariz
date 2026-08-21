@@ -132,4 +132,69 @@ public class ChatToolOrchestratorTests
         // The final round offers no tools (forces a text answer in a real model).
         Assert.Null(chat.ChunkCallTools[^1]);
     }
+
+    // ---- Vision: content becomes a parts array, but ONLY when there are images ----
+
+    /// <summary>Serialised the way the pipeline serialises it (JsonContent.Create, default options), not
+    /// with hand-picked options - a shape that looks right as an object can still reach the wire wrong.</summary>
+    private static string WireJson(object message) => System.Text.Json.JsonSerializer.Serialize(message);
+
+    [Fact]
+    public async Task NoImages_SendsContentAsAPlainString()
+    {
+        // The regression guard for every existing caller: chat turns, tool rounds, summariser. If this
+        // breaks, the feature has changed the request body of calls that have nothing to do with it.
+        var chat = new FakeChatStreamClient { Tokens = ["ok"] };
+        await Run(chat, []);
+
+        Assert.Equal("""{"role":"user","content":"who said budget?"}""",
+            WireJson(Assert.Single(chat.ChunkCallMessages[0])));
+    }
+
+    [Fact]
+    public async Task EmptyImageList_IsTreatedAsNoImages()
+    {
+        var chat = new FakeChatStreamClient { Tokens = ["ok"] };
+        IReadOnlyList<ChatMessage> seed = [new("user", "hello") { ImageDataUrls = [] }];
+
+        await foreach (var _ in new ChatToolOrchestrator(chat)
+            .RunAsync(Cfg, seed, [], new ChatToolContext(Guid.NewGuid(), []))) { }
+
+        Assert.Equal("""{"role":"user","content":"hello"}""",
+            WireJson(Assert.Single(chat.ChunkCallMessages[0])));
+    }
+
+    [Fact]
+    public async Task WithImages_SendsTextFirstThenEachImageInOrder()
+    {
+        var chat = new FakeChatStreamClient { Tokens = ["ok"] };
+        IReadOnlyList<ChatMessage> seed =
+            [new("user", "what is this?") { ImageDataUrls = ["data:image/png;base64,AAA", "data:image/jpeg;base64,BBB"] }];
+
+        await foreach (var _ in new ChatToolOrchestrator(chat)
+            .RunAsync(Cfg, seed, [], new ChatToolContext(Guid.NewGuid(), []))) { }
+
+        Assert.Equal(
+            """{"role":"user","content":[{"type":"text","text":"what is this?"},""" +
+            """{"type":"image_url","image_url":{"url":"data:image/png;base64,AAA"}},""" +
+            """{"type":"image_url","image_url":{"url":"data:image/jpeg;base64,BBB"}}]}""",
+            WireJson(Assert.Single(chat.ChunkCallMessages[0])));
+    }
+
+    [Fact]
+    public async Task WithImages_LeavesTheOtherMessagesAlone()
+    {
+        var chat = new FakeChatStreamClient { Tokens = ["ok"] };
+        IReadOnlyList<ChatMessage> seed =
+        [
+            new("system", "you are helpful"),
+            new("user", "look") { ImageDataUrls = ["data:image/png;base64,AAA"] },
+        ];
+
+        await foreach (var _ in new ChatToolOrchestrator(chat)
+            .RunAsync(Cfg, seed, [], new ChatToolContext(Guid.NewGuid(), []))) { }
+
+        Assert.Equal("""{"role":"system","content":"you are helpful"}""",
+            WireJson(chat.ChunkCallMessages[0][0]));
+    }
 }

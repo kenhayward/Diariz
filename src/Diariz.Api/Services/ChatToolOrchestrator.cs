@@ -54,7 +54,7 @@ public sealed class ChatToolOrchestrator : IChatToolOrchestrator
         IReadOnlyList<IChatTool> tools, ChatToolContext ctx,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        var messages = seed.Select(m => (object)new { role = m.Role, content = m.Content }).ToList();
+        var messages = seed.Select(Shape).ToList();
         var seenRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         // A per-turn sink tools can write client actions to (drained after each tool runs).
         var effects = new ChatToolEffects();
@@ -161,5 +161,23 @@ public sealed class ChatToolOrchestrator : IChatToolOrchestrator
         {
             return $"The tool '{call.Name}' failed: {ex.Message}";
         }
+    }
+
+    /// <summary>One seed message as the endpoint expects it.
+    ///
+    /// <para>A message with no images keeps <c>content</c> as a plain STRING. That is not a cosmetic
+    /// choice: every existing caller of this orchestrator goes through here, and promoting them all to the
+    /// parts array would change the request body of calls that have nothing to do with vision - against
+    /// endpoints that may not accept it.</para></summary>
+    private static object Shape(ChatMessage m)
+    {
+        if (m.ImageDataUrls is not { Count: > 0 } images)
+            return new { role = m.Role, content = m.Content };
+
+        var parts = new List<object> { new { type = "text", text = m.Content } };
+        foreach (var url in images)
+            parts.Add(new { type = "image_url", image_url = new { url } });
+
+        return new { role = m.Role, content = parts };
     }
 }

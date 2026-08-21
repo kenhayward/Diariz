@@ -718,6 +718,14 @@ public record CreateApiTokenRequest(string? Name, bool ReadOnly = false, DateTim
 // ---- Chat ----
 public record ChatTurnDto(string Role, string Content);
 
+/// <summary>One screen capture attached to a chat turn, by reference.
+///
+/// <para>Ids, never image bytes: the server re-checks that the caller may read the recording, loads the
+/// blob itself, and rescales it. That keeps the request body small, keeps a saved conversation storing
+/// references rather than megabytes of base64, and means a client cannot supply pixels of its
+/// choosing.</para></summary>
+public record ChatScreenshotRefDto(Guid RecordingId, Guid ScreenshotId);
+
 /// <summary>One model a chat user may pick.
 ///
 /// Deliberately carries no endpoint and no API key: every signed-in user reads this, unlike
@@ -741,7 +749,12 @@ public record SavedChatContextDto(
     /// on that model. Null for conversations saved before 0.231.0, and for one on the platform default.
     /// Stored, not validated: if the model is no longer offered the client falls back to the default, the
     /// same way a chat turn does.</summary>
-    Guid? ModelId = null);
+    Guid? ModelId = null,
+    /// <summary>Screen captures attached to this conversation, so reopening it restores the tray and the
+    /// model can still answer follow-ups about them. Null for conversations saved before 0.238.0. Stored,
+    /// not validated: a capture deleted in the meantime is dropped on reload rather than erroring - a saved
+    /// chat should reopen.</summary>
+    IReadOnlyList<ChatScreenshotRefDto>? Screenshots = null);
 
 /// <summary>A streaming chat request: the selected context + the full conversation so far.
 /// <paramref name="SectionId"/> (when set) makes the chat about a folder - its roll-up summary, minutes and
@@ -760,7 +773,14 @@ public record ChatStreamRequest(
     ///
     /// The request is stateless, so switching model part-way through a conversation needs nothing else -
     /// the full history is resent every turn and reaches the new model as a matter of course.</summary>
-    Guid? ModelId = null);
+    Guid? ModelId = null,
+    /// <summary>Screen captures to send with this turn, by reference. Each is re-checked against what the
+    /// caller may read, loaded from storage, and rescaled to fit a vision model.
+    ///
+    /// <para>Requires a model whose <c>images_supported</c> parameter is on: attaching captures to a
+    /// text-only model is a 400, not a silent drop. Answering a question about a picture the model never
+    /// saw is the failure worth refusing.</para></summary>
+    IReadOnlyList<ChatScreenshotRefDto>? Screenshots = null);
 
 /// <summary>Extracted attachment text returned to the client (held and resent with each turn).</summary>
 public record ChatAttachmentDto(string Name, int Chars, string Text);

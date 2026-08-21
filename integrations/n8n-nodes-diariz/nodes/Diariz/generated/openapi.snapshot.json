@@ -598,6 +598,23 @@
         ],
         "type": "object"
       },
+      "ChatScreenshotRefDto": {
+        "properties": {
+          "recordingId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "screenshotId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "recordingId",
+          "screenshotId"
+        ],
+        "type": "object"
+      },
       "ChatStreamRequest": {
         "properties": {
           "attachmentName": {
@@ -635,6 +652,15 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "screenshots": {
+            "items": {
+              "$ref": "#/components/schemas/ChatScreenshotRefDto"
+            },
+            "type": [
+              "null",
+              "array"
+            ]
           },
           "searchAllMeetings": {
             "default": false,
@@ -3413,6 +3439,15 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "screenshots": {
+            "items": {
+              "$ref": "#/components/schemas/ChatScreenshotRefDto"
+            },
+            "type": [
+              "null",
+              "array"
+            ]
           },
           "searchAllMeetings": {
             "default": false,

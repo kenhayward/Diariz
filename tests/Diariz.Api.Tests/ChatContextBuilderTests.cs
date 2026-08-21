@@ -146,4 +146,48 @@ public class ChatContextBuilderTests
         Assert.Equal(2, msgs.Count); // system + the one non-blank turn
         Assert.Equal("real", msgs[1].Content);
     }
+
+    // ---- Vision attachments ----
+
+    [Fact]
+    public void BuildMessages_AttachesImagesToTheLastUserMessage()
+    {
+        // The last user turn is the one the images are context FOR. Putting them on the system message
+        // would be rejected outright by several OpenAI-compatible servers.
+        var msgs = ChatContextBuilder.BuildMessages(
+            "sys",
+            [new("user", "first"), new("assistant", "reply"), new("user", "what is this?")],
+            ["data:image/png;base64,AAA"]);
+
+        Assert.Equal(["data:image/png;base64,AAA"], msgs[^1].ImageDataUrls);
+        Assert.All(msgs.Take(msgs.Count - 1), m => Assert.Null(m.ImageDataUrls));
+    }
+
+    [Fact]
+    public void BuildMessages_WithNoImages_LeavesEveryMessageUnadorned()
+    {
+        var msgs = ChatContextBuilder.BuildMessages("sys", [new("user", "hello")]);
+
+        Assert.All(msgs, m => Assert.Null(m.ImageDataUrls));
+    }
+
+    /// <summary>A history with nothing to attach to must not throw mid-turn. There is no sensible place to
+    /// put the images, so they are dropped rather than forced onto the system prompt.</summary>
+    [Fact]
+    public void BuildMessages_NoUserMessage_DropsTheImagesInsteadOfThrowing()
+    {
+        var msgs = ChatContextBuilder.BuildMessages("sys", [], ["data:image/png;base64,AAA"]);
+
+        Assert.All(msgs, m => Assert.Null(m.ImageDataUrls));
+    }
+
+    [Fact]
+    public void BuildMessages_LastTurnIsAssistant_StillAttachesToTheLastUserTurn()
+    {
+        var msgs = ChatContextBuilder.BuildMessages(
+            "sys", [new("user", "look"), new("assistant", "at what?")], ["data:image/png;base64,AAA"]);
+
+        var lastUser = msgs.Last(m => m.Role == "user");
+        Assert.Equal(["data:image/png;base64,AAA"], lastUser.ImageDataUrls);
+    }
 }

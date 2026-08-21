@@ -69,13 +69,15 @@ public class ChatController : ControllerBase
     private readonly IRoomScope _rooms;
     private readonly IDictationClient _dictation;
     private readonly DictationOptions _dictationOptions;
+    private readonly IVisionImageEncoder _vision;
 
     public ChatController(
         DiarizDbContext db, IChatStreamClient chat, ILlmSettingsResolver settings,
         IChatContextResolver contextResolver, IAttachmentExtractor extractor,
         IAudioStorage storage, IUrlFetcher urlFetcher,
         IChatToolSettingsResolver toolSettings, IChatToolOrchestrator orchestrator, IRoomScope rooms,
-        IDictationClient dictation, IOptions<DictationOptions> dictationOptions)
+        IDictationClient dictation, IOptions<DictationOptions> dictationOptions,
+        IVisionImageEncoder vision)
     {
         _db = db;
         _chat = chat;
@@ -89,6 +91,7 @@ public class ChatController : ControllerBase
         _rooms = rooms;
         _dictation = dictation;
         _dictationOptions = dictationOptions.Value;
+        _vision = vision;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -125,6 +128,41 @@ public class ChatController : ControllerBase
 
         var (contexts, allOwned) = await LoadTranscriptsAsync(req.RecordingIds ?? [], ct);
         if (!allOwned) return NotFound(); // a selected recording isn't visible to the caller
+
+        // Attached screen captures. Every rejection below happens BEFORE a single blob is read: a request
+        // that cannot be served should not cost storage IO, and a model that cannot see images should be
+        // refused rather than quietly answering a question about a picture it never received.
+        var images = new List<string>();
+        var imageTokens = 0;
+        if (req.Screenshots is { Count: > 0 } refs)
+        {
+            foreach (var recordingId in refs.Select(r => r.RecordingId).Distinct())
+                if (!await _rooms.CanReadRecordingAsync(UserId, recordingId, ct))
+                    return NotFound(); // same answer as an unreadable context recording - existence is not disclosed
+
+            var shots = new List<MeetingScreenshot>();
+            foreach (var reference in refs)
+            {
+                var shot = await _db.MeetingScreenshots.FirstOrDefaultAsync(
+                    s => s.Id == reference.ScreenshotId && s.RecordingId == reference.RecordingId, ct);
+                // A shot id paired with the wrong recording is a malformed request, not something to skip:
+                // skipping would let a caller probe which ids exist by watching what comes back.
+                if (shot is null) return NotFound();
+                shots.Add(shot);
+            }
+
+            if (!cfg.Parameters.ImagesSupported)
+                return BadRequest(
+                    $"The model '{cfg.Model}' cannot read images. Choose a vision model, or remove the " +
+                    "attached screenshots.");
+
+            foreach (var shot in shots)
+            {
+                var encoded = await _vision.EncodeAsync(shot, ct);
+                images.Add(encoded.DataUrl);
+                imageTokens += ChatContextMeter.EstimateImageTokens(encoded.Width, encoded.Height);
+            }
+        }
 
         // Attribution target for the LlmCallScope pushed below: a single pre-selected recording (captured
         // before any folder context is folded in), or the folder itself when one is in scope. Library-wide /
@@ -183,9 +221,11 @@ public class ChatController : ControllerBase
             if (req.SearchAllMeetings) system += "\n\n" + AllMeetingsInstruction;
         }
         var history = (req.Messages ?? []).Select(m => new ChatMessage(m.Role, m.Content)).ToList();
-        var messages = ChatContextBuilder.BuildMessages(system, history);
+        var messages = ChatContextBuilder.BuildMessages(system, history, images);
         var contextTotal = await _contextResolver.ResolveContextWindowAsync(req.ModelId, ct);
-        var promptTokens = messages.Sum(m => ChatContextMeter.EstimateTokens(m.Content));
+        // Images are billed separately: they are not in any message's Content, so a text-only count would
+        // report a turn carrying a full-size capture as nearly empty.
+        var promptTokens = messages.Sum(m => ChatContextMeter.EstimateTokens(m.Content)) + imageTokens;
         var toolContext = new ChatToolContext(UserId, scopeRecIds);
 
         Response.Headers["Content-Type"] = "text/event-stream";
