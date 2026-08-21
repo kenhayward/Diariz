@@ -171,7 +171,6 @@ This is what stops the picker and the pipeline from drifting. Refactor first, no
 - [ ] Write `ChatPanel.test.tsx` additions:
   - dropping a valid payload on the composer adds a thumbnail;
   - dropping the same shot twice leaves one;
-  - a seventh drop is refused and a notice renders;
   - a drop carrying only `text/plain` is ignored;
   - the tray's remove control clears it;
   - with a shot attached and a non-vision model selected, Send is disabled and "Select a vision model" renders - **via `userEvent`**, so the disabled state is genuinely exercised;
@@ -183,7 +182,9 @@ This is what stops the picker and the pipeline from drifting. Refactor first, no
 - [ ] Add `selectVisionModel`, `removeScreenshot`, `dropScreenshot`, `modelSupportsImages` to `chat` in all four locales.
 - [ ] Green, mutation-verify the gate by removing the `disabled` binding and confirming the `userEvent` test fails.
 
-**Requirements:** attachments must survive navigation between recordings - do not clear them on context change.
+**Requirements:** attachments must survive navigation between recordings - do not clear them on context
+change. **There is no cap on how many may be attached** - do not add a defensive limit; the context dial is
+the feedback mechanism.
 
 ## Task 14 - Picker marks vision models
 

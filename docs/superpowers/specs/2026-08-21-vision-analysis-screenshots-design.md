@@ -201,10 +201,11 @@ mistaken for a screenshot and a screenshot dragged elsewhere in the page does no
 
 **Duplicates.** Dropping a shot already in the tray is a no-op, not a second copy.
 
-**A cap of 6 attached screenshots.** At roughly 2,800 tokens each a full tray is already ~17k tokens, and an
-unbounded tray would silently overrun a small context window and surface as an opaque endpoint error rather
-than as anything a user could act on. The seventh drop is refused with a brief notice rather than accepted
-and truncated later.
+**No cap on the number of attached screenshots.** At roughly 2,800 tokens each, a tray of ten is ~28k tokens
+against the deployed vision model's 262,000-token window - a hard limit would refuse work the model can
+comfortably do, to guard against a problem this platform does not have. The context dial is the feedback
+mechanism instead: images are metered into it (see below), so a tray growing large is visible before it is a
+problem rather than being silently refused at an arbitrary number.
 
 **Empty states.** `ScreenshotsSection` already returns null when a recording has no captures, so the hint
 line appears only where the gesture is possible. The tray likewise renders nothing when empty - the drop
