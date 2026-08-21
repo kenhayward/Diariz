@@ -7,6 +7,11 @@ order: 20
 
 Press **Record** in the capture panel to start. Press **Stop** to end the take and begin transcription.
 
+After you press Stop the recording has to be uploaded before transcription can begin. The controls
+are disabled while that happens, and the status bar along the bottom of the window counts up -
+"Uploading... 4s" - until it is safely up, then clears itself. A long meeting on a slow connection can
+take several seconds; the counter is there so you can see it is still working rather than stuck.
+
 ## Choosing what to capture
 
 - **Microphone.** Pick a specific input device from the dropdown. Your choice is remembered, and the

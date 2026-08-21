@@ -14,7 +14,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 
 | Feature | Description |
 | --- | --- |
-| **Capture** | Record from your mic (device picker, capture tuning, live level meter, pause/resume), system audio, or both mixed together on one device - system audio works in Chromium browsers ("Share audio", though on Linux only when sharing a browser tab) and seamlessly in the desktop app; schedule a recording to auto-stop at a set time or after 15/30/60 minutes; or upload files (WAV, MP3, FLAC, Ogg/Oga/Opus, WebM, M4A/M4B, AAC) - or drop a **video** (MP4, M4V, MOV, MKV, WebM, TS/M2TS, 3GP) and its audio is extracted in your browser and uploaded on its own, so the video is never sent or stored. Dropped onto the list they land in the folder you dropped them on, and everything else follows your placement preference. |
+| **Capture** | Record from your mic (device picker, capture tuning, live level meter, pause/resume), system audio, or both mixed together on one device. Pressing **Stop** shows a counting "Uploading... 4s" in the status bar until the recording is safely up. System audio works in Chromium browsers ("Share audio", though on Linux only when sharing a browser tab) and seamlessly in the desktop app; schedule a recording to auto-stop at a set time or after 15/30/60 minutes; or upload files (WAV, MP3, FLAC, Ogg/Oga/Opus, WebM, M4A/M4B, AAC) - or drop a **video** (MP4, M4V, MOV, MKV, WebM, TS/M2TS, 3GP) and its audio is extracted in your browser and uploaded on its own, so the video is never sent or stored. Dropped onto the list they land in the folder you dropped them on, and everything else follows your placement preference. |
 | **Record a calendar meeting** | Join a meeting from your calendar and it records in one click, named after the invite rather than the clock and linked to that meeting from the start (bringing any prep notes with it). Optionally let it end itself - a set number of minutes after the meeting was due to finish, or after a run of silence once everyone has left; if people are still talking when the meeting's scheduled end arrives it asks whether to keep recording instead of cutting you off, doubling the wait each time you say yes, and always tells you why once a recording does end on its own. Joining a second meeting finishes and files the first automatically. It knows the major services by name - Teams (including the short teams.microsoft.com/meet links), Zoom, Google Meet, Webex, Whereby and GoToMeeting - so it opens the link that joins the meeting rather than a help page, a dial-in list or whatever the organiser pasted above them, and finds it even when the invite hides it in the body. |
 | **Recurring meetings** | A calendar event that repeats is marked with a **Repeats** badge, and both the event and a linked recording list your earlier recordings of the same meeting so you can jump straight back. |
 | **Transcribe & diarize** | Server-side WhisperX (word-level timestamps) with pyannote speaker diarization; speaker-labelled, editable, playable segments you can re-transcribe any time. Pin the spoken language on a recording or as your default rather than letting the model guess it, and a language with no word-aligner still produces a transcript. Optionally have every recording's consecutive same-speaker rows merged automatically once it finishes transcribing. |
@@ -64,6 +64,21 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.237.0",
+    date: "2026-08-21",
+    pr: 572,
+    headline: "The status bar counts up while a recording uploads",
+    summary:
+      "Pressing **Stop** used to leave the app looking frozen. The Record button went disabled and nothing else happened on screen while the audio uploaded - a few seconds on a short take, but five to ten on a long meeting, and longer still on a slow connection. There was no way to tell the difference between \"working on it\" and \"stuck\", so the natural reaction was to start clicking.\n\nThe status bar at the bottom of the window now says **Uploading... 4s** for as long as the upload runs, with the seconds ticking up so you can see it is alive rather than hung, and it clears itself the moment the recording is safely up. If the meeting had screenshots attached to it, the bar keeps counting through that part too, showing how many of them have gone across.\n\nThis is feedback only - nothing about how a recording is uploaded, stored or transcribed has changed, and an upload that fails still tells you so in red exactly as before. The count is measured against the clock rather than counted tick by tick, so leaving the tab in the background and coming back to it shows the real elapsed time rather than an undercount.",
+    added: [
+      "A live \"Uploading... Ns\" message in the status bar for the whole of a recording's upload, counting up in seconds and clearing when the upload finishes.",
+      "The same count continues through the screenshot-attach phase, alongside its existing progress count.",
+    ],
+    fixed: [
+      "Pressing Stop no longer leaves the app with no on-screen indication that anything is happening while the recording uploads.",
+    ],
+  },
   {
     version: "0.236.2",
     date: "2026-08-21",

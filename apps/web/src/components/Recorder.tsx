@@ -39,6 +39,7 @@ import {
 import { startSilenceWatcher, type SilenceWatcher } from "../lib/silenceWatcher";
 import { useCalendarRecordingSettings } from "../lib/calendarRecordingSettings";
 import { useStatus } from "../lib/status";
+import { useElapsedSeconds } from "../lib/elapsedSeconds";
 import { useToast } from "../lib/toast";
 import { useRoom } from "../lib/rooms";
 import { RoomPermission } from "../lib/types";
@@ -1328,7 +1329,25 @@ export default function Recorder({
   // most severe first; the tones keep the colours these lines had inline (red / amber / grey).
   const { setStatus } = useStatus();
   const { showToast } = useToast();
-  const statusText = error ?? notice ?? null;
+  // The upload window. Pressing Stop disables the controls and then nothing happens on screen for several
+  // seconds on a long recording, which reads as a freeze - so the bar carries a count-up for as long as
+  // `busy` holds (which spans the audio POST, the notes/screenshot attaches after it, and the "Upload now"
+  // recovery of a stashed recording). It sits above `notice` - a record-start fallback notice is stale by
+  // the time you stop. `error` is kept above it defensively rather than behaviourally: every setError sits
+  // in the same batch as the setBusy(false) beside it, and start() clears the previous error, so no render
+  // has ever seen both - if that changes, the failure must still win. Once captures start posting it keeps
+  // the attach's own wording, since that phase has real progress of its own to report.
+  const uploadSeconds = useElapsedSeconds(busy);
+  const uploadText =
+    !busy ? null
+    : attachProgress ?
+      t("recAttachingScreenshotsElapsed", {
+        done: attachProgress.done,
+        total: attachProgress.total,
+        seconds: uploadSeconds,
+      })
+    : t("recUploadingElapsed", { seconds: uploadSeconds });
+  const statusText = error ?? uploadText ?? notice ?? null;
   const statusTone: StatusTone = error ? "error" : "progress";
   const hint =
     recording && !paused && silent ? t("noSoundHint")

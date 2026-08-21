@@ -1496,6 +1496,187 @@ describe("screenshot attach progress feedback", () => {
   });
 });
 
+// ---- Upload progress in the status bar ----
+
+/// Pressing Stop disables the Record button and then does nothing visible while the audio uploads - 5-10
+/// seconds on a long recording, which reads as a freeze. The status bar carries an "Uploading... Ns"
+/// count-up for the whole busy window instead. See lib/elapsedSeconds.ts for the counter itself.
+describe("upload progress in the status bar", () => {
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((res) => {
+      resolve = res;
+    });
+    return { promise, resolve };
+  }
+
+  // A fake Electron shell, same shape as the "screenshot attach progress feedback" describe above.
+  let emit: ((payload: unknown) => void) | null = null;
+  function installShell() {
+    emit = null;
+    (window as unknown as { diariz?: unknown }).diariz = {
+      canCaptureScreenshot: true,
+      onScreenshotCaptured: (cb: (payload: unknown) => void) => {
+        emit = cb;
+        return () => {
+          emit = null;
+        };
+      },
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
+    (getStream as Mock).mockResolvedValue(fakeSession);
+  });
+
+  afterEach(() => {
+    delete (window as unknown as { diariz?: unknown }).diariz;
+  });
+
+  async function recordThenStop() {
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+  }
+
+  it("announces the upload the moment it starts, and clears once it finishes", async () => {
+    const upload = deferred<{ id: string }>();
+    (api.upload as Mock).mockReturnValue(upload.promise);
+
+    await recordThenStop();
+
+    await waitFor(() => expect(api.upload).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(setStatus).toHaveBeenCalledWith("Uploading… 0s", "progress", { sticky: true }),
+    );
+
+    setStatus.mockClear();
+    upload.resolve({ id: "r1" });
+    await waitFor(() => expect(setStatus).toHaveBeenCalledWith(null));
+  });
+
+  it("counts up while the upload is still in flight", async () => {
+    vi.useFakeTimers();
+    try {
+      const upload = deferred<{ id: string }>();
+      (api.upload as Mock).mockReturnValue(upload.promise);
+
+      render(<Recorder onUploaded={() => {}} />);
+      // Flush the mount effects (device enumeration, pending-recording load) under fake timers.
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+      fireEvent.click(screen.getByLabelText(/^record$/i));
+      // Flush start()'s awaited getStream promise under fake timers.
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+      fireEvent.click(screen.getByLabelText(/^stop$/i));
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+      expect(api.upload).toHaveBeenCalledTimes(1);
+
+      // Asserted as a delta rather than an absolute count: flushing the mount and start effects above
+      // advances the fake clock by an amount that is fake-timer bookkeeping, not behaviour. The delta is
+      // what matters, and is 0 for a counter that renders once and then sits still.
+      const secondsIn = (call: unknown[] | undefined) => {
+        const m = /^Uploading… (\d+)s$/.exec(String(call?.[0]));
+        expect(m, `last status was ${String(call?.[0])}`).not.toBeNull();
+        expect(call?.[1]).toBe("progress");
+        expect(call?.[2]).toEqual({ sticky: true });
+        return Number(m![1]);
+      };
+
+      const before = secondsIn(setStatus.mock.calls.at(-1));
+      await act(async () => {
+        vi.advanceTimersByTime(3000);
+      });
+      expect(secondsIn(setStatus.mock.calls.at(-1)) - before).toBeGreaterThanOrEqual(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The audio is already up by the time captures start posting, and each is its own request - so the bar
+  // keeps the attach's own "n/total" wording rather than falling back to a generic "Uploading", and keeps
+  // counting so a long attach is still visibly alive.
+  it("keeps the screenshot-attach wording, with the count still running", async () => {
+    installShell();
+    const shot = deferred<object>();
+    (api.upload as Mock).mockResolvedValue({ id: "rec-new" });
+    (api.createScreenshot as Mock).mockReturnValue(shot.promise);
+
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+    emit!({ full: new Uint8Array([1]), thumb: new Uint8Array([2]), width: 800, height: 600 });
+    await waitFor(() => expect(addPendingScreenshot).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+    await waitFor(() => expect(api.createScreenshot).toHaveBeenCalledTimes(1));
+
+    await waitFor(() =>
+      expect(setStatus).toHaveBeenCalledWith(
+        expect.stringMatching(/^Recording saved, uploading screenshots 0\/1… \d+s$/),
+        "progress",
+        { sticky: true },
+      ),
+    );
+
+    setStatus.mockClear();
+    shot.resolve({});
+    await waitFor(() => expect(setStatus).toHaveBeenCalledWith(null));
+  });
+
+  // A record-start notice (here: system audio wasn't shared, so we fell back to mic-only) is stale by the
+  // time you press Stop, and must not sit in the bar in place of live upload progress. The reverse holds
+  // for `error`, covered by the test below.
+  it("replaces a stale record-start notice while the upload runs", async () => {
+    (getCombinedStream as Mock).mockRejectedValue(Object.assign(new Error("x"), { name: "NotAllowedError" }));
+    const upload = deferred<{ id: string }>();
+    (api.upload as Mock).mockReturnValue(upload.promise);
+
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /audio source/i }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: /system audio/i }));
+    fireEvent.click(screen.getByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+    await waitFor(() =>
+      expect(setStatus).toHaveBeenCalledWith(expect.stringMatching(/microphone only/i), "progress", {
+        sticky: true,
+      }),
+    );
+
+    setStatus.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(api.upload).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(setStatus).toHaveBeenLastCalledWith(
+        expect.stringMatching(/^Uploading… \d+s$/),
+        "progress",
+        { sticky: true },
+      ),
+    );
+  });
+
+  // A failed upload still reports the failure, and the count-up is gone by then (setBusy(false) is batched
+  // with setError, so no render shows both). The `error ?? uploadText` ordering above it is therefore
+  // defensive - deliberately not asserted here, because nothing today can reach it.
+  it("gives way to the error message when the upload fails", async () => {
+    (api.upload as Mock).mockRejectedValue(new Error("nope"));
+
+    await recordThenStop();
+
+    await waitFor(() => expect(setStatus).toHaveBeenCalledWith("Upload failed.", "error", { sticky: true }));
+  });
+});
+
 // ---- Recording started from a calendar event ----
 
 describe("recording started from a calendar event", () => {
