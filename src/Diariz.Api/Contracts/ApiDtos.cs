@@ -735,9 +735,15 @@ public record ChatScreenshotRefDto(Guid RecordingId, Guid ScreenshotId);
 ///
 /// <paramref name="SupportsImages"/> is whether this model can be sent screenshots. It gates the chat
 /// composer's image attachments, so the client can refuse before sending rather than after the endpoint
-/// rejects the turn - or, worse, silently ignores the image and answers anyway.</summary>
+/// rejects the turn - or, worse, silently ignores the image and answers anyway.
+///
+/// <paramref name="SupportsTools"/> is whether the platform will offer this model its chat tools. It is a
+/// resolved parameter with an app default of <b>true</b>, so it reads true unless an administrator has
+/// turned it off. <paramref name="Description"/> is the administrator's short phrase for the picker, or
+/// null where none is set.</summary>
 public record ChatModelDto(
-    Guid Id, string Label, string Name, int ContextLength, bool IsDefault, bool SupportsImages);
+    Guid Id, string Label, string Name, int ContextLength, bool IsDefault, bool SupportsImages,
+    bool SupportsTools, string? Description);
 
 /// <summary>The context a chat turn (or a saved conversation) runs against. <paramref name="SearchAllMeetings"/>
 /// is the "All meetings" mode: no transcripts are pre-loaded and the assistant is told to answer by searching

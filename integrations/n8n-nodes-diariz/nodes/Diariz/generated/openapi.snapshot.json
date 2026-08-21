@@ -571,6 +571,12 @@
               "string"
             ]
           },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "id": {
             "format": "uuid",
             "type": "string"
@@ -586,6 +592,9 @@
           },
           "supportsImages": {
             "type": "boolean"
+          },
+          "supportsTools": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -594,7 +603,9 @@
           "name",
           "contextLength",
           "isDefault",
-          "supportsImages"
+          "supportsImages",
+          "supportsTools",
+          "description"
         ],
         "type": "object"
       },

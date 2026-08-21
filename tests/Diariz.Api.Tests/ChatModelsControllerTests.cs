@@ -85,4 +85,22 @@ public class ChatModelsControllerTests
         Assert.True(dtos.Single(d => d.Id == chat.Id).IsDefault);
         Assert.False(dtos.Single(d => d.Id == extra.Id).IsDefault);
     }
+
+    [Fact]
+    public async Task Returns_the_description_and_the_capability_flags()
+    {
+        using var db = TestDb.Create();
+        var m = Seed(db, "m", chatEnabled: true);
+        m.Description = "Use this for most chats";
+        db.SaveChanges();
+
+        var result = await Build(db).List();
+        var dto = Assert.Single(Assert.IsType<List<ChatModelDto>>(result.Value));
+
+        Assert.Equal("Use this for most chats", dto.Description);
+        // The app default for tools is true and for images false - the picker's two icons therefore start
+        // out asymmetric, which is the honest reflection of the resolved parameters.
+        Assert.True(dto.SupportsTools);
+        Assert.False(dto.SupportsImages);
+    }
 }
