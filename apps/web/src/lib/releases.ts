@@ -65,6 +65,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.236.1",
+    date: "2026-08-21",
+    pr: 566,
+    headline: "The chat model list is readable again",
+    summary:
+      "Opening the model picker in the chat toolbar showed a list with its left-hand side cut off by the panel's own border. The part that got cut was the model **names** - what survived was the context length in brackets, so the list read as \"(131,072 ctx)\", \"(262,144 ctx)\" and so on, with only the tail end of each name visible. There was no way to scroll the hidden part into view, which made choosing a model a guess.\n\nThe list was being drawn inside the chat panel, and it is wider than the panel usually is. Anything that spilled past the panel's edge was simply clipped away, and because the spill was to the left rather than the right, no scrollbar could bring it back. Widening the panel by dragging its edge helped, but you had to know that was the problem.\n\nThe list now floats above the page rather than being confined to the panel, so it is shown in full at any panel width and stays on screen in a narrow window. Nothing about choosing a model has changed.",
+    fixed: [
+      "The chat model list is no longer clipped by the chat panel's left edge, so every model's name is readable without widening the panel.",
+    ],
+  },
+  {
     version: "0.236.0",
     date: "2026-08-21",
     pr: 564,
