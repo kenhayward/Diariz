@@ -658,6 +658,30 @@
           "Sentry": "6.8.0"
         }
       },
+      "SkiaSharp": {
+        "type": "Transitive",
+        "resolved": "4.151.1",
+        "contentHash": "FNlVsGZ9to3o9pObVqhIZanHjUGOoPb/Zxk5svCSLMJnKwxPKV7sIJrjs9BpB/jF3j9OdsaMOb4cfwSJbjueSw==",
+        "dependencies": {
+          "SkiaSharp.NativeAssets.Win32": "4.151.1",
+          "SkiaSharp.NativeAssets.macOS": "4.151.1"
+        }
+      },
+      "SkiaSharp.NativeAssets.Linux.NoDependencies": {
+        "type": "Transitive",
+        "resolved": "4.151.1",
+        "contentHash": "lqPwXxYhKlmRfCuq1vGRLYEtRo3tn3ij1IGi0tI2qzkKHU6HOznHqZW+NqHV8aSKasPmRawbwlKLLPI132+SEA=="
+      },
+      "SkiaSharp.NativeAssets.macOS": {
+        "type": "Transitive",
+        "resolved": "4.151.1",
+        "contentHash": "nLXwdhi0oB7pqqNLbSOLX+FIZQOMAU/yFPspzcDTJjTmPbMWyp0JWyeVj8sFJ/cweurEfT0J/lvfgdXX2EFHXA=="
+      },
+      "SkiaSharp.NativeAssets.Win32": {
+        "type": "Transitive",
+        "resolved": "4.151.1",
+        "contentHash": "G+nln30ZX2ZuhH+ungf6x/QMXCje38KTS0VTfQeMyeY8uyMBmsZwFz2D30ZxUjZqsVbEIcaC2bsYF65876s4Yg=="
+      },
       "StackExchange.Redis": {
         "type": "Transitive",
         "resolved": "3.0.0",
@@ -808,6 +832,8 @@
           "OpenIddict.EntityFrameworkCore": "[7.5.0, )",
           "Pgvector.EntityFrameworkCore": "[0.3.0, )",
           "Sentry.AspNetCore": "[6.8.0, )",
+          "SkiaSharp": "[4.151.1, )",
+          "SkiaSharp.NativeAssets.Linux.NoDependencies": "[4.151.1, )",
           "StackExchange.Redis": "[3.0.0, )",
           "System.IO.Packaging": "[10.0.10, )",
           "UglyToad.PdfPig": "[1.7.0-custom-5, )"
@@ -816,7 +842,7 @@
       "diariz.api.testsupport": {
         "type": "Project",
         "dependencies": {
-          "Diariz.Api": "[0.230.0, )"
+          "Diariz.Api": "[0.237.0, )"
         }
       },
       "diariz.domain": {

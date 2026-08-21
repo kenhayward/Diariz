@@ -27,7 +27,7 @@ public class ChatModelsController(IChatModelCatalog catalog) : ControllerBase
     {
         var options = await catalog.ListAsync(ct);
         return options
-            .Select(o => new ChatModelDto(o.Id, o.Label, o.Name, o.ContextLength, o.IsDefault))
+            .Select(o => new ChatModelDto(o.Id, o.Label, o.Name, o.ContextLength, o.IsDefault, o.SupportsImages))
             .ToList();
     }
 }

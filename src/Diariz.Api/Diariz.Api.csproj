@@ -14,6 +14,13 @@
     <PackageReference Include="Google.Apis.Auth" Version="1.75.0" />
     <PackageReference Include="Ical.Net" Version="5.2.3" />
     <PackageReference Include="Markdig" Version="1.3.2" />
+    <!-- Rescales screenshots for vision-model chat attachments (VisionImageEncoder). MIT over Google's
+         BSD Skia - chosen over ImageSharp, whose Six Labors Split License needs a commercial licence for
+         anything but OSS and small companies. The NoDependencies native asset carries its own
+         libSkiaSharp.so and needs no fontconfig, so the runtime Dockerfile stays untouched (we resample
+         pixels and never render text). -->
+    <PackageReference Include="SkiaSharp" Version="4.151.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.151.1" />
     <!-- Pin a patched System.IO.Packaging (OpenXml pulls a transitive 8.0.0 with a high-severity advisory). -->
     <PackageReference Include="System.IO.Packaging" Version="10.0.10" />
     <PackageReference Include="MailKit" Version="4.17.0" />

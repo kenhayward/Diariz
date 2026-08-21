@@ -13,7 +13,7 @@ namespace Diariz.Api.Tests;
 public class ChatContextResolverTests
 {
     private static ChatContextResolver Build(DiarizDbContext db, int serverDefault = 131072) =>
-        new(db, Options.Create(new ChatOptions { ContextLength = serverDefault }), new ChatModelCatalog(db));
+        new(db, Options.Create(new ChatOptions { ContextLength = serverDefault }), new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())));
 
     private static LlmModel Seed(DiarizDbContext db, int contextLength)
     {

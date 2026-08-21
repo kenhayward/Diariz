@@ -398,6 +398,8 @@ builder.Services.AddSingleton<IExportLocalizer>(_ => new JsonExportLocalizer(exp
 AddLlmClient<IChatStreamClient, ChatStreamClient>(NoHttpTimeout);
 builder.Services.AddScoped<IChatContextResolver, ChatContextResolver>();
 builder.Services.AddSingleton<IAttachmentExtractor, AttachmentExtractor>();
+// Rescales a screen capture for a vision-model chat attachment. Stateless over IAudioStorage, so singleton.
+builder.Services.AddSingleton<IVisionImageEncoder, VisionImageEncoder>();
 // URL-attachment fetcher: a named client with auto-redirect OFF so each hop is re-checked against the
 // SSRF guard (see UrlFetcher).
 builder.Services.AddHttpClient("url-attachments")

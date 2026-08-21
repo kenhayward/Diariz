@@ -31,7 +31,7 @@ public class WorkerCallbackControllerTests
         var hub = new FakeHubContext();
         var queue = new FakeJobQueue();
         var summaryOpts = new SummarizationOptions { ApiBase = summarizationEnabled ? "http://llm.test/v1" : "" };
-        var resolver = new LlmSettingsResolver(db, Options.Create(new LlmDefaultsOptions()), Options.Create(summaryOpts), new FakeApiKeyProtector(), new ChatModelCatalog(db));
+        var resolver = new LlmSettingsResolver(db, Options.Create(new LlmDefaultsOptions()), Options.Create(summaryOpts), new FakeApiKeyProtector(), new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())));
         // Embeddings fall back to the summarisation endpoint, so they follow the same enable/disable toggle here.
         var embedding = new EmbeddingSettingsResolver(db, Options.Create(new EmbeddingOptions()), resolver);
         var controller = new WorkerCallbackController(

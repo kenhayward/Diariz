@@ -1,7 +1,10 @@
+using Diariz.Api.Configuration;
+using Diariz.Api.Services;
 using Diariz.Api.Services.Llm;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
+using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.Tests.Llm;
 
@@ -37,7 +40,7 @@ public class ChatModelCatalogTests
         var chat = Seed(db, "chat-model", chatEnabled: false);
         AssignChat(db, chat.Id);
 
-        var options = await new ChatModelCatalog(db).ListAsync();
+        var options = await new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())).ListAsync();
 
         var only = Assert.Single(options);
         Assert.Equal(chat.Id, only.Id);
@@ -53,7 +56,7 @@ public class ChatModelCatalogTests
         Seed(db, "alpha", chatEnabled: true, displayName: "Alpha");
         AssignChat(db, chat.Id);
 
-        var options = await new ChatModelCatalog(db).ListAsync();
+        var options = await new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())).ListAsync();
 
         Assert.Equal(["chat-model", "Alpha", "zeta"], options.Select(o => o.Label));
         Assert.Equal([true, false, false], options.Select(o => o.IsDefault));
@@ -69,7 +72,7 @@ public class ChatModelCatalogTests
         Seed(db, "expensive-cloud-model", chatEnabled: false);
         AssignChat(db, chat.Id);
 
-        var options = await new ChatModelCatalog(db).ListAsync();
+        var options = await new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())).ListAsync();
 
         Assert.Equal(["chat-model"], options.Select(o => o.Name));
     }
@@ -85,7 +88,7 @@ public class ChatModelCatalogTests
         });
         await db.SaveChangesAsync();
 
-        Assert.Equal(fallback.Id, await new ChatModelCatalog(db).DefaultModelIdAsync());
+        Assert.Equal(fallback.Id, await new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())).DefaultModelIdAsync());
     }
 
     [Fact]
@@ -101,7 +104,7 @@ public class ChatModelCatalogTests
         await db.SaveChangesAsync();
         AssignChat(db, chat.Id);
 
-        Assert.Equal(chat.Id, await new ChatModelCatalog(db).DefaultModelIdAsync());
+        Assert.Equal(chat.Id, await new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())).DefaultModelIdAsync());
     }
 
     [Fact]
@@ -112,7 +115,7 @@ public class ChatModelCatalogTests
         var big = Seed(db, "big-model", chatEnabled: true);
         AssignChat(db, chat.Id);
 
-        Assert.Equal(big.Id, await new ChatModelCatalog(db).ResolveOfferedAsync(big.Id));
+        Assert.Equal(big.Id, await new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())).ResolveOfferedAsync(big.Id));
     }
 
     [Fact]
@@ -125,14 +128,14 @@ public class ChatModelCatalogTests
         var secret = Seed(db, "expensive-cloud-model", chatEnabled: false);
         AssignChat(db, chat.Id);
 
-        Assert.Null(await new ChatModelCatalog(db).ResolveOfferedAsync(secret.Id));
+        Assert.Null(await new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())).ResolveOfferedAsync(secret.Id));
     }
 
     [Fact]
     public async Task Ignores_an_unknown_id()
     {
         using var db = TestDb.Create();
-        Assert.Null(await new ChatModelCatalog(db).ResolveOfferedAsync(Guid.NewGuid()));
+        Assert.Null(await new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())).ResolveOfferedAsync(Guid.NewGuid()));
     }
 
     [Fact]
@@ -142,14 +145,14 @@ public class ChatModelCatalogTests
         var chat = Seed(db, "chat-model", chatEnabled: false);
         AssignChat(db, chat.Id);
 
-        Assert.Equal(chat.Id, await new ChatModelCatalog(db).ResolveOfferedAsync(chat.Id));
+        Assert.Equal(chat.Id, await new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())).ResolveOfferedAsync(chat.Id));
     }
 
     [Fact]
     public async Task Resolves_null_for_no_request()
     {
         using var db = TestDb.Create();
-        Assert.Null(await new ChatModelCatalog(db).ResolveOfferedAsync(null));
+        Assert.Null(await new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())).ResolveOfferedAsync(null));
     }
 
     [Fact]
@@ -158,6 +161,112 @@ public class ChatModelCatalogTests
         // The environment-fallback config has no row, so there is genuinely nothing to offer. The picker
         // renders an empty list rather than inventing an entry for a model it cannot name.
         using var db = TestDb.Create();
-        Assert.Empty(await new ChatModelCatalog(db).ListAsync());
+        Assert.Empty(await new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())).ListAsync());
+    }
+
+    // ---- SupportsImages: the flag the chat picker gates image attachments on ----
+
+    private static void SetParameters(DiarizDbContext db, LlmModel model, LlmCallGroup group, string json)
+    {
+        db.LlmModelParameters.Add(new LlmModelParameters
+        {
+            Id = Guid.NewGuid(), LlmModelId = model.Id, Group = group, ParametersJson = json,
+        });
+        db.SaveChanges();
+    }
+
+    private static ChatModelCatalog Catalog(DiarizDbContext db, LlmDefaultsOptions? defaults = null) =>
+        new(db, Options.Create(defaults ?? new LlmDefaultsOptions()));
+
+    [Fact]
+    public async Task SupportsImages_ComesFromTheChatOverride()
+    {
+        using var db = TestDb.Create();
+        var chat = Seed(db, "vision-model");
+        AssignChat(db, chat.Id);
+        SetParameters(db, chat, LlmCallGroup.Chat, """{"images_supported":true}""");
+
+        Assert.True(Assert.Single(await Catalog(db).ListAsync()).SupportsImages);
+    }
+
+    [Fact]
+    public async Task SupportsImages_FallsThroughToTheModelBaseLayer()
+    {
+        using var db = TestDb.Create();
+        var chat = Seed(db, "vision-model");
+        AssignChat(db, chat.Id);
+        SetParameters(db, chat, LlmCallGroup.ModelBase, """{"images_supported":true}""");
+
+        Assert.True(Assert.Single(await Catalog(db).ListAsync()).SupportsImages);
+    }
+
+    [Fact]
+    public async Task SupportsImages_IsFalseWhenNoLayerMentionsIt()
+    {
+        // The shipped default. A model nobody has told us about cannot see, which is the safe direction:
+        // the gate refuses rather than sending images into a text-only endpoint.
+        using var db = TestDb.Create();
+        var chat = Seed(db, "text-model");
+        AssignChat(db, chat.Id);
+
+        Assert.False(Assert.Single(await Catalog(db).ListAsync()).SupportsImages);
+    }
+
+    [Fact]
+    public async Task SupportsImages_ChatOverrideOfFalseBeatsAModelBaseTrue()
+    {
+        using var db = TestDb.Create();
+        var chat = Seed(db, "vision-model");
+        AssignChat(db, chat.Id);
+        SetParameters(db, chat, LlmCallGroup.ModelBase, """{"images_supported":true}""");
+        SetParameters(db, chat, LlmCallGroup.Chat, """{"images_supported":false}""");
+
+        Assert.False(Assert.Single(await Catalog(db).ListAsync()).SupportsImages);
+    }
+
+    [Fact]
+    public async Task SupportsImages_HonoursThePlatformDefaultLayer()
+    {
+        using var db = TestDb.Create();
+        var chat = Seed(db, "text-model");
+        AssignChat(db, chat.Id);
+
+        var defaults = new LlmDefaultsOptions { ImagesSupported = true };
+
+        Assert.True(Assert.Single(await Catalog(db, defaults).ListAsync()).SupportsImages);
+    }
+
+    /// <summary>The picker and the pipeline must not merely happen to agree.
+    ///
+    /// <para>This is what makes <see cref="LlmParameterStack"/> load-bearing rather than incidental. Without
+    /// it, the catalogue could grow its own layer walk, pass every test above, and still offer a model as
+    /// vision-capable that <see cref="LlmSettingsResolver"/> then rejects as text-only - a defect visible
+    /// only in production, in which neither code path looks wrong.</para></summary>
+    [Theory]
+    [InlineData(null, null, false)]
+    [InlineData("""{"images_supported":true}""", null, true)]
+    [InlineData(null, """{"images_supported":true}""", true)]
+    [InlineData("""{"images_supported":false}""", """{"images_supported":true}""", false)]
+    public async Task SupportsImages_AgreesWithWhatTheSettingsResolverWillSend(
+        string? chatLayer, string? baseLayer, bool expected)
+    {
+        using var db = TestDb.Create();
+        var model = Seed(db, "some-model");
+        AssignChat(db, model.Id);
+        if (chatLayer is not null) SetParameters(db, model, LlmCallGroup.Chat, chatLayer);
+        if (baseLayer is not null) SetParameters(db, model, LlmCallGroup.ModelBase, baseLayer);
+
+        var defaults = new LlmDefaultsOptions();
+        var catalog = Catalog(db, defaults);
+        var offered = Assert.Single(await catalog.ListAsync());
+
+        var resolver = new LlmSettingsResolver(
+            db, Options.Create(defaults),
+            Options.Create(new SummarizationOptions { ApiBase = "http://env/v1", Model = "env" }),
+            new FakeApiKeyProtector(), catalog, Options.Create(new ChatOptions()));
+        var cfg = await resolver.ResolveAsync(LlmCallKind.ChatMessage, model.Id);
+
+        Assert.Equal(expected, offered.SupportsImages);
+        Assert.Equal(cfg.Parameters.ImagesSupported, offered.SupportsImages);
     }
 }

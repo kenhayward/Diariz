@@ -583,6 +583,9 @@
           },
           "name": {
             "type": "string"
+          },
+          "supportsImages": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -590,7 +593,8 @@
           "label",
           "name",
           "contextLength",
-          "isDefault"
+          "isDefault",
+          "supportsImages"
         ],
         "type": "object"
       },

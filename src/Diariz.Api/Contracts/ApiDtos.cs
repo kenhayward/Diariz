@@ -723,8 +723,13 @@ public record ChatTurnDto(string Role, string Content);
 /// Deliberately carries no endpoint and no API key: every signed-in user reads this, unlike
 /// <see cref="LlmModelDto"/>, which is administrator-only for exactly that reason.
 /// <paramref name="Name"/> is the slug the server sends as <c>model</c>, present so a client can match a
-/// streamed usage snapshot back to a label rather than rendering the raw slug.</summary>
-public record ChatModelDto(Guid Id, string Label, string Name, int ContextLength, bool IsDefault);
+/// streamed usage snapshot back to a label rather than rendering the raw slug.
+///
+/// <paramref name="SupportsImages"/> is whether this model can be sent screenshots. It gates the chat
+/// composer's image attachments, so the client can refuse before sending rather than after the endpoint
+/// rejects the turn - or, worse, silently ignores the image and answers anyway.</summary>
+public record ChatModelDto(
+    Guid Id, string Label, string Name, int ContextLength, bool IsDefault, bool SupportsImages);
 
 /// <summary>The context a chat turn (or a saved conversation) runs against. <paramref name="SearchAllMeetings"/>
 /// is the "All meetings" mode: no transcripts are pre-loaded and the assistant is told to answer by searching

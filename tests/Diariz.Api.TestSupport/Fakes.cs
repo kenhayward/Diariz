@@ -707,6 +707,13 @@ public sealed class FakeAudioStorage : IAudioStorage
 {
     public Dictionary<string, byte[]> Objects { get; } = new();
 
+    /// <summary>Every key handed to <see cref="OpenReadAsync"/> or <see cref="OpenAsync"/>, in order.
+    ///
+    /// <para>Exists so a test can assert a code path did NOT touch storage - "this request was rejected
+    /// before any blob was read" is otherwise unobservable, and a version that reads first and rejects
+    /// afterwards passes every assertion about the response.</para></summary>
+    public List<string> Reads { get; } = new();
+
     public Task EnsureBucketAsync(CancellationToken ct = default) => Task.CompletedTask;
 
     public async Task UploadAsync(string key, Stream content, string contentType, CancellationToken ct = default)
@@ -716,11 +723,15 @@ public sealed class FakeAudioStorage : IAudioStorage
         Objects[key] = ms.ToArray();
     }
 
-    public Task<Stream> OpenReadAsync(string key, CancellationToken ct = default) =>
-        Task.FromResult<Stream>(new MemoryStream(Objects[key]));
+    public Task<Stream> OpenReadAsync(string key, CancellationToken ct = default)
+    {
+        Reads.Add(key);
+        return Task.FromResult<Stream>(new MemoryStream(Objects[key]));
+    }
 
     public Task<AudioBlob?> OpenAsync(string key, long? from = null, long? to = null, CancellationToken ct = default)
     {
+        Reads.Add(key);
         if (!Objects.TryGetValue(key, out var bytes)) return Task.FromResult<AudioBlob?>(null);
         var start = (int)Math.Clamp(from ?? 0, 0, Math.Max(0, bytes.Length - 1));
         var end = (int)Math.Clamp(to ?? bytes.Length - 1, start, bytes.Length - 1);
