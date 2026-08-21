@@ -10,6 +10,16 @@ const GAP = 4;
 /// Keeps the menu off the very edge of the viewport when it has to be nudged back inside.
 const MARGIN = 8;
 
+/// A context window as binary K or M: 131,072 reads "128K", not "131K".
+///
+/// Rounded on 1024 deliberately. Model documentation quotes these windows in binary units, so dividing by
+/// 1000 would print a number that matches nothing the user has read anywhere else. The exact count is never
+/// lost - it is on the chip's tooltip.
+export function formatContext(tokens: number): string {
+  if (tokens >= 1024 * 1024) return `${+(tokens / 1024 / 1024).toFixed(1)}M`;
+  return `${Math.round(tokens / 1024)}K`;
+}
+
 interface Props {
   models: ChatModelOption[];
   selectedId: string | null;

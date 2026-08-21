@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
-import ChatModelPicker from "./ChatModelPicker";
+import ChatModelPicker, { formatContext } from "./ChatModelPicker";
 import type { ChatModelOption } from "../lib/types";
 
 const MODELS: ChatModelOption[] = [
@@ -159,5 +159,26 @@ describe("ChatModelPicker", () => {
     const rows = screen.getAllByRole("menuitemradio");
     expect(rows[0].textContent).not.toContain("Can read images");
     expect(rows[1].textContent).toContain("Can read images");
+  });
+});
+
+describe("formatContext", () => {
+  it("rounds on 1024, not 1000", () => {
+    // 131,072 is 128 binary K. Rounding on 1000 would print "131K", a number that matches nothing the
+    // model's documentation says and that no one would recognise as its context window.
+    expect(formatContext(131072)).toBe("128K");
+    expect(formatContext(262144)).toBe("256K");
+    expect(formatContext(8192)).toBe("8K");
+  });
+
+  it("switches to M at a megabyte of tokens", () => {
+    expect(formatContext(1048576)).toBe("1M");
+    expect(formatContext(1572864)).toBe("1.5M");
+  });
+
+  it("rounds an odd window to the nearest K rather than showing a fraction", () => {
+    // Imported models routinely report a window that is not a power of two. The chip has room for three
+    // or four characters, and the exact figure is one hover away.
+    expect(formatContext(200000)).toBe("195K");
   });
 });
