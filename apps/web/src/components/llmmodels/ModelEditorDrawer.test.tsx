@@ -17,11 +17,11 @@ import ModelEditorDrawer from "./ModelEditorDrawer";
 
 const MODELS: LlmModel[] = [
   {
-    id: "a", name: "gpt-oss-20b", displayName: null, apiBase: "http://a/v1", hasApiKey: true, chatEnabled: false, contextLength: 8192,
+    id: "a", name: "gpt-oss-20b", displayName: null, description: null, apiBase: "http://a/v1", hasApiKey: true, chatEnabled: false, contextLength: 8192,
     parameters: { ModelBase: '{"temperature":0.5}' },
   },
   {
-    id: "b", name: "qwen3-27b", displayName: null, apiBase: "http://b/v1", hasApiKey: false, chatEnabled: false, contextLength: 32768,
+    id: "b", name: "qwen3-27b", displayName: null, description: null, apiBase: "http://b/v1", hasApiKey: false, chatEnabled: false, contextLength: 32768,
     parameters: { ModelBase: '{"temperature":0.9,"top_k":40}', Translation: '{"temperature":0.1}' },
   },
 ];
@@ -195,6 +195,41 @@ describe("ModelEditorDrawer", () => {
     expect(screen.getByText(/override\(s\) on/).textContent).not.toContain("unsaved");
 
     fireEvent.change(screen.getByLabelText(/display name/i), { target: { value: "QWEN 3.8" } });
+
+    expect(screen.getByText(/override\(s\) on/).textContent).toContain("unsaved");
+  });
+
+  it("saves a description from the connection panel", async () => {
+    api.updateModel.mockResolvedValue(MODELS[0]);
+    open(MODELS[0]);
+
+    fireEvent.change(screen.getByLabelText(/description/i), { target: { value: "Use this for most chats" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await vi.waitFor(() => expect(api.updateModel).toHaveBeenCalled());
+    expect(api.updateModel.mock.calls[0][1].description).toBe("Use this for most chats");
+  });
+
+  it("sends a blank description as null, so the row simply has none", async () => {
+    // Same rule as the display name: "" and null would be two spellings of one state, and a stored empty
+    // string would render in the picker as a gap nobody asked for.
+    api.updateModel.mockResolvedValue(MODELS[0]);
+    open({ ...MODELS[0], description: "Fast" });
+
+    fireEvent.change(screen.getByLabelText(/description/i), { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await vi.waitFor(() => expect(api.updateModel).toHaveBeenCalled());
+    expect(api.updateModel.mock.calls[0][1].description).toBeNull();
+  });
+
+  it("counts a description edit as an unsaved change", () => {
+    // A field missing from `dirty` makes the drawer report "no unsaved changes" while holding an edit,
+    // and then throw it away on close without asking.
+    open(MODELS[0]);
+    expect(screen.getByText(/override\(s\) on/).textContent).not.toContain("unsaved");
+
+    fireEvent.change(screen.getByLabelText(/description/i), { target: { value: "Fast" } });
 
     expect(screen.getByText(/override\(s\) on/).textContent).toContain("unsaved");
   });

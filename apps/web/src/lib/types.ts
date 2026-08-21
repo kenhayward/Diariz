@@ -1507,6 +1507,8 @@ export interface LlmModel {
   name: string;
   /// A user-facing name shown in place of the slug. Null or blank means "use the slug".
   displayName: string | null;
+  /// A short phrase shown beside the name in the chat model picker. Null means the model has none.
+  description: string | null;
   apiBase: string;
   hasApiKey: boolean;
   contextLength: number;
@@ -1551,6 +1553,8 @@ export interface LlmModelUpsert {
   contextLength: number;
   /// Blank is sent as null, which the server stores as "not set" so the slug shows through.
   displayName?: string | null;
+  /// Blank is sent as null, so the picker has a single thing to test for rather than an empty string.
+  description?: string | null;
   parameters: Record<string, string>;
 }
 
