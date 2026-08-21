@@ -132,6 +132,22 @@ push to `main` directly, and never merge locally.** So the **default way to fini
 and open a PR** (`git push -u origin <branch>` + `gh pr create`), not a local merge - do this without asking
 unless the user says otherwise. Each PR must satisfy the release + docs rules below before it can merge.
 
+**Every fix starts as a GitHub issue and ends with the PR closing it.** When the user asks for a bug or
+problem to be fixed, **open a GitHub issue first** (`gh issue create`, before writing the fix) describing the
+symptom, and then make the PR that fixes it **close that issue automatically** by putting a closing keyword in
+the **PR body** - `Fixes #<n>` (or `Closes #<n>`) on its own line. Do this without asking. Notes:
+- **Scope:** fixes only. A new feature, chore, refactor, or docs-only change does not need an issue unless the
+  user asks for one - and if the user is *already* pointing at an existing issue, reuse that number instead of
+  opening a duplicate.
+- Write the issue from the **user-visible symptom** (what went wrong, how to reproduce, what was expected), not
+  from the fix you are about to write - it is the record of the bug, and the PR is the record of the fix.
+- **The issue consumes a number from the same sequence as PRs**, so the PR number is usually the issue number
+  + 1 - but confirm it rather than assuming (it feeds the `pr:` field in `apps/web/src/lib/releases.ts`, which
+  has to be written before `gh pr create` exists to report the real number).
+- The closing keyword must be in the **PR body**; GitHub only auto-closes from the PR description or from a
+  commit on the default branch, not from a PR title or a later comment. Verify the issue actually closed after
+  the merge, and close it by hand if it did not.
+
 **Every PR ships exactly one release: bump the version and add one release-notes entry.** The scheme
 is **Major.Minor.Build** (currently `0.x`).
 
