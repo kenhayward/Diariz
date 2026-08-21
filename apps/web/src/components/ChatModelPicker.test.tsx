@@ -93,6 +93,54 @@ describe("ChatModelPicker", () => {
     expect(row.getAttribute("title")).toBe("QWEN 3.8");
   });
 
+  it("renders the menu outside the panel that would clip it", () => {
+    // The picker sits in a chat panel 260-640px wide whose scroll container computes overflow-x: auto.
+    // A menu laid out inside that subtree hangs ~77px off its left edge (measured at the default 320px
+    // width), and overflow to the LEFT of a scroll box is unreachable - scrollWidth equals clientWidth -
+    // so the model names were simply invisible. The menu therefore has to escape the subtree entirely.
+    const { container } = render(
+      <ChatModelPicker models={MODELS} selectedId="a" onSelect={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /model/i }));
+
+    const menu = screen.getByRole("menu");
+    expect(container.contains(menu)).toBe(false);
+    expect(document.body.contains(menu)).toBe(true);
+  });
+
+  it("selects a model from a real pointer sequence, not just a bare click", () => {
+    // Once the menu is portalled it is no longer a descendant of the picker, so an outside-click check
+    // that only knows about the picker would close it on the row's own mousedown and unmount the row
+    // before its click ever landed. fireEvent.click cannot see that - it dispatches no mousedown.
+    const onSelect = vi.fn();
+    render(<ChatModelPicker models={MODELS} selectedId="a" onSelect={onSelect} />);
+    fireEvent.click(screen.getByRole("button", { name: /model/i }));
+
+    fireEvent.mouseDown(screen.getByRole("menuitemradio", { name: /QWEN 3\.8/ }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: /QWEN 3\.8/ }));
+
+    expect(onSelect).toHaveBeenCalledWith("b");
+  });
+
+  it("keeps the menu on screen when the anchor leaves no room to its left", () => {
+    // The menu is right-aligned on the sparkle button. In a window narrow enough that the whole chat
+    // panel is under ~300px from the left edge, aligning to the anchor alone would put the menu's left
+    // edge off-screen - trading one invisible menu for another. Anchor right 290 - 288 wide = 2, inside
+    // the 8px margin, so the placement has to push it back to 8.
+    render(<ChatModelPicker models={MODELS} selectedId="a" onSelect={vi.fn()} />);
+    const button = screen.getByRole("button", { name: /model/i });
+    button.getBoundingClientRect = () =>
+      ({ bottom: 40, right: 290, left: 266, top: 16, width: 24, height: 24, x: 266, y: 16, toJSON: () => ({}) }) as DOMRect;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 340 });
+
+    fireEvent.click(button);
+
+    const menu = screen.getByRole("menu");
+    const left = Number.parseFloat(menu.style.left);
+    expect(left).toBe(8);
+    expect(left + Number.parseFloat(menu.style.width)).toBeLessThanOrEqual(340);
+  });
+
   it("closes on Escape without selecting", () => {
     const onSelect = open();
 

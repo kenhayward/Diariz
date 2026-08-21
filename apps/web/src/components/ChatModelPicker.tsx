@@ -1,6 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { ChatModelOption } from "../lib/types";
+
+/// Menu width in px. Wide enough for an imported slug plus its context length.
+const WIDTH = 288;
+/// Gap between the sparkle button and the menu.
+const GAP = 4;
+/// Keeps the menu off the very edge of the viewport when it has to be nudged back inside.
+const MARGIN = 8;
 
 interface Props {
   models: ChatModelOption[];
@@ -19,23 +27,48 @@ interface Props {
 export default function ChatModelPicker({ models, selectedId, disabled = false, onSelect }: Props) {
   const { t } = useTranslation("chat");
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  // Right-aligned on the button, nudged back inside the viewport rather than allowed to hang off it.
+  const place = useCallback(() => {
+    const anchor = buttonRef.current?.getBoundingClientRect();
+    if (!anchor) return;
+    setPos({
+      top: anchor.bottom + GAP,
+      left: Math.max(MARGIN, Math.min(anchor.right - WIDTH, window.innerWidth - WIDTH - MARGIN)),
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (open) place();
+  }, [open, place]);
 
   useEffect(() => {
     if (!open) return;
     function onDocument(e: MouseEvent) {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+      // The menu is no longer a descendant of the picker, so it needs its own containment check -
+      // without it a row's mousedown would close the menu and unmount the row before its click landed.
+      const target = e.target as Node;
+      if (!buttonRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
     }
     document.addEventListener("mousedown", onDocument);
     document.addEventListener("keydown", onKey);
+    // A fixed menu does not travel with its anchor: resizing the window moves the right-docked panel,
+    // and any scroll under it shifts the button. Re-place rather than let the menu drift off it.
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
     return () => {
       document.removeEventListener("mousedown", onDocument);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
     };
-  }, [open]);
+  }, [open, place]);
 
   // An administrator can un-tick a model between a conversation being saved and reopened, so a stored id
   // may name a model that is no longer in the list. Falling back to the default is the same rule the
@@ -43,8 +76,10 @@ export default function ChatModelPicker({ models, selectedId, disabled = false, 
   const selected = models.find((m) => m.id === selectedId) ?? models.find((m) => m.isDefault) ?? null;
 
   return (
-    <div ref={ref} className="relative flex items-center">
+    // No `relative` any more: the menu is portalled, so nothing here is positioned against this box.
+    <div className="flex items-center">
       <button
+        ref={buttonRef}
         type="button"
         aria-label={t("modelPicker", { model: selected?.label ?? "" })}
         title={t("modelPicker", { model: selected?.label ?? "" })}
@@ -56,42 +91,55 @@ export default function ChatModelPicker({ models, selectedId, disabled = false, 
         <SparkleIcon />
       </button>
 
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 top-full z-30 mt-1 max-h-64 w-72 max-w-[calc(100vw-2rem)] overflow-y-auto overflow-x-hidden rounded-md border bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800"
-        >
-          {models.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              role="menuitemradio"
-              aria-checked={m.id === (selected?.id ?? null)}
-              onClick={() => {
-                onSelect(m.id);
-                setOpen(false);
-              }}
-              // A FLEX row, and the label a flex item with min-w-0. `truncate` on the inline span it used
-              // to be contributed only its `white-space: nowrap` - overflow and text-overflow do not apply
-              // to a non-replaced inline box - so a long imported slug could neither wrap nor ellipsise:
-              // it overflowed the menu (giving it a horizontal scrollbar, since overflow-y:auto makes
-              // overflow-x compute to auto) and pushed the context length onto a second line, where it was
-              // off the right-hand edge and invisible. Measured before and after in a browser: 421px of
-              // scroll width in a 241px box, and rows at 54px instead of 33px.
-              // min-w-0 is load-bearing: without it a flex item refuses to shrink below its content.
-              title={m.label}
-              className={`flex w-full items-baseline gap-1.5 px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700 ${
-                m.id === selected?.id ? "font-medium text-indigo-600 dark:text-indigo-400" : ""
-              }`}
-            >
-              <span className="min-w-0 truncate">{m.label}</span>
-              <span className="shrink-0 text-[11px] tabular-nums text-gray-500 dark:text-gray-400">
-                ({m.contextLength.toLocaleString()} {t("ctxSuffix")})
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
+      {open &&
+        createPortal(
+          // Portalled to the body and positioned FIXED, because the picker sits in a chat panel only
+          // 260-640px wide whose scroll container computes `overflow-x: auto`. A menu laid out inside
+          // that subtree hung 77px off its left edge at the default 320px width (measured: menu left
+          // 200.7 against a container starting at 278), and overflow to the LEFT of a scroll box is
+          // unreachable - scrollWidth equalled clientWidth - so the model names were simply invisible
+          // while the context lengths beside them read fine. The old `max-w-[calc(100vw-2rem)]` clamped
+          // against the viewport, never the panel, so it never engaged. Escaping the subtree also lets a
+          // long name use the width it needs instead of the width the panel happens to have.
+          <div
+            ref={menuRef}
+            role="menu"
+            style={{ width: WIDTH, top: pos?.top ?? 0, left: pos?.left ?? 0, visibility: pos ? "visible" : "hidden" }}
+            className="fixed z-30 max-h-64 overflow-y-auto overflow-x-hidden rounded-md border bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800"
+          >
+            {models.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                role="menuitemradio"
+                aria-checked={m.id === (selected?.id ?? null)}
+                onClick={() => {
+                  onSelect(m.id);
+                  setOpen(false);
+                }}
+                // A FLEX row, and the label a flex item with min-w-0. `truncate` on the inline span it
+                // used to be contributed only its `white-space: nowrap` - overflow and text-overflow do
+                // not apply to a non-replaced inline box - so a long imported slug could neither wrap nor
+                // ellipsise: it overflowed the menu (giving it a horizontal scrollbar, since
+                // overflow-y:auto makes overflow-x compute to auto) and pushed the context length onto a
+                // second line, where it was off the right-hand edge and invisible. Measured before and
+                // after in a browser: 421px of scroll width in a 241px box, and rows at 54px instead of
+                // 33px. min-w-0 is load-bearing: without it a flex item refuses to shrink below its
+                // content.
+                title={m.label}
+                className={`flex w-full items-baseline gap-1.5 px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700 ${
+                  m.id === selected?.id ? "font-medium text-indigo-600 dark:text-indigo-400" : ""
+                }`}
+              >
+                <span className="min-w-0 truncate">{m.label}</span>
+                <span className="shrink-0 text-[11px] tabular-nums text-gray-500 dark:text-gray-400">
+                  ({m.contextLength.toLocaleString()} {t("ctxSuffix")})
+                </span>
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
