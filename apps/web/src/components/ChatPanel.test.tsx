@@ -100,8 +100,8 @@ let lastClient: QueryClient;
 const mock = (fn: unknown) => fn as ReturnType<typeof vi.fn>;
 
 const CHAT_MODELS = [
-  { id: "a", label: "GPT OSS 20B", name: "gpt-oss", contextLength: 131072, isDefault: true, supportsImages: false },
-  { id: "b", label: "QWEN 3.8", name: "qwen3.8-27b@q4_k_xl", contextLength: 200000, isDefault: false, supportsImages: true },
+  { id: "a", label: "GPT OSS 20B", name: "gpt-oss", contextLength: 131072, isDefault: true, supportsImages: false, supportsTools: true, description: null },
+  { id: "b", label: "QWEN 3.8", name: "qwen3.8-27b@q4_k_xl", contextLength: 200000, isDefault: false, supportsImages: true, supportsTools: false, description: null },
 ];
 
 describe("ChatPanel", () => {

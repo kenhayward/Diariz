@@ -86,7 +86,10 @@
   "contextUsedAria": "Contexte utilisé à {{pct}} %",
   "modelFallback": "modèle",
   "modelPicker": "Modèle : {{model}}",
-  "ctxSuffix": "ctx",
+  "modelPickerTitle": "Modèle qui répond",
+  "modelCallsTools": "Utilise des outils",
+  "modelReadsImages": "Lit les images",
+  "modelContextTokens": "{{tokens}} jetons",
   "tokens": "jetons",
   "toolCallPrefix": "Appel d'outil :",
   "toolLabels": {
@@ -111,6 +114,5 @@
   "attachedScreenshot": "Capture jointe",
   "removeScreenshot": "Retirer la capture",
   "selectVisionModel": "Selectionnez un modele de vision",
-  "dropScreenshot": "Deposez pour l'ajouter au message",
-  "modelSupportsImages": "Peut lire les images"
+  "dropScreenshot": "Deposez pour l'ajouter au message"
 }

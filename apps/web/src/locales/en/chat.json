@@ -86,7 +86,10 @@
   "contextUsedAria": "Context {{pct}}% used",
   "modelFallback": "model",
   "modelPicker": "Model: {{model}}",
-  "ctxSuffix": "ctx",
+  "modelPickerTitle": "Answering model",
+  "modelCallsTools": "Calls tools",
+  "modelReadsImages": "Reads images",
+  "modelContextTokens": "{{tokens}} tokens",
   "tokens": "tokens",
   "toolCallPrefix": "Tool call:",
   "toolLabels": {
@@ -111,6 +114,5 @@
   "attachedScreenshot": "Attached screenshot",
   "removeScreenshot": "Remove screenshot",
   "selectVisionModel": "Select a vision model",
-  "dropScreenshot": "Drop to add to the prompt",
-  "modelSupportsImages": "Can read images"
+  "dropScreenshot": "Drop to add to the prompt"
 }

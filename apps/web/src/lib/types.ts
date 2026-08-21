@@ -1571,6 +1571,12 @@ export interface ChatModelOption {
   /// Whether this model can read attached screenshots. Gates the composer: with captures attached and this
   /// false, Send is refused rather than answering about a picture the model never received.
   supportsImages: boolean;
+  /// Whether the platform will offer this model its chat tools. A RESOLVED parameter whose app default is
+  /// true, so it reads true for every model an administrator has not turned it off on - the briefcase icon
+  /// is therefore near-universal until the flags are curated.
+  supportsTools: boolean;
+  /// The administrator's short phrase for this model, or null where none is set.
+  description: string | null;
 }
 
 /// One administrator-initiated test call. `response` is the model's actual reply - the only LLM output the

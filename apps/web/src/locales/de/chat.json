@@ -86,7 +86,10 @@
   "contextUsedAria": "Kontext zu {{pct}} % genutzt",
   "modelFallback": "Modell",
   "modelPicker": "Modell: {{model}}",
-  "ctxSuffix": "Ktx",
+  "modelPickerTitle": "Antwortendes Modell",
+  "modelCallsTools": "Nutzt Werkzeuge",
+  "modelReadsImages": "Liest Bilder",
+  "modelContextTokens": "{{tokens}} Tokens",
   "tokens": "Tokens",
   "toolCallPrefix": "Tool-Aufruf:",
   "toolLabels": {
@@ -111,6 +114,5 @@
   "attachedScreenshot": "Angehaengter Screenshot",
   "removeScreenshot": "Screenshot entfernen",
   "selectVisionModel": "Waehlen Sie ein Vision-Modell",
-  "dropScreenshot": "Ablegen, um zur Eingabe hinzuzufuegen",
-  "modelSupportsImages": "Kann Bilder lesen"
+  "dropScreenshot": "Ablegen, um zur Eingabe hinzuzufuegen"
 }
