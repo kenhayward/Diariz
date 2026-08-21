@@ -65,6 +65,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.238.1",
+    date: "2026-08-21",
+    pr: 575,
+    headline: "Recording tiles reflow when you widen the chat panel",
+    summary:
+      "A recording opens on its hub - a row of tiles for the transcript, actions, speakers, notes, files and formulas. Those tiles were laid out three across on a wide screen and stayed three across no matter how little room the middle of the window actually had. Widen the chat panel, or the meetings list, and each tile was squeezed to a fraction of the width it needed, at which point its contents stopped staying inside it: the **+ New**, **+ Add** and **Run** buttons and the arrows painted over the card's own border, the titles shrank to a single letter, and the page picked up a horizontal scrollbar it should never have had.\n\nThe tiles now measure the space they are actually in rather than the size of the window. Drag the chat panel wider and they drop to two columns, then to one, keeping each tile wide enough for its title and its button. Nothing paints outside a card at any panel width now, and the horizontal scrollbar is gone.\n\nThe preview lines inside a tile - an action item, an attached file, a formula run - now shorten with an ellipsis when they are too long for the tile, instead of running past its edge.",
+    fixed: [
+      "The recording hub's tiles reflow to two columns and then one as the middle panel narrows, instead of holding three columns and letting their buttons, arrows and titles spill outside the card.",
+      "A long action item, file name or formula name in a tile's preview is now shortened with an ellipsis rather than running past the card's edge.",
+      "The recording page no longer gains a horizontal scrollbar when the chat panel is widened.",
+    ],
+  },
+  {
     version: "0.238.0",
     date: "2026-08-21",
     pr: 573,
