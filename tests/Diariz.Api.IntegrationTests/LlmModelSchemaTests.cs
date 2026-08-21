@@ -275,6 +275,24 @@ public class LlmModelSchemaTests(ContainersFixture fx)
         return row;
     }
 
+    /// <summary>The picker's per-model description. Round-tripped against real Postgres rather than the
+    /// in-memory provider because the length cap and the nullability are schema facts, and the in-memory
+    /// provider enforces neither - a unit test would pass with no column at all.</summary>
+    [Fact]
+    public async Task Description_round_trips_and_is_optional()
+    {
+        await using var db = fx.CreateDbContext();
+        var described = NewModel();
+        described.Description = new string('x', 200);
+        var undescribed = NewModel();
+        db.LlmModels.AddRange(described, undescribed);
+        await db.SaveChangesAsync();
+
+        await using var read = fx.CreateDbContext();
+        Assert.Equal(new string('x', 200), (await read.LlmModels.FindAsync(described.Id))!.Description);
+        Assert.Null((await read.LlmModels.FindAsync(undescribed.Id))!.Description);
+    }
+
     /// <summary>Puts the shared singleton back: every test in this collection sees the same database.</summary>
     private async Task ClearDefaultAsync()
     {
