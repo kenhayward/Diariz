@@ -4,6 +4,7 @@ import { MemoryRouter, Routes, Route, useNavigate, useLocation } from "react-rou
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { RecordingDetail as RecordingDetailType } from "../lib/types";
 import { StatusProvider, useStatus } from "../lib/status";
+import { SCREENSHOT_DRAG_TYPE } from "../lib/dragTypes";
 
 /// Renders the current global status message, so a test can observe what the page pushed to the status bar
 /// (pipeline progress like "Extracting actions..." is shown only there, not in an in-page banner).
@@ -1561,5 +1562,31 @@ describe("RecordingDetail folder chips", () => {
 
     const chips = await screen.findByRole("navigation", { name: /folder/i });
     expect(chips.firstElementChild?.tagName).toBe("BUTTON"); // the room chip, not a glyph span
+  });
+});
+
+describe("RecordingDetail file-drop overlay", () => {
+  /// Dragging a screenshot thumbnail means dragging an <img>, and Chrome advertises "Files" on an image
+  /// drag. The attach overlay therefore lit up across the whole page as though a file were incoming - and
+  /// because the drop landed on the chat composer instead, the page saw neither a drop nor a matching
+  /// dragleave, so the overlay stayed on indefinitely.
+  it("stays hidden while a screenshot is dragged, even though the drag advertises Files", async () => {
+    const { container } = renderPage(base);
+    await loaded();
+
+    fireEvent.dragOver(container.firstChild as HTMLElement, {
+      dataTransfer: { types: ["Files", SCREENSHOT_DRAG_TYPE] },
+    });
+
+    expect(screen.queryByText(/drop files to attach/i)).toBeNull();
+  });
+
+  it("still shows for a genuine file drag", async () => {
+    const { container } = renderPage(base);
+    await loaded();
+
+    fireEvent.dragOver(container.firstChild as HTMLElement, { dataTransfer: { types: ["Files"] } });
+
+    expect(screen.getByText(/drop files to attach/i)).toBeTruthy();
   });
 });

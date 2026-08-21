@@ -11,6 +11,7 @@ declare module "axios" {
 import type {
   TemplateContent,
   ChatModelOption,
+  ChatScreenshotRef,
   DiscoverModelsResult,
   ImportModelsResult,
   AdminUser,
@@ -1284,6 +1285,9 @@ export const api = {
       /// chat model. Chat is stateless per turn, so changing it mid-conversation needs nothing else - the
       /// full history is resent and reaches the new model with the request.
       modelId?: string | null;
+      /// Screen captures to send with this turn, by reference. Requires a model whose `supportsImages` is
+      /// true - the server answers 400 otherwise rather than silently dropping them.
+      screenshots?: ChatScreenshotRef[];
     },
     handlers: {
       onToken: (token: string) => void;

@@ -16,7 +16,7 @@ public class LlmSettingsResolverTests
         DiarizDbContext db, LlmDefaultsOptions? defaults = null, SummarizationOptions? summary = null) =>
         new(db, Options.Create(defaults ?? new LlmDefaultsOptions()),
             Options.Create(summary ?? new SummarizationOptions { ApiBase = "http://env/v1", Model = "env-model" }),
-            new FakeApiKeyProtector(), new ChatModelCatalog(db), Options.Create(new ChatOptions()));
+            new FakeApiKeyProtector(), new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())), Options.Create(new ChatOptions()));
 
     [Fact]
     public async Task Falls_back_to_the_environment_model_when_no_rows_exist()

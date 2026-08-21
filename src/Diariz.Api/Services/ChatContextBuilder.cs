@@ -75,12 +75,24 @@ public static class ChatContextBuilder
     }
 
     /// <summary>The request messages: the system prompt followed by the (non-blank) conversation history.</summary>
-    public static IReadOnlyList<ChatMessage> BuildMessages(string systemPrompt, IReadOnlyList<ChatMessage> history)
+    /// <param name="imageDataUrls">Attached screenshots, hung on the LAST user message - the turn they are
+    /// context for. A history with no user message at all drops them rather than throwing: there is nowhere
+    /// sensible to put them, and the system prompt is not it (several OpenAI-compatible servers reject
+    /// images on a system message outright).</param>
+    public static IReadOnlyList<ChatMessage> BuildMessages(
+        string systemPrompt, IReadOnlyList<ChatMessage> history, IReadOnlyList<string>? imageDataUrls = null)
     {
         var msgs = new List<ChatMessage>(history.Count + 1) { new("system", systemPrompt) };
         foreach (var m in history)
             if (!string.IsNullOrWhiteSpace(m.Content))
                 msgs.Add(new ChatMessage(NormalizeRole(m.Role), m.Content));
+
+        if (imageDataUrls is { Count: > 0 })
+        {
+            var last = msgs.FindLastIndex(m => m.Role == "user");
+            if (last >= 0) msgs[last] = msgs[last] with { ImageDataUrls = imageDataUrls };
+        }
+
         return msgs;
     }
 

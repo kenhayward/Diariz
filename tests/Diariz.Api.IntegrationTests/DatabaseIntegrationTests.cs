@@ -148,7 +148,7 @@ public class DatabaseIntegrationTests(ContainersFixture fx)
         await using var db = fx.CreateDbContext();
         var resolver = new LlmSettingsResolver(
             db, Options.Create(new LlmDefaultsOptions()), Options.Create(new SummarizationOptions()),
-            new FakeApiKeyProtector(), new ChatModelCatalog(db));
+            new FakeApiKeyProtector(), new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())));
         var controller = new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config,
             resolver, new FakeEmailSender(), new FakeSpeakerIdentifier(), Options.Create(new UploadOptions()), new RoomScope(db),
             new PeopleDirectory(db), new CapturingWebhookPublisher(), Options.Create(new AppPublicOptions()))

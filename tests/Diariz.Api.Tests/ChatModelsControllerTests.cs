@@ -4,6 +4,8 @@ using Diariz.Api.Services.Llm;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
+using Diariz.Api.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.Tests;
 
@@ -12,7 +14,7 @@ namespace Diariz.Api.Tests;
 public class ChatModelsControllerTests
 {
     private static ChatModelsController Build(DiarizDbContext db) =>
-        new(new ChatModelCatalog(db)) { ControllerContext = Http.Context(Guid.NewGuid()) };
+        new(new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions()))) { ControllerContext = Http.Context(Guid.NewGuid()) };
 
     private static LlmModel Seed(DiarizDbContext db, string name, bool chatEnabled, string? displayName = null)
     {

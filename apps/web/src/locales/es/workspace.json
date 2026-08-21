@@ -707,5 +707,6 @@
   "extendNotifyTitle": "¿Seguir grabando?",
   "spokenLanguage": "Idioma hablado",
   "spokenLanguageAuto": "- Detectar automaticamente -",
-  "spokenLanguageHint": "Definalo cuando la transcripcion salga en el idioma equivocado. La deteccion lee el inicio de la grabacion, por lo que un comienzo silencioso puede interpretarse mal."
+  "spokenLanguageHint": "Definalo cuando la transcripcion salga en el idioma equivocado. La deteccion lee el inicio de la grabacion, por lo que un comienzo silencioso puede interpretarse mal.",
+  "screenshotsDragHint": "Arrastre una captura al cuadro del chat para analizar la imagen"
 }

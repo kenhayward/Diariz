@@ -25,7 +25,7 @@ public static class Recordings
         var resolver = new LlmSettingsResolver(
             db, Options.Create(new LlmDefaultsOptions()),
             Options.Create(new SummarizationOptions { ApiBase = "http://llm.test/v1" }), new FakeApiKeyProtector(),
-            new ChatModelCatalog(db));
+            new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())));
 
         return new RecordingsController(
             db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config,

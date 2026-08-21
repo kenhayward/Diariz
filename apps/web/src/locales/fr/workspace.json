@@ -707,5 +707,6 @@
   "extendNotifyTitle": "Continuer l'enregistrement ?",
   "spokenLanguage": "Langue parlee",
   "spokenLanguageAuto": "- Detecter automatiquement -",
-  "spokenLanguageHint": "Definissez-la quand la transcription revient dans la mauvaise langue. La detection lit le debut de l'enregistrement, un demarrage silencieux peut donc etre mal interprete."
+  "spokenLanguageHint": "Definissez-la quand la transcription revient dans la mauvaise langue. La detection lit le debut de l'enregistrement, un demarrage silencieux peut donc etre mal interprete.",
+  "screenshotsDragHint": "Faites glisser une capture vers la zone de saisie du chat pour l'analyser"
 }

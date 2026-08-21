@@ -1004,6 +1004,16 @@ export interface SavedChatContext {
   /// for one on the platform default. Restored on reopen, falling back to the default when the model is
   /// no longer offered.
   modelId?: string | null;
+  /// Screen captures attached to this conversation. Null/absent for conversations saved before 0.238.0.
+  /// A capture deleted in the meantime is dropped on reload rather than erroring.
+  screenshots?: ChatScreenshotRef[] | null;
+}
+
+/// One screen capture attached to a chat turn, by reference. The server loads and rescales the image; the
+/// browser never sends pixels, only ids.
+export interface ChatScreenshotRef {
+  recordingId: string;
+  screenshotId: string;
 }
 
 export interface ChatConversationSummary {
@@ -1554,6 +1564,9 @@ export interface ChatModelOption {
   name: string;
   contextLength: number;
   isDefault: boolean;
+  /// Whether this model can read attached screenshots. Gates the composer: with captures attached and this
+  /// false, Send is refused rather than answering about a picture the model never received.
+  supportsImages: boolean;
 }
 
 /// One administrator-initiated test call. `response` is the model's actual reply - the only LLM output the

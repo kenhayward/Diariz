@@ -100,17 +100,10 @@ public class LlmSettingsResolver : ILlmSettingsResolver
         var model = await ChooseModelAsync(group, chosen, ps, ct);
 
         // Most specific first. A null layer is skipped, so a model with no override row for this group
-        // inherits rather than omitting everything.
-        var layers = new List<string?>
-        {
-            group is null || model is null ? null : ParametersFor(model, group.Value),
-            model is null ? null : ParametersFor(model, LlmCallGroup.ModelBase),
-        };
-        // Shared with the model editor's test call, so the panel cannot disagree with the pipeline about
+        // inherits rather than omitting everything. Shared with the model editor's test call AND with
+        // ChatModelCatalog, so neither the panel nor the chat picker can disagree with the pipeline about
         // what a parameter resolves to. Carries the admin's platform timeout.
-        layers.AddRange(LlmPlatformLayers.Below(_defaults, group, ps));
-
-        var parameters = LlmParameterLayers.Resolve(layers);
+        var parameters = LlmParameterLayers.Resolve(LlmParameterStack.For(model, group, _defaults, ps));
 
         return new LlmRequestConfig(
             ApiBase: model?.ApiBase ?? _summary.ApiBase,
@@ -148,7 +141,4 @@ public class LlmSettingsResolver : ILlmSettingsResolver
             .Include(m => m.Parameters)
             .FirstOrDefaultAsync(m => m.Id == id.Value, ct);
     }
-
-    private static string? ParametersFor(LlmModel model, LlmCallGroup group) =>
-        model.Parameters.FirstOrDefault(p => p.Group == group)?.ParametersJson;
 }

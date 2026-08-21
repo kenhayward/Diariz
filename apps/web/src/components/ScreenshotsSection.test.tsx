@@ -50,4 +50,16 @@ describe("ScreenshotsSection", () => {
 
     expect(onOpen).toHaveBeenCalledWith(1);
   });
+
+  it("tells the user the thumbnails can be dragged into the chat prompt", () => {
+    render(<ScreenshotsSection recordingId="r1" shots={shots} onOpen={() => {}} />);
+
+    expect(screen.getByText(/drag and drop a screenshot to the chat prompt/i)).toBeTruthy();
+  });
+
+  it("makes its thumbnails draggable", () => {
+    render(<ScreenshotsSection recordingId="r1" shots={shots} onOpen={() => {}} />);
+
+    expect(screen.getAllByRole("button")[0].getAttribute("draggable")).toBe("true");
+  });
 });

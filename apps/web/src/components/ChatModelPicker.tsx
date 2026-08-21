@@ -135,6 +135,16 @@ export default function ChatModelPicker({ models, selectedId, disabled = false, 
                 <span className="shrink-0 text-[11px] tabular-nums text-gray-500 dark:text-gray-400">
                   ({m.contextLength.toLocaleString()} {t("ctxSuffix")})
                 </span>
+                {/* Without this the composer's "Select a vision model" warning names a remedy the user has
+                    no way to act on - nothing else in the product says which models can see. */}
+                {m.supportsImages && (
+                  <span
+                    title={t("modelSupportsImages")}
+                    className="shrink-0 text-[11px] text-gray-400 dark:text-gray-500"
+                  >
+                    {t("modelSupportsImages")}
+                  </span>
+                )}
               </button>
             ))}
           </div>,

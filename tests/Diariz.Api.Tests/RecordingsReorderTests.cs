@@ -19,7 +19,7 @@ public class RecordingsReorderTests
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
         var resolver = new LlmSettingsResolver(
-            db, Options.Create(new LlmDefaultsOptions()), Options.Create(new SummarizationOptions()), new FakeApiKeyProtector(), new ChatModelCatalog(db));
+            db, Options.Create(new LlmDefaultsOptions()), Options.Create(new SummarizationOptions()), new FakeApiKeyProtector(), new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())));
         return new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config,
             resolver, new FakeEmailSender(), new FakeSpeakerIdentifier(), Options.Create(new UploadOptions()), new RoomScope(db),
             new PeopleDirectory(db), new CapturingWebhookPublisher(), Options.Create(new AppPublicOptions()))

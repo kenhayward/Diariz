@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { useEffect } from "react";
@@ -14,6 +15,7 @@ vi.mock("../lib/api", () => ({
     getUserSettings: vi.fn(),
     updateUserSettings: vi.fn(),
     listChatModels: vi.fn(),
+    screenshotThumbUrl: (r: string, sid: string) => `/thumb/${r}/${sid}`,
     getSection: vi.fn(),
     chatStream: vi.fn(),
     uploadChatAttachment: vi.fn(),
@@ -98,8 +100,8 @@ let lastClient: QueryClient;
 const mock = (fn: unknown) => fn as ReturnType<typeof vi.fn>;
 
 const CHAT_MODELS = [
-  { id: "a", label: "GPT OSS 20B", name: "gpt-oss", contextLength: 131072, isDefault: true },
-  { id: "b", label: "QWEN 3.8", name: "qwen3.8-27b@q4_k_xl", contextLength: 200000, isDefault: false },
+  { id: "a", label: "GPT OSS 20B", name: "gpt-oss", contextLength: 131072, isDefault: true, supportsImages: false },
+  { id: "b", label: "QWEN 3.8", name: "qwen3.8-27b@q4_k_xl", contextLength: 200000, isDefault: false, supportsImages: true },
 ];
 
 describe("ChatPanel", () => {
@@ -663,6 +665,139 @@ describe("ChatPanel", () => {
 
       await waitFor(() => expect(api.createChatConversation).toHaveBeenCalled());
       expect(mock(api.createChatConversation).mock.calls[0][0].context.modelId).toBe("b");
+    });
+  });
+
+  // ---- Vision: screenshots dragged into the prompt ----
+
+  describe("screenshot attachments", () => {
+    /// jsdom has no DataTransfer, so the drop is driven through a stub shaped like the real one.
+    function drop(payload: Record<string, unknown> | null, type = "application/x-diariz-screenshot") {
+      const data = payload === null ? "" : JSON.stringify(payload);
+      fireEvent.drop(screen.getByTestId("chat-drop-zone"), {
+        dataTransfer: { getData: (t: string) => (t === type ? data : ""), types: [type] },
+      });
+    }
+
+    const shotA = { recordingId: "rec-1", screenshotId: "shot-a", capturedAtMs: 1000 };
+    const shotB = { recordingId: "rec-1", screenshotId: "shot-b", capturedAtMs: 2000 };
+
+    async function renderReady() {
+      renderPanel();
+      await waitFor(() => expect(api.listChatModels).toHaveBeenCalled());
+    }
+
+    it("adds a thumbnail when a capture is dropped on the composer", async () => {
+      await renderReady();
+
+      act(() => drop(shotA));
+
+      await waitFor(() =>
+        expect(screen.getByAltText(/attached screenshot/i).getAttribute("src")).toBe("/thumb/rec-1/shot-a"));
+    });
+
+    it("ignores a second drop of the same capture", async () => {
+      await renderReady();
+
+      act(() => drop(shotA));
+      await waitFor(() => expect(screen.getAllByAltText(/attached screenshot/i)).toHaveLength(1));
+      act(() => drop(shotA));
+
+      expect(screen.getAllByAltText(/attached screenshot/i)).toHaveLength(1);
+    });
+
+    it("accepts several different captures", async () => {
+      await renderReady();
+
+      act(() => drop(shotA));
+      act(() => drop(shotB));
+
+      await waitFor(() => expect(screen.getAllByAltText(/attached screenshot/i)).toHaveLength(2));
+    });
+
+    /// A dragged word or link must not be mistaken for a capture - that is why the payload has its own
+    /// MIME type rather than riding text/plain.
+    it("ignores a drop that carries no capture payload", async () => {
+      await renderReady();
+
+      act(() => drop(null, "text/plain"));
+
+      expect(screen.queryByAltText(/attached screenshot/i)).toBeNull();
+    });
+
+    it("removes a capture when its remove control is clicked", async () => {
+      await renderReady();
+      act(() => drop(shotA));
+      await waitFor(() => expect(screen.getByAltText(/attached screenshot/i)).toBeTruthy());
+
+      await userEvent.click(screen.getByRole("button", { name: /remove screenshot/i }));
+
+      expect(screen.queryByAltText(/attached screenshot/i)).toBeNull();
+    });
+
+    it("refuses to send while the selected model cannot read images", async () => {
+      await renderReady();
+      fireEvent.change(screen.getByLabelText(/message/i), { target: { value: "what is this?" } });
+      act(() => drop(shotA));
+      await waitFor(() => expect(screen.getByAltText(/attached screenshot/i)).toBeTruthy());
+
+      expect(screen.getByText(/select a vision model/i)).toBeTruthy();
+      // userEvent, not fireEvent: fireEvent dispatches onto a disabled control, so the lock would appear
+      // to hold for a reason the browser never reproduces.
+      await userEvent.click(screen.getByRole("button", { name: /^send$/i }));
+
+      expect(api.chatStream).not.toHaveBeenCalled();
+    });
+
+    it("sends once a vision-capable model is chosen", async () => {
+      await renderReady();
+      fireEvent.change(screen.getByLabelText(/message/i), { target: { value: "what is this?" } });
+      act(() => drop(shotA));
+      await waitFor(() => expect(screen.getByAltText(/attached screenshot/i)).toBeTruthy());
+
+      await userEvent.click(screen.getByRole("button", { name: /^Model:/ }));
+      await userEvent.click(await screen.findByRole("menuitemradio", { name: /QWEN 3\.8/ }));
+
+      await waitFor(() => expect(screen.queryByText(/select a vision model/i)).toBeNull());
+      await userEvent.click(screen.getByRole("button", { name: /^send$/i }));
+
+      await waitFor(() => expect(api.chatStream).toHaveBeenCalled());
+      expect(mock(api.chatStream).mock.calls[0][0].screenshots).toEqual([
+        { recordingId: "rec-1", screenshotId: "shot-a" },
+      ]);
+    });
+
+    it("sends no screenshots field when nothing is attached", async () => {
+      await renderReady();
+      fireEvent.change(screen.getByLabelText(/message/i), { target: { value: "hello" } });
+
+      await userEvent.click(screen.getByRole("button", { name: /^send$/i }));
+
+      await waitFor(() => expect(api.chatStream).toHaveBeenCalled());
+      expect(mock(api.chatStream).mock.calls[0][0].screenshots).toEqual([]);
+    });
+
+    it("restores attached captures when a saved conversation is reopened", async () => {
+      mock(api.listChatConversations).mockResolvedValue([
+        { id: "conv-1", title: "Slide question", updatedAt: "2026-01-01T00:00:00Z" },
+      ]);
+      mock(api.getChatConversation).mockResolvedValue({
+        id: "conv-1",
+        title: "Slide question",
+        messages: [{ role: "user", content: "what is on this slide?" }],
+        updatedAt: "2026-01-01T00:00:00Z",
+        context: {
+          recordingIds: [], attachmentName: null, attachmentText: null,
+          screenshots: [{ recordingId: "rec-9", screenshotId: "shot-z" }],
+        },
+      });
+      await renderReady();
+
+      await userEvent.click(screen.getByRole("button", { name: /saved conversations/i }));
+      await userEvent.click(await screen.findByRole("button", { name: /Slide question/ }));
+
+      await waitFor(() =>
+        expect(screen.getByAltText(/attached screenshot/i).getAttribute("src")).toBe("/thumb/rec-9/shot-z"));
     });
   });
 });

@@ -1,6 +1,8 @@
+using Diariz.Api.Configuration;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.Services.Llm;
 
@@ -9,8 +11,13 @@ namespace Diariz.Api.Services.Llm;
 /// Carries no endpoint and no key: this is the shape returned to every signed-in user, unlike
 /// <c>LlmModelDto</c>, which is administrator-only for exactly that reason. <see cref="Name"/> is the slug
 /// the server sends as <c>model</c>, present so a client can match a streamed usage snapshot back to a
-/// label.</summary>
-public sealed record ChatModelOption(Guid Id, string Label, string Name, int ContextLength, bool IsDefault);
+/// label.
+///
+/// <para><see cref="SupportsImages"/> is the resolved <c>images_supported</c> parameter for the Chat group -
+/// whether this model can be sent screenshots. It is a resolved value, not a stored column, so it follows
+/// the same layer walk the pipeline will use when the turn is actually sent.</para></summary>
+public sealed record ChatModelOption(
+    Guid Id, string Label, string Name, int ContextLength, bool IsDefault, bool SupportsImages);
 
 public interface IChatModelCatalog
 {
@@ -36,7 +43,7 @@ public interface IChatModelCatalog
 ///
 /// <b>The chat-assigned model is offered whether or not its flag is set.</b> It is the model actually in
 /// use, so excluding it would leave the picker unable to show the current selection.</summary>
-public sealed class ChatModelCatalog(DiarizDbContext db) : IChatModelCatalog
+public sealed class ChatModelCatalog(DiarizDbContext db, IOptions<LlmDefaultsOptions> defaults) : IChatModelCatalog
 {
     public async Task<Guid?> DefaultModelIdAsync(CancellationToken ct = default)
     {
@@ -57,13 +64,21 @@ public sealed class ChatModelCatalog(DiarizDbContext db) : IChatModelCatalog
 
         var models = await db.LlmModels
             .Where(m => m.ChatEnabled || (defaultId != null && m.Id == defaultId))
+            .Include(m => m.Parameters)
             .AsNoTracking()
             .ToListAsync(ct);
+
+        // The administrator's platform layer sits below every model's own, so it has to be read here too -
+        // resolving without it would answer a different question from the one the pipeline asks.
+        var platform = await db.PlatformSettings
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == PlatformSettings.SingletonId, ct);
 
         // Ordered in memory rather than in SQL: Label is a C# computed property, so there is no column to
         // sort on. The set is a handful of rows at most.
         return models
-            .Select(m => new ChatModelOption(m.Id, m.Label, m.Name, m.ContextLength, m.Id == defaultId))
+            .Select(m => new ChatModelOption(
+                m.Id, m.Label, m.Name, m.ContextLength, m.Id == defaultId, SupportsImages(m, platform)))
             .OrderByDescending(o => o.IsDefault)
             .ThenBy(o => o.Label, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
@@ -78,4 +93,15 @@ public sealed class ChatModelCatalog(DiarizDbContext db) : IChatModelCatalog
 
         return await db.LlmModels.AnyAsync(m => m.Id == id && m.ChatEnabled, ct) ? id : null;
     }
+
+    /// <summary>Whether this model may be sent images on a chat turn.
+    ///
+    /// <para>Resolved through <see cref="LlmParameterStack"/> - the SAME walk
+    /// <see cref="LlmSettingsResolver"/> performs - rather than a second one written here. A private copy
+    /// would pass every test about this class and still let the picker offer a capability the pipeline
+    /// refuses, which is the failure this type's summary warns about.</para></summary>
+    private bool SupportsImages(LlmModel model, PlatformSettings? platform) =>
+        LlmParameterLayers
+            .Resolve(LlmParameterStack.For(model, LlmCallGroup.Chat, defaults.Value, platform))
+            .ImagesSupported;
 }
