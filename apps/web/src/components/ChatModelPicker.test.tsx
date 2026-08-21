@@ -5,8 +5,8 @@ import ChatModelPicker from "./ChatModelPicker";
 import type { ChatModelOption } from "../lib/types";
 
 const MODELS: ChatModelOption[] = [
-  { id: "a", label: "GPT OSS 20B", name: "openai/gpt-oss-20b", contextLength: 131072, isDefault: true },
-  { id: "b", label: "QWEN 3.8", name: "qwen3.8-27b@q4_k_xl", contextLength: 200000, isDefault: false },
+  { id: "a", label: "GPT OSS 20B", name: "openai/gpt-oss-20b", contextLength: 131072, isDefault: true, supportsImages: false },
+  { id: "b", label: "QWEN 3.8", name: "qwen3.8-27b@q4_k_xl", contextLength: 200000, isDefault: false, supportsImages: true },
 ];
 
 function open(props: Partial<React.ComponentProps<typeof ChatModelPicker>> = {}) {
@@ -148,5 +148,16 @@ describe("ChatModelPicker", () => {
 
     expect(screen.queryByRole("menuitemradio")).toBeNull();
     expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  /// Without this the "Select a vision model" warning names a remedy the user cannot act on: nothing else
+  /// in the product says which models can see.
+  it("marks the models that can read images, and only those", async () => {
+    render(<ChatModelPicker models={MODELS} selectedId="a" onSelect={() => {}} />);
+    await userEvent.click(screen.getByRole("button", { name: /^Model:/ }));
+
+    const rows = screen.getAllByRole("menuitemradio");
+    expect(rows[0].textContent).not.toContain("Can read images");
+    expect(rows[1].textContent).toContain("Can read images");
   });
 });

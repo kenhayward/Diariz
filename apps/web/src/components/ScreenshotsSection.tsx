@@ -22,7 +22,9 @@ export default function ScreenshotsSection({
         {t("screenshots")} ({shots.length})
       </summary>
       <div className="pt-2">
-        <ScreenshotStrip recordingId={recordingId} shots={shots} onOpen={onOpen} />
+        {/* The gesture is invisible otherwise - a thumbnail looks like a button, not a draggable thing. */}
+        <p className="pb-2 text-xs text-gray-400 dark:text-gray-500">{t("screenshotsDragHint")}</p>
+        <ScreenshotStrip recordingId={recordingId} shots={shots} onOpen={onOpen} draggable />
       </div>
     </details>
   );

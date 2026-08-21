@@ -707,5 +707,6 @@
   "extendNotifyTitle": "Still recording?",
   "spokenLanguage": "Spoken language",
   "spokenLanguageAuto": "- Detect automatically -",
-  "spokenLanguageHint": "Set this when the transcript came back in the wrong language. Detection reads the start of the recording, so a quiet opening can be misread."
+  "spokenLanguageHint": "Set this when the transcript came back in the wrong language. Detection reads the start of the recording, so a quiet opening can be misread.",
+  "screenshotsDragHint": "Drag and drop a screenshot to the chat prompt for image analysis"
 }

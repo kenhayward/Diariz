@@ -8,14 +8,25 @@ import type { Screenshot } from "../lib/types";
 /// their own thumbnail markup rather than reusing this component (a three-way extraction is a tracked
 /// follow-up). Purely presentational: clicking a thumbnail hands the index to the parent, which owns
 /// whether/where a ScreenshotModal opens.
+///
+/// With `draggable`, a thumbnail can be dragged into the chat composer to attach it to a prompt for a
+/// vision model. The payload goes under its own MIME type rather than `text/plain` so the composer cannot
+/// mistake an arbitrary dragged word or link for a capture, and so dragging a thumbnail anywhere else in
+/// the page does nothing surprising.
+export const SCREENSHOT_DRAG_TYPE = "application/x-diariz-screenshot";
+
 export default function ScreenshotStrip({
   recordingId,
   shots,
   onOpen,
+  draggable = false,
 }: {
   recordingId: string;
   shots: Screenshot[];
   onOpen: (index: number) => void;
+  /// Opt-in: only the Notes tab wires the chat gesture, so nothing else grows a drag behaviour it never
+  /// asked for.
+  draggable?: boolean;
 }) {
   const { t } = useTranslation("workspace");
 
@@ -29,6 +40,15 @@ export default function ScreenshotStrip({
           <button
             type="button"
             onClick={() => onOpen(i)}
+            draggable={draggable}
+            onDragStart={(e) => {
+              if (!draggable) return;
+              e.dataTransfer.setData(
+                SCREENSHOT_DRAG_TYPE,
+                JSON.stringify({ recordingId, screenshotId: shot.id, capturedAtMs: shot.capturedAtMs }),
+              );
+              e.dataTransfer.effectAllowed = "copy";
+            }}
             aria-label={t("screenshotAlt", { time: formatDuration(shot.capturedAtMs) })}
             className="block overflow-hidden rounded border hover:border-blue-400 dark:border-gray-700 dark:hover:border-blue-500"
           >

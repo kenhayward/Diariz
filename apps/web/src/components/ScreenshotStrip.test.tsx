@@ -46,4 +46,49 @@ describe("ScreenshotStrip", () => {
     expect(screen.queryByRole("img")).toBeNull();
     expect(screen.getByText(/no screenshots captured/i)).toBeTruthy();
   });
+
+  // ---- Dragging a capture into the chat prompt ----
+
+  /// jsdom has no DataTransfer, so the drop payload is captured through a stub. That is the whole
+  /// contract between the strip and the chat composer, so it is asserted literally.
+  function dragThumbnail(index: number) {
+    const setData = vi.fn();
+    fireEvent.dragStart(screen.getAllByRole("button")[index], { dataTransfer: { setData, effectAllowed: "" } });
+    return setData;
+  }
+
+  it("marks thumbnails draggable only when the caller asks for it", () => {
+    const { unmount } = render(<ScreenshotStrip recordingId="r1" shots={shots} onOpen={() => {}} />);
+    expect(screen.getAllByRole("button")[0].getAttribute("draggable")).toBe("false");
+    unmount();
+
+    render(<ScreenshotStrip recordingId="r1" shots={shots} onOpen={() => {}} draggable />);
+    expect(screen.getAllByRole("button")[0].getAttribute("draggable")).toBe("true");
+  });
+
+  it("writes the capture reference under its own MIME type on drag", () => {
+    render(<ScreenshotStrip recordingId="r1" shots={shots} onOpen={() => {}} draggable />);
+
+    const setData = dragThumbnail(1);
+
+    expect(setData).toHaveBeenCalledWith(
+      "application/x-diariz-screenshot",
+      JSON.stringify({ recordingId: "r1", screenshotId: "b", capturedAtMs: 125_000 }),
+    );
+  });
+
+  it("does not write a payload when dragging is not enabled", () => {
+    render(<ScreenshotStrip recordingId="r1" shots={shots} onOpen={() => {}} />);
+
+    expect(dragThumbnail(0)).not.toHaveBeenCalled();
+  });
+
+  it("still opens a capture on click when dragging is enabled", () => {
+    const onOpen = vi.fn();
+    render(<ScreenshotStrip recordingId="r1" shots={shots} onOpen={onOpen} draggable />);
+
+    fireEvent.click(screen.getAllByRole("button")[1]);
+
+    expect(onOpen).toHaveBeenCalledWith(1);
+  });
 });

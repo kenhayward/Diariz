@@ -107,5 +107,10 @@
     "get_meeting_minutes": "Protokoll abrufen",
     "get_recording_details": "Aufnahmedetails",
     "run_formula": "Formel ausführen"
-  }
+  },
+  "attachedScreenshot": "Angehaengter Screenshot",
+  "removeScreenshot": "Screenshot entfernen",
+  "selectVisionModel": "Waehlen Sie ein Vision-Modell",
+  "dropScreenshot": "Ablegen, um zur Eingabe hinzuzufuegen",
+  "modelSupportsImages": "Kann Bilder lesen"
 }

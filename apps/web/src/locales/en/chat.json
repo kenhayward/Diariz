@@ -107,5 +107,10 @@
     "get_meeting_minutes": "get minutes",
     "get_recording_details": "recording details",
     "run_formula": "run formula"
-  }
+  },
+  "attachedScreenshot": "Attached screenshot",
+  "removeScreenshot": "Remove screenshot",
+  "selectVisionModel": "Select a vision model",
+  "dropScreenshot": "Drop to add to the prompt",
+  "modelSupportsImages": "Can read images"
 }

@@ -31,7 +31,9 @@ import {
   type ChatCommand,
   type CommandInfo,
 } from "../lib/chatCommands";
-import type { AttachmentDraft, ChatConversationSummary, ChatTurn, ChatUsage } from "../lib/types";
+import type {
+  AttachmentDraft, ChatConversationSummary, ChatScreenshotRef, ChatTurn, ChatUsage,
+} from "../lib/types";
 import { pickDictationEngine, appendTranscript } from "../lib/dictation";
 import {
   hasSpeechRecognition,
@@ -40,6 +42,8 @@ import {
   type DictationEngine,
 } from "../lib/dictationEngine";
 import ChatModelPicker from "./ChatModelPicker";
+import ChatScreenshotTray from "./ChatScreenshotTray";
+import { SCREENSHOT_DRAG_TYPE } from "./ScreenshotStrip";
 import { CHAT_MODELS_KEY } from "../lib/modelQueryKeys";
 import ContextDial from "./ContextDial";
 import PickRecordingModal from "./PickRecordingModal";
@@ -116,6 +120,33 @@ export default function ChatPanel() {
 
   const [attachment, setAttachment] = useState<{ name: string; text: string; chars: number } | null>(null);
   const [uploading, setUploading] = useState(false);
+
+  // Screen captures dragged in from a recording's Notes tab. Sticky, like the attachment pill above: they
+  // ride every turn until removed, so a follow-up question about the same image needs no second drag. Not
+  // cleared when the user navigates - a capture is something they chose to discuss, not inferred context.
+  const [shots, setShots] = useState<ChatScreenshotRef[]>([]);
+  const [dropActive, setDropActive] = useState(false);
+
+  /// Accept a capture dropped on the composer. Its own MIME type, so a dragged word or link cannot be
+  /// mistaken for one. Re-dropping a capture already attached is a no-op rather than a duplicate.
+  function onDropShot(e: React.DragEvent) {
+    const raw = e.dataTransfer.getData(SCREENSHOT_DRAG_TYPE);
+    setDropActive(false);
+    if (!raw) return;
+    e.preventDefault();
+    let dropped: ChatScreenshotRef;
+    try {
+      const parsed = JSON.parse(raw) as ChatScreenshotRef;
+      if (!parsed?.recordingId || !parsed?.screenshotId) return;
+      dropped = { recordingId: parsed.recordingId, screenshotId: parsed.screenshotId };
+    } catch {
+      return; // a malformed payload is not worth an error message; it cannot have come from our own strip
+    }
+    setShots((prev) =>
+      prev.some((s) => s.recordingId === dropped.recordingId && s.screenshotId === dropped.screenshotId)
+        ? prev
+        : [...prev, dropped]);
+  }
 
   // Voice dictation: the mic button toggles listening; finalized speech is appended to `input`, interim
   // speech shows as a live preview above the box. Engine is chosen once from capabilities.
@@ -204,6 +235,7 @@ export default function ChatPanel() {
 
   const started = messages.length > 0;
 
+
   // What "current" resolves to right now (open folder / open recording / 2+ ticked). Live; the displayed
   // wording uses `frozenCurrent`, which only updates on input focus.
   const inferredCurrent = inferCurrentContext({
@@ -234,6 +266,9 @@ export default function ChatPanel() {
   // Falls back to the default when the stored pick is no longer offered - the same rule the server applies
   // to the turn itself, so the dial cannot advertise a model the reply will not come from.
   const selectedModel = models.find((m) => m.id === modelId) ?? models.find((m) => m.isDefault) ?? null;
+  // Captures attached to a model that cannot see them. No model selected at all means the environment
+  // fallback, whose images_supported default is false - so it counts as blocked, matching the server.
+  const blockedByVision = shots.length > 0 && !selectedModel?.supportsImages;
 
   // Prefer the picked model's own window, so the dial moves the moment a model is chosen rather than at
   // the next turn. Once a turn has run the server reports the same number for that model anyway.
@@ -523,6 +558,7 @@ export default function ChatPanel() {
           includeAttachments: includeAttachments && hasContext,
           searchAllMeetings: contextMode === "all",
           modelId: selectedModel?.id ?? null,
+          screenshots: shots,
         },
         {
           onToken: (tok) => {
@@ -624,6 +660,9 @@ export default function ChatPanel() {
     try {
       const c = await api.getChatConversation(id);
       setMessages(c.messages);
+      // A capture deleted since the save simply fails to load its thumbnail; the reference is harmless and
+      // the server drops it. A saved chat should reopen, not error.
+      setShots(c.context.screenshots ?? []);
       // Restore the conversation's context. A folder chat reopens its folder in the middle panel (so the
       // inferred context stays "Current Folder" as the chat continues); otherwise restore the transcripts as
       // the shared selection and let "current" infer single/multiple.
@@ -690,6 +729,7 @@ export default function ChatPanel() {
         includeAttachments,
         searchAllMeetings: contextMode === "all",
         modelId: selectedModel?.id ?? null,
+        screenshots: shots,
       },
     };
     try {
@@ -860,7 +900,25 @@ export default function ChatPanel() {
       {error && <p className="px-3 pb-1 text-xs text-red-600 dark:text-red-400">{error}</p>}
 
       {/* Context + attachment */}
-      <div className="shrink-0 border-t px-2 py-1.5 dark:border-gray-700">
+      {/* The composer, and the drop target for screen captures dragged from a recording's Notes tab.
+          The whole footer accepts the drop, not just the textarea: aiming at a two-line box while dragging
+          is fiddly, and the tray it lands in sits above the box anyway. */}
+      <div
+        data-testid="chat-drop-zone"
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes(SCREENSHOT_DRAG_TYPE)) return;
+          e.preventDefault(); // without this the browser refuses the drop entirely
+          e.dataTransfer.dropEffect = "copy";
+          setDropActive(true);
+        }}
+        onDragLeave={() => setDropActive(false)}
+        onDrop={onDropShot}
+        className={
+          dropActive
+            ? "shrink-0 border-t border-blue-400 bg-blue-50/60 px-2 py-1.5 dark:border-blue-500 dark:bg-blue-900/20"
+            : "shrink-0 border-t px-2 py-1.5 dark:border-gray-700"
+        }
+      >
         <div className="flex flex-wrap items-center gap-2">
           <div ref={pickerRef} className="relative flex items-center">
             <button
@@ -986,6 +1044,17 @@ export default function ChatPanel() {
           </p>
         )}
 
+        {/* Attached screen captures, and the reason they cannot be sent yet. */}
+        <ChatScreenshotTray shots={shots} onRemove={(shot) =>
+          setShots((prev) => prev.filter(
+            (s) => !(s.recordingId === shot.recordingId && s.screenshotId === shot.screenshotId)))} />
+
+        {blockedByVision && (
+          <p className="mt-2 rounded bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+            {t("selectVisionModel")}
+          </p>
+        )}
+
         {/* Input */}
         <div className="mt-2 flex items-end gap-2">
           <textarea
@@ -1046,7 +1115,7 @@ export default function ChatPanel() {
             <button
               type="button"
               onClick={send}
-              disabled={!input.trim()}
+              disabled={!input.trim() || blockedByVision}
               aria-label={t("send")}
               title={t("send")}
               className="flex items-center justify-center rounded bg-blue-600 p-2 text-white disabled:opacity-50"

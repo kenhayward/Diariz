@@ -107,5 +107,10 @@
     "get_meeting_minutes": "obtener acta",
     "get_recording_details": "detalles de la grabación",
     "run_formula": "ejecutar fórmula"
-  }
+  },
+  "attachedScreenshot": "Captura adjunta",
+  "removeScreenshot": "Quitar captura",
+  "selectVisionModel": "Seleccione un modelo con vision",
+  "dropScreenshot": "Suelte para anadirla al mensaje",
+  "modelSupportsImages": "Puede leer imagenes"
 }
