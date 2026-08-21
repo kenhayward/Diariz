@@ -197,4 +197,63 @@ public class ChatIntegrationTests(ContainersFixture fx)
         Assert.Contains(chat.ChunkCallMessages[1],
             m => System.Text.Json.JsonSerializer.Serialize(m).Contains("Alice"));
     }
+
+    /// <summary>Screenshot references ride in ContextJson, which is already a jsonb blob - which is why
+    /// this feature needs no migration. That claim is only true if the blob actually round-trips them.</summary>
+    [Fact]
+    public async Task Conversation_RoundTripsAttachedScreenshotReferences()
+    {
+        var user = await SeedUser();
+        var recId = Guid.NewGuid();
+        var shotId = Guid.NewGuid();
+
+        Guid convId;
+        await using (var db = fx.CreateDbContext())
+        {
+            var res = await BuildController(db, user.Id, llmEnabled: false).CreateConversation(
+                new SaveChatConversationRequest(
+                    [new ChatTurnDto("user", "what is on this slide?")],
+                    new SavedChatContextDto([recId], null, null,
+                        Screenshots: [new ChatScreenshotRefDto(recId, shotId)])),
+                default);
+            convId = Assert.IsType<SaveChatConversationResult>(res.Value).Id;
+        }
+
+        await using (var verify = fx.CreateDbContext())
+        {
+            var got = await BuildController(verify, user.Id).GetConversation(convId);
+            var dto = Assert.IsType<ChatConversationDto>(got.Value);
+            var only = Assert.Single(dto.Context.Screenshots!);
+            Assert.Equal(recId, only.RecordingId);
+            Assert.Equal(shotId, only.ScreenshotId);
+        }
+    }
+
+    /// <summary>A conversation saved before 0.238.0 has no `screenshots` key in its blob at all. It must
+    /// reload as "no attachments" rather than failing - the reason this went into an existing blob instead
+    /// of a new column.</summary>
+    [Fact]
+    public async Task Conversation_SavedBeforeThisFeature_ReloadsWithNoScreenshots()
+    {
+        var user = await SeedUser();
+        var convId = Guid.NewGuid();
+
+        await using (var seed = fx.CreateDbContext())
+        {
+            seed.ChatSessions.Add(new Diariz.Domain.Entities.ChatSession
+            {
+                Id = convId, UserId = user.Id,
+                RoomId = await new RoomScope(seed).PersonalRoomIdAsync(user.Id), Title = "Old chat",
+                MessagesJson = """[{"role":"user","content":"hi"}]""",
+                ContextJson = """{"recordingIds":[],"attachmentName":null,"attachmentText":null}""",
+            });
+            await seed.SaveChangesAsync();
+        }
+
+        await using (var verify = fx.CreateDbContext())
+        {
+            var got = await BuildController(verify, user.Id).GetConversation(convId);
+            Assert.Null(Assert.IsType<ChatConversationDto>(got.Value).Context.Screenshots);
+        }
+    }
 }
