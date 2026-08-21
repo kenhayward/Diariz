@@ -26,6 +26,11 @@ address `/admin/llm-models` still works if you have it bookmarked. Each model th
 - **A display name**, optional. What everyone else sees in place of that name - "QWEN 3.8" rather than
   "qwen3.8-27b@q4_k_xl". Leave it blank and the name is shown instead. Changing the name later moves the
   display name with it, because nothing is copied.
+- **A description**, optional. A short phrase telling people what the model is for - "Use this for most
+  chats", "Slower but more accurate" - shown next to its name whenever someone picks a chat model. About
+  thirty characters reads best; a longer one is shortened with an ellipsis. Leave it blank and the row
+  simply shows the name. If you have been padding a display name to explain what a model is for, that
+  text belongs here instead.
 - **An endpoint.** Any OpenAI-compatible `/chat/completions` URL. This includes hosted providers and
   local runtimes such as LM Studio or Ollama.
 - **An API key**, if the endpoint needs one. It is encrypted at rest and write-only: once saved, Diariz
@@ -63,6 +68,11 @@ models does not put forty entries in everyone's picker.
 Every model has a full set of parameters: temperature, top P, top K, repeat penalty, frequency and
 presence penalties, max tokens, max completion tokens, reasoning effort, the request timeout, and
 whether the model supports tool calling or image input.
+
+Those last two are the only parameters people other than administrators ever see. The chat model picker
+marks each model with a briefcase when tool calling is on and an eye when image input is on, so someone
+choosing a model can tell what it will be able to do. Tool calling **defaults to on**, so every model
+shows the briefcase until you turn it off on the ones that cannot call tools.
 
 Each one is in **one of three states**, and two of them are easy to confuse:
 

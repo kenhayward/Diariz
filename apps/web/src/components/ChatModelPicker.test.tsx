@@ -1,12 +1,18 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
-import ChatModelPicker from "./ChatModelPicker";
+import ChatModelPicker, { formatContext } from "./ChatModelPicker";
 import type { ChatModelOption } from "../lib/types";
 
 const MODELS: ChatModelOption[] = [
-  { id: "a", label: "GPT OSS 20B", name: "openai/gpt-oss-20b", contextLength: 131072, isDefault: true, supportsImages: false },
-  { id: "b", label: "QWEN 3.8", name: "qwen3.8-27b@q4_k_xl", contextLength: 200000, isDefault: false, supportsImages: true },
+  {
+    id: "a", label: "GPT OSS 20B", name: "openai/gpt-oss-20b", contextLength: 131072, isDefault: true,
+    supportsImages: false, supportsTools: true, description: "Use this for most chats",
+  },
+  {
+    id: "b", label: "QWEN 3.8", name: "qwen3.8-27b@q4_k_xl", contextLength: 200000, isDefault: false,
+    supportsImages: true, supportsTools: false, description: null,
+  },
 ];
 
 function open(props: Partial<React.ComponentProps<typeof ChatModelPicker>> = {}) {
@@ -19,12 +25,56 @@ function open(props: Partial<React.ComponentProps<typeof ChatModelPicker>> = {})
 }
 
 describe("ChatModelPicker", () => {
-  it("lists each model's label with its context length in brackets", () => {
+  it("shows each model's context window as binary K, with the exact count on hover", () => {
+    // "131,072 ctx" was accurate and unreadable: the longest thing on the row and the least glanceable.
+    // 128K is the number the model's own documentation quotes.
+    open();
+
+    const row = screen.getByRole("menuitemradio", { name: /GPT OSS 20B/ });
+    expect(row.textContent).toContain("GPT OSS 20B");
+    const chip = within(row).getByText("128K");
+    expect(chip.getAttribute("title")).toBe("131,072 tokens");
+    expect(row.textContent).not.toContain("131,072 ctx");
+  });
+
+  it("shows the administrator's description beside the name", () => {
+    open();
+
+    expect(screen.getByRole("menuitemradio", { name: /GPT OSS 20B/ }).textContent)
+      .toContain("Use this for most chats");
+  });
+
+  it("renders no description text for a model that has none", () => {
+    // A model with no description gets empty flex space, not the word "null" and not a placeholder
+    // sentence the platform made up.
     open();
 
     const row = screen.getByRole("menuitemradio", { name: /QWEN 3\.8/ });
-    expect(row.textContent).toContain("QWEN 3.8");
-    expect(row.textContent).toContain("(200,000 ctx)");
+    expect(row.textContent).not.toContain("null");
+    expect(row.textContent).not.toContain("undefined");
+  });
+
+  it("titles the menu and explains its icons", () => {
+    // The icons are the only thing on a row that is not words. Without the legend a briefcase is a guess,
+    // and the menu had no title at all before.
+    open();
+
+    const menu = screen.getByRole("menu");
+    expect(menu.textContent).toContain("Answering model");
+    expect(menu.textContent).toContain("Calls tools");
+    expect(menu.textContent).toContain("Reads images");
+  });
+
+  it("keeps the title and the legend fixed while only the rows scroll", () => {
+    // A single scroll container over the whole menu would carry the legend out of sight exactly when a
+    // long list makes it worth having.
+    open();
+
+    const menu = screen.getByRole("menu");
+    const scroller = menu.querySelector("[data-testid='model-rows']");
+    expect(scroller).not.toBeNull();
+    expect(scroller!.className).toContain("overflow-y-auto");
+    expect(menu.className).not.toContain("overflow-y-auto");
   });
 
   it("never shows the raw slug", () => {
@@ -125,8 +175,8 @@ describe("ChatModelPicker", () => {
   it("keeps the menu on screen when the anchor leaves no room to its left", () => {
     // The menu is right-aligned on the sparkle button. In a window narrow enough that the whole chat
     // panel is under ~300px from the left edge, aligning to the anchor alone would put the menu's left
-    // edge off-screen - trading one invisible menu for another. Anchor right 290 - 288 wide = 2, inside
-    // the 8px margin, so the placement has to push it back to 8.
+    // edge off-screen - trading one invisible menu for another, so the placement has to push it back
+    // to the 8px margin.
     render(<ChatModelPicker models={MODELS} selectedId="a" onSelect={vi.fn()} />);
     const button = screen.getByRole("button", { name: /model/i });
     button.getBoundingClientRect = () =>
@@ -136,9 +186,12 @@ describe("ChatModelPicker", () => {
     fireEvent.click(button);
 
     const menu = screen.getByRole("menu");
+    // At 372px the menu is wider than a 340px window, so it cannot be fully on screen and the guarantee
+    // is about its LEFT edge only: the names live there, and losing the right edge costs at most the
+    // context chip. Clamping the WIDTH instead would reintroduce the squeeze the overhang exists to
+    // avoid, and this test asserted exactly that until the menu outgrew the window.
     const left = Number.parseFloat(menu.style.left);
     expect(left).toBe(8);
-    expect(left + Number.parseFloat(menu.style.width)).toBeLessThanOrEqual(340);
   });
 
   it("closes on Escape without selecting", () => {
@@ -151,13 +204,40 @@ describe("ChatModelPicker", () => {
   });
 
   /// Without this the "Select a vision model" warning names a remedy the user cannot act on: nothing else
-  /// in the product says which models can see.
-  it("marks the models that can read images, and only those", async () => {
+  /// in the product says which models can see. Tool support is asserted alongside it and independently,
+  /// because they are separate resolved parameters and a model can have either, both, or neither -
+  /// checking them together on one row would let a bug that ties them pass.
+  it("marks tool support and image support independently", async () => {
     render(<ChatModelPicker models={MODELS} selectedId="a" onSelect={() => {}} />);
     await userEvent.click(screen.getByRole("button", { name: /^Model:/ }));
 
-    const rows = screen.getAllByRole("menuitemradio");
-    expect(rows[0].textContent).not.toContain("Can read images");
-    expect(rows[1].textContent).toContain("Can read images");
+    const oss = screen.getByRole("menuitemradio", { name: /GPT OSS 20B/ });
+    expect(within(oss).queryByRole("img", { name: "Calls tools" })).not.toBeNull();
+    expect(within(oss).queryByRole("img", { name: "Reads images" })).toBeNull();
+
+    const qwen = screen.getByRole("menuitemradio", { name: /QWEN 3\.8/ });
+    expect(within(qwen).queryByRole("img", { name: "Calls tools" })).toBeNull();
+    expect(within(qwen).queryByRole("img", { name: "Reads images" })).not.toBeNull();
+  });
+});
+
+describe("formatContext", () => {
+  it("rounds on 1024, not 1000", () => {
+    // 131,072 is 128 binary K. Rounding on 1000 would print "131K", a number that matches nothing the
+    // model's documentation says and that no one would recognise as its context window.
+    expect(formatContext(131072)).toBe("128K");
+    expect(formatContext(262144)).toBe("256K");
+    expect(formatContext(8192)).toBe("8K");
+  });
+
+  it("switches to M at a megabyte of tokens", () => {
+    expect(formatContext(1048576)).toBe("1M");
+    expect(formatContext(1572864)).toBe("1.5M");
+  });
+
+  it("rounds an odd window to the nearest K rather than showing a fraction", () => {
+    // Imported models routinely report a window that is not a power of two. The chip has room for three
+    // or four characters, and the exact figure is one hover away.
+    expect(formatContext(200000)).toBe("195K");
   });
 });

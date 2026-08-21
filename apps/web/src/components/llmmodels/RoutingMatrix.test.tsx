@@ -6,11 +6,11 @@ import RoutingMatrix from "./RoutingMatrix";
 
 const MODELS: LlmModel[] = [
   {
-    id: "a", name: "gpt-oss-20b", displayName: null, apiBase: "http://a/v1", hasApiKey: true,
+    id: "a", name: "gpt-oss-20b", displayName: null, description: null, apiBase: "http://a/v1", hasApiKey: true,
     contextLength: 8192, chatEnabled: false, parameters: {},
   },
   {
-    id: "b", name: "qwen3-27b", displayName: null, apiBase: "http://b/v1", hasApiKey: false,
+    id: "b", name: "qwen3-27b", displayName: null, description: null, apiBase: "http://b/v1", hasApiKey: false,
     contextLength: 200000, chatEnabled: false, parameters: {},
   },
 ];

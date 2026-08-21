@@ -670,6 +670,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.Property(m => m.Name).IsRequired().HasMaxLength(256);
             e.Property(m => m.ApiBase).IsRequired().HasMaxLength(512);
             e.Property(m => m.DisplayName).HasMaxLength(128);
+            e.Property(m => m.Description).HasMaxLength(200);
             // A column default, not just the C# initialiser: the column is added to a table that already
             // has rows, and those must come out of the migration as "not offered in chat".
             e.Property(m => m.ChatEnabled).HasDefaultValue(false);

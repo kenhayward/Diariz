@@ -88,7 +88,7 @@ describe("LlmModels", () => {
     // It is a one-time migration aid; the API refuses a second call, so leaving the button on screen would
     // offer an action that can only fail.
     api.listModels.mockResolvedValue([
-      { id: "a", name: "gpt-oss-20b", displayName: null, apiBase: "http://only/v1", hasApiKey: false, chatEnabled: false, contextLength: 8192, parameters: {} },
+      { id: "a", name: "gpt-oss-20b", displayName: null, description: null, apiBase: "http://only/v1", hasApiKey: false, chatEnabled: false, contextLength: 8192, parameters: {} },
     ]);
     renderPage();
 
@@ -103,8 +103,8 @@ describe("LlmModels", () => {
     // These are real calls to real endpoints, and several models commonly point at the SAME server -
     // firing them together would measure that server's queue instead of the models.
     api.listModels.mockResolvedValue([
-      { id: "a", name: "one", displayName: null, apiBase: "http://a/v1", hasApiKey: false, chatEnabled: false, contextLength: 8192, parameters: {} },
-      { id: "b", name: "two", displayName: null, apiBase: "http://b/v1", hasApiKey: false, chatEnabled: false, contextLength: 8192, parameters: {} },
+      { id: "a", name: "one", displayName: null, description: null, apiBase: "http://a/v1", hasApiKey: false, chatEnabled: false, contextLength: 8192, parameters: {} },
+      { id: "b", name: "two", displayName: null, description: null, apiBase: "http://b/v1", hasApiKey: false, chatEnabled: false, contextLength: 8192, parameters: {} },
     ]);
     let release: (v: unknown) => void = () => {};
     api.testModel.mockImplementation(() => new Promise((r) => { release = r; }));
@@ -129,7 +129,7 @@ describe("LlmModels", () => {
   // ---- Keeping the chat picker in step with the model list ----
 
   const MODEL = {
-    id: "a", name: "gpt-oss-20b", displayName: null, apiBase: "http://a/v1", hasApiKey: false,
+    id: "a", name: "gpt-oss-20b", displayName: null, description: null, apiBase: "http://a/v1", hasApiKey: false,
     chatEnabled: false, contextLength: 8192, parameters: {},
   };
 

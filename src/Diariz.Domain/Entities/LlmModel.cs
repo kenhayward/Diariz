@@ -17,6 +17,11 @@ public class LlmModel
     /// model moves the label with it instead of stranding the old slug as a label nobody set.</summary>
     public string? DisplayName { get; set; }
 
+    /// <summary>A short phrase shown beside the name in the chat model picker, e.g. "Use this for most
+    /// chats". Null means the row simply has no description - never a generated one: a sentence nobody
+    /// wrote would read as advice the platform is giving, which is exactly what it is not.</summary>
+    public string? Description { get; set; }
+
     /// <summary>Whether this model is offered in the chat model picker. The model assigned to
     /// <see cref="LlmCallGroup.Chat"/> is offered whether or not this is set (see <c>ChatModelCatalog</c>),
     /// so an administrator cannot produce an empty picker, or one that excludes the model actually in

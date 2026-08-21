@@ -297,7 +297,10 @@ actions** are the context, and "Include attachments" pulls in every attachment a
 sub-folders.
   **Choosing a model.** Where an administrator has marked more than one model as available for chat (see
 **AI models** below), a sparkle button beside the context dial opens a picker listing each one by its
-display name with its context window in brackets. The choice can be changed **part-way through a
+display name, a short description written by an administrator, icons marking whether it can use the chat
+tools or read images, and its context window as binary K (128K rather than 131,072, with the exact count
+on hover). A legend along the foot of the menu names both icons, and the menu is wider than the chat
+panel and overhangs it so a long name and its description fit on one line. The choice can be changed **part-way through a
 conversation** - chat is stateless per turn, so the whole conversation is resent and the new model picks up
 where the previous one left off. The dial follows the choice immediately rather than waiting for the next
 reply, so it always reports the window of the model that will actually answer. The choice is remembered
@@ -311,6 +314,8 @@ and they are stored with a saved conversation, so reopening it restores them (a 
 meantime is simply dropped). Reading images requires a model whose **Supports image input** parameter is set:
 with captures attached to a model that cannot, **Send is refused** with "Select a vision model" rather than
 answering about a picture the model never received, and the model picker marks which models can read images.
+It marks tool support the same way, with a briefcase - though that parameter defaults to on, so every
+model carries the briefcase until an administrator turns it off on the ones that cannot call tools.
 Before sending, a capture is **rescaled to fit inside 1920x1080** (ratio preserved, never enlarged) because
 the models read that size more reliably than full 4K; one already within those bounds is sent byte-for-byte
 as captured. The bound is a cap rather than a target, so the smallest text in a dense 4K capture may not
@@ -664,8 +669,8 @@ column still decides which model answers when the user has chosen nothing. The m
 is ticked and locked, because it is the model in use and a picker that could exclude it would be unable to
 show the current selection.
   The editor is a right-hand **drawer** with a tab per call type, each showing how many parameters it
-overrides, and the thirteen parameters in two columns. Connection details (name, endpoint, key, context
-window) sit behind a **Connection** button, since they are set once when a model is added. A panel beside
+overrides, and the thirteen parameters in two columns. Connection details (name, display name, description,
+endpoint, key, context window) sit behind a **Connection** button, since they are set once when a model is added. A panel beside
 the parameters previews the **exact request body** that call type would send, updated as values are typed -
 the resolved layer walk, with omitted parameters absent and inherited ones carrying their inherited value.
 The timeout, tool-calling, image-support and send-reasoning flags are deliberately shown *outside* that body:

@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Nodes;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
@@ -69,6 +69,7 @@ public class LlmModelsController : ControllerBase
             Id = Guid.NewGuid(),
             Name = req.Name.Trim(),
             DisplayName = Trim(req.DisplayName),
+            Description = Trim(req.Description),
             ApiBase = req.ApiBase.Trim(),
             ApiKeyEncrypted = _protector.Protect(req.ApiKey),
             ContextLength = req.ContextLength,
@@ -95,6 +96,7 @@ public class LlmModelsController : ControllerBase
 
         model.Name = req.Name.Trim();
         model.DisplayName = Trim(req.DisplayName);
+        model.Description = Trim(req.Description);
         model.ApiBase = req.ApiBase.Trim();
         model.ContextLength = req.ContextLength;
         model.UpdatedAt = DateTimeOffset.UtcNow;
@@ -633,5 +635,5 @@ public class LlmModelsController : ControllerBase
         HasApiKey: !string.IsNullOrEmpty(m.ApiKeyEncrypted),
         m.ContextLength,
         m.Parameters.ToDictionary(p => p.Group.ToString(), p => p.ParametersJson),
-        m.DisplayName, m.ChatEnabled);
+        m.DisplayName, m.ChatEnabled, m.Description);
 }

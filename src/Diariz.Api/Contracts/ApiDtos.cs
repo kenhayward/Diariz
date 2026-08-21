@@ -735,9 +735,15 @@ public record ChatScreenshotRefDto(Guid RecordingId, Guid ScreenshotId);
 ///
 /// <paramref name="SupportsImages"/> is whether this model can be sent screenshots. It gates the chat
 /// composer's image attachments, so the client can refuse before sending rather than after the endpoint
-/// rejects the turn - or, worse, silently ignores the image and answers anyway.</summary>
+/// rejects the turn - or, worse, silently ignores the image and answers anyway.
+///
+/// <paramref name="SupportsTools"/> is whether the platform will offer this model its chat tools. It is a
+/// resolved parameter with an app default of <b>true</b>, so it reads true unless an administrator has
+/// turned it off. <paramref name="Description"/> is the administrator's short phrase for the picker, or
+/// null where none is set.</summary>
 public record ChatModelDto(
-    Guid Id, string Label, string Name, int ContextLength, bool IsDefault, bool SupportsImages);
+    Guid Id, string Label, string Name, int ContextLength, bool IsDefault, bool SupportsImages,
+    bool SupportsTools, string? Description);
 
 /// <summary>The context a chat turn (or a saved conversation) runs against. <paramref name="SearchAllMeetings"/>
 /// is the "All meetings" mode: no transcripts are pre-loaded and the assistant is told to answer by searching
@@ -927,16 +933,20 @@ public record FeedbackDto(Guid Id, Guid UserId, string? UserEmail, DateTimeOffse
 /// The key itself is never returned, only <paramref name="HasApiKey"/>: same write-only contract the
 /// per-user key had, so a stored secret cannot leak back out through the admin UI.</summary>
 public record LlmModelDto(Guid Id, string Name, string ApiBase, bool HasApiKey, int ContextLength,
-    Dictionary<string, string> Parameters, string? DisplayName = null, bool ChatEnabled = false);
+    Dictionary<string, string> Parameters, string? DisplayName = null, bool ChatEnabled = false,
+    string? Description = null);
 
 /// <summary>Create or replace a model. A null <c>ApiKey</c> on update means "keep the stored key" - the UI
 /// was never given it, so it cannot send it back.
 ///
 /// <c>ChatEnabled</c> is deliberately ABSENT. The editor drawer does not show that control, so were it a
 /// field here every save from the drawer would post whatever stale value the client held and silently
-/// un-offer the model. It has its own route instead.</summary>
+/// un-offer the model. It has its own route instead.
+///
+/// <c>Description</c> IS a field here, unlike <c>ChatEnabled</c>: the editor drawer shows the control, so a
+/// save posts a value the administrator can actually see on screen.</summary>
 public record LlmModelUpsert(string Name, string ApiBase, string? ApiKey, int ContextLength,
-    Dictionary<string, string> Parameters, string? DisplayName = null);
+    Dictionary<string, string> Parameters, string? DisplayName = null, string? Description = null);
 
 /// <summary>Whether a model appears in the chat model picker.</summary>
 public record SetChatEnabledRequest(bool Enabled);

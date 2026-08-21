@@ -15,9 +15,17 @@ namespace Diariz.Api.Services.Llm;
 ///
 /// <para><see cref="SupportsImages"/> is the resolved <c>images_supported</c> parameter for the Chat group -
 /// whether this model can be sent screenshots. It is a resolved value, not a stored column, so it follows
-/// the same layer walk the pipeline will use when the turn is actually sent.</para></summary>
+/// the same layer walk the pipeline will use when the turn is actually sent.</para>
+///
+/// <para><see cref="SupportsTools"/> is the resolved <c>tools_supported</c> parameter for the Chat group,
+/// through the SAME walk as <see cref="SupportsImages"/>. Its app default is <b>true</b>, so it reads true
+/// for every model an administrator has not explicitly turned it off on.</para>
+///
+/// <para><see cref="Description"/> is the administrator's short phrase for the picker, or null where none
+/// is set. Unlike the two flags it is a stored column, not a resolved parameter.</para></summary>
 public sealed record ChatModelOption(
-    Guid Id, string Label, string Name, int ContextLength, bool IsDefault, bool SupportsImages);
+    Guid Id, string Label, string Name, int ContextLength, bool IsDefault, bool SupportsImages,
+    bool SupportsTools, string? Description);
 
 public interface IChatModelCatalog
 {
@@ -77,8 +85,16 @@ public sealed class ChatModelCatalog(DiarizDbContext db, IOptions<LlmDefaultsOpt
         // Ordered in memory rather than in SQL: Label is a C# computed property, so there is no column to
         // sort on. The set is a handful of rows at most.
         return models
-            .Select(m => new ChatModelOption(
-                m.Id, m.Label, m.Name, m.ContextLength, m.Id == defaultId, SupportsImages(m, platform)))
+            // The layer walk runs ONCE per model and both flags are read off the one result: calling the
+            // resolver twice would walk every layer twice for nothing, and would let the two flags drift
+            // apart if the walk ever stopped being deterministic.
+            .Select(m =>
+            {
+                var p = Resolved(m, platform);
+                return new ChatModelOption(
+                    m.Id, m.Label, m.Name, m.ContextLength, m.Id == defaultId,
+                    p.ImagesSupported, p.ToolsSupported, m.Description);
+            })
             .OrderByDescending(o => o.IsDefault)
             .ThenBy(o => o.Label, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
@@ -94,14 +110,13 @@ public sealed class ChatModelCatalog(DiarizDbContext db, IOptions<LlmDefaultsOpt
         return await db.LlmModels.AnyAsync(m => m.Id == id && m.ChatEnabled, ct) ? id : null;
     }
 
-    /// <summary>Whether this model may be sent images on a chat turn.
+    /// <summary>This model's resolved Chat-group parameters - what the picker reports about it.
     ///
     /// <para>Resolved through <see cref="LlmParameterStack"/> - the SAME walk
     /// <see cref="LlmSettingsResolver"/> performs - rather than a second one written here. A private copy
     /// would pass every test about this class and still let the picker offer a capability the pipeline
-    /// refuses, which is the failure this type's summary warns about.</para></summary>
-    private bool SupportsImages(LlmModel model, PlatformSettings? platform) =>
-        LlmParameterLayers
-            .Resolve(LlmParameterStack.For(model, LlmCallGroup.Chat, defaults.Value, platform))
-            .ImagesSupported;
+    /// refuses, which is the failure this type's summary warns about. That applies to <c>tools_supported</c>
+    /// exactly as it does to <c>images_supported</c>, which is why both come off one call.</para></summary>
+    private LlmParameters Resolved(LlmModel model, PlatformSettings? platform) =>
+        LlmParameterLayers.Resolve(LlmParameterStack.For(model, LlmCallGroup.Chat, defaults.Value, platform));
 }
