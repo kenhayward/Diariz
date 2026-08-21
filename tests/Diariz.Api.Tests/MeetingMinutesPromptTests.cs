@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Diariz.Api.Contracts;
 using Diariz.Api.Services;
+using Diariz.Domain.Entities;
 
 namespace Diariz.Api.Tests;
 
@@ -43,6 +44,45 @@ public class MeetingMinutesPromptTests
         Assert.Equal("user", user.Role);
         Assert.Contains("Alice: Let's ship on Friday.", user.Content); // transcript is the (data) turn
         Assert.DoesNotContain("Instructions here", user.Content);      // instructions stay in the system turn
+    }
+
+    [Fact]
+    public void BuildMessages_LeavesTheMultipleSpeakersSlotOffTheAttendeesLine()
+    {
+        // Overlapping speech is not a person who attended, so the model is not told it was one.
+        var ctx = new MeetingMinutesContext(
+            Guid.NewGuid(), null, "Weekly Sync", ["Alice", Speaker.MultiSpeakerName, "Bob"], null);
+
+        var system = MeetingMinutesPrompt.BuildMessages(Template, ctx, Segments, 16000)[0].Content;
+
+        Assert.Contains("Attendees: Alice, Bob", system);
+        Assert.DoesNotContain(Speaker.MultiSpeakerName, system);
+    }
+
+    [Fact]
+    public void BuildMessages_AttendeesFallsBackToThePlaceholder_WhenOnlyOverlappingSpeech()
+    {
+        var ctx = new MeetingMinutesContext(
+            Guid.NewGuid(), null, "Weekly Sync", [Speaker.MultiSpeakerName], null);
+
+        var system = MeetingMinutesPrompt.BuildMessages(Template, ctx, Segments, 16000)[0].Content;
+
+        Assert.Contains("Attendees: [placeholder]", system);
+    }
+
+    [Fact]
+    public void BuildMessages_StillLabelsOverlappingSegmentsInTheTranscript()
+    {
+        // The roster drops it; the transcript must not - the model still needs to see who said what.
+        var segments = new List<SegmentDto>(Segments)
+        {
+            new(Guid.NewGuid(), "SPEAKER_02", Speaker.MultiSpeakerName, 2000, 3000, "Both at once."),
+        };
+        var ctx = new MeetingMinutesContext(Guid.NewGuid(), null, "Weekly Sync", ["Alice"], null);
+
+        var user = MeetingMinutesPrompt.BuildMessages(Template, ctx, segments, 16000)[1].Content;
+
+        Assert.Contains(Speaker.MultiSpeakerName + ": Both at once.", user);
     }
 
     [Fact]

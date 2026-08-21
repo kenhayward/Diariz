@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Diariz.Api.Contracts;
+using Diariz.Domain.Entities;
 
 namespace Diariz.Api.Services;
 
@@ -144,9 +145,16 @@ Duration:{meeting_duration}
 
     private static string FormatTime(DateTimeOffset? d) => d?.ToString("HH:mm") ?? "[placeholder]";
 
+    /// <summary>The attendee roster handed to the model. A slot marked "Multiple Speakers" is left out: it is a
+    /// stretch of overlapping speech, not someone who attended, and listing it invites the model to write it into
+    /// the attendees section of the minutes. The transcript turn still labels those segments as such - the model
+    /// needs to see who said what; it is only the roster that drops them.</summary>
     private static string FormatAttendees(IReadOnlyList<string> attendees)
     {
-        var names = attendees?.Where(n => !string.IsNullOrWhiteSpace(n)).ToList() ?? [];
+        var names = attendees?
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Where(n => !string.Equals(n.Trim(), Speaker.MultiSpeakerName, StringComparison.Ordinal))
+            .ToList() ?? [];
         return names.Count == 0 ? " [placeholder]" : " " + string.Join(", ", names);
     }
 
