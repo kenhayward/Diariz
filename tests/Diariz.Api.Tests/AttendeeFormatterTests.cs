@@ -1,4 +1,5 @@
 using Diariz.Api.Services;
+using Diariz.Domain.Entities;
 
 namespace Diariz.Api.Tests;
 
@@ -48,6 +49,23 @@ public class AttendeeFormatterTests
         Assert.Equal("1 unidentified attendee", AttendeeFormatter.Summarize(["UNKNOWN"]));
         Assert.Equal("Ken Hayward and 4 unidentified attendees",
             AttendeeFormatter.Summarize(["Ken Hayward", "UNKNOWN", "SPEAKER_00", "SPEAKER_02", "SPEAKER_03"]));
+    }
+
+    [Fact]
+    public void The_Multiple_Speakers_slot_is_not_an_attendee()
+    {
+        // Overlapping speech is a pseudo-speaker, not a person: it is neither named nor counted.
+        Assert.Equal("Alice, Bob",
+            AttendeeFormatter.Summarize(["Alice", Speaker.MultiSpeakerName, "Bob"]));
+        Assert.Equal("Alice and 1 unidentified attendee",
+            AttendeeFormatter.Summarize(["Alice", Speaker.MultiSpeakerName, "SPEAKER_01"]));
+    }
+
+    [Fact]
+    public void A_recording_of_only_overlapping_speech_has_no_attendees()
+    {
+        // Nothing is left to list, so the field resolves to null and the composer drops the block.
+        Assert.Null(AttendeeFormatter.Summarize([Speaker.MultiSpeakerName]));
     }
 
     [Fact]

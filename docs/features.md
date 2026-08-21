@@ -282,7 +282,8 @@ another. A section can also be **headless**, which is what a formula that is sim
 The templates Diariz ships with are **plain markdown files** in the repository, so you can read and review the
 exact words the model is given.
 When a template substitutes the **attendees** field it names the identified people and then counts the rest
-(e.g. "Alice, Bob and 11 unidentified attendees"). A Platform Administrator can also pick how minutes generate:
+(e.g. "Alice, Bob and 11 unidentified attendees"); a speaker marked **Multiple Speakers** is left out entirely,
+being overlapping speech rather than a person. A Platform Administrator can also pick how minutes generate:
 **one LLM call per section** (best structure) or a **single call** (fewer tokens).
 - **Chat across one or more transcripts — a folder — or all your meetings at once** (an "All meetings" mode
 that searches your whole library on demand instead of pre-loading transcripts) — streaming
