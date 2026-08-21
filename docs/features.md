@@ -9,7 +9,7 @@ when the app's scope changes - see [CLAUDE.md](../CLAUDE.md).
 remembered, and the list refreshes on hot-plug), **tune capture** (echo cancellation, noise suppression,
 auto gain, mono) from a ⚙ popover, and watch a **live input-level meter** while recording (with a subtle
 silence hint). **Pause and resume** a recording in progress (separate from Stop) for breaks or sensitive
-moments — paused audio is never captured and never counts toward the recording's duration. **Schedule the
+moments — paused audio is never captured and never counts toward the recording's duration. When you press **Stop**, the status bar counts up ("Uploading... 4s") for as long as the recording takes to upload and clears once it is safely up, so a long take never looks like a frozen app. **Schedule the
 current recording to auto-stop** - after 15/30/60 minutes or at a set clock time - and it ends and starts
 transcription on its own, so you can start a recording and walk away. Also capture
 **system audio** - tick the **System audio** checkbox to mix it into the recording (both sides of a call on
