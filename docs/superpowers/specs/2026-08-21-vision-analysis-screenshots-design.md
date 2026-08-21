@@ -185,6 +185,34 @@ actually produced. That is the common tile-based approximation and puts a full 1
 2,800 tokens. It is an estimate either way - the existing text figure is chars/4 - and the point is that the
 gauge stops being confidently wrong about something that can be a fifth of a small context window.
 
+### The context dial earns its keep
+
+With no cap on attachments (see above), the dial stops being decoration and becomes the only signal that a
+tray is getting expensive. Today it is blue until 90% and red after - a two-state gauge that says nothing at
+all through the entire range where a user could still act on the information.
+
+It becomes three bands on the ring segment:
+
+| Fraction used | Segment |
+|---|---|
+| below 0.50 | blue |
+| 0.50 to below 0.75 | orange |
+| 0.75 and above | red |
+
+Boundaries are inclusive at the lower edge (exactly 50% is orange, exactly 75% is red). The band is decided
+by a pure exported `contextBand(frac)`, mirroring the existing `contextFraction` seam, so the thresholds are
+testable without rendering.
+
+**This is a change to existing behaviour, not only an addition.** Red currently begins at 90%; it will now
+begin at 75%, so a conversation that reads as comfortable today will read as urgent after this ships. That
+is deliberate - 90% is too late to be useful, since by then the next turn is already at risk of truncation -
+but it belongs in the release notes as a change, not buried as a new feature.
+
+Only the ring segment changes colour. The always-visible `used / total (pct%)` label stays grey: colouring
+both would make the whole control shout, and the number is the thing a user reads for detail once the ring
+has caught their eye. Colour is not the sole carrier of the state either way - the percentage is always
+present in text and in the `aria-label`.
+
 ### Web
 
 | Component | Change |
@@ -194,6 +222,7 @@ gauge stops being confidently wrong about something that can be a fifth of a sma
 | `ChatPanel.tsx` | `attachedShots` state; drop target around the composer with a drop-hover affordance; thumbnail tray above the textarea; vision gate on Send; refs on the wire and in save/load. |
 | `ChatScreenshotTray.tsx` | **New.** The tray: thumbnails with a corner remove control. Extracted because `ChatPanel.tsx` is already 1142 lines. |
 | `ChatModelPicker.tsx` | Marks vision-capable rows. |
+| `ContextDial.tsx` | Three-band ring colour via a pure `contextBand`. |
 | `lib/api.ts`, `lib/types.ts` | `screenshots` on the chat request and saved context; `supportsImages` on `ChatModelOption`. |
 
 **Drop payload.** A custom MIME type rather than `text/plain`, so an arbitrary dragged word or URL cannot be

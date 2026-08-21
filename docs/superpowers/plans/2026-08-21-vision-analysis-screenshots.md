@@ -53,6 +53,7 @@ Every task's requirements implicitly include this section.
 | `apps/web/src/components/ChatScreenshotTray.tsx` | **New.** Tray of thumbnails with remove controls |
 | `apps/web/src/components/ChatPanel.tsx` | Drop target, tray, vision gate, wire, save/load |
 | `apps/web/src/components/ChatModelPicker.tsx` | Marks vision-capable rows |
+| `apps/web/src/components/ContextDial.tsx` | Three-band ring colour via a pure `contextBand` |
 | `apps/web/src/lib/api.ts`, `apps/web/src/lib/types.ts` | Request field and `supportsImages` |
 | `apps/web/src/locales/{en,de,es,fr}/{chat,workspace}.json` | New strings |
 | `integrations/n8n-nodes-diariz/generated/index.ts` | Regenerated - `api/chat/stream` is a published route |
@@ -75,7 +76,7 @@ The pure arithmetic, isolated so the interesting cases are testable without Skia
 ## Task 2 - SkiaSharp and `IVisionImageEncoder`
 
 - [ ] Add `SkiaSharp` and `SkiaSharp.NativeAssets.Linux.NoDependencies` to `src/Diariz.Api/Diariz.Api.csproj`. Restore. **`packages.lock.json` will need regenerating** - this repo floats versions *and* commits lock files, so a restore warning in CI is real, not a stale cache.
-- [ ] Confirm `src/Diariz.Api/Dockerfile` needs no apt packages. If Skia fails to load in the container at Task 17's live check, that is where to come back to.
+- [ ] Confirm `src/Diariz.Api/Dockerfile` needs no apt packages. If Skia fails to load in the container at Task 18's live check, that is where to come back to.
 - [ ] Write `tests/Diariz.Api.Tests/VisionImageEncoderTests.cs` using `FakeAudioStorage` from `TestSupport`: a 3840x2160 PNG comes back as a `data:image/jpeg;base64,` URL whose decoded dimensions fit the box and whose reported `Width`/`Height` match; an 800x600 PNG comes back as `data:image/png;base64,` with base64 bytes byte-identical to what was stored and dimensions unchanged; an exactly-1920x1080 PNG takes the pass-through path.
 - [ ] Run, confirm failure.
 - [ ] Implement `VisionImageEncoder : IVisionImageEncoder` with `Task<VisionImage> EncodeAsync(MeetingScreenshot shot, CancellationToken ct)` returning `record VisionImage(string DataUrl, int Width, int Height)`. Decide from `shot.Width`/`shot.Height` via `VisionImageBounds.Fit`; pass-through reads `BlobKey` and emits PNG; resize decodes, resamples at high quality, encodes JPEG q92.
@@ -191,17 +192,38 @@ the feedback mechanism.
 - [ ] Write `ChatModelPicker.test.tsx` additions: a `supportsImages` model renders the marker with an accessible label; one without does not.
 - [ ] Run, confirm failure. Implement. Green, mutation-verify.
 
-## Task 15 - Generated artefacts
+## Task 15 - Three-band context dial
+
+The dial is now the only signal that an uncapped tray is getting expensive, so it has to say something
+before the situation is already bad. Today it is blue until 90% and red after.
+
+- [ ] Extend `ContextDial.test.tsx`: `contextBand` returns `"low"` below 0.5, `"medium"` from 0.5 to just
+      under 0.75, and `"high"` at 0.75 and above; the boundaries land on the *upper* band (0.5 is medium,
+      0.75 is high); rendering at 30 / 60 / 80 percent puts `stroke-blue-500`, `stroke-orange-500` and
+      `stroke-red-500` on the segment respectively.
+- [ ] **Rewrite, do not merely extend, the existing `"turns the ring red near the limit"` test.** It renders
+      at 95% and still passes under the new rule, so left alone it would silently stop testing the threshold
+      it was written for. Replace it with the band cases above.
+- [ ] Run, confirm failure.
+- [ ] Implement: export `contextBand(frac: number): "low" | "medium" | "high"`, mirroring the existing
+      `contextFraction` seam, and drive the segment class from it. Delete the `danger` constant.
+- [ ] Green, then mutation-verify: move the high threshold to 0.9 and confirm the 80% case fails.
+
+**Requirements:** only the ring segment changes colour - the `used / total (pct%)` label stays grey. Do not
+make colour the sole carrier of the state; the percentage is already in the text and the `aria-label`, and
+must stay there.
+
+## Task 16 - Generated artefacts
 
 `api/chat/stream` is a **published** route (only `api/admin`, `api/platform`, `api/oauth` and `api/maintenance` are excluded), so changing its request shape moves both generated files.
 
 - [ ] Run the OpenAPI snapshot test. It **self-heals**: run 1 fails and rewrites the snapshot, run 2 passes with no code change. Commit the regenerated file.
 - [ ] Run `npm run generate` in `integrations/n8n-nodes-diariz`. This one does **not** self-heal, and a stale `generated/index.ts` reds the non-required "n8n community node" check - it stayed broken across three merged PRs before. Commit the result.
 
-## Task 16 - Release checklist and docs
+## Task 17 - Release checklist and docs
 
 - [ ] `version.json` -> `0.238.0`, plus all four mirrors: `apps/web/package.json`, `apps/desktop/package.json`, `src/Diariz.Api/Diariz.Api.csproj`, `integrations/n8n-nodes-diariz/package.json`. `versionMirrors.test.ts` fails the build if any drifts.
-- [ ] `RELEASES[0]` entry in `apps/web/src/lib/releases.ts`: version, date, `pr`, headline, prose summary, `added` bullets. **Confirm the PR number** rather than assuming last + 1 - Dependabot PRs and issues share the sequence and nothing tests a wrong number.
+- [ ] `RELEASES[0]` entry in `apps/web/src/lib/releases.ts`: version, date, `pr`, headline, prose summary, `added` bullets, and a **`changed`** bullet for the dial - red now starts at 75% rather than 90%, which existing users will notice. **Confirm the PR number** rather than assuming last + 1 - Dependabot PRs and issues share the sequence and nothing tests a wrong number.
 - [ ] `CAPABILITIES` table row in the same file (one concise `| Feature | Description |` line, not prose).
 - [ ] `AboutModal.tsx` disclaimers: add SkiaSharp - a new third-party library.
 - [ ] README **Features** table row.
@@ -211,7 +233,7 @@ the feedback mechanism.
 - [ ] `apps/web/src/content/help/en/chat-over-transcripts.md`: the drag gesture and the vision-model requirement. ASCII only; keep the front-matter `summary` to two or three sentences.
 - [ ] Add the deferred derivative cache to `untracked/Future_Roadmap_Hit_List.md` - it is gitignored, so it is invisible to any repo grep and will otherwise be lost.
 
-## Task 17 - Verification
+## Task 18 - Verification
 
 - [ ] `dotnet build Diariz.slnx` - clean.
 - [ ] `dotnet test tests/Diariz.Api.Tests` - green, no warnings.
@@ -231,4 +253,5 @@ the feedback mechanism.
 | Picker and resolver disagree about `images_supported` | Silent - user sees a model offered then refused | Task 3 extraction + Task 4 agreement test |
 | The parts-array change leaks into non-vision calls | Every existing chat turn, tool round, summariser | Task 5 asserts byte-identical string form when no images |
 | Gate test passes without a real gate | `fireEvent` fires on disabled controls | `userEvent` mandated in Task 13 |
-| Stale `generated/index.ts` | A non-required CI check nobody looks at | Task 15 |
+| Stale `generated/index.ts` | A non-required CI check nobody looks at | Task 16 |
+| Dial test keeps passing after the threshold moves | The 95% red test is green under both old and new rules | Task 15 rewrites it rather than adding beside it |
