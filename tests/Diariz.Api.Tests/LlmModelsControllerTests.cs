@@ -620,6 +620,31 @@ public class LlmModelsControllerTests
     }
 
     [Fact]
+    public async Task Round_trips_a_description()
+    {
+        using var db = TestDb.Create();
+        var created = await Build(db).Create(Upsert("m") with { Description = "Use this for most chats" });
+
+        var dto = Assert.IsType<LlmModelDto>(created.Value);
+        Assert.Equal("Use this for most chats", dto.Description);
+        Assert.Equal("Use this for most chats", db.LlmModels.Single().Description);
+    }
+
+    [Fact]
+    public async Task Stores_a_blank_description_as_absent()
+    {
+        // Same rule as the display name: "" and null would be two spellings of one state, and a stored
+        // empty string would render in the picker as a gap nobody asked for.
+        using var db = TestDb.Create();
+        var created = await Build(db).Create(Upsert("m") with { Description = "Fast" });
+        var id = Assert.IsType<LlmModelDto>(created.Value).Id;
+
+        await Build(db).Update(id, Upsert("m") with { Description = "   " });
+
+        Assert.Null(db.LlmModels.Single().Description);
+    }
+
+    [Fact]
     public async Task Toggling_chat_enabled_persists()
     {
         using var db = TestDb.Create();
