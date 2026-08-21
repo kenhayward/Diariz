@@ -82,7 +82,7 @@ A **Field** block substitutes one of:
 | **Date** | The recording's date |
 | **Time** | The recording's time |
 | **Title** | The meeting name |
-| **Attendees** | Identified people, then a count of the rest |
+| **Attendees** | Identified people, then a count of the rest (a speaker marked Multiple Speakers is left out) |
 | **Duration** | How long the recording ran |
 | **Action items table** | The extracted actions as a table - Action, Owner, Due date |
 | **Transcript table (time, speaker, text)** | The whole transcript as a table - Time, Speaker, Text |

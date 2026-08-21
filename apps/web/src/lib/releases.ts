@@ -65,6 +65,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.236.2",
+    date: "2026-08-21",
+    pr: 569,
+    headline: "\"Multiple Speakers\" is no longer listed as an attendee",
+    summary:
+      "When a formula's template includes the attendees field, the attendee line is built from the recording's speakers. A speaker slot you had marked as **Multiple Speakers** was being treated as one of them, so the output read like \"Alice, Bob, Multiple Speakers and 3 unidentified attendees\" - naming something that is not a person as though it had sat in the meeting.\n\nA Multiple Speakers slot stands for a stretch of overlapping or simultaneous speech, which is why it is already kept out of voiceprints and automatic speaker identification. It is now kept out of the attendee list too: it is neither named nor counted toward the unidentified tally, so the example above reads \"Alice, Bob and 3 unidentified attendees\". If a recording has nothing but overlapping speech, the attendees field is simply left out of the document, as any other empty field would be.\n\nThe same attendees field is shared with generated meeting minutes, so minutes get the correction as well. Nothing else about how attendees are listed has changed, and no existing document is rewritten - re-run the formula to pick up the corrected line.",
+    fixed: [
+      "A speaker marked as Multiple Speakers is no longer listed - or counted - as an attendee in the attendees field of a formula result or meeting minutes.",
+    ],
+  },
+  {
     version: "0.236.1",
     date: "2026-08-21",
     pr: 566,

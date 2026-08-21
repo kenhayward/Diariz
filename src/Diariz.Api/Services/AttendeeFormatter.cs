@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Diariz.Domain.Entities;
 
 namespace Diariz.Api.Services;
 
@@ -6,7 +7,10 @@ namespace Diariz.Api.Services;
 /// people are listed by name; the auto-labelled diarization speakers still on their default placeholder label -
 /// <c>SPEAKER_nn</c> or <c>UNKNOWN</c> (a segment with no attributed speaker) - collapse to a count (e.g. "Alice,
 /// Bob and 11 unidentified attendees") so the minutes don't spell out a long list of anonymous speakers. Returns
-/// null when there are no attendees at all.</summary>
+/// null when there are no attendees at all.
+///
+/// A slot marked "Multiple Speakers" is dropped outright rather than named or counted: it stands for a stretch of
+/// overlapping speech, not for a person who attended, so it is neither an attendee nor an unidentified one.</summary>
 public static partial class AttendeeFormatter
 {
     [GeneratedRegex(@"^(?:SPEAKER_\d+|UNKNOWN)$")]
@@ -17,6 +21,7 @@ public static partial class AttendeeFormatter
         var names = (attendees ?? [])
             .Where(a => !string.IsNullOrWhiteSpace(a))
             .Select(a => a.Trim())
+            .Where(a => !string.Equals(a, Speaker.MultiSpeakerName, StringComparison.Ordinal))
             .ToList();
         if (names.Count == 0) return null;
 
