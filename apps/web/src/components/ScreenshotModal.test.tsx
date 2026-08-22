@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import ScreenshotModal from "./ScreenshotModal";
 import type { Screenshot } from "../lib/types";
 import { onChatScreenshotAttached, onChatTextAttached } from "../lib/chatAttachments";
@@ -20,6 +20,24 @@ vi.mock("../lib/api", () => ({
     addMarkdownAttachment: vi.fn().mockResolvedValue({ id: "att-1" }),
   },
 }));
+
+/// The default OCR reply, restored before every test.
+///
+/// Without this the `mockResolvedValueOnce` / `mockRejectedValueOnce` queues leak across tests: a value
+/// queued by one test is consumed by whichever call happens next, which made a test that passes alone fail
+/// in the suite. Resetting is cheaper to reason about than ordering the tests around each other.
+const OCR_REPLY = {
+  text: "Extracted text",
+  model: "olmocr-2-7b-1025",
+  chars: 14,
+  cached: false,
+  generatedAt: "2026-08-22T12:00:00Z",
+};
+
+beforeEach(() => {
+  vi.mocked(api.ocrScreenshot).mockReset().mockResolvedValue(OCR_REPLY);
+  vi.mocked(api.addMarkdownAttachment).mockReset().mockResolvedValue({ id: "att-1" } as never);
+});
 
 const shots: Screenshot[] = [
   { id: "a", capturedAtMs: 65_000, width: 100, height: 50, sizeBytes: 1, ordinal: 0, createdAt: "" },
@@ -574,5 +592,87 @@ describe("ScreenshotModal - extract text (OCR)", () => {
     fireEvent.click(screen.getByRole("button", { name: /extract text to chat/i }));
 
     await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
+  });
+
+  /// The model's answer arrives as HTML when the page had a table on it - which is the useful case, not a
+  /// defect - so what lands in a note or a chat context has to be Markdown by the time it gets there.
+  it("converts an HTML table in the model's answer to a Markdown table", async () => {
+    vi.mocked(api.ocrScreenshot).mockResolvedValueOnce({
+      text: "<table><tr><th>Core requirement</th><th>Total</th></tr><tr><td>USP</td><td>11</td></tr></table>",
+      model: "olmocr-2-7b-1025",
+      chars: 90,
+      cached: false,
+      generatedAt: "2026-08-22T12:00:00Z",
+    });
+
+    render(<ScreenshotModal {...props} ocrEnabled />);
+    fireEvent.click(screen.getByRole("button", { name: /extract text as an attachment/i }));
+
+    await waitFor(() => expect(api.addMarkdownAttachment).toHaveBeenCalled());
+    const content = vi.mocked(api.addMarkdownAttachment).mock.calls[0][2];
+    expect(content).toContain("| Core requirement | Total |");
+    expect(content).toContain("| --- | --- |");
+    expect(content).toContain("| USP | 11 |");
+    expect(content).not.toContain("<table>");
+  });
+
+  /// The Files tab is rendered by the page underneath this modal, so nothing about saving an attachment
+  /// from up here would otherwise reach it.
+  it("tells the page to refresh its files after saving an attachment", async () => {
+    const onAttachmentSaved = vi.fn();
+    render(<ScreenshotModal {...props} ocrEnabled onAttachmentSaved={onAttachmentSaved} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /extract text as an attachment/i }));
+
+    await waitFor(() => expect(onAttachmentSaved).toHaveBeenCalledTimes(1));
+  });
+
+  /// Sending to chat writes no attachment, so asking the page to refresh its files would be a pointless
+  /// refetch on every extraction.
+  it("does not ask for a files refresh when the text went to chat", async () => {
+    const onAttachmentSaved = vi.fn();
+    const off = onChatTextAttached(() => {});
+    render(<ScreenshotModal {...props} ocrEnabled onAttachmentSaved={onAttachmentSaved} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /extract text to chat/i }));
+
+    await waitFor(() => expect(screen.getByRole("status")).toBeTruthy());
+    expect(onAttachmentSaved).not.toHaveBeenCalled();
+    off();
+  });
+
+  /// A cold model load can take a minute, so the button has to say it is working - and must not accept a
+  /// second click that would spend a second call for the same answer.
+  it("shows progress and blocks both buttons while a run is in flight", async () => {
+    let release: (v: unknown) => void = () => {};
+    vi.mocked(api.ocrScreenshot).mockReturnValueOnce(
+      new Promise((resolve) => {
+        release = resolve;
+      }) as ReturnType<typeof api.ocrScreenshot>,
+    );
+
+    render(<ScreenshotModal {...props} ocrEnabled />);
+    const toChat = screen.getByRole("button", { name: /extract text to chat/i });
+    fireEvent.click(toChat);
+
+    await waitFor(() => expect(toChat.querySelector(".animate-spin")).toBeTruthy());
+    expect(toChat.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: /extract text as an attachment/i }).hasAttribute("disabled")).toBe(true);
+
+    release({ text: "Extracted text", model: "m", chars: 14, cached: false, generatedAt: "" });
+    await waitFor(() => expect(toChat.hasAttribute("disabled")).toBe(false));
+  });
+
+  it("marks the button that succeeded with a tick", async () => {
+    render(<ScreenshotModal {...props} ocrEnabled />);
+    const toChat = screen.getByRole("button", { name: /extract text to chat/i });
+    const toFile = screen.getByRole("button", { name: /extract text as an attachment/i });
+
+    fireEvent.click(toChat);
+
+    // The tick replaces the destination glyph on the button that ran, and only on that one.
+    await waitFor(() => expect(toChat.querySelectorAll("svg")).toHaveLength(2));
+    await waitFor(() => expect(screen.getByRole("status")).toBeTruthy());
+    expect(toFile.querySelector(".animate-spin")).toBeNull();
   });
 });

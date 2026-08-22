@@ -1825,6 +1825,7 @@ export default function RecordingDetail() {
           onJump={jumpToMs}
           onDelete={isOwner ? removeShot : undefined}
           ocrEnabled={ocrStatus?.enabled ?? false}
+          onAttachmentSaved={() => qc.invalidateQueries({ queryKey: ["attachments", id] })}
         />
       )}
 

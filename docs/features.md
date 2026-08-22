@@ -135,6 +135,16 @@ destination is instant and free, and a "force" re-read overwrites it. Extract se
 an uploaded file already in that slot is never overwritten without a confirmation. The buttons are hidden
 entirely when no OCR model is routed, and the existing image path (**Add to chat context**) is unchanged -
 sending the picture to a vision model and reading the words off it are different jobs.
+  **Structure is converted, not stripped.** The models that read a page best answer with HTML - a capture
+  with a table on it comes back as `<table><tr><td>`, and one model renders a gauge as `<img alt="Green">`.
+  That is more useful than flat lines and is *not* worth prompting away (asked for Markdown instead, one
+  model narrowed to a single table and discarded the rest of the capture), so tables are converted to real
+  **GFM tables** on the way to a note or the chat pill: a `<th>` row becomes the header (or the first row is
+  promoted when there is none), ragged rows are padded, pipes inside cells are escaped, `<br>` is kept as
+  the one line break a GFM cell allows, and an image is reduced to its alt text. Text with no markup in it
+  is passed through **byte-identical**. The API still stores the model's answer verbatim - that is the
+  record of what it actually said - so the conversion happens where the Markdown is needed.
+
   **Every extraction is stamped with the model that produced it and marked machine-read and unverified**, in
   the chat pill and in the attachment alike. This is not boilerplate: four OCR models measured against one
   dense desktop capture each made silent errors - a misread letter (`DSP` as `OSP`, reproducibly), whole

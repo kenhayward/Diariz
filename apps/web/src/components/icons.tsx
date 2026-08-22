@@ -174,3 +174,37 @@ export const MergeIcon = (p: IconProps) => (
     <line x1="12" y1="15" x2="12" y2="21" />
   </svg>
 );
+
+/// Corner brackets around text lines - the standard "scan / read the text off this" glyph. Marks the two
+/// extract-text actions in the screenshot viewer, where the destination (chat or a file) is carried by the
+/// second glyph beside it rather than by this one.
+export const ScanTextIcon = (p: IconProps) => (
+  <svg {...svgProps(p)}>
+    <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+    <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+    <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+    <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+    <line x1="7" y1="9" x2="17" y2="9" />
+    <line x1="7" y1="13" x2="15" y2="13" />
+    <line x1="7" y1="17" x2="12" y2="17" />
+  </svg>
+);
+
+/// A tick. Confirms an action whose result lands somewhere the user cannot see from here - the chat
+/// composer behind a modal, or a tab that is not open.
+export const CheckIcon = (p: IconProps) => (
+  <svg {...svgProps(p)}>
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+
+/// An indeterminate progress ring, spun by Tailwind's `animate-spin`.
+///
+/// The gap in the ring is what makes the rotation visible - a closed circle spinning looks static. Takes a
+/// `title` like the rest, but a caller should usually leave it decorative and put the status in the
+/// button's own label, since a spinner announced on its own tells a screen reader nothing useful.
+export const SpinnerIcon = ({ size = 18, title }: IconProps) => (
+  <svg {...svgProps({ size, title })} className="animate-spin">
+    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+  </svg>
+);

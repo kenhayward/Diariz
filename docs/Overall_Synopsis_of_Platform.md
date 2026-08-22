@@ -518,6 +518,13 @@ invented an entire column of plausible data. `OcrImageBounds` therefore takes th
 `VisionImageBounds`'s constant, and `OcrImageEncoder` emits **PNG even when rescaling** (where the vision
 encoder switches to JPEG), since JPEG artefacts land on exactly the glyph edges an OCR model reads.
 
+The API stores and returns the model's answer **verbatim**, and `apps/web/src/lib/ocrMarkdown.ts` converts
+it to Markdown at the point it becomes a note or a chat context. The split is deliberate: the stored text is
+the record of what the model actually said, which matters for output carrying an "unverified" stamp, while
+what a user reads should not be raw `<table>` markup. The converter is pure and string-only (no DOM), and
+narrow by design - tables to GFM, `<br>` kept as the one break a GFM cell allows, `<img>` reduced to its
+alt, entities decoded, everything else stripped - rather than a general HTML-to-Markdown dependency.
+
 Because every model tested made silent errors, extracted text is stamped with the model that produced it and
 marked unverified wherever it surfaces - the chat context pill and the Markdown attachment alike. A general
 chat model routed here fails **invisibly**: rather than erroring, it describes the image or invents a
