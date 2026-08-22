@@ -33,4 +33,22 @@ describe("version mirrors", () => {
     const csproj = read("src/Diariz.Api/Diariz.Api.csproj");
     expect(csproj).toContain(`<Version>${canonical}</Version>`);
   });
+
+  /// The lock file is a fifth mirror, and it drifted to roughly thirty releases behind before anyone
+  /// noticed - it was on 0.211.3 at 0.240.0. Nothing reads it at runtime, so unlike the four above a stale
+  /// value breaks nothing; it is caught here because `npm install` rewrites it from package.json whenever
+  /// it runs, which turns an unrelated dependency change into a surprise version diff on a PR that never
+  /// touched the version. Pinning it makes the bump deliberate rather than a side effect.
+  ///
+  /// Both copies are checked: npm writes the version at the top level AND in `packages[""]`, and syncing
+  /// only one by hand is the obvious way to half-fix this.
+  it("the web package-lock mirrors version.json, in both places npm writes it", () => {
+    const lock = JSON.parse(read("apps/web/package-lock.json")) as {
+      version: string;
+      packages: Record<string, { version?: string }>;
+    };
+
+    expect(lock.version).toBe(canonical);
+    expect(lock.packages[""].version).toBe(canonical);
+  });
 });

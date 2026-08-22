@@ -65,6 +65,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.241.1",
+    date: "2026-08-22",
+    pr: 581,
+    headline: "Stop the web app's lock file drifting away from the version number",
+    summary:
+      "Housekeeping with no user-visible change. Alongside the version number itself, five files repeat it, and four of them were already checked automatically. The fifth - the web app's dependency lock file - was not, and had quietly fallen about thirty releases behind.\n\nNothing read the stale value, so nothing was broken by it. The nuisance is that installing dependencies rewrites that file from the current version, so the drift eventually surfaced as an unexplained version change on some unrelated piece of work that had nothing to do with releases. It is now checked with the other four, in both places the file records it.",
+    fixed: [
+      "The web app's package-lock version is checked against version.json alongside the other mirrors, so it cannot silently fall out of step again.",
+    ],
+  },
+  {
     version: "0.241.0",
     date: "2026-08-22",
     pr: 580,
