@@ -7,6 +7,7 @@ import { awaitFormulaResult } from "../lib/formulaRun";
 import { parseRecordingLink, recordingLinkPath } from "../lib/transcriptNav";
 import { linkifyRecordings } from "../lib/linkify";
 import { renderMarkdown } from "../lib/markdown";
+import ChatAttachmentPreviewModal from "./ChatAttachmentPreviewModal";
 import { useActiveRecordingId, useActiveSectionId } from "../lib/activeRoute";
 import { useRoomBasePath } from "../lib/rooms";
 import { useSelection } from "../lib/selection";
@@ -119,6 +120,9 @@ export default function ChatPanel() {
   const [frozenCurrent, setFrozenCurrent] = useState<CurrentContext>(() =>
     inferCurrentContext({ sectionId: activeSectionId, recordingId: activeId, selectedIds: selection.selectedIds }));
 
+  // Whether the attachment preview is open. Just a flag - the text itself stays in `attachment` below, so a
+  // second extraction appending to it cannot leave the open dialog showing a stale copy.
+  const [previewing, setPreviewing] = useState(false);
   // `origin` is what lets extracted text accumulate without ever eating an uploaded document: OCR appends
   // to OCR, and only asks before overwriting a file. Optional so a restored conversation (which predates the
   // field) simply reads as a file - the conservative default, since that is the one the confirm protects.
@@ -1045,8 +1049,28 @@ ${text}`;
           />
           {attachment ? (
             <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs dark:border-gray-700 dark:text-gray-300">
-              📎 <span className="max-w-[120px] truncate">{attachment.name}</span>
-              <button type="button" aria-label={t("removeAttachment")} onClick={() => setAttachment(null)} className="text-gray-400 hover:text-red-500">
+              📎{" "}
+              {/* The name is the control: the pill said WHAT was attached but nothing about its contents,
+                  which for text read off a capture meant sending it to find out. */}
+              <button
+                type="button"
+                aria-label={t("viewAttachment")}
+                title={t("viewAttachment")}
+                onClick={() => setPreviewing(true)}
+                className="max-w-[120px] truncate underline decoration-dotted underline-offset-2 hover:text-blue-600 dark:hover:text-blue-400"
+              >
+                {attachment.name}
+              </button>
+              <button
+                type="button"
+                aria-label={t("removeAttachment")}
+                onClick={() => {
+                  setAttachment(null);
+                  // The preview describes an attachment that no longer exists, so it goes with it.
+                  setPreviewing(false);
+                }}
+                className="text-gray-400 hover:text-red-500"
+              >
                 ✕
               </button>
             </span>
@@ -1181,6 +1205,18 @@ ${text}`;
           )}
         </div>
       </div>
+
+      {previewing && attachment && (
+        <ChatAttachmentPreviewModal
+          name={attachment.name}
+          text={attachment.text}
+          // Defaults to "file" for a restored conversation saved before origin was tracked: showing text
+          // verbatim can only under-render, whereas rendering a plain document as Markdown eats characters
+          // out of it.
+          origin={attachment.origin ?? "file"}
+          onClose={() => setPreviewing(false)}
+        />
+      )}
 
       {pickerDraft && (
         <PickRecordingModal

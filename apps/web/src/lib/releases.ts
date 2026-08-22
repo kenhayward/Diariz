@@ -65,6 +65,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.243.0",
+    date: "2026-08-22",
+    pr: 586,
+    headline: "Read what is attached to your question before you send it",
+    summary:
+      "The chat box shows a paperclip and a name when something is attached, and until now that was all it showed. You could see that a file or some extracted text was riding along with your question, but not what was in it - so the only way to find out what the model was actually being given was to send the question and work backwards from the answer.\n\nClick the name and it opens. Text read off a screen capture renders as it will be read, tables included, so a misread number or a table that came back mangled is visible in a couple of seconds rather than after a wrong answer. An uploaded document's extracted text is shown exactly as extracted, without formatting applied to it, since it was never written as formatted text in the first place.\n\nThis matters most for extracted text, which is machine-read and imperfect by nature. Being able to look at it first is the difference between noticing a misreading and quoting one.",
+    added: [
+      "Clicking the attachment name in the chat box opens a read-only preview of its contents.",
+    ],
+  },
+  {
     version: "0.242.1",
     date: "2026-08-22",
     pr: 585,
