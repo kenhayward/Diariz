@@ -23,6 +23,8 @@
   "includeAttachments": "Anhänge einbeziehen",
   "includeAttachmentsHint": "Dateien und Links der ausgewählten Aufnahmen zum Kontext hinzufügen",
   "removeAttachment": "Anhang entfernen",
+  "attachmentChars": "{{count}} Zeichen",
+  "viewAttachment": "Angehängten Text ansehen",
   "replaceAttachmentWithExtractedText": "Angehängte Datei \"{{name}}\" durch den extrahierten Text ersetzen?",
   "extractedTextFromCaptures": "Extrahierter Text ({{count}} Aufnahmen)",
   "reading": "Wird gelesen…",

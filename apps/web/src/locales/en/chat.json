@@ -23,6 +23,8 @@
   "includeAttachments": "Include attachments",
   "includeAttachmentsHint": "Add the selected recordings' files & links to the context",
   "removeAttachment": "Remove attachment",
+  "attachmentChars": "{{count}} characters",
+  "viewAttachment": "View the attached text",
   "replaceAttachmentWithExtractedText": "Replace the attached file \"{{name}}\" with the extracted text?",
   "extractedTextFromCaptures": "Extracted text ({{count}} captures)",
   "reading": "Reading…",

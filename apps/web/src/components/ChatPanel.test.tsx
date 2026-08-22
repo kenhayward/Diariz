@@ -889,3 +889,62 @@ describe("ChatPanel - extracted text in the context pill", () => {
     expect(() => attachTextToChat({ name: "n", text: "t" })).not.toThrow();
   });
 });
+
+describe("ChatPanel - previewing what is attached", () => {
+  async function renderReady() {
+    renderPanel();
+    await waitFor(() => expect(api.listChatModels).toHaveBeenCalled());
+  }
+
+  /// Without this, the only way to find out what a model had actually been handed was to send it and infer
+  /// the answer - which is exactly the wrong way round for text a machine read off a picture.
+  it("opens a preview of the attached text when the pill is clicked", async () => {
+    await renderReady();
+    act(() => attachTextToChat({ name: "Screenshot at 1:05", text: "Row one\nRow two" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /view the attached text/i })).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("button", { name: /view the attached text/i }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.textContent).toContain("Row one");
+    expect(dialog.textContent).toContain("Screenshot at 1:05");
+  });
+
+  it("closes the preview again", async () => {
+    await renderReady();
+    act(() => attachTextToChat({ name: "n", text: "Row one" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /view the attached text/i })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: /view the attached text/i }));
+    await screen.findByRole("dialog");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  /// Removing the attachment has to take its preview with it, or the dialog outlives the thing it describes.
+  it("drops the preview when the attachment is removed", async () => {
+    await renderReady();
+    act(() => attachTextToChat({ name: "n", text: "Row one" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /view the attached text/i })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: /view the attached text/i }));
+    await screen.findByRole("dialog");
+
+    fireEvent.click(screen.getByRole("button", { name: /remove attachment/i }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  /// An uploaded document goes through the same pill, so it gets the same look-before-you-send.
+  it("previews an uploaded file's text too", async () => {
+    mock(api.uploadChatAttachment).mockResolvedValue({ name: "notes.pdf", text: "PDF body text", chars: 13 });
+    await renderReady();
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["x"], "notes.pdf", { type: "application/pdf" })] } });
+    await waitFor(() => expect(screen.getByRole("button", { name: /view the attached text/i })).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("button", { name: /view the attached text/i }));
+
+    expect((await screen.findByRole("dialog")).textContent).toContain("PDF body text");
+  });
+});

@@ -92,6 +92,19 @@ The button shows a spinner while it is working. The first run of the day can tak
 model has to load before it can read anything; after that it is quick. A tick appears on the button that
 did the work.
 
+## Checking what is attached
+
+The chat box shows a paperclip and a name for whatever is attached to your next question - an uploaded file,
+or text read off a capture. Click the name to read it.
+
+Extracted text opens rendered the way it will be read, tables included. An uploaded document opens as plain
+text, exactly as it was extracted from the file.
+
+This is worth doing before you send, especially for extracted text. It takes a couple of seconds and it is
+how you catch a misread number or a mangled table, rather than finding out from a confident wrong answer.
+
+Removing the attachment closes the preview too.
+
 ## How much to trust extracted text
 
 Treat it as a fast way to get at what a capture says, not as a transcript.

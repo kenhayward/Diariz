@@ -161,6 +161,12 @@ sending the picture to a vision model and reading the words off it are different
   2560 pixels depending on the model, and pushing past a model's own best size made it worse - so the cap is a
   calibration rather than a maximum. Extraction runs synchronously and the image is sent as PNG even when
   rescaled, since JPEG artefacts land on exactly the glyph edges an OCR model is reading.
+- **Preview what is attached to a question.** The chat composer's attachment pill names what is attached;
+clicking that name opens a **read-only preview** of the contents. Text extracted from a capture renders as
+Markdown (so a converted table reads as a table); an uploaded document's extracted text is shown verbatim in
+a monospace block, because it is not Markdown and rendering it would eat underscores and stray hashes out of
+ordinary prose. It matters most for extracted text, which is machine-read: reading it before sending is what
+separates noticing a misreading from quoting one. Removing the attachment closes the preview with it.
 - **Auto-capture (desktop app).** A sticky toggle beside the capture buttons: while it is on, Diariz watches
 the capture area and takes a screenshot **every time the screen settles on something new**, which captures a
 presentation slide by slide without anyone touching the keyboard. It watches once a second and only keeps a
