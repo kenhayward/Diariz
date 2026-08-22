@@ -11,7 +11,7 @@ import { useActiveRecordingId, useActiveSectionId } from "../lib/activeRoute";
 import { useRoomBasePath } from "../lib/rooms";
 import { useSelection } from "../lib/selection";
 import { SCREENSHOT_DRAG_TYPE } from "../lib/dragTypes";
-import { onChatScreenshotAttached } from "../lib/chatAttachments";
+import { onChatScreenshotAttached, onChatTextAttached } from "../lib/chatAttachments";
 import {
   inferCurrentContext, currentContextLabelKey, currentContextRequest, type CurrentContext,
 } from "../lib/chatContext";
@@ -119,7 +119,12 @@ export default function ChatPanel() {
   const [frozenCurrent, setFrozenCurrent] = useState<CurrentContext>(() =>
     inferCurrentContext({ sectionId: activeSectionId, recordingId: activeId, selectedIds: selection.selectedIds }));
 
-  const [attachment, setAttachment] = useState<{ name: string; text: string; chars: number } | null>(null);
+  // `origin` is what lets extracted text accumulate without ever eating an uploaded document: OCR appends
+  // to OCR, and only asks before overwriting a file. Optional so a restored conversation (which predates the
+  // field) simply reads as a file - the conservative default, since that is the one the confirm protects.
+  const [attachment, setAttachment] = useState<
+    { name: string; text: string; chars: number; origin?: "file" | "ocr"; captures?: number } | null
+  >(null);
   const [uploading, setUploading] = useState(false);
 
   // Screen captures dragged in from a recording's Notes tab. Sticky, like the attachment pill above: they
@@ -159,6 +164,40 @@ export default function ChatPanel() {
   /// attached with the rail shut is already in the tray when it opens.
   useEffect(() => onChatScreenshotAttached((shot) =>
     addShot({ recordingId: shot.recordingId, screenshotId: shot.screenshotId })), []);
+
+  /// Text extracted from a capture, arriving on the sibling channel. It lands in the SAME single pill the
+  /// paperclip fills, so nothing about the wire contract or the saved-conversation shape changes - which is
+  /// why the accumulation rules live here rather than in a second slot.
+  useEffect(() => onChatTextAttached(({ name, text }) => {
+    setAttachment((current) => {
+      if (current && current.origin !== "ocr") {
+        // An uploaded document is the user's own work and arrived from somewhere else entirely; silently
+        // replacing it with OCR output would lose it with no way back.
+        if (!window.confirm(t("replaceAttachmentWithExtractedText", { name: current.name }))) return current;
+        return { name, text, chars: text.length, origin: "ocr", captures: 1 };
+      }
+      if (!current) return { name, text, chars: text.length, origin: "ocr", captures: 1 };
+
+      // Second and later extractions accumulate. Each block keeps its own heading so the model can tell
+      // which capture a line came from, and the label counts them rather than naming only the newest.
+      const captures = (current.captures ?? 1) + 1;
+      const merged = `${current.text}
+
+---
+
+## ${name}
+
+${text}`;
+      return {
+        name: t("extractedTextFromCaptures", { count: captures }),
+        text: merged,
+        chars: merged.length,
+        origin: "ocr",
+        captures,
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), []);
 
   // Voice dictation: the mic button toggles listening; finalized speech is appended to `input`, interim
   // speech shows as a live preview above the box. Engine is chosen once from capabilities.
@@ -648,7 +687,7 @@ export default function ChatPanel() {
     setUploading(true);
     api
       .uploadChatAttachment(file)
-      .then((r) => setAttachment({ name: r.name, text: r.text, chars: r.chars }))
+      .then((r) => setAttachment({ name: r.name, text: r.text, chars: r.chars, origin: "file" }))
       .catch((err: unknown) => setError(apiErrorMessage(err, t("couldNotReadFile"))))
       .finally(() => setUploading(false));
   }
@@ -694,7 +733,12 @@ export default function ChatPanel() {
       }
       setAttachment(
         c.context.attachmentName && c.context.attachmentText
-          ? { name: c.context.attachmentName, text: c.context.attachmentText, chars: c.context.attachmentText.length }
+          ? {
+              name: c.context.attachmentName,
+              text: c.context.attachmentText,
+              chars: c.context.attachmentText.length,
+              origin: "file",
+            }
           : null,
       );
       setIncludeAttachments(c.context.includeAttachments ?? false);

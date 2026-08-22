@@ -29,6 +29,8 @@ public static class LlmParameterLayers
     public const string TimeoutSeconds = "timeout_seconds";
     public const string ToolsSupported = "tools_supported";
     public const string ImagesSupported = "images_supported";
+    public const string OcrPrompt = "ocr_prompt";
+    public const string OcrMaxEdge = "ocr_max_edge";
 
     /// <summary>Every key a layer may contain. The single source the API's validation and the admin UI's
     /// field list both read, so a parameter cannot exist in one and not the other.</summary>
@@ -37,6 +39,7 @@ public static class LlmParameterLayers
         Temperature, TopP, TopK, RepeatPenalty, FrequencyPenalty, PresencePenalty,
         MaxTokens, MaxCompletionTokens, ReasoningEffort,
         ReasoningEnabled, TimeoutSeconds, ToolsSupported, ImagesSupported,
+        OcrPrompt, OcrMaxEdge,
     ];
 
     public static LlmParameters Resolve(IReadOnlyList<string?> layersMostSpecificFirst)
@@ -71,6 +74,8 @@ public static class LlmParameterLayers
             TimeoutSeconds = Integer(layers, TimeoutSeconds) ?? LlmParameters.DefaultTimeoutSeconds,
             ToolsSupported = Flag(layers, ToolsSupported) ?? true,
             ImagesSupported = Flag(layers, ImagesSupported) ?? false,
+            OcrPrompt = Text(layers, OcrPrompt) ?? LlmParameters.DefaultOcrPrompt,
+            OcrMaxEdge = Integer(layers, OcrMaxEdge) ?? LlmParameters.DefaultOcrMaxEdge,
         };
     }
 

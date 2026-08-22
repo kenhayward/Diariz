@@ -36,3 +36,33 @@ export function onChatScreenshotAttached(listener: Listener): () => void {
     listeners.delete(listener);
   };
 }
+
+/// Text extracted from a capture, on its way to the chat composer's context pill.
+export interface ChatTextAttachment {
+  name: string;
+  text: string;
+}
+
+type TextListener = (attachment: ChatTextAttachment) => void;
+
+const textListeners = new Set<TextListener>();
+
+/// Hand extracted text to the chat composer.
+///
+/// A SECOND channel rather than a variant of the one above, deliberately: the two carry different things
+/// to different places. A capture attached as an image rides to a vision model as pixels and lands in the
+/// screenshot tray; extracted text lands in the context pill and is read by whatever model is answering.
+/// Merging them would mean every subscriber had to discriminate, and a mistake there would silently turn
+/// a vision attachment into an OCR pill (or the reverse).
+export function attachTextToChat(attachment: ChatTextAttachment): void {
+  // Iterate a copy, for the same reason as above: a listener may (un)subscribe while being notified.
+  for (const listener of [...textListeners]) listener(attachment);
+}
+
+/// Subscribe to text extracted elsewhere in the app. Returns the unsubscribe function.
+export function onChatTextAttached(listener: TextListener): () => void {
+  textListeners.add(listener);
+  return () => {
+    textListeners.delete(listener);
+  };
+}

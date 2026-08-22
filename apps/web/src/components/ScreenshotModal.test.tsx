@@ -1,14 +1,23 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import ScreenshotModal from "./ScreenshotModal";
 import type { Screenshot } from "../lib/types";
-import { onChatScreenshotAttached } from "../lib/chatAttachments";
+import { onChatScreenshotAttached, onChatTextAttached } from "../lib/chatAttachments";
+import { api } from "../lib/api";
 
 vi.mock("../lib/api", () => ({
   api: {
     screenshotContentUrl: (r: string, s: string) => `/content/${r}/${s}`,
     screenshotThumbUrl: (r: string, s: string) => `/thumb/${r}/${s}`,
     deleteScreenshot: vi.fn().mockResolvedValue(undefined),
+    ocrScreenshot: vi.fn().mockResolvedValue({
+      text: "Extracted text",
+      model: "olmocr-2-7b-1025",
+      chars: 14,
+      cached: false,
+      generatedAt: "2026-08-22T12:00:00Z",
+    }),
+    addMarkdownAttachment: vi.fn().mockResolvedValue({ id: "att-1" }),
   },
 }));
 
@@ -481,5 +490,89 @@ describe("ScreenshotModal", () => {
 
       expect(screen.getByRole("button", { name: /zoom: 100%/i })).toBeTruthy();
     });
+  });
+});
+
+describe("ScreenshotModal - extract text (OCR)", () => {
+  const props = {
+    recordingId: "r1",
+    shots,
+    index: 0,
+    onIndexChange: () => {},
+    onClose: () => {},
+  };
+
+  /// Offering an action nobody has configured is worse than not offering it: the endpoint would 400 every
+  /// time, and most deployments never route an OCR model.
+  it("draws neither extract button when no OCR model is routed", () => {
+    render(<ScreenshotModal {...props} />);
+
+    expect(screen.queryByRole("button", { name: /extract text to chat/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /extract text as an attachment/i })).toBeNull();
+  });
+
+  it("draws both extract buttons when OCR is available", () => {
+    render(<ScreenshotModal {...props} ocrEnabled />);
+
+    expect(screen.getByRole("button", { name: /extract text to chat/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /extract text as an attachment/i })).toBeTruthy();
+  });
+
+  /// The image button is NOT replaced by these: it is still the right action for a general vision model,
+  /// where the user wants the model to see the capture rather than read text off it.
+  it("keeps the image attach button alongside them", () => {
+    render(<ScreenshotModal {...props} ocrEnabled />);
+
+    expect(screen.getByRole("button", { name: /add to chat context/i })).toBeTruthy();
+  });
+
+  it("publishes the extracted text to the chat composer", async () => {
+    const received: { name: string; text: string }[] = [];
+    const off = onChatTextAttached((t) => received.push(t));
+
+    render(<ScreenshotModal {...props} ocrEnabled />);
+    fireEvent.click(screen.getByRole("button", { name: /extract text to chat/i }));
+
+    await waitFor(() => expect(received.length).toBe(1));
+    expect(received[0].text).toContain("Extracted text");
+    expect(received[0].name).toMatch(/1:05/);
+    // Provenance rides the chat path too, not just the attachment: text pasted into a model's context
+    // with no note of where it came from is exactly how an invented number becomes a quoted fact.
+    expect(received[0].text).toContain("olmocr-2-7b-1025");
+    expect(received[0].text).toMatch(/unverified/i);
+    off();
+  });
+
+  it("saves the extracted text as a Markdown attachment", async () => {
+    render(<ScreenshotModal {...props} ocrEnabled />);
+    fireEvent.click(screen.getByRole("button", { name: /extract text as an attachment/i }));
+
+    await waitFor(() => expect(api.addMarkdownAttachment).toHaveBeenCalled());
+    const [recordingId, name, content] = vi.mocked(api.addMarkdownAttachment).mock.calls[0];
+    expect(recordingId).toBe("r1");
+    expect(name).toMatch(/1:05/);
+    expect(content).toContain("Extracted text");
+  });
+
+  /// Provenance is not decoration. Measured against four models, every one produced silent errors on a
+  /// dense capture - and one invented a whole column of plausible scores. Text that reads as transcribed
+  /// fact is the one way this feature does harm.
+  it("stamps the attachment with the model and an unverified warning", async () => {
+    render(<ScreenshotModal {...props} ocrEnabled />);
+    fireEvent.click(screen.getByRole("button", { name: /extract text as an attachment/i }));
+
+    await waitFor(() => expect(api.addMarkdownAttachment).toHaveBeenCalled());
+    const content = vi.mocked(api.addMarkdownAttachment).mock.calls[0][2];
+    expect(content).toContain("olmocr-2-7b-1025");
+    expect(content).toMatch(/unverified/i);
+  });
+
+  it("surfaces a failure on the button rather than failing silently", async () => {
+    vi.mocked(api.ocrScreenshot).mockRejectedValueOnce(new Error("no OCR model"));
+
+    render(<ScreenshotModal {...props} ocrEnabled />);
+    fireEvent.click(screen.getByRole("button", { name: /extract text to chat/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
   });
 });

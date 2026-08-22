@@ -35,7 +35,7 @@ vi.mock("../lib/api", () => ({
 import { api } from "../lib/api";
 import { fromPrompt } from "../lib/formulaTemplate";
 import ChatPanel from "./ChatPanel";
-import { attachScreenshotToChat } from "../lib/chatAttachments";
+import { attachScreenshotToChat, attachTextToChat } from "../lib/chatAttachments";
 
 const sharedRoom: RoomListItem = {
   id: "room-s", name: "Engineering", kind: 1, icon: null, color: null,
@@ -830,5 +830,62 @@ describe("ChatPanel", () => {
       await waitFor(() =>
         expect(screen.getByAltText(/attached screenshot/i).getAttribute("src")).toBe("/thumb/rec-9/shot-z"));
     });
+  });
+});
+
+describe("ChatPanel - extracted text in the context pill", () => {
+  async function renderReady() {
+    renderPanel();
+    await waitFor(() => expect(api.listChatModels).toHaveBeenCalled());
+  }
+
+  it("shows extracted text as the context pill", async () => {
+    await renderReady();
+
+    act(() => attachTextToChat({ name: "Screenshot at 1:05", text: "Row one" }));
+
+    await waitFor(() => expect(screen.getByText("Screenshot at 1:05")).toBeTruthy());
+  });
+
+  /// The pill is one slot, and a user extracting two captures means both, not the last. Appending keeps the
+  /// wire contract (AttachmentName/AttachmentText are singular) and the saved-conversation shape unchanged.
+  it("appends a second extraction rather than replacing the first", async () => {
+    await renderReady();
+
+    act(() => attachTextToChat({ name: "Screenshot at 1:05", text: "Row one" }));
+    await waitFor(() => expect(screen.getByText("Screenshot at 1:05")).toBeTruthy());
+    act(() => attachTextToChat({ name: "Screenshot at 2:05", text: "Row two" }));
+
+    // Both captures are named on the pill, so the label says what is actually in scope.
+    await waitFor(() => expect(screen.getByText(/2 captures/i)).toBeTruthy());
+  });
+
+  /// A user's uploaded document must never be silently discarded by an OCR extraction landing on the same
+  /// slot - the two arrive from different places and the user may not connect them.
+  it("asks before replacing an uploaded file with extracted text", async () => {
+    mock(api.uploadChatAttachment).mockResolvedValue({ name: "notes.pdf", text: "PDF body", chars: 8 });
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    await renderReady();
+
+    const file = new File(["x"], "notes.pdf", { type: "application/pdf" });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await waitFor(() => expect(input).toBeTruthy());
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() => expect(screen.getByText("notes.pdf")).toBeTruthy());
+
+    act(() => attachTextToChat({ name: "Screenshot at 1:05", text: "Row one" }));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    // Declined, so the document survives.
+    expect(screen.getByText("notes.pdf")).toBeTruthy();
+    confirmSpy.mockRestore();
+  });
+
+  it("stops listening for extracted text once unmounted", async () => {
+    const { unmount } = renderPanel();
+    await waitFor(() => expect(api.listChatModels).toHaveBeenCalled());
+    unmount();
+
+    expect(() => attachTextToChat({ name: "n", text: "t" })).not.toThrow();
   });
 });

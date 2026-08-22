@@ -1034,6 +1034,24 @@ const GENERATED: GeneratedResource[] = [
     ]
   },
   {
+    "tag": "Ocr",
+    "displayName": "Ocr",
+    "value": "ocr",
+    "operations": [
+      {
+        "value": "whetherScreenshotOcrIsAvailable",
+        "displayName": "Whether screenshot OCR is available",
+        "description": "Reports whether a Platform Administrator has routed a model to the OCR call type, and which model it is. When enabled is false the screenshot OCR endpoint returns 400, so a client should hide or disable the action rather than offering it.",
+        "method": "GET",
+        "path": "/api/ocr/status",
+        "pathParams": [],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": false
+      }
+    ]
+  },
+  {
     "tag": "OutlookCalendar",
     "displayName": "Outlook Calendar",
     "value": "outlookCalendar",
@@ -2133,6 +2151,26 @@ const GENERATED: GeneratedResource[] = [
         "queryParams": [],
         "hasBody": false,
         "returnsArray": true
+      },
+      {
+        "value": "readTheTextOffAScreenshot",
+        "displayName": "Read the text off a screenshot",
+        "description": "Runs the platform's OCR model over the capture and returns the extracted text, caching it on the capture so a second call costs nothing. Pass force=true to re-run and overwrite a stored result.",
+        "method": "POST",
+        "path": "/api/recordings/{recordingId}/screenshots/{screenshotId}/ocr",
+        "pathParams": [
+          "recordingId",
+          "screenshotId"
+        ],
+        "queryParams": [
+          {
+            "name": "force",
+            "required": false,
+            "description": "force"
+          }
+        ],
+        "hasBody": false,
+        "returnsArray": false
       }
     ]
   },

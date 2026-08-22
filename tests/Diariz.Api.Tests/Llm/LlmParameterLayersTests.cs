@@ -105,13 +105,15 @@ public class LlmParameterLayersTests
     }
 
     [Fact]
-    public void Names_the_thirteen_parameters_exactly_once_each()
+    public void Names_the_fifteen_parameters_exactly_once_each()
     {
-        Assert.Equal(13, LlmParameterLayers.ParameterNames.Count);
+        Assert.Equal(15, LlmParameterLayers.ParameterNames.Count);
         Assert.Equal(LlmParameterLayers.ParameterNames.Count,
             LlmParameterLayers.ParameterNames.Distinct().Count());
         Assert.Contains("temperature", LlmParameterLayers.ParameterNames);
         Assert.Contains("max_completion_tokens", LlmParameterLayers.ParameterNames);
         Assert.Contains("images_supported", LlmParameterLayers.ParameterNames);
+        Assert.Contains("ocr_prompt", LlmParameterLayers.ParameterNames);
+        Assert.Contains("ocr_max_edge", LlmParameterLayers.ParameterNames);
     }
 }

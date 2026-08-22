@@ -103,6 +103,8 @@ import type {
   LlmAssignments,
   LlmTestOutcome,
   LlmTestRecording,
+  ScreenshotOcr,
+  OcrStatus,
 } from "./types";
 
 const TOKEN_KEY = "diariz.token";
@@ -751,6 +753,23 @@ export const api = {
     form.append("width", String(shot.width));
     form.append("height", String(shot.height));
     const { data } = await http.post<Screenshot>(`/api/recordings/${recordingId}/screenshots`, form);
+    return data;
+  },
+
+  /// Read the text off a capture. Cached server-side, so the second destination costs nothing after the
+  /// first; `force` re-runs and overwrites. Slow on a cold model - LM Studio loads on demand - so callers
+  /// should show progress rather than assuming this returns quickly.
+  async ocrScreenshot(recordingId: string, screenshotId: string, force = false): Promise<ScreenshotOcr> {
+    const { data } = await http.post<ScreenshotOcr>(
+      `/api/recordings/${recordingId}/screenshots/${screenshotId}/ocr${force ? "?force=true" : ""}`,
+    );
+    return data;
+  },
+
+  /// Whether an administrator has routed an OCR model. The capture viewer reads this to decide whether to
+  /// draw the extract actions at all.
+  async getOcrStatus(): Promise<OcrStatus> {
+    const { data } = await http.get<OcrStatus>("/api/ocr/status");
     return data;
   },
 

@@ -424,6 +424,17 @@ public record MeetingNoteDto(Guid Id, string Text, long? CapturedAtMs, int Ordin
 public record ScreenshotDto(
     Guid Id, long CapturedAtMs, int Width, int Height, long SizeBytes, int Ordinal, DateTimeOffset CreatedAt);
 
+/// <summary>Text read off a capture by an OCR model.
+///
+/// <para><paramref name="Model"/> is returned rather than kept server-side because it belongs in the
+/// provenance line wherever this text is shown. <paramref name="Cached"/> distinguishes a stored result
+/// from a fresh extraction, so a caller can offer to re-run rather than silently accepting an old one.</para>
+///
+/// <para><b>Treat the text as machine-extracted and unverified.</b> Every model measured against a dense
+/// capture produced silent errors - misread digits, whole dropped regions, and in one case an entirely
+/// invented column of plausible-looking scores.</para></summary>
+public record ScreenshotOcrDto(string Text, string Model, int Chars, bool Cached, DateTimeOffset GeneratedAt);
+
 /// <summary>Bulk-append request: the live panel attaches all its lines after upload; single adds send one.</summary>
 public record CreateMeetingNotesRequest(IReadOnlyList<CreateMeetingNoteLine> Lines);
 public record CreateMeetingNoteLine(string Text, long? CapturedAtMs = null);

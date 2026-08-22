@@ -1998,6 +1998,24 @@
         ],
         "type": "object"
       },
+      "OcrStatusDto": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "model": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "enabled",
+          "model"
+        ],
+        "type": "object"
+      },
       "OutlookAttendeeInput": {
         "properties": {
           "email": {
@@ -7798,6 +7816,37 @@
         ]
       }
     },
+    "/api/ocr/status": {
+      "get": {
+        "description": "Reports whether a Platform Administrator has routed a model to the OCR call type, and which model it is. When `enabled` is false the screenshot OCR endpoint returns 400, so a client should hide or disable the action rather than offering it.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OcrStatusDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OcrStatusDto"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/OcrStatusDto"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Whether screenshot OCR is available",
+        "tags": [
+          "Ocr"
+        ]
+      }
+    },
     "/api/people": {
       "get": {
         "description": "Everyone in the directory, newest names first by name order, with optional filters. A person may have no voiceprint at all - `hasVoiceprint` is then false and Diariz will not recognise them by voice.\n\nRequires the **Manage people** permission, because the directory is platform-wide and therefore lists every external contact the organisation has recorded. To find someone in order to label a speaker, use the search endpoint instead - that one is open to everyone.\n\n`q` matches the name, the email address **and** the company, case-insensitively - so you can find everyone from one client without knowing their names.",
@@ -11362,6 +11411,47 @@
         ]
       }
     },
+    "/api/recordings/{recordingId}/screenshots/{screenshotId}/ocr": {
+      "post": {
+        "description": "Runs the platform's OCR model over the capture and returns the extracted text, caching it on the capture so a second call costs nothing. Pass `force=true` to re-run and overwrite a stored result.\n\n**The text is machine-extracted and unverified.** Every model measured against a dense capture produced silent errors - misread digits, whole dropped regions, and in one case an invented column of plausible-looking scores. The response names the `model` that produced it precisely so that whatever displays the text can say where it came from; do not present it as transcribed fact.\n\nReturns 400 when no OCR model is routed, and 422 when the model returns nothing - which usually means it cannot see images, rather than that the capture is blank.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recordingId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "screenshotId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "force",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Read the text off a screenshot",
+        "tags": [
+          "Screenshots"
+        ]
+      }
+    },
     "/api/recordings/{recordingId}/screenshots/{screenshotId}/thumb": {
       "get": {
         "description": "Streams the small JPEG preview - use it for strips and transcript rows, where fetching full-size PNGs would be wasteful. Same access rules and the same `access_token` support as the full image.",
@@ -14201,6 +14291,10 @@
       "name": "MeetingTypes"
     },
     {
+      "description": "Whether this platform can read text off a screen capture, and which model does it.",
+      "name": "Ocr"
+    },
+    {
       "description": "Mirror a classic desktop Outlook calendar into Diariz from the Windows app, and manage the machines you have connected. Unlike Google and .ics calendars, which are read live, Outlook is only reachable from your own PC - so its events are pushed here and stored, which is what lets them keep working in a browser and after the desktop app is closed.",
       "name": "OutlookCalendar"
     },
@@ -14225,7 +14319,7 @@
       "name": "Rooms"
     },
     {
-      "description": "Screen captures taken during a recording from the desktop app - list them and fetch the full image or thumbnail.",
+      "description": "Screen captures taken during a recording from the desktop app - list them, fetch the full image or thumbnail, and read the text off one with an OCR model.",
       "name": "Screenshots"
     },
     {

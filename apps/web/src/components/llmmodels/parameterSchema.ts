@@ -1,4 +1,4 @@
-/// The 13 parameters an administrator can set, in the order they appear in a panel.
+/// The 15 parameters an administrator can set, in the order they appear in a panel.
 ///
 /// The `key` values must match `LlmParameterLayers.ParameterNames` on the API exactly - the API rejects any
 /// key it does not recognise, so a typo here becomes a 400 the admin cannot act on. `parameterSchema.test.ts`
@@ -58,6 +58,12 @@ export const PARAMETERS: ParameterSpec[] = [
   { key: "timeout_seconds", label: "llmParamTimeoutSeconds", kind: "integer", min: 1 },
   { key: "tools_supported", label: "llmParamToolsSupported", kind: "boolean" },
   { key: "images_supported", label: "llmParamImagesSupported", kind: "boolean" },
+  // OCR only, and free text for a measured reason: one OCR model wants the terse "Text Recognition:",
+  // another a full sentence, and swapping them narrows a model to a single region of the capture.
+  { key: "ocr_prompt", label: "llmParamOcrPrompt", kind: "text", hint: "llmParamOcrPromptHint" },
+  // Not a maximum - a calibration. Quality is NOT monotonic in resolution: measured on one capture the
+  // best size ranged from 1288 to 2560 px across models, and one model degraded above its own best size.
+  { key: "ocr_max_edge", label: "llmParamOcrMaxEdge", kind: "integer", min: 256, hint: "llmParamOcrMaxEdgeHint" },
 ];
 
 export interface GroupSpec {
@@ -89,6 +95,7 @@ export const GROUPS: GroupSpec[] = [
   },
   { key: "Translation", label: "llmGroupTranslation", short: "llmGroupTranslation", column: "llmGroupTranslation" },
   { key: "Chat", label: "llmGroupChat", short: "llmGroupChat", column: "llmGroupChat" },
+  { key: "Ocr", label: "llmGroupOcr", short: "llmGroupOcr", column: "llmGroupOcr" },
 ];
 
 /// The groups a model can actually be assigned to - everything except the parameter-only base scope.

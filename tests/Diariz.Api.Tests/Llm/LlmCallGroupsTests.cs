@@ -46,9 +46,9 @@ public class LlmCallGroupsTests
     [Fact]
     public void ModelBase_is_zero() => Assert.Equal(0, (int)LlmCallGroup.ModelBase);
 
-    /// <summary>Six real call groups plus the base scope. Pinned so that adding one is a deliberate act
-    /// that also forces a look at the admin UI, which renders a panel per group.</summary>
+    /// <summary>Seven real call groups plus the base scope. Pinned so that adding one is a deliberate act
+    /// that also forces a look at the admin UI, which renders a panel and a routing column per group.</summary>
     [Fact]
-    public void Has_six_call_groups_plus_the_model_base_scope() =>
-        Assert.Equal(7, Enum.GetValues<LlmCallGroup>().Length);
+    public void Has_seven_call_groups_plus_the_model_base_scope() =>
+        Assert.Equal(8, Enum.GetValues<LlmCallGroup>().Length);
 }

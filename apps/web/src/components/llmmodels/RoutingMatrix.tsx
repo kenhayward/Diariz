@@ -72,7 +72,9 @@ export default function RoutingMatrix({
     return ASSIGNABLE_GROUPS.filter((g) => assignments[g.key] === model.id).length;
   }
 
-  const grid = "grid grid-cols-[minmax(0,1fr)_repeat(7,86px)_76px_128px] items-center";
+  // One column per assignable call type, plus the Default column ahead of them - so this repeat() count is
+// ASSIGNABLE_GROUPS.length + 1 and has to move whenever a call group is added.
+const grid = "grid grid-cols-[minmax(0,1fr)_repeat(8,86px)_76px_128px] items-center";
   // The model column stays put while the call types scroll under it: at a narrow width the dots are
   // meaningless without the name they belong to, and a horizontal scroll is exactly when the name is the
   // first thing to leave the screen. Needs its own opaque background, or the cells scroll through it.

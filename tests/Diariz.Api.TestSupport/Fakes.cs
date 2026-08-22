@@ -1048,3 +1048,35 @@ public sealed class FakeLlmTestProbe : ILlmTestProbe
         return Task.FromResult(_outcome);
     }
 }
+
+/// <summary>Returns canned OCR text and records the config it was handed, so a controller test can prove
+/// the resolved prompt and cap actually reached the client without a model to talk to.</summary>
+public sealed class FakeOcrClient(string text = "Extracted text") : IOcrClient
+{
+    public string Text { get; set; } = text;
+    public int Calls { get; private set; }
+    public LlmRequestConfig? LastConfig { get; private set; }
+    public string? LastDataUrl { get; private set; }
+
+    public Task<string> ExtractAsync(LlmRequestConfig config, string dataUrl, CancellationToken ct = default)
+    {
+        Calls++;
+        LastConfig = config;
+        LastDataUrl = dataUrl;
+        return Task.FromResult(Text);
+    }
+}
+
+/// <summary>Hands back a fixed data URL without touching storage or Skia. The encoding itself is covered
+/// by OcrImageBoundsTests and the integration suite; a controller test only cares that something was
+/// encoded and passed on.</summary>
+public sealed class FakeOcrImageEncoder : IOcrImageEncoder
+{
+    public int? LastMaxEdge { get; private set; }
+
+    public Task<string> EncodeAsync(MeetingScreenshot shot, int maxEdge, CancellationToken ct = default)
+    {
+        LastMaxEdge = maxEdge;
+        return Task.FromResult("data:image/png;base64,AAAA");
+    }
+}

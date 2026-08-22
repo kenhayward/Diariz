@@ -335,6 +335,26 @@ export interface ShotView {
 
 /// A screen capture taken during a recording (desktop client only). capturedAtMs is the offset into the
 /// recording clock; immutable after capture. Image bytes come from the content and thumb URLs.
+/// Text an OCR model read off a capture.
+///
+/// `model` is carried so the provenance line can name it: the text is machine-extracted and unverified,
+/// and every model measured against a dense capture produced silent errors - misread digits, dropped
+/// regions, and in one case an invented column of plausible scores.
+export interface ScreenshotOcr {
+  text: string;
+  model: string;
+  chars: number;
+  /// True when this came from a stored result rather than a fresh model call.
+  cached: boolean;
+  generatedAt: string;
+}
+
+/// Whether this platform can read text off a capture at all. `model` is null exactly when disabled.
+export interface OcrStatus {
+  enabled: boolean;
+  model: string | null;
+}
+
 export interface Screenshot {
   id: string;
   capturedAtMs: number;
@@ -1291,6 +1311,7 @@ export const LLM_CALL_KINDS = [
   "FormulaRun",
   "ChatTitle",
   "AdminTest",
+  "ScreenshotOcr",
 ] as const;
 
 export type LlmCallKind = (typeof LLM_CALL_KINDS)[number];

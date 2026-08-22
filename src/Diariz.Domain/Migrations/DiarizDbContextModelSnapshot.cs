@@ -795,6 +795,15 @@ namespace Diariz.Domain.Migrations
                     b.Property<int>("Height")
                         .HasColumnType("integer");
 
+                    b.Property<DateTimeOffset?>("OcrGeneratedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("OcrModel")
+                        .HasColumnType("text");
+
+                    b.Property<string>("OcrText")
+                        .HasColumnType("text");
+
                     b.Property<int>("Ordinal")
                         .HasColumnType("integer");
 

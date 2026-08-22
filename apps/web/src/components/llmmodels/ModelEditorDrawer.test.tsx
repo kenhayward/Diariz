@@ -68,7 +68,8 @@ describe("ModelEditorDrawer", () => {
     open();
 
     const tabs = screen.getAllByRole("tab").map((t) => t.textContent);
-    expect(tabs).toHaveLength(7);
+    // Defaults plus one per call group.
+    expect(tabs).toHaveLength(8);
     expect(tabs[0]).toMatch(/Defaults/);
     expect(screen.getByRole("tab", { selected: true }).textContent).toMatch(/Defaults/);
   });

@@ -16,4 +16,5 @@ public enum LlmCallGroup
     MinutesAndFormulas = 4,
     Translation = 5,
     Chat = 6,
+    Ocr = 7,
 }

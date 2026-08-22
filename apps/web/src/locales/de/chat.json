@@ -23,6 +23,8 @@
   "includeAttachments": "Anhänge einbeziehen",
   "includeAttachmentsHint": "Dateien und Links der ausgewählten Aufnahmen zum Kontext hinzufügen",
   "removeAttachment": "Anhang entfernen",
+  "replaceAttachmentWithExtractedText": "Angehängte Datei \"{{name}}\" durch den extrahierten Text ersetzen?",
+  "extractedTextFromCaptures": "Extrahierter Text ({{count}} Aufnahmen)",
   "reading": "Wird gelesen…",
   "attachFile": "+ Datei anhängen",
   "askPlaceholder": "Frage zu deinen Transkriptionen\nTippe / für die Befehlsliste",
