@@ -47,22 +47,68 @@ function decodeEntities(text: string): string {
   return text.replace(/&(amp|lt|gt|quot|apos|nbsp|#39);/g, (m) => ENTITIES[m] ?? m);
 }
 
+/// Removes every tag, and keeps removing until the string stops changing.
+///
+/// A single pass is not obviously enough: removing a span can join what surrounded it, and the joined text
+/// can be a tag the first pass never saw. That does not appear to be reachable with *this* pattern - it
+/// consumes from a `<` to the next `>`, so no `<` survives into a complete element - but the argument is
+/// subtle enough that it should not be what the safety of the output rests on, and it would quietly stop
+/// holding if the pattern were ever edited. Each pass strictly shortens the string, so this terminates.
+function stripTags(text: string): string {
+  let previous: string;
+  let current = text;
+  do {
+    previous = current;
+    current = current.replace(/<[^>]*>/g, "");
+  } while (current !== previous);
+  return current;
+}
+
+/// Makes text safe to place in the Markdown output.
+///
+/// Angle brackets become entities rather than staying raw, which matters twice over. It stops decoded text
+/// becoming live markup - `&lt;script&gt;` used to survive the strip as plain text and then decode into an
+/// element on the way out - and it stops a reader losing content, because a Markdown renderer swallows a
+/// raw `<non-vaccines>` as an unknown tag and shows nothing at all.
+function escapeMarkup(text: string): string {
+  return text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/// Escapes the characters that would otherwise be read as table structure.
+///
+/// **Backslash first, and that order is the whole point.** Escaping only the pipe turns a cell containing
+/// `\|` into `\\|` - a literal backslash followed by a live delimiter - which splits the cell and shifts
+/// every column after it. Backslashes turn up in exactly the material this reads: file paths, regexes,
+/// terminal output.
+function escapeCell(text: string): string {
+  return text.replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
+}
+
 /// One cell's text: images reduced to their alt, breaks parked, every other tag dropped, whitespace
 /// collapsed, and pipes escaped so a cell containing one cannot silently become two columns.
 function cellText(html: string): string {
-  return decodeEntities(
-    html
-      .replace(/<img\b[^>]*>/gi, (tag) => {
-        const alt = /\balt\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(tag);
-        return alt ? (alt[2] ?? alt[3] ?? alt[4] ?? "") : "";
-      })
-      .replace(/<br\s*\/?>/gi, BREAK)
-      .replace(/<[^>]*>/g, ""),
+  // Strip, THEN decode, THEN escape - and all three steps are load-bearing in that order.
+  //
+  // Stripping first means `&lt;b&gt;` is still an entity when the tag-strip runs, so text the page merely
+  // *showed* is not mistaken for markup and deleted. Escaping last is what closes the hole this used to
+  // have: the decode can turn `&lt;script&gt;` back into an element, and nothing looked at it again.
+  const decoded = decodeEntities(
+    stripTags(
+      html
+        .replace(/<img\b[^>]*>/gi, (tag) => {
+          const alt = /\balt\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(tag);
+          return alt ? (alt[2] ?? alt[3] ?? alt[4] ?? "") : "";
+        })
+        .replace(/<br\s*\/?>/gi, BREAK),
+    ),
+  );
+
+  return escapeCell(
+    escapeMarkup(decoded)
+      // Collapses runs of real whitespace. The parked break is not whitespace, so it survives.
+      .replace(/\s+/g, " ")
+      .trim(),
   )
-    // Collapses runs of real whitespace. The parked break is not whitespace, so it survives.
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/\|/g, "\\|")
     // Whitespace either side of a break came from the source's indentation, not from the content.
     .replace(BREAK_PADDED, BREAK);
 }
@@ -110,11 +156,16 @@ export function ocrToMarkdown(text: string): string {
     });
   }
 
-  out = decodeEntities(
-    out
-      .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<\/(p|div|h[1-6]|li|tr)\s*>/gi, "\n")
-      .replace(/<[^>]*>/g, ""),
+  // Same three steps in the same order as a cell, and for the same reasons. The tables converted above are
+  // already escaped and hold no `<` for this to find - their breaks are still parked, not yet `<br>`.
+  out = escapeMarkup(
+    decodeEntities(
+      stripTags(
+        out
+          .replace(/<br\s*\/?>/gi, "\n")
+          .replace(/<\/(p|div|h[1-6]|li|tr)\s*>/gi, "\n"),
+      ),
+    ),
   );
 
   // Only now do parked breaks become `<br>` - after the pass above, which would otherwise turn them into

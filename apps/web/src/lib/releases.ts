@@ -65,6 +65,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.242.1",
+    date: "2026-08-22",
+    pr: 585,
+    headline: "Extracted text keeps its angle brackets and its backslashes",
+    summary:
+      "Three fixes to how text read off a screen capture is turned into Markdown, all found by the security scanner reviewing the previous release.\n\nIf the capture showed something written in angle brackets - a placeholder like `<non-vaccines>`, a tag name, a bit of code - that text was disappearing. It was being handed to the renderer as though it were markup, and the renderer quietly dropped it. Angle brackets now survive and display as they appeared on screen.\n\nThe same fix closes a hole. Text arriving with markup written in escaped form was slipping past the step meant to remove markup, and turning back into live markup afterwards. Nothing was ever exposed - what displays it strips anything dangerous - but it should never have got that far, and the step that removes markup now genuinely removes it.\n\nAnd a backslash immediately before a table separator was breaking the table, shifting every column after it. Backslashes are common in exactly the material this reads: file paths, regular expressions, terminal output. They are now handled properly, so a Windows path in a captured table stays in one cell.",
+    fixed: [
+      "Angle-bracketed text in a screenshot is no longer silently dropped when the extracted text is displayed.",
+      "Escaped markup in extracted text can no longer become live markup after the point that removes it.",
+      "A backslash before a table separator no longer splits the cell and shifts the rest of the row.",
+    ],
+  },
+  {
     version: "0.242.0",
     date: "2026-08-22",
     pr: 583,
