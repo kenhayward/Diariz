@@ -33,5 +33,24 @@ public class MeetingScreenshot
     /// <summary>Sort order within the recording (0-based).</summary>
     public int Ordinal { get; set; }
 
+    // ---- OCR (text read off the capture by a vision model) ----
+
+    /// <summary>Text extracted from the capture, or null when it has never been run. Cached so the second
+    /// destination costs nothing after the first, and so a later feature (search over capture text) has
+    /// somewhere to read from.
+    ///
+    /// <para><b>Machine-extracted and unverified.</b> Measured against four models, every one of them
+    /// produced silent errors on a dense capture - a misread digit, a dropped table, and in one case an
+    /// entire invented column of plausible scores. Anything that surfaces this text must say where it came
+    /// from; it must never be presented as transcribed fact.</para></summary>
+    public string? OcrText { get; set; }
+
+    /// <summary>The model that produced <see cref="OcrText"/>. Stored, not derived, because the routed OCR
+    /// model changes over time and the provenance line has to name the one that actually ran.</summary>
+    public string? OcrModel { get; set; }
+
+    /// <summary>When <see cref="OcrText"/> was produced. Null exactly when no OCR has run.</summary>
+    public DateTimeOffset? OcrGeneratedAt { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

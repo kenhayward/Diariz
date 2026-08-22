@@ -21,7 +21,8 @@ public class ScreenshotsControllerTests
         new FormFile(new MemoryStream(new byte[bytes]), 0, bytes, "thumb", "shot.jpg") { Headers = new HeaderDictionary() };
 
     private static ScreenshotsController Build(DiarizDbContext db, Guid userId, IAudioStorage? storage = null) =>
-        new(db, storage ?? new FakeAudioStorage(), new StorageUsage(db), Options.Create(new ScreenshotOptions()), new RoomScope(db))
+        new(db, storage ?? new FakeAudioStorage(), new StorageUsage(db), Options.Create(new ScreenshotOptions()),
+            new RoomScope(db), new FakeLlmSettingsResolver(), new FakeOcrClient(), new FakeOcrImageEncoder())
         {
             ControllerContext = Http.Context(userId),
         };
@@ -38,7 +39,8 @@ public class ScreenshotsControllerTests
 
         var storage = new FakeAudioStorage();
         var controller = new ScreenshotsController(
-            db, storage, new StorageUsage(db), Options.Create(new ScreenshotOptions()), new RoomScope(db))
+            db, storage, new StorageUsage(db), Options.Create(new ScreenshotOptions()), new RoomScope(db),
+            new FakeLlmSettingsResolver(), new FakeOcrClient(), new FakeOcrImageEncoder())
         {
             ControllerContext = Http.Context(userId),
         };
@@ -112,7 +114,7 @@ public class ScreenshotsControllerTests
         db.SaveChanges();
         var controller = new ScreenshotsController(
             db, new FakeAudioStorage(), new StorageUsage(db), Options.Create(new ScreenshotOptions { MaxBytes = 32 }),
-            new RoomScope(db))
+            new RoomScope(db), new FakeLlmSettingsResolver(), new FakeOcrClient(), new FakeOcrImageEncoder())
         {
             ControllerContext = Http.Context(userId),
         };

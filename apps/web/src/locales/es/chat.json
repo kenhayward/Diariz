@@ -23,6 +23,8 @@
   "includeAttachments": "Incluir adjuntos",
   "includeAttachmentsHint": "Añade los archivos y enlaces de las grabaciones seleccionadas al contexto",
   "removeAttachment": "Quitar adjunto",
+  "replaceAttachmentWithExtractedText": "¿Reemplazar el archivo adjunto \"{{name}}\" por el texto extraído?",
+  "extractedTextFromCaptures": "Texto extraído ({{count}} capturas)",
   "reading": "Leyendo…",
   "attachFile": "+ Adjuntar archivo",
   "askPlaceholder": "Pregunta sobre tus transcripciones\nEscribe / para ver los comandos",

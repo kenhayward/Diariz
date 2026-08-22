@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Services;
+using Diariz.Api.Services.Llm;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -30,16 +31,22 @@ public class ScreenshotsController : ControllerBase
     private readonly IStorageUsage _usage;
     private readonly ScreenshotOptions _options;
     private readonly IRoomScope _rooms;
+    private readonly ILlmSettingsResolver _settings;
+    private readonly IOcrClient _ocr;
+    private readonly IOcrImageEncoder _encoder;
 
     public ScreenshotsController(
         DiarizDbContext db, IAudioStorage storage, IStorageUsage usage, IOptions<ScreenshotOptions> options,
-        IRoomScope rooms)
+        IRoomScope rooms, ILlmSettingsResolver settings, IOcrClient ocr, IOcrImageEncoder encoder)
     {
         _db = db;
         _storage = storage;
         _usage = usage;
         _options = options.Value;
         _rooms = rooms;
+        _settings = settings;
+        _ocr = ocr;
+        _encoder = encoder;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -167,6 +174,68 @@ public class ScreenshotsController : ControllerBase
 
         var stream = await _storage.OpenReadAsync(thumbnail ? shot.ThumbBlobKey : shot.BlobKey);
         return File(stream, thumbnail ? "image/jpeg" : "image/png");
+    }
+
+    /// <summary>Read the text off a capture with the routed OCR model.
+    ///
+    /// <para>Synchronous rather than queued: this is one image against one model, seconds warm, and it is
+    /// triggered by a button press that wants an answer. If batch or whole-recording OCR is ever added it
+    /// belongs on the Redis stream like every other long job - but paying that machinery here would make a
+    /// three-second call feel like a background task.</para>
+    ///
+    /// <para>Readable by anyone who can read the recording, matching the content and thumb endpoints: the
+    /// text is a view of an image they can already fetch.</para></summary>
+    [HttpPost("{screenshotId:guid}/ocr")]
+    [EndpointSummary("Read the text off a screenshot")]
+    [EndpointDescription(
+        "Runs the platform's OCR model over the capture and returns the extracted text, caching it on the " +
+        "capture so a second call costs nothing. Pass `force=true` to re-run and overwrite a stored result.\n\n" +
+        "**The text is machine-extracted and unverified.** Every model measured against a dense capture " +
+        "produced silent errors - misread digits, whole dropped regions, and in one case an invented column " +
+        "of plausible-looking scores. The response names the `model` that produced it precisely so that " +
+        "whatever displays the text can say where it came from; do not present it as transcribed fact.\n\n" +
+        "Returns 400 when no OCR model is routed, and 422 when the model returns nothing - which usually " +
+        "means it cannot see images, rather than that the capture is blank.")]
+    public async Task<IActionResult> Ocr(
+        Guid recordingId, Guid screenshotId, [FromQuery] bool force, CancellationToken ct)
+    {
+        if (!await CanReadAsync(recordingId)) return NotFound();
+
+        // Paired lookup, not two: a real capture id quoted against the wrong recording must answer exactly
+        // as a missing one does, or the endpoint becomes a way to enumerate which ids exist.
+        var shot = await _db.MeetingScreenshots
+            .FirstOrDefaultAsync(s => s.Id == screenshotId && s.RecordingId == recordingId, ct);
+        if (shot is null) return NotFound();
+
+        if (!force && !string.IsNullOrWhiteSpace(shot.OcrText))
+            return Ok(new ScreenshotOcrDto(
+                shot.OcrText, shot.OcrModel ?? "", shot.OcrText.Length, true,
+                shot.OcrGeneratedAt ?? shot.CreatedAt));
+
+        var cfg = await _settings.ResolveAsync(LlmCallKind.ScreenshotOcr, ct);
+        if (!cfg.Enabled)
+            return BadRequest(
+                "No OCR model is configured. Route one to the OCR call type in Admin - AI models.");
+
+        using var llm = LlmCallScope.Push(
+            LlmCallKind.ScreenshotOcr, UserId, recordingId: recordingId);
+
+        var dataUrl = await _encoder.EncodeAsync(shot, cfg.Parameters.OcrMaxEdge, ct);
+        var text = (await _ocr.ExtractAsync(cfg, dataUrl, ct)).Trim();
+
+        // An empty answer is never written over a good stored result: a model that cannot see the image
+        // returns nothing, and letting that erase a previous extraction would lose real work to a
+        // misconfiguration.
+        if (string.IsNullOrWhiteSpace(text))
+            return UnprocessableEntity(
+                $"The model '{cfg.Model}' returned no text. Check that it can read images.");
+
+        shot.OcrText = text;
+        shot.OcrModel = cfg.Model;
+        shot.OcrGeneratedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        return Ok(new ScreenshotOcrDto(text, cfg.Model, text.Length, false, shot.OcrGeneratedAt.Value));
     }
 
     /// <summary>Remove a capture. Blobs go first: a dangling row is safer (and retriable) than an orphaned blob.</summary>

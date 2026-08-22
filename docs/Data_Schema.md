@@ -114,6 +114,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddAutoMergeSpeakerSegments` | `UserSettings.AutoMergeSpeakerSegments` (boolean NOT NULL DEFAULT false) - whether consecutive same-speaker segments are collapsed automatically once a recording finishes transcribing. Additive and defaulted, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddLlmTestRecording` | `UserSettings.LlmTestRecordingId` (uuid, nullable, **no FK**) - the recording an administrator last chose to test an AI model against in the model editor's test rail. Deliberately unconstrained: it is resolved on read and nulled out when the recording is gone, so an admin's convenience setting can never be a reason a user's recording will not delete (and a nullable tracked FK would not enforce anything anyway - EF nulls it first). Additive and nullable, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddLlmModelDescription` | `LlmModels.Description` (varchar(200) null) - the administrator's short phrase for a model, shown beside its name in the chat model picker. Additive and nullable, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddScreenshotOcr` | `MeetingScreenshots.OcrText` (text null), `OcrModel` (text null), `OcrGeneratedAt` (timestamptz null) - text read off a capture by an OCR model, plus which model read it and when. Additive and nullable, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 
 ### Entity-relationship overview
 
@@ -361,6 +362,9 @@ non-nullable here.
 | `Width` / `Height` | int | pixel dimensions of the full image (long edge capped at 2560) |
 | `SizeBytes` | bigint | full plus thumbnail bytes combined; counts toward the owner's storage quota |
 | `Ordinal` | int | 0-based sort order within the recording |
+| `OcrText` | text null | text an OCR model read off the capture; null until OCR has been run. **Machine-extracted and unverified** - see the note below |
+| `OcrModel` | text null | the model that produced `OcrText`. Stored rather than derived, because the routed OCR model changes over time and the provenance line must name the one that actually ran |
+| `OcrGeneratedAt` | timestamptz null | when `OcrText` was produced; null exactly when no OCR has run |
 | `CreatedAt` | timestamptz | |
 
 Indexes: `(RecordingId, CapturedAtMs)` (transcript-weave lookups and list ordering), `UserId`. CRUD +
@@ -370,6 +374,20 @@ streaming at `/api/recordings/{id}/screenshots` (`GET`/`POST`, `GET {id}/content
 (the cascade above only removes the rows); merging a recording away does the same rather than reassigning
 its screenshots to the survivor (unlike attachments), since a capture's clock offset has no meaning once its
 source recording's audio has been spliced into a different timeline.
+
+**OCR.** `POST {id}/ocr` (optionally `?force=true`) reads the text off a capture using the model routed to the
+`Ocr` call group, and caches it in the three `Ocr*` columns so the second read is free. The cache is the only
+reason those columns exist on the row rather than being computed per request: the feature offers two
+destinations for one extraction (the chat context and a Markdown attachment), and paying for a second model
+call to send the same text somewhere else would be indefensible. An empty model response is **never** written
+over a stored result - a model that cannot see images returns nothing, and letting that erase a good
+extraction would lose real work to a misconfiguration - so the endpoint answers 422 instead.
+
+Treat `OcrText` as **machine-extracted and unverified** wherever it is surfaced, and always alongside
+`OcrModel`. Four OCR models measured against one dense desktop capture each produced silent errors: a
+reproducible glyph misread (`DSP` read as `OSP`), whole tables dropped, and at one image size an entirely
+invented column of plausible scores. The columns are additive and nullable, so an older backup still restores
+and no `MaintenanceController.CurrentFormat` bump was needed.
 
 #### `Formulas`
 A saved **template** + a chosen context, run over a recording to produce a Markdown `FormulaResult`. `Scope`

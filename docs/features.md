@@ -126,6 +126,25 @@ at native resolution and scrolled around instead of downloading it. The Notes ta
 captures in a collapsed Screenshots section, from where one can be **dragged into the chat prompt** to ask
 a vision-capable model about it. A note or screenshot sitting between two turns by the same speaker now stops those
 turns from being merged past it.
+- **Extract text from a screenshot (OCR).** Where a Platform Administrator has routed a model to the **OCR**
+call type, the capture viewer gains two extract buttons: one puts the text into the **chat prompt**, the other
+saves it as a **Markdown attachment** on the meeting (where it is renameable, editable, and pulled into chat
+with the rest). Both share a single model call - the result is cached on the capture, so the second
+destination is instant and free, and a "force" re-read overwrites it. Extract several captures and they
+**accumulate** in the chat's context pill rather than replacing each other, each block headed by its capture;
+an uploaded file already in that slot is never overwritten without a confirmation. The buttons are hidden
+entirely when no OCR model is routed, and the existing image path (**Add to chat context**) is unchanged -
+sending the picture to a vision model and reading the words off it are different jobs.
+  **Every extraction is stamped with the model that produced it and marked machine-read and unverified**, in
+  the chat pill and in the attachment alike. This is not boilerplate: four OCR models measured against one
+  dense desktop capture each made silent errors - a misread letter (`DSP` as `OSP`, reproducibly), whole
+  tables dropped, and at one image size an invented column of neat, plausible scores present nowhere in the
+  image. Two settings are **per model** because the right values differ sharply: `ocr_prompt` (one model wants
+  the terse `Text Recognition:`, another a full sentence) and `ocr_max_edge`, the longest edge before the
+  image is rescaled. Quality is **not** monotonic in resolution - the best size measured between 1288 and
+  2560 pixels depending on the model, and pushing past a model's own best size made it worse - so the cap is a
+  calibration rather than a maximum. Extraction runs synchronously and the image is sent as PNG even when
+  rescaled, since JPEG artefacts land on exactly the glyph edges an OCR model is reading.
 - **Auto-capture (desktop app).** A sticky toggle beside the capture buttons: while it is on, Diariz watches
 the capture area and takes a screenshot **every time the screen settles on something new**, which captures a
 presentation slide by slide without anyone touching the keyboard. It watches once a second and only keeps a

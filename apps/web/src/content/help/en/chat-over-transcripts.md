@@ -64,11 +64,48 @@ read that size more reliably than a full 4K image. A capture already smaller tha
 it was taken. Very small text in a dense 4K screenshot may not survive the resize - if that happens, open
 the capture in the viewer and read it there.
 
+## Reading the text off a screenshot
+
+Sending a capture as a picture asks a model to look at it. There is a second option that reads the words
+off it instead, and turns them into text you can quote, search and keep.
+
+Open a capture full size. If your administrator has set up a text-extraction model, the toolbar has two
+extra buttons. One puts the extracted text straight into the chat box, ready to ask about. The other saves
+it as a file on the meeting, listed with your other attachments, where you can rename it, edit it, or feed
+it to chat later along with everything else.
+
+Both use the same single read. The result is kept on the capture, so if you extract to chat and then decide
+you want it as a file too, the second one is instant and costs nothing.
+
+Extract from several captures and they build up in the same context pill rather than replacing one another,
+each with a heading saying which capture it came from. If you already have a file attached to the chat when
+you extract, you are asked before it is replaced - your upload is never quietly thrown away.
+
+The buttons do not appear at all unless a text-extraction model has been set up. That is an administrator
+setting, on the AI models page.
+
+## How much to trust extracted text
+
+Treat it as a fast way to get at what a capture says, not as a transcript.
+
+Every extraction carries a line naming the model that read it and marking it unverified. That line is
+there because the warning is real. Four extraction models were tested against one busy screenshot before
+this feature shipped, and every one of them made mistakes that look nothing like mistakes: a letter read
+wrongly in a heading, a whole table silently left out, and - with one setting - a tidy column of
+plausible-looking scores that simply is not in the picture.
+
+Nothing flags these. The text comes back looking clean either way. So if a number matters, check it against
+the image in the viewer, which is always right there behind the text.
+
+Dials, gauges and charts are the hardest case, since the numbers around them are not laid out as a table.
+Expect those to need checking most.
+
 ## What you can do
 
 - **Stream replies** as they are generated.
 - **Attach PDFs or text files** to a question.
 - **Send in a meeting screenshot** - from its viewer or by dragging its thumbnail - for a vision-capable model to read.
+- **Extract the text from a screenshot** into the chat box or into a file on the meeting, where a text-extraction model is set up.
 - **Save conversations** and come back to them.
 - **Include attachments** to feed a meeting's attached documents to the model. Documents are read into
   text, and URLs are fetched behind safety guards.

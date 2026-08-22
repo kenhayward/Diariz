@@ -114,7 +114,8 @@ describe("RoutingMatrix", () => {
     show({ Tags: "a" }, "b");
 
     const checked = screen.getAllByRole("radio", { checked: true });
-    expect(checked).toHaveLength(7);
+    // Default plus one per assignable call group - so this moves whenever a group is added.
+    expect(checked).toHaveLength(8);
   });
 
   it("offers each model for editing", () => {

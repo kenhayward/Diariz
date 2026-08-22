@@ -318,6 +318,7 @@ AddLlmClient<ISummarizationClient, SummarizationClient>(NoHttpTimeout);
 AddLlmClient<IDictationClient, DictationClient>(NoHttpTimeout);
 AddLlmClient<IActionsClient, ActionsClient>(NoHttpTimeout);
 AddLlmClient<ITranslationClient, TranslationClient>(NoHttpTimeout);
+AddLlmClient<IOcrClient, OcrClient>(NoHttpTimeout);
 // The administrator's connection test. Registered like every other LLM client so its calls are timed and
 // logged by LlmTelemetryHandler - a test that spent tokens invisibly would be the one call an admin could
 // not account for.
@@ -400,6 +401,7 @@ builder.Services.AddScoped<IChatContextResolver, ChatContextResolver>();
 builder.Services.AddSingleton<IAttachmentExtractor, AttachmentExtractor>();
 // Rescales a screen capture for a vision-model chat attachment. Stateless over IAudioStorage, so singleton.
 builder.Services.AddSingleton<IVisionImageEncoder, VisionImageEncoder>();
+builder.Services.AddSingleton<IOcrImageEncoder, OcrImageEncoder>();
 // URL-attachment fetcher: a named client with auto-redirect OFF so each hop is re-checked against the
 // SSRF guard (see UrlFetcher).
 builder.Services.AddHttpClient("url-attachments")

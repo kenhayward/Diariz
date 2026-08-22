@@ -499,6 +499,30 @@ an id. It lives in the resolver rather than in `ChatController` so no future cal
 `LlmCallKind.ChatTitle` shares the Chat group but is deliberately excluded: it is background housekeeping
 the user never sees, so it stays on whatever the administrator routed.
 
+**Screenshot OCR (0.241.0).** `LlmCallGroup.Ocr` / `LlmCallKind.ScreenshotOcr` route reading text off a
+screen capture, and it is its own group rather than a reuse of Chat for a measured reason: the models worth
+using here are **not chat models**. `POST /api/recordings/{id}/screenshots/{shotId}/ocr` resolves the group,
+encodes the capture through `OcrImageEncoder`, and calls `OcrClient` - which posts to the same
+OpenAI-compatible `/chat/completions` every other client uses, but with **one user message, no system
+message, no history, no tools, no streaming, and the image content part placed BEFORE the text part** (the
+ordering llama.cpp documents for OCR models, and the opposite of `ChatToolOrchestrator.Shape`, which is
+correct for chat). `GET /api/ocr/status` reports whether a model is routed, so the capture viewer can hide
+the action rather than offer one that always 400s. The result is cached in `MeetingScreenshot.Ocr*`.
+
+Two parameters are **per model**, not constants, because four models measured against one dense capture
+disagreed sharply: `ocr_prompt` (one wants the terse `Text Recognition:`, another a full sentence - and
+swapping them narrowed one model to a single table, discarding the rest of the capture) and `ocr_max_edge`,
+the longest edge before rescaling. Quality is **not monotonic in resolution** for any model tested: the best
+size ranged from 1288 to 2560 pixels, one model *degraded* above its own best size, and at one size a model
+invented an entire column of plausible data. `OcrImageBounds` therefore takes the cap as an argument, unlike
+`VisionImageBounds`'s constant, and `OcrImageEncoder` emits **PNG even when rescaling** (where the vision
+encoder switches to JPEG), since JPEG artefacts land on exactly the glyph edges an OCR model reads.
+
+Because every model tested made silent errors, extracted text is stamped with the model that produced it and
+marked unverified wherever it surfaces - the chat context pill and the Markdown attachment alike. A general
+chat model routed here fails **invisibly**: rather than erroring, it describes the image or invents a
+narrative, which is why the provenance line names the model.
+
 **`ChatModelCatalog` is the single authority on which models chat may use.** Three callers need the same
 answer - `LlmSettingsResolver` (which endpoint to call), `ChatContextResolver` (which window to report), and
 `ChatModelsController` (what to offer). Written separately in each they would agree by coincidence and
@@ -565,7 +589,7 @@ key and deadline. **Dictation is deliberately outside all of this** - it is spee
 `/audio/transcriptions` with its own model, configured entirely by `DictationOptions`.
 
 Administration is `LlmModelsController` (`/api/admin/llm-models`, `ManagePlatform`) and the `/admin/llm-models`
-page, which from 0.223.0 is a **routing grid** (models down the side, the seven call groups across the top,
+page, which from 0.223.0 is a **routing grid** (models down the side, the eight call groups across the top,
 one selection per column) plus a per-model **drawer** of parameters. The grid writes the same
 `{defaultModelId, assignments}` object the old selects did, and keeps the same semantics: a group ABSENT from
 `assignments` follows `PlatformSettings.DefaultLlmModelId` rather than naming it, which is a different

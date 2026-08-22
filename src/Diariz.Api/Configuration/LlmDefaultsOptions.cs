@@ -22,6 +22,8 @@ public class LlmParameterDefaults
     public int? TimeoutSeconds { get; set; }
     public bool? ToolsSupported { get; set; }
     public bool? ImagesSupported { get; set; }
+    public string? OcrPrompt { get; set; }
+    public int? OcrMaxEdge { get; set; }
 
     /// <summary>This set as a parameter-layer JSON object, or null when nothing is configured.
     ///
@@ -43,9 +45,13 @@ public class LlmParameterDefaults
         Add(o, LlmParameterLayers.TimeoutSeconds, TimeoutSeconds);
         Add(o, LlmParameterLayers.ToolsSupported, ToolsSupported);
         Add(o, LlmParameterLayers.ImagesSupported, ImagesSupported);
+        Add(o, LlmParameterLayers.OcrMaxEdge, OcrMaxEdge);
 
         if (!string.IsNullOrWhiteSpace(ReasoningEffort))
             o[LlmParameterLayers.ReasoningEffort] = JsonValue.Create(ReasoningEffort);
+
+        if (!string.IsNullOrWhiteSpace(OcrPrompt))
+            o[LlmParameterLayers.OcrPrompt] = JsonValue.Create(OcrPrompt);
 
         return o.Count == 0 ? null : o.ToJsonString();
     }
@@ -79,6 +85,8 @@ public class LlmDefaultsOptions
     public int? TimeoutSeconds { get; set; } = LlmParameters.DefaultTimeoutSeconds;
     public bool? ToolsSupported { get; set; } = true;
     public bool? ImagesSupported { get; set; } = false;
+    public string? OcrPrompt { get; set; }
+    public int? OcrMaxEdge { get; set; }
 
     /// <summary>Today's one deliberate exception: translation runs cooler than everything else.</summary>
     public LlmParameterDefaults Translation { get; set; } = new() { Temperature = 0.1 };
@@ -88,6 +96,22 @@ public class LlmDefaultsOptions
     public LlmParameterDefaults Summaries { get; set; } = new();
     public LlmParameterDefaults MinutesAndFormulas { get; set; } = new();
     public LlmParameterDefaults Chat { get; set; } = new();
+
+    /// <summary>OCR's defaults are all deliberate, and all measured against real captures.
+    ///
+    /// Temperature near zero and top_k 1 are llama.cpp's own guidance for suppressing OCR hallucination -
+    /// which is not theoretical: at one resolution a model invented a whole column of plausible scores.
+    /// Tools off because no OCR model does tool calling. Images on, self-evidently. The timeout is 300s
+    /// rather than the usual 120s because LM Studio loads a model on demand, and a cold load can outlast
+    /// the default before a single token is produced.</summary>
+    public LlmParameterDefaults Ocr { get; set; } = new()
+    {
+        Temperature = 0.02,
+        TopK = 1,
+        ToolsSupported = false,
+        ImagesSupported = true,
+        TimeoutSeconds = 300,
+    };
 
     /// <summary>The bottom layer: what applies when neither the model nor its group override says anything.</summary>
     public string? BaseLayer => new LlmParameterDefaults
@@ -105,6 +129,8 @@ public class LlmDefaultsOptions
         TimeoutSeconds = TimeoutSeconds,
         ToolsSupported = ToolsSupported,
         ImagesSupported = ImagesSupported,
+        OcrPrompt = OcrPrompt,
+        OcrMaxEdge = OcrMaxEdge,
     }.ToLayer();
 
     /// <summary>The group's own default layer, or null when nothing is configured for it. ModelBase and a
@@ -117,6 +143,7 @@ public class LlmDefaultsOptions
         LlmCallGroup.MinutesAndFormulas => MinutesAndFormulas.ToLayer(),
         LlmCallGroup.Translation => Translation.ToLayer(),
         LlmCallGroup.Chat => Chat.ToLayer(),
+        LlmCallGroup.Ocr => Ocr.ToLayer(),
         _ => null,
     };
 }

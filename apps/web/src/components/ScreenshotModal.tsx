@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
-import { attachScreenshotToChat } from "../lib/chatAttachments";
+import { attachScreenshotToChat, attachTextToChat } from "../lib/chatAttachments";
 import { formatDuration } from "../lib/format";
 import type { Screenshot } from "../lib/types";
 import { MessageSquareIcon } from "./icons";
@@ -48,6 +48,7 @@ export default function ScreenshotModal({
   onClose,
   onJump,
   onDelete,
+  ocrEnabled = false,
 }: {
   recordingId: string;
   shots: Screenshot[];
@@ -56,6 +57,9 @@ export default function ScreenshotModal({
   onClose: () => void;
   onJump?: (ms: number) => void;
   onDelete?: (id: string) => void;
+  /// Whether an OCR model is routed. Passed in rather than fetched here so this component stays a pure
+  /// view - the recording page already owns the query.
+  ocrEnabled?: boolean;
 }) {
   const { t } = useTranslation("workspace");
   // Windowed by default; the toggle expands the dialog to fill the viewport so a full-screen capture is
@@ -68,6 +72,11 @@ export default function ScreenshotModal({
   // The chat panel sits behind this modal, so the only place a successful attach can be reported is the
   // button itself. Holds the id of the capture just attached; cleared when the viewer moves to another one.
   const [attachedId, setAttachedId] = useState<string | null>(null);
+  // Which extract action is in flight, or null. Doubles as the disabled guard: a cold LM Studio load can
+  // take a minute, and a second click during it would spend a second model call for the same answer.
+  const [ocrBusy, setOcrBusy] = useState<"chat" | "attachment" | null>(null);
+  const [ocrError, setOcrError] = useState<string | null>(null);
+  const [ocrDone, setOcrDone] = useState<string | null>(null);
   // Bumped when the image finishes loading, so the zoom-percentage badge recomputes from the real
   // naturalWidth/Height instead of the pre-load fallback (which reads as 100%).
   const [, remeasure] = useState(0);
@@ -140,7 +149,43 @@ export default function ScreenshotModal({
   useEffect(() => {
     setZoom(initialZoomState());
     setAttachedId(null);
+    setOcrError(null);
+    setOcrDone(null);
   }, [index]);
+
+  /// Extract the text off the capture on screen and send it to one of the two destinations.
+  ///
+  /// Both destinations share the one model call: the server caches the result on the capture, so choosing
+  /// the second destination afterwards costs nothing.
+  ///
+  /// The provenance header is not decoration and must not be dropped to tidy the output. Measured against
+  /// four models on one dense capture, every one produced silent errors - a misread digit, a whole dropped
+  /// table - and at one resolution a model invented an entire column of plausible scores. Text that reads
+  /// as transcribed fact is the single way this feature does harm, so whatever carries it says where it
+  /// came from.
+  async function runOcr(destination: "chat" | "attachment") {
+    if (!shot || ocrBusy) return;
+    setOcrBusy(destination);
+    setOcrError(null);
+    setOcrDone(null);
+    const label = t("screenshotOcrName", { time: formatDuration(shot.capturedAtMs) });
+    try {
+      const result = await api.ocrScreenshot(recordingId, shot.id);
+      const provenance = t("screenshotOcrProvenance", { model: result.model });
+      if (destination === "chat") {
+        attachTextToChat({ name: label, text: `${provenance}\n\n${result.text}` });
+      } else {
+        await api.addMarkdownAttachment(recordingId, `${label}.md`, `${provenance}\n\n${result.text}`);
+      }
+      setOcrDone(destination === "chat" ? t("screenshotOcrSentToChat") : t("screenshotOcrSaved"));
+    } catch (e) {
+      // Surfaced on the dialog rather than swallowed: the common failure is a model that cannot see images,
+      // and the server's message says exactly that.
+      setOcrError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setOcrBusy(null);
+    }
+  }
 
   useEffect(() => {
     // Nothing to page through - skip wiring the listener at all rather than dividing by shots.length.
@@ -302,6 +347,34 @@ export default function ScreenshotModal({
               />
             </>
           )}
+          {/* Extract text. Two destinations, and both are hidden entirely unless an administrator has
+              routed an OCR model - the endpoint would 400 every time otherwise, and most deployments never
+              configure one. These sit LEFT of the image button rather than replacing it: sending the
+              picture to a vision model and reading the text off it are different jobs. */}
+          {ocrEnabled && (
+            <>
+              <button
+                type="button"
+                className={btn}
+                disabled={ocrBusy !== null}
+                aria-label={t("screenshotOcrToChat")}
+                title={t("screenshotOcrToChat")}
+                onClick={() => runOcr("chat")}
+              >
+                {ocrBusy === "chat" ? <span aria-hidden>…</span> : t("screenshotOcrToChatShort")}
+              </button>
+              <button
+                type="button"
+                className={btn}
+                disabled={ocrBusy !== null}
+                aria-label={t("screenshotOcrToAttachment")}
+                title={t("screenshotOcrToAttachment")}
+                onClick={() => runOcr("attachment")}
+              >
+                {ocrBusy === "attachment" ? <span aria-hidden>…</span> : t("screenshotOcrToAttachmentShort")}
+              </button>
+            </>
+          )}
           {/* Hands the capture on screen to the chat composer - the drag gesture's equivalent for anyone who
               cannot (or would rather not) drag a thumbnail out of the strip. The tick is the only feedback
               possible from here, since the composer's tray is behind this modal. */}
@@ -341,6 +414,22 @@ export default function ScreenshotModal({
             ✕
           </button>
         </div>
+        {ocrError && (
+          <div
+            role="alert"
+            className="mx-2 mb-1 rounded bg-red-50 px-2 py-1 text-xs text-red-700 dark:bg-red-950 dark:text-red-300"
+          >
+            {ocrError}
+          </div>
+        )}
+        {ocrDone && !ocrError && (
+          <div
+            role="status"
+            className="mx-2 mb-1 rounded bg-green-50 px-2 py-1 text-xs text-green-700 dark:bg-green-950 dark:text-green-300"
+          >
+            {ocrDone}
+          </div>
+        )}
         <div
           ref={viewportRef}
           className={`flex w-full items-center justify-center overflow-hidden ${expanded ? "max-h-[92vh]" : "max-h-[75vh]"}`}

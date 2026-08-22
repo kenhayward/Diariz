@@ -41,4 +41,28 @@ public sealed record LlmParameters
     /// <summary>Declared and stored, not yet read by any call site. Present so the schema does not need
     /// revisiting when image input is wired up.</summary>
     public bool ImagesSupported { get; init; }
+
+    // ---- OCR: govern the client, never serialised as request keys ----
+
+    /// <summary>What olmOCR-2 responds to, and therefore the shipped default, since it is the default OCR
+    /// model. GLM-OCR's row overrides it with the terse "Text Recognition:".</summary>
+    public const string DefaultOcrPrompt =
+        "Below is the image of one page of a document. Just return the plain text representation of this " +
+        "document as if you were reading it naturally. Do not hallucinate.";
+
+    /// <summary>olmOCR-2's measured peak. It is a floor-and-ceiling question, not a maximum: olmOCR reads a
+    /// dense capture correctly at 2048 and <i>degrades</i> at 2560, where it starts replacing numbers with
+    /// image placeholders.</summary>
+    public const int DefaultOcrMaxEdge = 2048;
+
+    /// <summary>The instruction sent alongside the image. Free text, and per model for a measured reason:
+    /// GLM-OCR wants "Text Recognition:", olmOCR wants a sentence, and asking either for the other's prompt
+    /// measurably changes what comes back - "OCR markdown" narrowed one model to a single table and
+    /// discarded the rest of the capture.</summary>
+    public string OcrPrompt { get; init; } = DefaultOcrPrompt;
+
+    /// <summary>Longest edge, in pixels, an OCR image may have before it is rescaled. Per model because
+    /// four models measured against one capture wanted four different answers, and because more is not
+    /// better: quality is non-monotonic in resolution for every model tested.</summary>
+    public int OcrMaxEdge { get; init; } = DefaultOcrMaxEdge;
 }

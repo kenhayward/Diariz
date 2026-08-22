@@ -28,4 +28,9 @@ public enum LlmCallKind
     /// account for - but it is NOT dispatched by the resolver: the group and parameters come from whatever
     /// the admin is editing, unsaved, so it has no group of its own.</summary>
     AdminTest = 15,
+
+    /// <summary>Reading text off one screen capture, from the capture viewer. Its own kind rather than a
+    /// reuse of ChatMessage because it is routed to a different model entirely - a purpose-built OCR model,
+    /// not a chat model - and because an administrator needs to see what OCR costs on its own.</summary>
+    ScreenshotOcr = 16,
 }

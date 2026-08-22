@@ -115,6 +115,17 @@ export default function RecordingDetail() {
     queryFn: () => api.listAttachments(id),
     enabled: Boolean(id),
   });
+
+  // Whether an administrator has routed an OCR model, which decides if the capture viewer offers its
+  // extract actions at all. Platform-wide and slow-moving, so it is cached for the session rather than
+  // refetched per recording - and a failure resolves to "not available", which hides the buttons rather
+  // than offering an action that would 400.
+  const { data: ocrStatus } = useQuery({
+    queryKey: ["ocr-status"],
+    queryFn: () => api.getOcrStatus(),
+    staleTime: Infinity,
+    retry: false,
+  });
   // Generated formula results (the Formulas tab). Formula runs are async, so poll while any result is still
   // generating (the run adds a Generating row immediately; the poll fills in the Ready/Failed outcome).
   const { data: formulaResults = [] } = useQuery({
@@ -1813,6 +1824,7 @@ export default function RecordingDetail() {
           onClose={() => setOpenShot(null)}
           onJump={jumpToMs}
           onDelete={isOwner ? removeShot : undefined}
+          ocrEnabled={ocrStatus?.enabled ?? false}
         />
       )}
 
