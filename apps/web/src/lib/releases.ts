@@ -80,6 +80,9 @@ export const RELEASES: Release[] = [
     changed: [
       "Extracted text carries a line naming the model that read it and marking it unverified, wherever it lands.",
     ],
+    fixed: [
+      "The web app's package-lock version had drifted about thirty releases behind and is now checked alongside the other version mirrors, so it cannot silently fall out of step again.",
+    ],
   },
   {
     version: "0.240.0",
