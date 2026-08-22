@@ -84,6 +84,14 @@ you extract, you are asked before it is replaced - your upload is never quietly 
 The buttons do not appear at all unless a text-extraction model has been set up. That is an administrator
 setting, on the AI models page.
 
+Tables come through as tables. If the capture had a table on it, the model usually reads it back as one,
+and that structure is kept rather than flattened - so it renders as a table in your chat prompt or your
+saved file, with the line breaks inside a cell intact.
+
+The button shows a spinner while it is working. The first run of the day can take a minute, because the
+model has to load before it can read anything; after that it is quick. A tick appears on the button that
+did the work.
+
 ## How much to trust extracted text
 
 Treat it as a fast way to get at what a capture says, not as a transcript.

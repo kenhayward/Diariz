@@ -3,8 +3,9 @@ import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
 import { attachScreenshotToChat, attachTextToChat } from "../lib/chatAttachments";
 import { formatDuration } from "../lib/format";
+import { ocrToMarkdown } from "../lib/ocrMarkdown";
 import type { Screenshot } from "../lib/types";
-import { MessageSquareIcon } from "./icons";
+import { CheckIcon, FileTextIcon, MessageSquareIcon, ScanTextIcon, SpinnerIcon } from "./icons";
 import {
   MIN_SCALE,
   clampPanOffset,
@@ -49,6 +50,7 @@ export default function ScreenshotModal({
   onJump,
   onDelete,
   ocrEnabled = false,
+  onAttachmentSaved,
 }: {
   recordingId: string;
   shots: Screenshot[];
@@ -60,6 +62,10 @@ export default function ScreenshotModal({
   /// Whether an OCR model is routed. Passed in rather than fetched here so this component stays a pure
   /// view - the recording page already owns the query.
   ocrEnabled?: boolean;
+  /// Called after extracted text has been saved as an attachment, so the page that owns the Files list can
+  /// refresh it. A callback rather than a `useQueryClient` here for the same reason `ocrEnabled` is a prop:
+  /// it keeps this component a view, and keeps its tests free of a QueryClientProvider.
+  onAttachmentSaved?: () => void;
 }) {
   const { t } = useTranslation("workspace");
   // Windowed by default; the toggle expands the dialog to fill the viewport so a full-screen capture is
@@ -76,7 +82,9 @@ export default function ScreenshotModal({
   // take a minute, and a second click during it would spend a second model call for the same answer.
   const [ocrBusy, setOcrBusy] = useState<"chat" | "attachment" | null>(null);
   const [ocrError, setOcrError] = useState<string | null>(null);
-  const [ocrDone, setOcrDone] = useState<string | null>(null);
+  // WHICH destination last succeeded, not a message: the tick belongs on the button that did the work,
+  // and the banner text is derived from it.
+  const [ocrDone, setOcrDone] = useState<"chat" | "attachment" | null>(null);
   // Bumped when the image finishes loading, so the zoom-percentage badge recomputes from the real
   // naturalWidth/Height instead of the pre-load fallback (which reads as 100%).
   const [, remeasure] = useState(0);
@@ -172,12 +180,18 @@ export default function ScreenshotModal({
     try {
       const result = await api.ocrScreenshot(recordingId, shot.id);
       const provenance = t("screenshotOcrProvenance", { model: result.model });
+      // The models that read a page best answer with STRUCTURE - `<table>`, `<br>`, `<img alt>` - which is
+      // more useful than flat lines, but renders as angle brackets in a Markdown note or a chat context.
+      const body = `${provenance}\n\n${ocrToMarkdown(result.text)}`;
       if (destination === "chat") {
-        attachTextToChat({ name: label, text: `${provenance}\n\n${result.text}` });
+        attachTextToChat({ name: label, text: body });
       } else {
-        await api.addMarkdownAttachment(recordingId, `${label}.md`, `${provenance}\n\n${result.text}`);
+        await api.addMarkdownAttachment(recordingId, `${label}.md`, body);
+        // The Files tab is a sibling query owned by the recording page, and this modal sits over it - so
+        // without telling the page, a saved attachment stays invisible until something else refetches.
+        onAttachmentSaved?.();
       }
-      setOcrDone(destination === "chat" ? t("screenshotOcrSentToChat") : t("screenshotOcrSaved"));
+      setOcrDone(destination);
     } catch (e) {
       // Surfaced on the dialog rather than swallowed: the common failure is a model that cannot see images,
       // and the server's message says exactly that.
@@ -361,7 +375,10 @@ export default function ScreenshotModal({
                 title={t("screenshotOcrToChat")}
                 onClick={() => runOcr("chat")}
               >
-                {ocrBusy === "chat" ? <span aria-hidden>…</span> : t("screenshotOcrToChatShort")}
+                <span className="flex items-center gap-0.5">
+                  {ocrBusy === "chat" ? <SpinnerIcon size={14} /> : <ScanTextIcon size={14} />}
+                  {ocrDone === "chat" ? <CheckIcon size={12} /> : <MessageSquareIcon size={12} />}
+                </span>
               </button>
               <button
                 type="button"
@@ -371,7 +388,10 @@ export default function ScreenshotModal({
                 title={t("screenshotOcrToAttachment")}
                 onClick={() => runOcr("attachment")}
               >
-                {ocrBusy === "attachment" ? <span aria-hidden>…</span> : t("screenshotOcrToAttachmentShort")}
+                <span className="flex items-center gap-0.5">
+                  {ocrBusy === "attachment" ? <SpinnerIcon size={14} /> : <ScanTextIcon size={14} />}
+                  {ocrDone === "attachment" ? <CheckIcon size={12} /> : <FileTextIcon size={12} />}
+                </span>
               </button>
             </>
           )}
@@ -390,7 +410,7 @@ export default function ScreenshotModal({
           >
             <span className="flex items-center gap-1">
               <MessageSquareIcon size={14} />
-              {attachedId === shot.id && <span aria-hidden>✓</span>}
+              {attachedId === shot.id && <CheckIcon size={12} />}
             </span>
           </button>
           <button
@@ -427,7 +447,7 @@ export default function ScreenshotModal({
             role="status"
             className="mx-2 mb-1 rounded bg-green-50 px-2 py-1 text-xs text-green-700 dark:bg-green-950 dark:text-green-300"
           >
-            {ocrDone}
+            {ocrDone === "chat" ? t("screenshotOcrSentToChat") : t("screenshotOcrSaved")}
           </div>
         )}
         <div
