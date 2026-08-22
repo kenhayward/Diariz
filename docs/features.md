@@ -144,6 +144,12 @@ sending the picture to a vision model and reading the words off it are different
   the one line break a GFM cell allows, and an image is reduced to its alt text. Text with no markup in it
   is passed through **byte-identical**. The API still stores the model's answer verbatim - that is the
   record of what it actually said - so the conversion happens where the Markdown is needed.
+  The conversion strips real tags, then decodes entities, then escapes any angle brackets that remain -
+  that order matters in both directions. Stripping before decoding stops text a page merely *showed*
+  (`&lt;non-vaccines&gt;`) from being mistaken for markup and deleted; escaping afterwards stops the decode
+  turning escaped markup back into a live element, and keeps angle-bracketed text visible instead of being
+  swallowed by the renderer as an unknown tag. Backslashes are escaped before pipes, so a Windows path or a
+  regex in a captured table cannot un-escape the separator that follows it.
 
   **Every extraction is stamped with the model that produced it and marked machine-read and unverified**, in
   the chat pill and in the attachment alike. This is not boilerplate: four OCR models measured against one

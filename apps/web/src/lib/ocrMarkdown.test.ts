@@ -94,8 +94,15 @@ describe("ocrToMarkdown", () => {
   });
 
   it("decodes the entities a model emits", () => {
-    expect(ocrToMarkdown("<p>Mammalian &amp; Microbial &lt;non-vaccines&gt; &quot;scope&quot;&nbsp;here</p>"))
-      .toBe('Mammalian & Microbial <non-vaccines> "scope" here');
+    expect(ocrToMarkdown("<p>Mammalian &amp; Microbial &quot;scope&quot;&nbsp;here</p>"))
+      .toBe('Mammalian & Microbial "scope" here');
+  });
+
+  /// Angle brackets stay escaped rather than decoding to raw markup. Two reasons, and the second is the one
+  /// that bites a reader: a raw `<non-vaccines>` is swallowed by a Markdown renderer as an unknown HTML
+  /// tag, so the text simply disappears. This test previously asserted the opposite and was wrong.
+  it("keeps decoded angle brackets escaped so the text survives rendering", () => {
+    expect(ocrToMarkdown("<p>&lt;non-vaccines&gt;</p>")).toBe("&lt;non-vaccines&gt;");
   });
 
   /// Stray non-table markup should not survive into a Markdown file, but its text must.
@@ -127,5 +134,71 @@ describe("ocrToMarkdown", () => {
 
     expect(ocrToMarkdown(html)).toContain("| A |");
     expect(ocrToMarkdown(html)).toContain("| 1 |");
+  });
+});
+
+/// The defects CodeQL raised against this file (alerts 25-27), each reproduced as the caller would hit it.
+///
+/// The output is not an XSS sink today - both destinations render through `renderMarkdown`, which runs
+/// DOMPurify - but this function's contract is that its output carries no markup except the `<br>` it
+/// deliberately emits, and relying on a downstream sanitizer to make that true is not the same as it being
+/// true.
+describe("ocrToMarkdown - markup and escaping", () => {
+  /// The strip used to run BEFORE the decode, so entity-encoded markup passed through as plain text and
+  /// then decoded into a live element on the way out.
+  it("does not let entity-encoded markup decode into live markup", () => {
+    const out = ocrToMarkdown("&lt;script&gt;alert(1)&lt;/script&gt;");
+
+    expect(out).not.toContain("<script>");
+    expect(out).not.toContain("</script>");
+  });
+
+  it("does not let entity-encoded markup through inside a table cell", () => {
+    const out = ocrToMarkdown("<table><tr><th>A</th></tr><tr><td>&lt;img src=x onerror=alert(1)&gt;</td></tr></table>");
+
+    expect(out).not.toContain("<img");
+  });
+
+  /// Belt and braces on the strip itself. This regex consumes from a `<` to the next `>`, so a surviving
+  /// `<` cannot form a complete element - but the strip should be stable under repetition regardless,
+  /// rather than depending on that argument staying true if the pattern is ever edited.
+  it("leaves nothing that a second strip would still find", () => {
+    for (const attack of [
+      "<scr<script>ipt>alert(1)</scr</script>ipt>",
+      "<<script>script>alert(1)<</script>/script>",
+      "<img sr<x>c=x onerror=alert(1)>",
+    ]) {
+      const out = ocrToMarkdown(attack);
+      expect(out).not.toContain("<script");
+      expect(out).not.toContain("<img");
+    }
+  });
+
+  /// The `<br>` this file emits itself is the one piece of markup that must survive - it is the only line
+  /// break a GFM cell allows.
+  it("still emits its own br inside a cell", () => {
+    expect(ocrToMarkdown("<table><tr><th>A</th></tr><tr><td>one<br>two</td></tr></table>"))
+      .toContain("| one<br>two |");
+  });
+
+  /// A backslash already in the text was not escaped, so `\|` became `\|` - a literal backslash followed
+  /// by a live delimiter, splitting the cell and shifting every column after it. Backslashes are common in
+  /// exactly what this reads: file paths, regexes, terminal output.
+  it("escapes a backslash so it cannot un-escape the pipe after it", () => {
+    const backslashPipe = "<table><tr><th>A</th><th>B</th></tr><tr><td>x" + String.fromCharCode(92) + "|y</td><td>z</td></tr></table>";
+    const out = ocrToMarkdown(backslashPipe);
+
+    // The backslash is escaped in its own right, so the pipe after it is still escaped by ITS backslash
+    // rather than being un-escaped by the one in the text.
+    expect(out).toContain(String.raw`| x\\\|y | z |`);
+  });
+
+  it("keeps a Windows path intact in a cell", () => {
+    const path = "C:" + String.fromCharCode(92) + "Users" + String.fromCharCode(92) + "me";
+    const out = ocrToMarkdown("<table><tr><th>Path</th></tr><tr><td>" + path + "</td></tr></table>");
+
+    // Each backslash is escaped for Markdown, so the path renders as it was captured rather than losing
+    // its separators to the renderer.
+    expect(out).toContain(String.raw`C:\\Users\\me`);
   });
 });
