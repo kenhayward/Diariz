@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import ScreenshotModal from "./ScreenshotModal";
 import type { Screenshot } from "../lib/types";
+import { onChatScreenshotAttached } from "../lib/chatAttachments";
 
 vi.mock("../lib/api", () => ({
   api: {
@@ -95,6 +96,97 @@ describe("ScreenshotModal", () => {
     fireEvent.click(screen.getByRole("button", { name: /delete screenshot/i }));
 
     expect(onDelete).toHaveBeenCalledWith("a");
+  });
+
+  /// Delete is destructive and immediate; sitting it next to Close made a mis-aimed click lose a capture
+  /// (#577). It now leads the trailing cluster, fenced off by a separator from every routine control.
+  describe("delete placement", () => {
+    /// True when `later` comes after `earlier` in document order.
+    function precedes(earlier: Element, later: Element) {
+      return Boolean(earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING);
+    }
+
+    function renderWithDelete() {
+      render(
+        <ScreenshotModal
+          recordingId="r1"
+          shots={shots}
+          index={0}
+          onIndexChange={() => {}}
+          onClose={() => {}}
+          onDelete={() => {}}
+        />,
+      );
+      return {
+        del: screen.getByRole("button", { name: /delete screenshot/i }),
+        separator: screen.getByRole("separator"),
+        close: screen.getByRole("button", { name: /close screenshot/i }),
+        download: screen.getByRole("link", { name: /download screenshot/i }),
+        expand: screen.getByRole("button", { name: /enter full screen/i }),
+      };
+    }
+
+    it("puts the delete control before the download, full-screen and close controls", () => {
+      const { del, close, download, expand } = renderWithDelete();
+
+      expect(precedes(del, download)).toBe(true);
+      expect(precedes(del, expand)).toBe(true);
+      expect(precedes(del, close)).toBe(true);
+    });
+
+    it("fences the delete control off with a separator", () => {
+      const { del, separator, close } = renderWithDelete();
+
+      expect(precedes(del, separator)).toBe(true);
+      expect(precedes(separator, close)).toBe(true);
+    });
+
+    it("renders no separator when there is no delete control to fence off", () => {
+      render(<ScreenshotModal recordingId="r1" shots={shots} index={0} onIndexChange={() => {}} onClose={() => {}} />);
+
+      expect(screen.queryByRole("separator")).toBeNull();
+    });
+  });
+
+  describe("add to chat context", () => {
+    it("publishes the capture on screen to the chat composer", () => {
+      const attached = vi.fn();
+      const off = onChatScreenshotAttached(attached);
+      render(<ScreenshotModal recordingId="r1" shots={shots} index={1} onIndexChange={() => {}} onClose={() => {}} />);
+
+      fireEvent.click(screen.getByRole("button", { name: /add to chat context/i }));
+
+      expect(attached).toHaveBeenCalledWith({ recordingId: "r1", screenshotId: "b" });
+      off();
+    });
+
+    it("stays open so the capture can still be read while asking about it", () => {
+      const onClose = vi.fn();
+      const off = onChatScreenshotAttached(() => {});
+      render(<ScreenshotModal recordingId="r1" shots={shots} index={0} onIndexChange={() => {}} onClose={onClose} />);
+
+      fireEvent.click(screen.getByRole("button", { name: /add to chat context/i }));
+
+      expect(onClose).not.toHaveBeenCalled();
+      off();
+    });
+
+    /// The chat panel is behind the viewer, so the only feedback a click can give is on the button itself.
+    it("confirms the capture was added, and drops the confirmation on moving to another capture", () => {
+      const off = onChatScreenshotAttached(() => {});
+      const { rerender } = render(
+        <ScreenshotModal recordingId="r1" shots={shots} index={0} onIndexChange={() => {}} onClose={() => {}} />,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: /add to chat context/i }));
+      expect(screen.getByRole("button", { name: /added to chat context/i })).toBeTruthy();
+
+      rerender(
+        <ScreenshotModal recordingId="r1" shots={shots} index={1} onIndexChange={() => {}} onClose={() => {}} />,
+      );
+      expect(screen.getByRole("button", { name: /add to chat context/i })).toBeTruthy();
+      off();
+    });
   });
 
   it("offers a download link to the full-size image", () => {

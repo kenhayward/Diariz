@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { describe, it, expect, beforeEach } from "vitest";
 import { vi } from "vitest";
@@ -22,6 +22,7 @@ vi.mock("../auth", () => ({
 
 import Workspace from "./Workspace";
 import { TOUR_STEPS } from "../lib/onboarding";
+import { attachScreenshotToChat } from "../lib/chatAttachments";
 
 function renderWorkspace(initial = "/") {
   return render(
@@ -74,6 +75,18 @@ describe("Workspace", () => {
     expect(screen.queryByText("LIST")).toBeNull();
     expect(screen.getByRole("button", { name: /expand personal panel/i })).toBeTruthy();
     expect(localStorage.getItem("diariz.panels.left")).toBe("false");
+  });
+
+  /// Attaching a capture from the screenshot viewer is pointless if the tray it lands in is collapsed out
+  /// of sight, so the panel reveals itself (and remembers, like any other expand).
+  it("expands the chat panel when a capture is attached from the screenshot viewer", () => {
+    renderWorkspace();
+    expect(screen.getByText("CHAT").closest(".hidden")).toBeTruthy();
+
+    act(() => attachScreenshotToChat({ recordingId: "rec-1", screenshotId: "shot-a" }));
+
+    expect(screen.getByText("CHAT").closest(".hidden")).toBeNull();
+    expect(localStorage.getItem("diariz.panels.right")).toBe("true");
   });
 
   it("expands the chat panel when requested", () => {

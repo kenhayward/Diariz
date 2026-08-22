@@ -119,11 +119,12 @@ notes popover, so a mis-aimed capture area is caught during the meeting instead 
 stores a full PNG (long edge capped at 2560 pixels) plus a JPEG thumbnail, and both count toward your
 storage quota. Screenshots then appear **inline in the transcript** at the moment they were taken, as
 thumbnails that open a full-size viewer with previous/next, a position counter, a full-screen toggle,
-jump-to-moment, download, and delete; **zoom and pan** (mouse wheel toward the pointer, a zoom cluster,
-double-click, keyboard shortcuts, drag once zoomed in) let a dense capture be read at native resolution and
-scrolled around instead of downloading it. The Notes tab also lists a recording's captures in a collapsed
-Screenshots section, from where one can be **dragged into the chat prompt** to ask a vision-capable model
-about it. A note or screenshot sitting between two turns by the same speaker now stops those
+jump-to-moment, **add to chat context**, download, and delete - the delete leads the trailing button group
+behind a divider, so a click aimed at close cannot land on it; **zoom and pan** (mouse wheel toward the
+pointer, a zoom cluster, double-click, keyboard shortcuts, drag once zoomed in) let a dense capture be read
+at native resolution and scrolled around instead of downloading it. The Notes tab also lists a recording's
+captures in a collapsed Screenshots section, from where one can be **dragged into the chat prompt** to ask
+a vision-capable model about it. A note or screenshot sitting between two turns by the same speaker now stops those
 turns from being merged past it.
 - **Auto-capture (desktop app).** A sticky toggle beside the capture buttons: while it is on, Diariz watches
 the capture area and takes a screenshot **every time the screen settles on something new**, which captures a
@@ -306,10 +307,13 @@ where the previous one left off. The dial follows the choice immediately rather 
 reply, so it always reports the window of the model that will actually answer. The choice is remembered
 between visits and stored with a saved conversation; if the model is later withdrawn, the conversation falls
 back to the platform's chat model rather than failing.
-  **Asking about a screenshot.** A capture in the Notes tab's Screenshots section can be **dragged into the
-chat prompt box**, where it appears as a thumbnail above the input and goes to the model with the question.
-Several can be attached, one drop at a time, and each thumbnail carries an X to take it back out. They are
-**sticky** - they ride every turn until removed, so a follow-up about the same image needs no second drag -
+  **Asking about a screenshot.** A capture goes to the chat prompt two ways: the **Add to chat context**
+button in its full-size viewer (which ticks to confirm, leaves the viewer open, and expands the chat panel
+if it was collapsed), or **dragging its thumbnail** out of the Notes tab's Screenshots section into the
+prompt box. Either way it appears as a thumbnail above the input and goes to the model with the question.
+Several can be attached, one at a time, and each thumbnail carries an X to take it back out. They are
+**sticky** - they ride every turn until removed, so a follow-up about the same image needs no second
+attach -
 and they are stored with a saved conversation, so reopening it restores them (a capture deleted in the
 meantime is simply dropped). Reading images requires a model whose **Supports image input** parameter is set:
 with captures attached to a model that cannot, **Send is refused** with "Select a vision model" rather than

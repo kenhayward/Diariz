@@ -40,15 +40,19 @@ conversation falls back to the standard one rather than failing.
 
 ## Asking about a screenshot
 
-If a meeting has screen captures, the Notes tab lists them in a Screenshots section. Drag one from there
-into the chat box and it appears as a small thumbnail above where you type. Ask your question as usual
-and the picture goes across with it, so you can ask what a diagram shows or have a slide read back to
-you.
+If a meeting has screen captures, there are two ways to put one in front of the model. Open the capture
+full size and click the speech-bubble button in its toolbar - "Add to chat context" - or, from the
+Screenshots section on the Notes tab, drag a thumbnail into the chat box. Either way it appears as a small
+thumbnail above where you type. Ask your question as usual and the picture goes across with it, so you can
+ask what a diagram shows or have a slide read back to you.
 
-You can attach more than one, dropping them in one at a time, and each thumbnail has an X in its corner
-to take it back out. They stay attached while you keep asking, so a follow-up question about the same
-picture needs no second drag, and they are kept when you save the conversation. If a capture has been
-deleted since, it is quietly left out when you reopen.
+The button ticks to confirm, and leaves the viewer open so you can keep reading the capture while you type
+your question. If the chat panel was collapsed at the time, it opens itself.
+
+You can attach more than one, adding them one at a time, and each thumbnail has an X in its corner to take
+it back out. They stay attached while you keep asking, so a follow-up question about the same picture needs
+no second attach, and they are kept when you save the conversation. If a capture has been deleted since, it
+is quietly left out when you reopen.
 
 Not every model can read images. Your administrator marks the ones that can, and the model list shows
 which those are. If you attach a screenshot while a model that cannot read images is selected, the Send
@@ -64,7 +68,7 @@ the capture in the viewer and read it there.
 
 - **Stream replies** as they are generated.
 - **Attach PDFs or text files** to a question.
-- **Drag in a meeting screenshot** for a vision-capable model to read.
+- **Send in a meeting screenshot** - from its viewer or by dragging its thumbnail - for a vision-capable model to read.
 - **Save conversations** and come back to them.
 - **Include attachments** to feed a meeting's attached documents to the model. Documents are read into
   text, and URLs are fetched behind safety guards.

@@ -254,6 +254,8 @@
   "screenshotJump": "Aller à {{time}}",
   "screenshotDownload": "Télécharger la capture",
   "screenshotDelete": "Supprimer la capture",
+  "screenshotChatAdd": "Ajouter au contexte du chat",
+  "screenshotChatAdded": "Ajouté au contexte du chat",
   "screenshotCaptureButton": "Prendre une capture d'écran",
   "screenshotCaptureButtonHint": "Prendre maintenant une capture de la zone sélectionnée",
   "screenshotCaptureNeedsArea": "Définissez d'abord une zone de capture",

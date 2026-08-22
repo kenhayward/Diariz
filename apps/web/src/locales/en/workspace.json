@@ -254,6 +254,8 @@
   "screenshotJump": "Jump to {{time}}",
   "screenshotDownload": "Download screenshot",
   "screenshotDelete": "Delete screenshot",
+  "screenshotChatAdd": "Add to chat context",
+  "screenshotChatAdded": "Added to chat context",
   "screenshotCaptureButton": "Capture screenshot",
   "screenshotCaptureButtonHint": "Take one screenshot of the capture area now",
   "screenshotCaptureNeedsArea": "Set a capture area first",

@@ -35,6 +35,7 @@ vi.mock("../lib/api", () => ({
 import { api } from "../lib/api";
 import { fromPrompt } from "../lib/formulaTemplate";
 import ChatPanel from "./ChatPanel";
+import { attachScreenshotToChat } from "../lib/chatAttachments";
 
 const sharedRoom: RoomListItem = {
   id: "room-s", name: "Engineering", kind: 1, icon: null, color: null,
@@ -722,6 +723,36 @@ describe("ChatPanel", () => {
 
       act(() => drop(null, "text/plain"));
 
+      expect(screen.queryByAltText(/attached screenshot/i)).toBeNull();
+    });
+
+    /// The viewer's "Add to chat context" button publishes on the same module the panel subscribes to -
+    /// the drag gesture's keyboard-and-mouse-free equivalent, landing in the same tray.
+    it("adds a thumbnail when a capture is attached from the screenshot viewer", async () => {
+      await renderReady();
+
+      act(() => attachScreenshotToChat({ recordingId: "rec-1", screenshotId: "shot-a" }));
+
+      await waitFor(() =>
+        expect(screen.getByAltText(/attached screenshot/i).getAttribute("src")).toBe("/thumb/rec-1/shot-a"));
+    });
+
+    it("ignores a capture attached from the viewer that is already in the tray", async () => {
+      await renderReady();
+
+      act(() => drop(shotA));
+      await waitFor(() => expect(screen.getAllByAltText(/attached screenshot/i)).toHaveLength(1));
+      act(() => attachScreenshotToChat({ recordingId: "rec-1", screenshotId: "shot-a" }));
+
+      expect(screen.getAllByAltText(/attached screenshot/i)).toHaveLength(1);
+    });
+
+    it("stops listening for attached captures once unmounted", async () => {
+      const { unmount } = renderPanel();
+      await waitFor(() => expect(api.listChatModels).toHaveBeenCalled());
+      unmount();
+
+      expect(() => attachScreenshotToChat({ recordingId: "rec-1", screenshotId: "shot-a" })).not.toThrow();
       expect(screen.queryByAltText(/attached screenshot/i)).toBeNull();
     });
 
