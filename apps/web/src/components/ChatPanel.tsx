@@ -11,6 +11,7 @@ import { useActiveRecordingId, useActiveSectionId } from "../lib/activeRoute";
 import { useRoomBasePath } from "../lib/rooms";
 import { useSelection } from "../lib/selection";
 import { SCREENSHOT_DRAG_TYPE } from "../lib/dragTypes";
+import { onChatScreenshotAttached } from "../lib/chatAttachments";
 import {
   inferCurrentContext, currentContextLabelKey, currentContextRequest, type CurrentContext,
 } from "../lib/chatContext";
@@ -127,26 +128,37 @@ export default function ChatPanel() {
   const [shots, setShots] = useState<ChatScreenshotRef[]>([]);
   const [dropActive, setDropActive] = useState(false);
 
+  /// Attach a capture, wherever it came from. Attaching one already in the tray is a no-op rather than a
+  /// duplicate thumbnail - the same rule for a re-drop and for a second click of the viewer's chat button.
+  function addShot(shot: ChatScreenshotRef) {
+    setShots((prev) =>
+      prev.some((s) => s.recordingId === shot.recordingId && s.screenshotId === shot.screenshotId)
+        ? prev
+        : [...prev, shot]);
+  }
+
   /// Accept a capture dropped on the composer. Its own MIME type, so a dragged word or link cannot be
-  /// mistaken for one. Re-dropping a capture already attached is a no-op rather than a duplicate.
+  /// mistaken for one.
   function onDropShot(e: React.DragEvent) {
     const raw = e.dataTransfer.getData(SCREENSHOT_DRAG_TYPE);
     setDropActive(false);
     if (!raw) return;
     e.preventDefault();
-    let dropped: ChatScreenshotRef;
     try {
       const parsed = JSON.parse(raw) as ChatScreenshotRef;
       if (!parsed?.recordingId || !parsed?.screenshotId) return;
-      dropped = { recordingId: parsed.recordingId, screenshotId: parsed.screenshotId };
+      addShot({ recordingId: parsed.recordingId, screenshotId: parsed.screenshotId });
     } catch {
       return; // a malformed payload is not worth an error message; it cannot have come from our own strip
     }
-    setShots((prev) =>
-      prev.some((s) => s.recordingId === dropped.recordingId && s.screenshotId === dropped.screenshotId)
-        ? prev
-        : [...prev, dropped]);
   }
+
+  /// The other way in: the screenshot viewer's "Add to chat context" button, which cannot reach this panel
+  /// through the tree (it is mounted by the routed page, not by us) and publishes on a module channel
+  /// instead. Subscribed for the panel's whole life - it stays mounted while collapsed, so a capture
+  /// attached with the rail shut is already in the tray when it opens.
+  useEffect(() => onChatScreenshotAttached((shot) =>
+    addShot({ recordingId: shot.recordingId, screenshotId: shot.screenshotId })), []);
 
   // Voice dictation: the mic button toggles listening; finalized speech is appended to `input`, interim
   // speech shows as a live preview above the box. Engine is chosen once from capabilities.

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
+import { attachScreenshotToChat } from "../lib/chatAttachments";
 import { formatDuration } from "../lib/format";
 import type { Screenshot } from "../lib/types";
+import { MessageSquareIcon } from "./icons";
 import {
   MIN_SCALE,
   clampPanOffset,
@@ -18,7 +20,8 @@ import {
 } from "../lib/imageZoom";
 
 /// Full-size viewer for one capture, with prev/next through the recording's captures, a position counter,
-/// a jump to the moment it was taken, download, delete, a full-screen (expand-to-fill) toggle, and zoom/pan.
+/// a jump to the moment it was taken, an "add to chat context" button, download, delete, a full-screen
+/// (expand-to-fill) toggle, and zoom/pan.
 /// Index is owned by the caller so the transcript row, the Notes section and the strip all agree on which
 /// capture is open. Mirrors EditActionModal's shell (backdrop click + stop-propagation, Escape via a
 /// document keydown listener cleaned up on unmount).
@@ -31,6 +34,12 @@ import {
 /// pure `lib/imageZoom.ts`, unit-tested independently of the DOM; this component just wires DOM events to
 /// it and holds the `{ scale, offset }` state, which resets to fit whenever `index` changes or the modal
 /// is reopened.
+///
+/// Toolbar order is deliberate: paging and zoom on the left, then the trailing cluster led by **delete**,
+/// fenced off by a separator from the routine controls (chat, download, full screen, close). Delete used to
+/// sit immediately left of Close - same size, same X glyph - and deletion is immediate, so a mis-aimed
+/// click lost a capture (#577). Distance plus the fence is the fix; a confirm dialog on every delete was
+/// the heavier answer to a problem of aim.
 export default function ScreenshotModal({
   recordingId,
   shots,
@@ -56,6 +65,9 @@ export default function ScreenshotModal({
   // (initialZoomState) each time the modal is reopened, and via the effect below whenever `index` changes.
   const [zoom, setZoom] = useState(() => initialZoomState());
   const [dragging, setDragging] = useState(false);
+  // The chat panel sits behind this modal, so the only place a successful attach can be reported is the
+  // button itself. Holds the id of the capture just attached; cleared when the viewer moves to another one.
+  const [attachedId, setAttachedId] = useState<string | null>(null);
   // Bumped when the image finishes loading, so the zoom-percentage badge recomputes from the real
   // naturalWidth/Height instead of the pre-load fallback (which reads as 100%).
   const [, remeasure] = useState(0);
@@ -123,9 +135,11 @@ export default function ScreenshotModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Reset zoom/pan to fit whenever the caller moves to a different capture, so each one opens clean.
+  // Reset zoom/pan to fit whenever the caller moves to a different capture, so each one opens clean - and
+  // drop the attach confirmation with it, which describes the capture that was on screen, not this one.
   useEffect(() => {
     setZoom(initialZoomState());
+    setAttachedId(null);
   }, [index]);
 
   useEffect(() => {
@@ -268,6 +282,44 @@ export default function ScreenshotModal({
             +
           </button>
           <span className="flex-1" />
+          {/* Destructive first, then a fence: every routine control sits to the right of the separator, so a
+              click aimed at Close cannot land on Delete (#577). */}
+          {onDelete && (
+            <>
+              <button
+                type="button"
+                aria-label={t("screenshotDelete")}
+                title={t("screenshotDelete")}
+                className="rounded border border-red-300 px-2 py-1 text-sm text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
+                onClick={() => onDelete(shot.id)}
+              >
+                ✕
+              </button>
+              <span
+                role="separator"
+                aria-orientation="vertical"
+                className="mx-1 h-6 w-px shrink-0 bg-gray-200 dark:bg-gray-700"
+              />
+            </>
+          )}
+          {/* Hands the capture on screen to the chat composer - the drag gesture's equivalent for anyone who
+              cannot (or would rather not) drag a thumbnail out of the strip. The tick is the only feedback
+              possible from here, since the composer's tray is behind this modal. */}
+          <button
+            type="button"
+            className={btn}
+            aria-label={attachedId === shot.id ? t("screenshotChatAdded") : t("screenshotChatAdd")}
+            title={attachedId === shot.id ? t("screenshotChatAdded") : t("screenshotChatAdd")}
+            onClick={() => {
+              attachScreenshotToChat({ recordingId, screenshotId: shot.id });
+              setAttachedId(shot.id);
+            }}
+          >
+            <span className="flex items-center gap-1">
+              <MessageSquareIcon size={14} />
+              {attachedId === shot.id && <span aria-hidden>✓</span>}
+            </span>
+          </button>
           <button
             type="button"
             className={btn}
@@ -285,16 +337,6 @@ export default function ScreenshotModal({
           >
             ⤓
           </a>
-          {onDelete && (
-            <button
-              type="button"
-              aria-label={t("screenshotDelete")}
-              className="rounded border border-red-300 px-2 py-1 text-sm text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
-              onClick={() => onDelete(shot.id)}
-            >
-              ✕
-            </button>
-          )}
           <button type="button" autoFocus className={btn} aria-label={t("screenshotClose")} onClick={onClose}>
             ✕
           </button>

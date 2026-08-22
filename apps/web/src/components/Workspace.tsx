@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Outlet } from "react-router-dom";
 import RouteErrorBoundary from "./RouteErrorBoundary";
@@ -11,6 +11,7 @@ import { SelectionProvider } from "../lib/selection";
 import { MoveClipboardProvider } from "../lib/moveClipboard";
 import { useRoom } from "../lib/rooms";
 import { useResizableWidth } from "../lib/useResizableWidth";
+import { onChatScreenshotAttached } from "../lib/chatAttachments";
 
 function usePersistedBool(key: string, fallback: boolean): [boolean, (v: boolean) => void] {
   const [value, setValue] = useState<boolean>(() => {
@@ -49,6 +50,14 @@ export default function Workspace() {
   });
   const widthRef = useRef(rightWidth);
   widthRef.current = rightWidth;
+
+  // Attaching a capture from the screenshot viewer lands it in the chat composer's tray - which is behind a
+  // collapsed rail, and therefore invisible, unless the panel opens itself. ChatPanel does the attaching;
+  // this only reveals it (and persists the expand, like any other, since the user asked for chat).
+  // `setRightOpen` is a fresh closure each render but always writes the same key, so subscribing once is
+  // enough - re-subscribing on every render would only churn the listener set.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => onChatScreenshotAttached(() => setRightOpen(true)), []);
 
   function startResize(e: React.MouseEvent) {
     e.preventDefault();
