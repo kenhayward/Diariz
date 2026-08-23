@@ -64,6 +64,7 @@
   "cmdAttachDocTitle": "Chat conversation",
   "cmdAttachYou": "You",
   "cmdAttachAssistant": "Assistant",
+  "cmdAttachAttachment": "Attachment",
   "cmdAttachEmpty": "There's nothing to attach yet.",
   "cmdAttachNoTarget": "Open a transcript or folder first, then run /attach.",
   "cmdAttachAddedTranscript": "Saved this conversation as an attachment on the transcript.",

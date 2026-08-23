@@ -64,6 +64,7 @@
   "cmdAttachDocTitle": "Conversation du chat",
   "cmdAttachYou": "Vous",
   "cmdAttachAssistant": "Assistant",
+  "cmdAttachAttachment": "Pièce jointe",
   "cmdAttachEmpty": "Il n'y a encore rien à joindre.",
   "cmdAttachNoTarget": "Ouvrez d'abord une transcription ou un dossier, puis lancez /attach.",
   "cmdAttachAddedTranscript": "Conversation enregistrée en pièce jointe sur la transcription.",

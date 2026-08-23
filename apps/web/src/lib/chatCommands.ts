@@ -85,10 +85,19 @@ export function bulletList(heading: string, items: string[]): string {
 /// skipped. Pure so it can be unit-tested without the component.
 export function conversationToMarkdown(
   messages: { role: string; content: string }[],
-  labels: { title: string; youLabel: string; assistantLabel: string },
+  labels: { title: string; youLabel: string; assistantLabel: string; attachmentLabel?: string },
 ): string {
+  /// An attachment entry is neither side of the conversation - nobody said it - so it gets its own heading.
+  /// Falling through to the assistant label, as an `=== "user"` test does, would put text the model never
+  /// produced under its name in a document the user keeps.
+  function label(role: string): string {
+    if (role === "user") return labels.youLabel;
+    if (role === "attachment") return labels.attachmentLabel ?? "Attachment";
+    return labels.assistantLabel;
+  }
+
   const blocks = messages
     .filter((m) => m.content.trim().length > 0)
-    .map((m) => `## ${m.role === "user" ? labels.youLabel : labels.assistantLabel}\n\n${m.content.trim()}`);
+    .map((m) => `## ${label(m.role)}\n\n${m.content.trim()}`);
   return `# ${labels.title}\n\n${blocks.join("\n\n")}\n`;
 }

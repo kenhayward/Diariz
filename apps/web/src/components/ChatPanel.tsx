@@ -123,6 +123,9 @@ export default function ChatPanel() {
   // Whether the attachment preview is open. Just a flag - the text itself stays in `attachment` below, so a
   // second extraction appending to it cannot leave the open dialog showing a stale copy.
   const [previewing, setPreviewing] = useState(false);
+  // The attachment text already recorded in the thread, so a sticky pill is not repeated on every turn.
+  // A ref rather than state: nothing renders from it, and it must be current the moment send() reads it.
+  const shownAttachmentRef = useRef("");
   // `origin` is what lets extracted text accumulate without ever eating an uploaded document: OCR appends
   // to OCR, and only asks before overwriting a file. Optional so a restored conversation (which predates the
   // field) simply reads as a file - the conservative default, since that is the one the confirm protects.
@@ -402,6 +405,7 @@ ${text}`;
       title: t("cmdAttachDocTitle"),
       youLabel: t("cmdAttachYou"),
       assistantLabel: t("cmdAttachAssistant"),
+      attachmentLabel: t("cmdAttachAttachment"),
     });
     const name = t("cmdAttachDocTitle");
     try {
@@ -609,7 +613,10 @@ ${text}`;
           sectionId,
           attachmentName: attachment?.name ?? null,
           attachmentText: attachment?.text ?? null,
-          messages: history,
+          // Attachment entries are a record for the reader, not history: the server injects the
+          // attachment itself (labelled, and trimmed to the context budget), so sending them here
+          // would spend the same tokens twice.
+          messages: history.filter((m) => m.role !== "attachment"),
           includeAttachments: includeAttachments && hasContext,
           searchAllMeetings: contextMode === "all",
           modelId: selectedModel?.id ?? null,
@@ -666,7 +673,32 @@ ${text}`;
     }
 
     setInput("");
-    runTurn([...messages, { role: "user", content: prompt }]);
+    runTurn([...messages, ...attachmentEntry(), { role: "user", content: prompt }]);
+  }
+
+  /// The thread entry recording what the attachment supplied, or nothing when there is no new text to record.
+  ///
+  /// Extracted text is the reason this exists: unlike a transcript it lives nowhere else, and the pill that
+  /// holds it is transient. Without this, reopening a saved conversation shows answers with no sign of what
+  /// they were based on.
+  ///
+  /// Only what is NEW is recorded. The pill is sticky and rides every turn, so repeating it each time would
+  /// bury the conversation; and a second extraction appends to the pill, so re-showing the whole thing would
+  /// repeat the first block. Where the text has grown by appending, only the growth is added.
+  function attachmentEntry(): ChatTurn[] {
+    if (!attachment) return [];
+
+    const shown = shownAttachmentRef.current;
+    if (attachment.text === shown) return [];
+    const fresh = shown && attachment.text.startsWith(shown) ? attachment.text.slice(shown.length) : attachment.text;
+    shownAttachmentRef.current = attachment.text;
+    if (!fresh.trim()) return [];
+
+    // The name has to live INSIDE the content: a persisted turn is `{ role, content }` and nothing else, so
+    // anything not in the content is gone when the conversation is reopened. Same for the fence below - an
+    // uploaded document is not Markdown, and a code fence is how that survives a round trip through storage.
+    const body = (attachment.origin ?? "file") === "ocr" ? fresh.trim() : `\`\`\`\n${fresh.trim()}\n\`\`\``;
+    return [{ role: "attachment", content: `**📎 ${attachment.name}**\n\n${body}` }];
   }
 
   function stop() {
@@ -677,6 +709,7 @@ ${text}`;
   function clearThread() {
     stop();
     setMessages([]);
+    shownAttachmentRef.current = "";
     setUsage(null);
     setOpenedId(null);
     setSaveStatus(null);
@@ -746,6 +779,9 @@ ${text}`;
           : null,
       );
       setIncludeAttachments(c.context.includeAttachments ?? false);
+      // The restored thread already carries this conversation's attachment entries, so the next turn must
+      // not add them again.
+      shownAttachmentRef.current = c.context.attachmentText ?? "";
       // A model can be un-ticked between saving and reopening. Null falls through to the default, which is
       // what the picker and the server both do with an id they no longer recognise.
       setModelId(c.context.modelId ?? null);
@@ -891,12 +927,30 @@ ${text}`;
       </div>
 
       {/* Thread */}
-      <div ref={threadRef} onClick={onThreadClick} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+      <div ref={threadRef} data-testid="chat-thread" onClick={onThreadClick} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
         {messages.length === 0 && !commandOutput ? (
           <p className="px-1 text-xs text-gray-400 dark:text-gray-500">{t("intro")}</p>
         ) : (
           messages.map((m, i) => {
             const thinking = m.role === "assistant" && m.content === "" && streaming && i === messages.length - 1;
+            // The record of what an attachment supplied. Rendered as a bordered card rather than as a turn,
+            // because it is not one: nobody said it. It is capped and scrolls, since an extracted document
+            // can run to thousands of lines and would otherwise bury the conversation it belongs to.
+            if (m.role === "attachment") {
+              return (
+                <div key={i} data-role="attachment" className="flex justify-start">
+                  <div className="max-w-[90%] rounded-lg border border-dashed bg-gray-50 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800/60 dark:text-gray-200">
+                    <div
+                      className="chat-md max-h-64 overflow-y-auto break-words [&_code]:rounded [&_code]:bg-black/10 [&_code]:px-1 [&_pre]:overflow-x-auto"
+                      // Sanitized in renderMarkdown (DOMPurify) before injection, like every other rendered
+                      // surface here. This text is a model's transcription of arbitrary pixels.
+                      dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }}
+                    />
+                  </div>
+                </div>
+              );
+            }
+
             return (
               <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
                 <div
