@@ -64,6 +64,7 @@
   "cmdAttachDocTitle": "Chat-Unterhaltung",
   "cmdAttachYou": "Sie",
   "cmdAttachAssistant": "Assistent",
+  "cmdAttachAttachment": "Anhang",
   "cmdAttachEmpty": "Es gibt noch nichts zum Anhängen.",
   "cmdAttachNoTarget": "Öffnen Sie zuerst ein Transkript oder einen Ordner und führen Sie dann /attach aus.",
   "cmdAttachAddedTranscript": "Diese Unterhaltung wurde als Anhang am Transkript gespeichert.",

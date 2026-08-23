@@ -65,6 +65,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.244.0",
+    date: "2026-08-23",
+    pr: 587,
+    headline: "A saved conversation now keeps the text that was attached to it",
+    summary:
+      "When you attach something to a question, the text now appears in the conversation itself, in a card of its own just above the question it went with.\n\nThe reason is what happens later. A transcript is safe - it lives on the recording, and a saved conversation can always point back to it. Text read off a screen capture is not: it exists only in that attachment. Reopening a saved conversation used to show the questions and the answers with no sign of what they had actually been based on, and no way to check whether an answer was fair.\n\nNow it is there, as part of the conversation, and it comes back with it. Long text is capped to a scrollable block so a lengthy document does not bury the conversation around it. It is also labelled as an attachment rather than as something either you or the assistant said, including in the Markdown you get from /attach.\n\nThe model is not sent the text twice: it still receives the attachment the way it always did, and the copy in the thread is there for you to read.",
+    added: [
+      "Attached text appears in the conversation thread as its own card, and is kept when the conversation is saved and reopened.",
+    ],
+  },
+  {
     version: "0.243.0",
     date: "2026-08-22",
     pr: 586,

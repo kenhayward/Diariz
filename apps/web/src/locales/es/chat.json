@@ -64,6 +64,7 @@
   "cmdAttachDocTitle": "Conversación del chat",
   "cmdAttachYou": "Tú",
   "cmdAttachAssistant": "Asistente",
+  "cmdAttachAttachment": "Adjunto",
   "cmdAttachEmpty": "Aún no hay nada que adjuntar.",
   "cmdAttachNoTarget": "Abre primero una transcripción o carpeta y luego ejecuta /attach.",
   "cmdAttachAddedTranscript": "Conversación guardada como adjunto en la transcripción.",

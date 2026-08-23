@@ -146,6 +146,22 @@ describe("conversationToMarkdown", () => {
     expect(out).toContain("## Assistant\n\nHi! How can I help?");
   });
 
+  /// An attachment entry is neither side of the conversation. Labelling it "Assistant" would put words the
+  /// model never said under its name, in a document the user keeps.
+  it("labels an attachment entry as an attachment, not as the assistant", () => {
+    const out = conversationToMarkdown(
+      [
+        { role: "attachment", content: "**Screenshot at 1:05**\n\nUSP 8 1 2 11" },
+        { role: "user", content: "What is the total?" },
+      ],
+      { ...labels, attachmentLabel: "Attachment" },
+    );
+
+    expect(out).toContain("## Attachment");
+    expect(out).toContain("USP 8 1 2 11");
+    expect(out).not.toContain("## Assistant");
+  });
+
   it("skips blank turns", () => {
     const out = conversationToMarkdown(
       [

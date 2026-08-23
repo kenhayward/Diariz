@@ -948,3 +948,97 @@ describe("ChatPanel - previewing what is attached", () => {
     expect((await screen.findByRole("dialog")).textContent).toContain("PDF body text");
   });
 });
+
+describe("ChatPanel - attached text is kept in the thread", () => {
+  // This block sends turns, so it needs the same mock setup the main block installs - it is a sibling
+  // describe, so that beforeEach does not reach here.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mock(api.listRecordings).mockResolvedValue([rec("rec-1", "Standup")]);
+    mock(api.getUserSettings).mockResolvedValue({
+      apiBase: null, model: "gpt-oss", hasApiKey: false, defaultApiBase: null, defaultModel: "gpt-oss",
+      contextWindow: 131072, chatModel: "test-model", chatModelId: null,
+    });
+    mock(api.listChatModels).mockResolvedValue(CHAT_MODELS);
+    mock(api.chatStream).mockImplementation(async (_body: unknown, h: { onToken: (s: string) => void }) => {
+      h.onToken("ok");
+      return { model: "gpt-oss", contextUsed: 12, contextTotal: 100 };
+    });
+  });
+
+  async function renderReady() {
+    renderPanel();
+    await waitFor(() => expect(api.listChatModels).toHaveBeenCalled());
+  }
+
+  async function ask(text: string) {
+    const box = screen.getByLabelText("Chat message");
+    await act(async () => {
+      fireEvent.focus(box);
+      fireEvent.change(box, { target: { value: text } });
+      fireEvent.click(screen.getByRole("button", { name: /^send$/i }));
+    });
+  }
+
+  /// Extracted text may exist nowhere else - it is not in a transcript, and the pill is transient - so a
+  /// conversation that used it has to carry it, or reopening the chat loses what the answer was based on.
+  it("puts the attached text into the thread when it is first sent", async () => {
+    await renderReady();
+    act(() => attachTextToChat({ name: "Screenshot at 1:05", text: "USP 8 1 2 11" }));
+
+    await ask("What is the USP total?");
+
+    const thread = screen.getByTestId("chat-thread");
+    expect(thread.textContent).toContain("USP 8 1 2 11");
+    expect(thread.textContent).toContain("Screenshot at 1:05");
+  });
+
+  /// The server already injects the attachment into the prompt, where it is labelled and budget-trimmed.
+  /// Sending it as history as well would hand the model the same text twice and pay for it twice.
+  it("does not send the thread copy back as history", async () => {
+    await renderReady();
+    act(() => attachTextToChat({ name: "n", text: "USP 8 1 2 11" }));
+
+    await ask("First question");
+    await ask("Second question");
+
+    const last = mock(api.chatStream).mock.calls.at(-1)![0];
+    expect(last.messages.every((m: { role: string }) => m.role !== "attachment")).toBe(true);
+    // It still reaches the model the supported way.
+    expect(last.attachmentText).toContain("USP 8 1 2 11");
+  });
+
+  /// The pill is sticky and rides every turn; repeating its contents on each one would bury the conversation.
+  it("adds it once, not on every following turn", async () => {
+    await renderReady();
+    act(() => attachTextToChat({ name: "n", text: "USP 8 1 2 11" }));
+
+    await ask("First question");
+    await ask("Second question");
+
+    const thread = screen.getByTestId("chat-thread");
+    expect(thread.textContent!.split("USP 8 1 2 11").length - 1).toBe(1);
+  });
+
+  /// A second extraction appends to the pill, so showing the whole pill again would repeat the first
+  /// block. Only what is new is added.
+  it("adds only the new part when a second extraction appends to it", async () => {
+    await renderReady();
+    act(() => attachTextToChat({ name: "n", text: "First capture text" }));
+    await ask("One");
+    act(() => attachTextToChat({ name: "n2", text: "Second capture text" }));
+    await ask("Two");
+
+    const thread = screen.getByTestId("chat-thread");
+    expect(thread.textContent).toContain("Second capture text");
+    expect(thread.textContent!.split("First capture text").length - 1).toBe(1);
+  });
+
+  it("does nothing when there is no attachment", async () => {
+    await renderReady();
+
+    await ask("Plain question");
+
+    expect(screen.getByTestId("chat-thread").querySelector("[data-role=attachment]")).toBeNull();
+  });
+});

@@ -105,6 +105,19 @@ how you catch a misread number or a mangled table, rather than finding out from 
 
 Removing the attachment closes the preview too.
 
+## What a saved conversation keeps
+
+When you send a question with something attached, the attached text is added to the conversation as its own
+card, just above that question.
+
+This matters for text read off a capture. A transcript lives on its recording, so a saved conversation can
+always point back to it. Extracted text does not live anywhere else - it is only in the attachment - so
+without this, reopening a saved conversation would show the questions and answers with no way to see what
+they were based on.
+
+Long text is shown in a scrollable block so it does not bury the rest of the conversation, and only new text
+is added: asking several questions with the same attachment does not repeat it each time.
+
 ## How much to trust extracted text
 
 Treat it as a fast way to get at what a capture says, not as a transcript.

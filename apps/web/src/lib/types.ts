@@ -999,7 +999,11 @@ export interface UpdateUserSettings {
 
 // ---- Chat ----
 export interface ChatTurn {
-  role: "user" | "assistant";
+  /// `attachment` is a thread entry, not a turn: it records the text an attachment supplied so a reopened
+  /// conversation still shows what an answer was based on. It is never sent back as history - the server
+  /// injects the attachment itself, where it is labelled and budget-trimmed - so sending it too would hand
+  /// the model the same text twice. Persisted verbatim: `ChatTurnDto.Role` is a free-form string.
+  role: "user" | "assistant" | "attachment";
   content: string;
 }
 

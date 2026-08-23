@@ -167,6 +167,16 @@ Markdown (so a converted table reads as a table); an uploaded document's extract
 a monospace block, because it is not Markdown and rendering it would eat underscores and stray hashes out of
 ordinary prose. It matters most for extracted text, which is machine-read: reading it before sending is what
 separates noticing a misreading from quoting one. Removing the attachment closes the preview with it.
+- **Attached text is kept in the conversation.** When a turn is sent with something attached, the text it
+supplied is recorded in the thread as its own card, above the question it went with - so a saved conversation
+reopened later still shows what its answers were based on. This exists for extracted text specifically: a
+transcript lives on its recording and can always be pointed back to, whereas text read off a capture exists
+**only** in that attachment. The card is capped to a scrollable block so a long document does not bury the
+conversation, and it is labelled as an attachment rather than as either party's words (including in the
+Markdown `/attach` produces). It is a **record, not a turn**: it is never sent back as history, because the
+server already injects the attachment itself - labelled and trimmed to the context budget - and sending both
+would spend the same tokens twice. Only *new* text is recorded, so a sticky pill is not repeated on every
+turn and a second extraction adds only what it appended.
 - **Auto-capture (desktop app).** A sticky toggle beside the capture buttons: while it is on, Diariz watches
 the capture area and takes a screenshot **every time the screen settles on something new**, which captures a
 presentation slide by slide without anyone touching the keyboard. It watches once a second and only keeps a
