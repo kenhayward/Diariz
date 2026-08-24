@@ -99,6 +99,24 @@ a long table, so put it last, or in a section of its own.
 Note that in a **folder-wide** run there is no single recording, so field blocks resolve to nothing and
 are dropped. Keep merge fields for formulas you intend to run on one meeting.
 
+### Your own name in a prompt
+
+Write `$USERNAME` anywhere in a formula - in a prompt block or in ordinary text - and it is replaced, each
+time the formula runs, with the name you appear under on your transcripts. That lets a formula ask about
+you specifically:
+
+- "What role did $USERNAME play in this meeting?"
+- "What was the attitude of speakers apart from $USERNAME?"
+
+The name comes from your entry in the people directory, which follows the display name on your profile.
+You can see it, and whether Diariz holds a voiceprint for you, under Preferences -> Profile. When a formula
+runs automatically rather than because you asked for it, the name used is the owner of the recording.
+
+This is not a merge field, and the difference matters. A merge field like `{{date}}` is written into the
+finished document and the model never sees it. `$USERNAME` is substituted before the model is asked, which
+is what makes it usable inside a question. Write it in capitals - `$username` is left alone - and a longer
+word starting the same way, such as `$USERNAMES`, is left alone too.
+
 ## Context
 
 Tick what the formula is allowed to see. Nothing you do not tick reaches the model.
