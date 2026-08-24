@@ -12,9 +12,9 @@ using NpgsqlTypes;
 namespace Diariz.Api.IntegrationTests;
 
 /// <summary>The pgvector ANN index behind the semantic search arm, against real Postgres. Covers the two
-/// halves that have to hold together: the HNSW index exists and the unfenced query actually plans an index
-/// scan onto it (the whole point - see issue #594), and the fenced query still plans an exact scan, which is
-/// what keeps a filtered search truthful. HNSW is <b>approximate</b> and pgvector <b>post-filters</b>, so a
+/// halves that have to hold together: the HNSW index exists and the unfenced query can plan onto it (the whole
+/// point - see issue #594), and the fenced query still plans an exact scan, which is what keeps a filtered
+/// search truthful. HNSW is <b>approximate</b> and pgvector <b>post-filters</b>, so a
 /// selective filter can silently drop true nearest neighbours; the behavioural tests here pin that it does
 /// not, for both filters the search applies (an explicit recording scope, and room membership).</summary>
 [Collection(IntegrationCollection.Name)]
@@ -85,19 +85,42 @@ public class VectorIndexIntegrationTests(ContainersFixture fx)
         await db.SaveChangesAsync();
     }
 
-    private static async Task<List<string>> ExplainAsync(DiarizDbContext db, string sql, Action<DbCommand> bind)
+    /// <summary>Prices sequential scans out of the planner's reach, transaction-locally.
+    ///
+    /// <para>Postgres chooses by cost, and at test-data scale a sequential scan plus a top-N sort genuinely is
+    /// cheaper than an HNSW index scan - on CI it costed the unfenced query at 18.64 and picked the scan. That
+    /// is correct behaviour, and it is the whole reason this index only starts paying at library scale, but it
+    /// makes "does the planner choose the index" unassertable on a test database without seeding tens of
+    /// thousands of chunks. So these tests ask a sharper question: with sequential scans priced out, is the
+    /// index <b>usable</b> by this query shape at all? The unfenced query must reach for it, and the fenced one
+    /// must still refuse - which is a stronger statement about the fence than cost-based avoidance would be,
+    /// because it holds even when the planner actively wants the index.</para></summary>
+    private const string PriceOutSeqScans = "SET LOCAL enable_seqscan = off";
+
+    private static async Task<List<string>> ExplainAsync(
+        DiarizDbContext db, string sql, Action<DbCommand> bind, bool forceIndexPreference = true)
     {
         var conn = db.Database.GetDbConnection();
         var mustClose = conn.State != System.Data.ConnectionState.Open;
         if (mustClose) await conn.OpenAsync();
         try
         {
+            await using var tx = await conn.BeginTransactionAsync();
+            if (forceIndexPreference)
+            {
+                await using var set = conn.CreateCommand();
+                set.Transaction = tx;
+                set.CommandText = PriceOutSeqScans;
+                await set.ExecuteNonQueryAsync();
+            }
             await using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
             cmd.CommandText = "EXPLAIN " + sql;
             bind(cmd);
             var lines = new List<string>();
-            await using var reader = await cmd.ExecuteReaderAsync();
-            while (await reader.ReadAsync()) lines.Add(reader.GetString(0));
+            await using (var reader = await cmd.ExecuteReaderAsync())
+                while (await reader.ReadAsync()) lines.Add(reader.GetString(0));
+            await tx.CommitAsync();
             return lines;
         }
         finally
@@ -146,13 +169,14 @@ public class VectorIndexIntegrationTests(ContainersFixture fx)
 
     // ---- what the two query shapes plan to --------------------------------------------------------------
 
-    // These two are deliberately an A/B pair: identical SQL inputs, identical bindings, differing only in
-    // `exact`. That isolates the OFFSET 0 fence as the single cause of the plan changing - if the fenced test
-    // narrowed the room filter as well, it could pass because the filter looked selective rather than because
-    // the fence worked, and would keep passing if the fence were deleted.
+    // These two are deliberately an A/B pair: identical SQL inputs, identical bindings, identical planner
+    // settings, differing only in `exact`. That isolates the OFFSET 0 fence as the single cause of the plan
+    // changing. Both bind every room, and both price out sequential scans (see PriceOutSeqScans), so neither
+    // can pass for an incidental reason: delete the fence and the fenced test starts planning onto the index
+    // and fails immediately.
 
     [Fact]
-    public async Task UnfencedSemanticSql_PlansAnIndexScan_NotASequentialScan()
+    public async Task UnfencedSemanticSql_CanPlanOntoTheAnnIndex()
     {
         var (userId, recId, trId) = await SeedRecording();
         await AddChunks(userId, recId, trId, 200, 0.01, 0.004, "Index");
@@ -165,8 +189,10 @@ public class VectorIndexIntegrationTests(ContainersFixture fx)
             db, TranscriptSearch.BuildSemanticSql(hasScope: false, exact: false),
             cmd => Bind(cmd, roomIds, Angle(0), 10, null)));
 
+        // The query shape, the opclass and the operator all line up, so the index is reachable by this query.
+        // Whether the planner then picks it at a given size is its own cost decision - and correctly, it does
+        // not until the table is large enough for the index to pay for itself.
         Assert.Contains("hnsw", plan, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Seq Scan on \"TranscriptChunks\"", plan);
     }
 
     [Fact]
@@ -183,9 +209,9 @@ public class VectorIndexIntegrationTests(ContainersFixture fx)
             db, TranscriptSearch.BuildSemanticSql(hasScope: false, exact: true),
             cmd => Bind(cmd, roomIds, Angle(0), 10, null)));
 
-        // The fence must keep the planner off the ANN index even here, where the filter is wide open and the
-        // index is otherwise the obvious choice - post-filtering an approximate walk is what silently loses
-        // true neighbours once a real caller's filter is narrow.
+        // The fence must hold even here, where the filter is wide open and the planner has been told sequential
+        // scans are prohibitive - that is, where it actively wants the index. Post-filtering an approximate walk
+        // is what silently loses true neighbours once a real caller's filter is narrow.
         Assert.DoesNotContain("hnsw", plan, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -243,7 +269,10 @@ public class VectorIndexIntegrationTests(ContainersFixture fx)
             {
                 await using var set = conn.CreateCommand();
                 set.Transaction = tx;
-                set.CommandText = $"SET LOCAL hnsw.ef_search = {TranscriptSearch.EfSearch(Limit)}";
+                // ef_search exactly as production sets it, so the recall measured is the recall users get -
+                // plus the same seq-scan pricing the plan tests use, so the run really does go through the
+                // index. Measuring "recall" of a sequential scan would be a tautology.
+                set.CommandText = $"SET LOCAL hnsw.ef_search = {TranscriptSearch.EfSearch(Limit)}; {PriceOutSeqScans}";
                 await set.ExecuteNonQueryAsync();
             }
             await using var cmd = conn.CreateCommand();
