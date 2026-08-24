@@ -64,4 +64,22 @@ public class SummarizationClientTests
         Assert.Contains("reasoning_effort", handler.LastRequestBody);
         Assert.Contains("high", handler.LastRequestBody);
     }
+
+    [Fact]
+    public async Task SummarizeAsync_WhenTheEndpointRejectsIt_SurfacesWhatTheEndpointSaid()
+    {
+        // The failure this suite could not see before: EnsureSuccessStatusCode discarded the body, so the
+        // recording's Error - and GlitchTip - said only "400 (Bad Request)".
+        var handler = new FakeHttpMessageHandler(
+            """{"error":"The model 'local-model' is not loaded."}""",
+            System.Net.HttpStatusCode.BadRequest);
+        var client = new SummarizationClient(new HttpClient(handler));
+        var config = new LlmRequestConfig("http://llm.test/v1", "k", "local-model",
+            new LlmParameters { TimeoutSeconds = 60 });
+
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(() =>
+            client.SummarizeAsync(config, Segments, needName: false, SummarizationPrompt.DefaultTemplate));
+
+        Assert.Contains("is not loaded", ex.Message);
+    }
 }

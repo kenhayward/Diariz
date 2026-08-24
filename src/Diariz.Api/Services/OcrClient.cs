@@ -69,7 +69,7 @@ public class OcrClient(HttpClient http) : IOcrClient
         cts.CancelAfter(TimeSpan.FromSeconds(config.TimeoutSeconds));
 
         using var resp = await http.SendAsync(req, cts.Token);
-        resp.EnsureSuccessStatusCode();
+        await LlmResponse.EnsureSuccessAsync(resp, cts.Token);
 
         using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(cts.Token));
         // A model that answers with no choices is a failed extraction, not a crash: the caller already

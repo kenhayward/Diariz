@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
@@ -43,7 +44,7 @@ public class DictationClient : IDictationClient
         cts.CancelAfter(TimeSpan.FromSeconds(config.TimeoutSeconds));
 
         using var resp = await _http.SendAsync(req, cts.Token);
-        resp.EnsureSuccessStatusCode();
+        await LlmResponse.EnsureSuccessAsync(resp, cts.Token);
         var body = await resp.Content.ReadAsStringAsync(cts.Token);
         using var doc = JsonDocument.Parse(body);
         return doc.RootElement.TryGetProperty("text", out var t) ? t.GetString() ?? "" : "";
