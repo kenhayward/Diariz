@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using System.Data.Common;
 using System.Globalization;
 using System.Text;
@@ -167,9 +167,61 @@ public sealed class TranscriptSearch : ITranscriptSearch
         });
     }
 
+    /// <summary>How many ANN candidates pgvector may walk per query (<c>hnsw.ef_search</c>). pgvector's default
+    /// of 40 is sized for an unfiltered top-10, but this query always post-filters (by room membership, and
+    /// sometimes by recording scope) - a walk that stops at 40 candidates can hand back fewer rows than were
+    /// asked for, or miss true neighbours entirely. Scaled off the requested limit and clamped into pgvector's
+    /// permitted 1..1000 range. Public as a test seam so the recall test tunes the ANN path exactly as
+    /// production does, rather than hardcoding a second copy of the number.</summary>
+    public static int EfSearch(int limit) => Math.Clamp(limit * 8, 100, 1000);
+
+    /// <summary>The share of all placed recordings a caller must be able to see before the approximate index is
+    /// worth using. Above it, post-filtering discards at most half the walk and <see cref="EfSearch"/> has ample
+    /// headroom; below it the caller's slice is by definition a minority of the corpus, so scanning it exactly
+    /// is both cheaper and truthful.</summary>
+    private const double PrefilterRatio = 0.5;
+
+    /// <summary>The semantic arm's SQL, in its two shapes. Public as a test seam - this repo tests through
+    /// public API rather than <c>InternalsVisibleTo</c>, and the plan tests have to EXPLAIN the exact string
+    /// production runs rather than a copy of it that can drift. No production caller but the search itself.
+    ///
+    /// <para><paramref name="exact"/> wraps the filtered rows in a subquery terminated by <c>OFFSET 0</c>. That
+    /// is a Postgres optimisation fence: it blocks subquery pull-up, so the outer <c>ORDER BY</c> cannot be
+    /// pushed down into an index scan on the base table and the filtered rows must be sorted exactly. It is
+    /// deliberately not a session flag - it survives planner changes, and it does not disable index scans for
+    /// the rest of the query (the join to Recordings still uses its own).</para></summary>
+    public static string BuildSemanticSql(bool hasScope, bool exact)
+    {
+        var where = new StringBuilder(ChunkInCallersRooms + " AND c.\"Embedding\" IS NOT NULL");
+        if (hasScope) where.Append(" AND c.\"RecordingId\" = ANY(@scope)");
+
+        var sql = new StringBuilder(
+            "SELECT c.\"RecordingId\", COALESCE(r.\"Name\", r.\"Title\"), r.\"CreatedAt\", c.\"StartMs\", " +
+            "c.\"SpeakerLabels\", c.\"Text\", 1 - (c.\"Embedding\" <=> @qvec::vector) AS sim FROM ");
+        sql.Append(exact
+            ? "(SELECT c.\"RecordingId\", c.\"StartMs\", c.\"SpeakerLabels\", c.\"Text\", c.\"Embedding\" " +
+              "FROM \"TranscriptChunks\" c WHERE " + where + " OFFSET 0) c "
+            : "\"TranscriptChunks\" c ");
+        sql.Append("JOIN \"Recordings\" r ON r.\"Id\" = c.\"RecordingId\" ");
+        if (!exact) sql.Append("WHERE " + where + " ");
+        sql.Append("ORDER BY c.\"Embedding\" <=> @qvec::vector LIMIT @limit");
+        return sql.ToString();
+    }
+
     /// <summary>Vector arm: embeds the query and finds the nearest transcript chunks by pgvector cosine distance
     /// (<c>&lt;=&gt;</c>), owner-scoped and optionally restricted to <paramref name="scope"/>. Returns [] (and the
-    /// caller falls back to lexical-only) when embeddings are unconfigured or the query embedding fails.</summary>
+    /// caller falls back to lexical-only) when embeddings are unconfigured or the query embedding fails.
+    ///
+    /// <para><b>Why this picks between two query shapes.</b> The HNSW index makes the unfiltered case fast, but
+    /// HNSW is <b>approximate</b> and pgvector <b>post-filters</b>: it walks the graph in distance order and
+    /// discards rows failing the WHERE clause, stopping once it has seen <c>hnsw.ef_search</c> candidates.
+    /// Neither filter this query applies - room membership, or an explicit recording scope - can be pushed into
+    /// the index. So against a selective filter the walk can be used up entirely by rows the caller cannot see,
+    /// and the search quietly returns too few results, or the wrong ones. That is a correctness regression
+    /// rather than a slow query, so the choice is made deterministically instead of being left to the planner:
+    /// a scoped search is selective by construction, and a caller who can see only a sliver of the corpus is
+    /// selective by measurement. Both take the exact path - where the slice being scanned is small anyway, so
+    /// it is also the fast one.</para></summary>
     private async Task<IReadOnlyList<TranscriptHit>> SemanticSearchAsync(
         Guid userId, Guid[] roomIds, string phrase, Guid[]? scope, int limit, CancellationToken ct)
     {
@@ -192,23 +244,25 @@ public sealed class TranscriptSearch : ITranscriptSearch
         }
         catch
         {
-            // Embedding endpoint down/misconfigured → degrade to lexical-only rather than failing the search.
+            // Embedding endpoint down/misconfigured -> degrade to lexical-only rather than failing the search.
             return [];
         }
 
-        var sql = new StringBuilder();
-        sql.Append(
-            "SELECT c.\"RecordingId\", COALESCE(r.\"Name\", r.\"Title\"), r.\"CreatedAt\", c.\"StartMs\", " +
-            "c.\"SpeakerLabels\", c.\"Text\", 1 - (c.\"Embedding\" <=> @qvec::vector) AS sim " +
-            "FROM \"TranscriptChunks\" c " +
-            "JOIN \"Recordings\" r ON r.\"Id\" = c.\"RecordingId\" " +
-            "WHERE " + ChunkInCallersRooms + " AND c.\"Embedding\" IS NOT NULL");
-        if (scope is not null) sql.Append(" AND c.\"RecordingId\" = ANY(@scope)");
-        sql.Append(" ORDER BY c.\"Embedding\" <=> @qvec::vector LIMIT @limit");
-
         return await RunAsync(ct, async cmd =>
         {
-            cmd.CommandText = sql.ToString();
+            var exact = scope is not null || !await CallerSeesMostOfCorpusAsync(cmd, roomIds, ct);
+
+            if (!exact)
+            {
+                // Transaction-local (set_config's third argument), exactly like the trgm threshold RunAsync
+                // sets, so it cannot leak onto the next user of this pooled connection.
+                cmd.CommandText = "SELECT set_config('hnsw.ef_search', @ef, true)";
+                Add(cmd, "ef", EfSearch(limit).ToString(CultureInfo.InvariantCulture));
+                await cmd.ExecuteNonQueryAsync(ct);
+                cmd.Parameters.Clear();
+            }
+
+            cmd.CommandText = BuildSemanticSql(scope is not null, exact);
             Add(cmd, "roomIds", roomIds);
             Add(cmd, "qvec", queryLiteral);
             Add(cmd, "limit", limit);
@@ -223,6 +277,32 @@ public sealed class TranscriptSearch : ITranscriptSearch
                     reader.GetFieldValue<double>(6)));
             return (IReadOnlyList<TranscriptHit>)hits;
         });
+    }
+
+    /// <summary>Whether the caller can see at least <see cref="PrefilterRatio"/> of the corpus. Counted over
+    /// <c>RoomRecordings</c> (one row per placement) rather than over chunks: the caller's side is an index-only
+    /// scan of <c>PK_RoomRecordings</c> and the total is the planner's own <c>reltuples</c> estimate out of
+    /// <c>pg_class</c>, so this costs a small fraction of the search it protects - whereas counting chunks would
+    /// reintroduce the very scan the index exists to avoid. A never-ANALYZEd table reports <c>reltuples</c> of
+    /// -1; that only happens on a fresh instance, which is small enough for either path to be fast, so it takes
+    /// the ANN path rather than pinning a new deployment to exact scans forever.</summary>
+    private static async Task<bool> CallerSeesMostOfCorpusAsync(DbCommand cmd, Guid[] roomIds, CancellationToken ct)
+    {
+        cmd.CommandText =
+            "SELECT (SELECT count(*) FROM \"RoomRecordings\" WHERE \"RoomId\" = ANY(@roomIds))::float8, " +
+            "(SELECT reltuples FROM pg_class WHERE oid = '\"RoomRecordings\"'::regclass)::float8";
+        Add(cmd, "roomIds", roomIds);
+        double visible = 0, total = 0;
+        await using (var reader = await cmd.ExecuteReaderAsync(ct))
+        {
+            if (await reader.ReadAsync(ct))
+            {
+                visible = reader.GetDouble(0);
+                total = reader.GetDouble(1);
+            }
+        }
+        cmd.Parameters.Clear();
+        return total <= 0 || visible >= total * PrefilterRatio;
     }
 
     public async Task<IReadOnlyList<RecordingHit>> ListRecordingsAsync(

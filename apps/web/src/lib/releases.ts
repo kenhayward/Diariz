@@ -65,6 +65,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.245.1",
+    date: "2026-08-24",
+    pr: 595,
+    headline: "Meaning-based search stops reading every transcript to answer one question",
+    summary:
+      "Searching by meaning has always compared your question against every stored passage in turn. At the size most libraries are today that is fine - it answers in a small fraction of a second - but the work grew with the library rather than staying flat, so it was on course to get slower every month, and to fall off a cliff rather than degrade gently once the passages stopped fitting in memory.\n\nIt now uses an index, so the cost of a search stops tracking the size of your library. A library that has been collecting meetings for years answers as fast as one that started last week.\n\nThis needed more than just adding the index. The index finds near matches quickly but approximately, and it has no notion of which meetings you are allowed to see. Left to itself it searches the whole platform, discards everything that was not yours, and hands back a short answer with the best matches missing - which looks like a search that found nothing rather than one that went wrong. So it is used only where it cannot cost you results: when you can already see most of the library. A search inside one meeting or one folder, or a search on a shared platform where your rooms are a small slice of the whole, still compares every passage in that slice exactly. Those slices are small enough to be fast either way, and they stay exactly right.",
+    fixed: [
+      "Semantic transcript search read and unpacked every stored passage on every query. It now uses a pgvector HNSW index wherever doing so cannot cost it results, and an exact scan of your own slice wherever it could.",
+    ],
+  },
+  {
     version: "0.245.0",
     date: "2026-08-24",
     pr: 592,

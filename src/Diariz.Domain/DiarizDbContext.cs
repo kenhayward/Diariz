@@ -1,4 +1,4 @@
-using Diariz.Domain.Entities;
+﻿using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -530,9 +530,29 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
                 .HasForeignKey(c => c.TranscriptionId)
                 .OnDelete(DeleteBehavior.Cascade);
             if (isNpgsql)
+            {
                 e.Property(c => c.Embedding).HasColumnType("vector(768)");
+                // ANN index for the semantic search arm. Without it every search sequentially scans every
+                // chunk AND detoasts every vector: a vector(768) is 3,076 bytes and pgvector declares the
+                // type STORAGE = external, so each embedding lives out-of-line and costs ~12 buffer reads
+                // to reassemble before a single distance is computed (5,265 chunks measured at ~503 MB of
+                // buffer traffic per query). See issue #594.
+                //
+                // The opclass MUST stay vector_cosine_ops: TranscriptSearch orders by <=> (cosine), and an
+                // index built for a different operator is simply never used. m/ef_construction are pgvector's
+                // defaults - the corpus is far from the scale where tuning them pays.
+                //
+                // HNSW is APPROXIMATE and pgvector POST-filters, so this index is only safe to plan onto when
+                // the caller can see most of the corpus. TranscriptSearch decides that per query and fences
+                // the planner off this index when it cannot - see BuildSemanticSql.
+                e.HasIndex(c => c.Embedding)
+                    .HasMethod("hnsw")
+                    .HasOperators("vector_cosine_ops");
+            }
             else
+            {
                 e.Ignore(c => c.Embedding);
+            }
         });
 
         builder.Entity<Speaker>(e =>
