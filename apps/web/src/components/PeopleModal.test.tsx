@@ -146,6 +146,25 @@ describe("PeopleModal", () => {
     expect(api.mergePeople).not.toHaveBeenCalled();
   });
 
+
+  /// Before this the banner joined bare names - "Same name: Ken Hayward, Ken Hayward" - which is
+  /// undecidable without opening the dialog. Each person gets their own line and their own identity.
+  it("lists each duplicate with its identity rather than joining bare names", async () => {
+    const dupes: PersonDuplicateGroup[] = [{
+      reason: "name",
+      people: [
+        person("a", "Ken Hayward", { linkedUserId: "u1", isSelf: true, email: "ken@example.com" }),
+        person("b", "Ken Hayward"),
+      ],
+    }];
+    mock(api.findPersonDuplicates).mockResolvedValue(dupes);
+    render_();
+
+    const banner = (await screen.findByText("Possible duplicates")).closest("div")!;
+    expect(within(banner).getByText(/ken@example\.com - your account/)).toBeTruthy();
+    expect(within(banner).getByText(/no Diariz account/)).toBeTruthy();
+  });
+
   it("merges once the review dialog is confirmed", async () => {
     const dupes: PersonDuplicateGroup[] = [{ reason: "email", people: [people[0], people[1]] }];
     mock(api.findPersonDuplicates).mockResolvedValue(dupes);

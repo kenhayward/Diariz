@@ -148,13 +148,25 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
                 <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-300">{t("people:duplicatesHint")}</p>
                 <ul className="mt-2 space-y-1">
                   {visibleDuplicates.map((group, i) => (
-                    <li key={i} className="flex flex-wrap items-center gap-2 text-xs">
-                      <span className="text-gray-600 dark:text-gray-300">
+                    <li key={i} className="flex flex-wrap items-start gap-2 text-xs">
+                      {/* One line per person, each with its account identity. Joining the names produced
+                          "Same name: Ken Hayward, Ken Hayward", which cannot be decided on without
+                          opening the dialog - and the pair most worth reporting is the one where the
+                          names are identical. A div, not a span: it contains a list. */}
+                      <div className="min-w-0 flex-1 text-gray-600 dark:text-gray-300">
                         {group.reason === "email"
                           ? t("people:duplicatesReasonEmail")
                           : t("people:duplicatesReasonName")}
-                        : {group.people.map((p) => p.name).join(", ")}
-                      </span>
+                        :
+                        <ul className="mt-0.5 space-y-0.5">
+                          {group.people.map((p) => (
+                            <li key={p.id} className="truncate">
+                              {p.name}{" "}
+                              <PersonIdentityLine person={p} className="text-gray-500 dark:text-gray-400" />
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                       {group.people.length > 1 && (
                         <button
                           type="button"
