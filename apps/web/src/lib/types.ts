@@ -232,6 +232,12 @@ export interface SegmentDto {
   hasWords: boolean;
 }
 
+/** The speaker a segment now belongs to, including a label the server minted. */
+export interface SegmentSpeakerDto {
+  label: string;
+  displayName: string;
+}
+
 /** One aligned word inside a segment. Short keys because the server stores ~10k of these per recording. */
 export interface SegmentWord {
   w: string;
@@ -267,6 +273,9 @@ export interface SpeakerInfo {
   /// The user has marked this slot as overlapping/simultaneous speech ("Multiple Speakers").
   /// Such a speaker is never auto-identified or enrolled into a voiceprint.
   isMultiSpeaker: boolean;
+  /// A segment was moved into or out of this speaker, so its stored voiceprint no longer describes the
+  /// audio attributed to it. Nothing recomputes on its own - this is what prompts the user to.
+  embeddingStale: boolean;
 }
 
 /// Someone who appears in meetings. Platform-wide, and the voiceprint is optional: `hasVoiceprint` is false

@@ -2427,6 +2427,158 @@ public class RecordingsControllerTests
         Assert.Equal(3, await db.Segments.CountAsync());
     }
 
+
+    // ---- Moving one segment to a different speaker ----
+
+    /// <summary>Two speakers, two segments each, so a reassignment can be checked without also emptying a
+    /// label. Returns the id of SPEAKER_00's first segment.</summary>
+    private static async Task<(Recording rec, Guid segmentId)> SeedTwoSpeakers(DiarizDbContext db, Guid userId)
+    {
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var tr = await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id);
+        var first = new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 0, EndMs = 1000, Original = "A", Ordinal = 0 };
+        db.Segments.AddRange(
+            first,
+            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 1000, EndMs = 2000, Original = "B", Ordinal = 1 },
+            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_01", StartMs = 2000, EndMs = 3000, Original = "C", Ordinal = 2 });
+        db.Speakers.AddRange(
+            new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "Alice" },
+            new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_01", DisplayName = "Bob" });
+        await db.SaveChangesAsync();
+        return (rec, first.Id);
+    }
+
+    [Fact]
+    public async Task AssignSegmentSpeaker_MovesOneSegmentToAnExistingLabel()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, segmentId) = await SeedTwoSpeakers(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = Assert.IsType<OkObjectResult>(await controller.AssignSegmentSpeaker(
+            rec.Id, segmentId, new AssignSegmentSpeakerRequest("SPEAKER_01")));
+
+        Assert.Equal("SPEAKER_01", Assert.IsType<SegmentSpeakerDto>(result.Value).Label);
+        Assert.Equal("SPEAKER_01", (await db.Segments.SingleAsync(s => s.Id == segmentId)).SpeakerLabel);
+    }
+
+    [Fact]
+    public async Task AssignSegmentSpeaker_MarksBothLabelsStale()
+    {
+        // The audio behind each embedding changed: one speaker lost a segment, the other gained one.
+        // Marking only the receiver would leave the donor's voiceprint quietly describing audio that is
+        // no longer theirs.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, segmentId) = await SeedTwoSpeakers(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        await controller.AssignSegmentSpeaker(rec.Id, segmentId, new AssignSegmentSpeakerRequest("SPEAKER_01"));
+
+        var speakers = await db.Speakers.Where(s => s.RecordingId == rec.Id).ToListAsync();
+        Assert.Equal(2, speakers.Count);
+        Assert.All(speakers, s => Assert.True(s.EmbeddingStale));
+    }
+
+    [Fact]
+    public async Task AssignSegmentSpeaker_ToTheSpeakerItAlreadyHas_ChangesNothing()
+    {
+        // A no-op must not mark a voiceprint stale, or reassigning by mistake and undoing it would leave
+        // both speakers permanently flagged.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, segmentId) = await SeedTwoSpeakers(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        Assert.IsType<OkObjectResult>(await controller.AssignSegmentSpeaker(
+            rec.Id, segmentId, new AssignSegmentSpeakerRequest("SPEAKER_00")));
+
+        Assert.All(await db.Speakers.Where(s => s.RecordingId == rec.Id).ToListAsync(),
+            s => Assert.False(s.EmbeddingStale));
+    }
+
+    [Fact]
+    public async Task AssignSegmentSpeaker_WithNullLabel_MintsTheNextFreeSpeaker()
+    {
+        // The interrupting voice often has no diarization slot of its own. The client asks; the API
+        // allocates, so nothing writes into the worker's label namespace.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, segmentId) = await SeedTwoSpeakers(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = Assert.IsType<OkObjectResult>(await controller.AssignSegmentSpeaker(
+            rec.Id, segmentId, new AssignSegmentSpeakerRequest(null)));
+
+        Assert.Equal("SPEAKER_02", Assert.IsType<SegmentSpeakerDto>(result.Value).Label);
+        var minted = await db.Speakers.SingleAsync(s => s.RecordingId == rec.Id && s.Label == "SPEAKER_02");
+        Assert.Equal("SPEAKER_02", minted.DisplayName);
+        Assert.Null(minted.PersonId);
+    }
+
+    [Fact]
+    public async Task AssignSegmentSpeaker_DropsASpeakerLeftWithNoSegments()
+    {
+        // Same rule DeleteSegment already applies: a label with nothing under it is not a speaker in this
+        // recording, and leaving it puts an empty row in the Speakers panel.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var tr = await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id);
+        var only = new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 0, EndMs = 1000, Original = "A", Ordinal = 0 };
+        db.Segments.AddRange(only,
+            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_01", StartMs = 1000, EndMs = 2000, Original = "B", Ordinal = 1 });
+        db.Speakers.AddRange(
+            new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "Alice" },
+            new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_01", DisplayName = "Bob" });
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        await controller.AssignSegmentSpeaker(rec.Id, only.Id, new AssignSegmentSpeakerRequest("SPEAKER_01"));
+
+        Assert.DoesNotContain(await db.Speakers.Where(s => s.RecordingId == rec.Id).ToListAsync(),
+            s => s.Label == "SPEAKER_00");
+    }
+
+    [Fact]
+    public async Task AssignSegmentSpeaker_ToAnUnknownLabel_IsNotFound()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, segmentId) = await SeedTwoSpeakers(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        Assert.IsType<NotFoundResult>(await controller.AssignSegmentSpeaker(
+            rec.Id, segmentId, new AssignSegmentSpeakerRequest("SPEAKER_99")));
+    }
+
+    [Fact]
+    public async Task AssignSegmentSpeaker_ForAnotherUsersRecording_IsNotFound()
+    {
+        using var db = TestDb.Create();
+        var (rec, segmentId) = await SeedTwoSpeakers(db, Guid.NewGuid());
+        var controller = Build(db, Guid.NewGuid(), new FakeJobQueue());
+
+        Assert.IsType<NotFoundResult>(await controller.AssignSegmentSpeaker(
+            rec.Id, segmentId, new AssignSegmentSpeakerRequest("SPEAKER_01")));
+        Assert.Equal("SPEAKER_00", (await db.Segments.SingleAsync(s => s.Id == segmentId)).SpeakerLabel);
+    }
+
+    [Fact]
+    public async Task Get_ReportsWhichSpeakersNeedRecomputing()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, segmentId) = await SeedTwoSpeakers(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
+        await controller.AssignSegmentSpeaker(rec.Id, segmentId, new AssignSegmentSpeakerRequest("SPEAKER_01"));
+
+        var dto = (await controller.Get(rec.Id)).Value!;
+
+        Assert.All(dto.Speakers, s => Assert.True(s.EmbeddingStale));
+    }
+
     private static async Task<Recording> SeedTranscribedRecording(
         DiarizDbContext db, Guid userId, string? name = null)
     {

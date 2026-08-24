@@ -36,6 +36,17 @@ public class Speaker
     /// is a mix of people. Setting any explicit name/profile (or unassigning) clears the flag.</summary>
     public bool IsMultiSpeaker { get; set; }
 
+    /// <summary>The audio behind <see cref="Embedding"/> no longer describes this speaker, because a segment
+    /// was reassigned into or out of them. Set by per-segment reassignment, surfaced in the People screen's
+    /// Voiceprint tab, and cleared when a re-embed job reports back.
+    ///
+    /// <para>A <em>split</em> sets nothing: the same audio is still attributed to the same speaker, only
+    /// divided. Only moving a segment between speakers changes what each one's audio is.</para>
+    ///
+    /// <para>Nothing recomputes silently - that needs the worker and the original audio - so this is a flag,
+    /// not a trigger.</para></summary>
+    public bool EmbeddingStale { get; set; }
+
     /// <summary>The display name applied when a speaker is flagged <see cref="IsMultiSpeaker"/>. Stored
     /// verbatim so server-side transcript surfaces (exports, email, chat) read it like any other name;
     /// the web localises the in-app affordance.</summary>

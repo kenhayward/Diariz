@@ -1708,6 +1708,20 @@ const GENERATED: GeneratedResource[] = [
         "returnsArray": false
       },
       {
+        "value": "reassignOneSegmentToADifferentSpeaker",
+        "displayName": "Reassign one segment to a different speaker",
+        "description": "Moves a single segment to another speaker - what you need after splitting a block that contained a second voice. Pass an existing label, or null to have a new speaker minted for this recording when the interrupting voice has no diarization slot of its own; the response says which label was used.",
+        "method": "PUT",
+        "path": "/api/recordings/{id}/segments/{segmentId}/speaker",
+        "pathParams": [
+          "id",
+          "segmentId"
+        ],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": false
+      },
+      {
         "value": "removeARecordingSCalendarLink",
         "displayName": "Remove a recording's calendar link",
         "description": "Detaches the recording from its calendar event. Idempotent - unlinking a recording that has no link succeeds. Only the link is removed; the calendar event itself is never touched.",

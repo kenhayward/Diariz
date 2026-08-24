@@ -519,7 +519,20 @@ public record SetVoiceprintOptOutRequest(bool OptOut);
 public record SpeakerInfoDto(
     string Label, string DisplayName, Guid? PersonId, bool IdentifiedAuto, bool IsMultiSpeaker = false,
     string? Title = null, string? CompanyName = null, string? Email = null, string? Phone = null,
-    bool? IsInternal = null);
+    bool? IsInternal = null,
+    /// <summary>A segment was moved into or out of this speaker, so its stored voiceprint no longer
+    /// describes the audio it is attributed to. Nothing recomputes on its own - that needs the worker and
+    /// the original audio - so this is what tells the user it is worth doing.</summary>
+    bool EmbeddingStale = false);
+
+/// <summary>Move one segment to a different speaker. A null <see cref="Label"/> asks the API to mint a new
+/// speaker for this recording: the interrupting voice often has no diarization slot of its own, and the
+/// client must not invent a label into the worker's namespace.</summary>
+public record AssignSegmentSpeakerRequest(string? Label);
+
+/// <summary>The speaker a segment now belongs to - including a label the API minted, which the caller
+/// could not have known in advance.</summary>
+public record SegmentSpeakerDto(string Label, string DisplayName);
 public record RenameRecordingRequest(string? Name);
 /// <summary>Diarization speaker-count hints. Either bound may be null (= no bound / auto).</summary>
 public record SpeakerHints(int? Min, int? Max);

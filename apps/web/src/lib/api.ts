@@ -107,6 +107,7 @@ import type {
   ScreenshotOcr,
   OcrStatus,
   SegmentWord,
+  SegmentSpeakerDto,
 } from "./types";
 
 const TOKEN_KEY = "diariz.token";
@@ -428,6 +429,14 @@ export const api = {
   /// Empty for a segment with none - check `hasWords` on the segment first.
   async getSegmentWords(id: string, segmentId: string): Promise<SegmentWord[]> {
     const { data } = await http.get<SegmentWord[]>(`/api/recordings/${id}/segments/${segmentId}/words`);
+    return data;
+  },
+
+  /// Move one segment to another speaker. Pass null to have the server mint a new speaker for this
+  /// recording and tell you which label it chose.
+  async assignSegmentSpeaker(id: string, segmentId: string, label: string | null): Promise<SegmentSpeakerDto> {
+    const { data } = await http.put<SegmentSpeakerDto>(
+      `/api/recordings/${id}/segments/${segmentId}/speaker`, { label });
     return data;
   },
 

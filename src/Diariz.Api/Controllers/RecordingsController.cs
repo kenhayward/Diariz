@@ -1022,6 +1022,63 @@ public class RecordingsController : ControllerBase
         return NoContent();
     }
 
+    [HttpPut("{id:guid}/segments/{segmentId:guid}/speaker")]
+    [EndpointSummary("Reassign one segment to a different speaker")]
+    [EndpointDescription(
+        "Moves a single segment to another speaker - what you need after splitting a block that contained a " +
+        "second voice. Pass an existing label, or **null** to have a new speaker minted for this recording " +
+        "when the interrupting voice has no diarization slot of its own; the response says which label was " +
+        "used.\n\n" +
+        "Both the losing and the gaining speaker have their stored voiceprint marked stale, since the audio " +
+        "behind it changed. Nothing is recomputed here - that needs the worker and the original audio. A " +
+        "speaker left with no segments drops off the recording, exactly as when its last segment is deleted.")]
+    public async Task<IActionResult> AssignSegmentSpeaker(
+        Guid id, Guid segmentId, AssignSegmentSpeakerRequest req)
+    {
+        var owned = await _db.Recordings.AnyAsync(r => r.Id == id && r.UserId == UserId);
+        if (!owned) return NotFound();
+
+        var seg = await _db.Segments.Include(s => s.Transcription)
+            .FirstOrDefaultAsync(s => s.Id == segmentId);
+        if (seg?.Transcription is null || seg.Transcription.RecordingId != id) return NotFound();
+
+        var speakers = await _db.Speakers.Where(s => s.RecordingId == id).ToListAsync();
+        var from = speakers.FirstOrDefault(s => s.Label == seg.SpeakerLabel);
+
+        Speaker to;
+        if (req.Label is null)
+        {
+            var label = SpeakerLabels.NextFree(speakers.Select(s => s.Label));
+            to = new Speaker { Id = Guid.NewGuid(), RecordingId = id, Label = label, DisplayName = label };
+            _db.Speakers.Add(to);
+            speakers.Add(to);
+        }
+        else
+        {
+            var found = speakers.FirstOrDefault(s => s.Label == req.Label);
+            if (found is null) return NotFound();
+            to = found;
+        }
+
+        // A no-op must not flag anything: reassigning by mistake and putting it back would otherwise leave
+        // both speakers permanently marked stale.
+        if (to.Label == seg.SpeakerLabel) return Ok(new SegmentSpeakerDto(to.Label, to.DisplayName));
+
+        seg.SpeakerLabel = to.Label;
+        if (from is not null) from.EmbeddingStale = true;
+        to.EmbeddingStale = true;
+        await _db.SaveChangesAsync();
+
+        // A label with nothing left under it is not a speaker in this recording - the same rule
+        // DeleteSegment applies when it empties one.
+        var survivors = await _db.Segments
+            .Where(s => s.TranscriptionId == seg.Transcription.Id).ToListAsync();
+        await PruneOrphanSpeakersAsync(id, survivors);
+        await _db.SaveChangesAsync();
+
+        return Ok(new SegmentSpeakerDto(to.Label, to.DisplayName));
+    }
+
     /// <summary>Delete a single segment from the current transcription (e.g. a meaningless filler row).
     /// Permanent for this version — re-transcribe to regenerate the full set. Remaining segments are
     /// renumbered so their ordinals stay contiguous.</summary>
@@ -2145,10 +2202,12 @@ public class RecordingsController : ControllerBase
     private static SpeakerInfoDto Describe(Speaker s, IReadOnlyDictionary<Guid, Person> people)
     {
         if (s.IsMultiSpeaker || s.PersonId is not { } personId || !people.TryGetValue(personId, out var person))
-            return new SpeakerInfoDto(s.Label, s.DisplayName, s.PersonId, s.IdentifiedAuto, s.IsMultiSpeaker);
+            return new SpeakerInfoDto(s.Label, s.DisplayName, s.PersonId, s.IdentifiedAuto, s.IsMultiSpeaker,
+                EmbeddingStale: s.EmbeddingStale);
 
         return new SpeakerInfoDto(
             s.Label, s.DisplayName, s.PersonId, s.IdentifiedAuto, s.IsMultiSpeaker,
-            person.Title, person.CompanyName, person.Email, person.Phone, person.IsInternal);
+            person.Title, person.CompanyName, person.Email, person.Phone, person.IsInternal,
+            s.EmbeddingStale);
     }
 }

@@ -182,6 +182,20 @@
         ],
         "type": "object"
       },
+      "AssignSegmentSpeakerRequest": {
+        "properties": {
+          "label": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "type": "object"
+      },
       "AssignSpeakerRequest": {
         "properties": {
           "personId": {
@@ -4221,6 +4235,10 @@
               "null",
               "string"
             ]
+          },
+          "embeddingStale": {
+            "default": false,
+            "type": "boolean"
           },
           "identifiedAuto": {
             "type": "boolean"
@@ -9600,6 +9618,60 @@
           }
         },
         "summary": "Edit a segment's text",
+        "tags": [
+          "Recordings"
+        ]
+      }
+    },
+    "/api/recordings/{id}/segments/{segmentId}/speaker": {
+      "put": {
+        "description": "Moves a single segment to another speaker - what you need after splitting a block that contained a second voice. Pass an existing label, or **null** to have a new speaker minted for this recording when the interrupting voice has no diarization slot of its own; the response says which label was used.\n\nBoth the losing and the gaining speaker have their stored voiceprint marked stale, since the audio behind it changed. Nothing is recomputed here - that needs the worker and the original audio. A speaker left with no segments drops off the recording, exactly as when its last segment is deleted.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "segmentId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignSegmentSpeakerRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignSegmentSpeakerRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignSegmentSpeakerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Reassign one segment to a different speaker",
         "tags": [
           "Recordings"
         ]

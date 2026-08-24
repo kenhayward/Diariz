@@ -1849,6 +1849,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<Vector>("Embedding")
                         .HasColumnType("vector(192)");
 
+                    b.Property<bool>("EmbeddingStale")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IdentifiedAuto")
                         .HasColumnType("boolean");
 
