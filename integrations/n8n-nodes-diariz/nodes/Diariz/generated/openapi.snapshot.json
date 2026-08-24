@@ -561,6 +561,32 @@
         ],
         "type": "object"
       },
+      "ChatLibraryAttachmentRequest": {
+        "properties": {
+          "attachmentId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "recordingId": {
+            "format": "uuid",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sectionId": {
+            "format": "uuid",
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "attachmentId"
+        ],
+        "type": "object"
+      },
       "ChatModelDto": {
         "properties": {
           "contextLength": {
@@ -6656,6 +6682,57 @@
           }
         },
         "summary": "Extract text from a file for chat",
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
+    "/api/chat/attachment/library": {
+      "post": {
+        "description": "Returns the **extracted text** of an attachment you already have - one filed against a recording, or one filed against a folder - so it can be added to a chat turn as context. Nothing is stored and nothing is copied: this reads the attachment you already own.\n\nGive exactly one of `recordingId` or `sectionId`, naming where the attachment hangs. A recording attachment requires that the recording is yours; a folder attachment requires that you can see the folder. 404 for anything you cannot reach - the two are not distinguished, so a stranger cannot probe for ids. 400 for a file type with no text in it (an archive, an image) or a document that yields nothing.",
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatLibraryAttachmentRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatLibraryAttachmentRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatLibraryAttachmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatAttachmentDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatAttachmentDto"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatAttachmentDto"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Read an existing attachment into chat context",
         "tags": [
           "Chat"
         ]

@@ -810,6 +810,10 @@ public record ChatStreamRequest(
 /// <summary>Extracted attachment text returned to the client (held and resent with each turn).</summary>
 public record ChatAttachmentDto(string Name, int Chars, string Text);
 
+/// <summary>Which existing attachment to read into chat context. Exactly one of <paramref name="RecordingId"/>
+/// and <paramref name="SectionId"/> identifies where it hangs, and therefore which access rule applies.</summary>
+public record ChatLibraryAttachmentRequest(Guid AttachmentId, Guid? RecordingId = null, Guid? SectionId = null);
+
 /// <summary>The recognised text for one dictation utterance.</summary>
 public record ChatTranscriptionDto(string Text);
 

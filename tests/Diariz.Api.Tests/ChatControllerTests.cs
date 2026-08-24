@@ -727,4 +727,193 @@ public class ChatControllerTests
         // 800x600 is 640 tokens on its own - a turn this short could not reach that on text alone.
         Assert.True(used >= 640, $"expected the image to be billed, got contextUsed={used}");
     }
+
+    // ---- One existing attachment, read into chat context (the drag-and-drop endpoint) ----
+
+    /// <summary>Seeds a File attachment on a recording, with its blob in fake storage.</summary>
+    private static async Task<Guid> SeedFileAttachment(
+        DiarizDbContext db, FakeAudioStorage storage, Guid recordingId, string name, string contentType, string body)
+    {
+        var key = Guid.NewGuid().ToString("N");
+        storage.Objects[key] = Encoding.UTF8.GetBytes(body);
+        var a = new Attachment
+        {
+            Id = Guid.NewGuid(), RecordingId = recordingId, Kind = AttachmentKind.File,
+            Name = name, ContentType = contentType, BlobKey = key, SizeBytes = body.Length, Ordinal = 0,
+        };
+        db.Attachments.Add(a);
+        await db.SaveChangesAsync();
+        return a.Id;
+    }
+
+    [Fact]
+    public async Task LibraryAttachment_ReturnsTheTextOfARecordingAttachment()
+    {
+        var me = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var (controller, db, _, _) = Build(me, storage: storage);
+        var rid = await SeedTranscribedRecording(db, me);
+        var aid = await SeedFileAttachment(db, storage, rid, "plan.txt", "text/plain", "Quarterly plan text.");
+
+        var res = await controller.LibraryAttachment(new ChatLibraryAttachmentRequest(aid, RecordingId: rid), default);
+
+        Assert.Equal("plan.txt", res.Value!.Name);
+        Assert.Contains("Quarterly plan text.", res.Value.Text);
+    }
+
+    [Fact]
+    public async Task LibraryAttachment_ReturnsAUrlAttachmentsFetchedText()
+    {
+        var me = Guid.NewGuid();
+        var fetcher = new FakeUrlFetcher();
+        var (controller, db, _, _) = Build(me, urlFetcher: fetcher);
+        var rid = await SeedTranscribedRecording(db, me);
+        var a = new Attachment
+        {
+            Id = Guid.NewGuid(), RecordingId = rid, Kind = AttachmentKind.Url,
+            Name = "Roadmap", Url = "https://example.com/roadmap", Ordinal = 0,
+        };
+        db.Attachments.Add(a);
+        await db.SaveChangesAsync();
+        fetcher.Texts["https://example.com/roadmap"] = "Ship in Q3.";
+
+        var res = await controller.LibraryAttachment(new ChatLibraryAttachmentRequest(a.Id, RecordingId: rid), default);
+
+        Assert.Equal("Ship in Q3.", res.Value!.Text);
+    }
+
+    /// <summary>Ownership is the access rule, and a stranger must not be able to tell a recording that is not
+    /// theirs from one that does not exist - both are 404.</summary>
+    [Fact]
+    public async Task LibraryAttachment_NotFound_WhenTheRecordingBelongsToSomeoneElse()
+    {
+        var me = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var (controller, db, _, _) = Build(me, storage: storage);
+        var rid = await SeedTranscribedRecording(db, Guid.NewGuid()); // someone else's recording
+        var aid = await SeedFileAttachment(db, storage, rid, "plan.txt", "text/plain", "Secret.");
+
+        var res = await controller.LibraryAttachment(new ChatLibraryAttachmentRequest(aid, RecordingId: rid), default);
+
+        Assert.IsType<NotFoundResult>(res.Result);
+        Assert.Empty(storage.Reads); // rejected before any blob was read
+    }
+
+    [Fact]
+    public async Task LibraryAttachment_NotFound_WhenTheAttachmentDoesNotExist()
+    {
+        var me = Guid.NewGuid();
+        var (controller, db, _, _) = Build(me);
+        var rid = await SeedTranscribedRecording(db, me);
+
+        var res = await controller.LibraryAttachment(
+            new ChatLibraryAttachmentRequest(Guid.NewGuid(), RecordingId: rid), default);
+
+        Assert.IsType<NotFoundResult>(res.Result);
+    }
+
+    [Fact]
+    public async Task LibraryAttachment_BadRequest_WhenNeitherRecordingNorSectionIsGiven()
+    {
+        var (controller, _, _, _) = Build(Guid.NewGuid());
+
+        var res = await controller.LibraryAttachment(new ChatLibraryAttachmentRequest(Guid.NewGuid()), default);
+
+        Assert.IsType<BadRequestObjectResult>(res.Result);
+    }
+
+    [Fact]
+    public async Task LibraryAttachment_BadRequest_WhenBothRecordingAndSectionAreGiven()
+    {
+        var (controller, _, _, _) = Build(Guid.NewGuid());
+
+        var res = await controller.LibraryAttachment(
+            new ChatLibraryAttachmentRequest(Guid.NewGuid(), RecordingId: Guid.NewGuid(), SectionId: Guid.NewGuid()),
+            default);
+
+        Assert.IsType<BadRequestObjectResult>(res.Result);
+    }
+
+    /// <summary>The bulk path skips these silently, which is right when a whole turn is at stake. Here the
+    /// user dropped this one document and is waiting on it, so it says why.</summary>
+    [Fact]
+    public async Task LibraryAttachment_BadRequest_ForAnUnsupportedFileType()
+    {
+        var me = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var (controller, db, _, _) = Build(me, storage: storage);
+        var rid = await SeedTranscribedRecording(db, me);
+        var aid = await SeedFileAttachment(db, storage, rid, "bundle.zip", "application/zip", "PK...");
+
+        var res = await controller.LibraryAttachment(new ChatLibraryAttachmentRequest(aid, RecordingId: rid), default);
+
+        Assert.IsType<BadRequestObjectResult>(res.Result);
+    }
+
+    [Fact]
+    public async Task LibraryAttachment_BadRequest_WhenNothingCouldBeExtracted()
+    {
+        var me = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var (controller, db, _, _) = Build(me, storage: storage);
+        var rid = await SeedTranscribedRecording(db, me);
+        var aid = await SeedFileAttachment(db, storage, rid, "blank.txt", "text/plain", "   ");
+
+        var res = await controller.LibraryAttachment(new ChatLibraryAttachmentRequest(aid, RecordingId: rid), default);
+
+        Assert.IsType<BadRequestObjectResult>(res.Result);
+    }
+
+    /// <summary>A folder attachment is gated on being able to VIEW the folder, mirroring
+    /// SectionAttachmentsController rather than inventing a second rule.</summary>
+    [Fact]
+    public async Task LibraryAttachment_ResolvesAFolderAttachmentForAViewerOfThatFolder()
+    {
+        var me = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var (controller, db, _, _) = Build(me, storage: storage);
+        var roomId = await new RoomScope(db).PersonalRoomIdAsync(me);
+        var section = new Section { Id = Guid.NewGuid(), UserId = me, RoomId = roomId, Name = "Folder" };
+        db.Sections.Add(section);
+        storage.Objects["fk"] = Encoding.UTF8.GetBytes("Folder brief text.");
+        var a = new SectionAttachment
+        {
+            Id = Guid.NewGuid(), SectionId = section.Id, UploadedByUserId = me, Kind = AttachmentKind.File,
+            Name = "brief.txt", ContentType = "text/plain", BlobKey = "fk", SizeBytes = 18, Ordinal = 0,
+        };
+        db.SectionAttachments.Add(a);
+        await db.SaveChangesAsync();
+
+        var res = await controller.LibraryAttachment(
+            new ChatLibraryAttachmentRequest(a.Id, SectionId: section.Id), default);
+
+        Assert.Contains("Folder brief text.", res.Value!.Text);
+    }
+
+    [Fact]
+    public async Task LibraryAttachment_NotFound_ForAFolderTheCallerCannotView()
+    {
+        var me = Guid.NewGuid();
+        var other = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var (controller, db, _, _) = Build(me, storage: storage);
+        Users.Ensure(db, other);
+        var otherRoom = await new RoomScope(db).PersonalRoomIdAsync(other);
+        var section = new Section { Id = Guid.NewGuid(), UserId = other, RoomId = otherRoom, Name = "Theirs" };
+        db.Sections.Add(section);
+        storage.Objects["fk"] = Encoding.UTF8.GetBytes("Private brief.");
+        var a = new SectionAttachment
+        {
+            Id = Guid.NewGuid(), SectionId = section.Id, UploadedByUserId = other, Kind = AttachmentKind.File,
+            Name = "brief.txt", ContentType = "text/plain", BlobKey = "fk", SizeBytes = 14, Ordinal = 0,
+        };
+        db.SectionAttachments.Add(a);
+        await db.SaveChangesAsync();
+
+        var res = await controller.LibraryAttachment(
+            new ChatLibraryAttachmentRequest(a.Id, SectionId: section.Id), default);
+
+        Assert.IsType<NotFoundResult>(res.Result);
+        Assert.Empty(storage.Reads);
+    }
 }

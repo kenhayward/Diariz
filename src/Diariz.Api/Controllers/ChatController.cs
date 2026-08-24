@@ -327,6 +327,56 @@ public class ChatController : ControllerBase
         }
     }
 
+
+    [HttpPost("attachment/library")]
+    [EndpointSummary("Read an existing attachment into chat context")]
+    [EndpointDescription(
+        "Returns the **extracted text** of an attachment you already have - one filed against a recording, " +
+        "or one filed against a folder - so it can be added to a chat turn as context. Nothing is stored and " +
+        "nothing is copied: this reads the attachment you already own.\n\n" +
+        "Give exactly one of `recordingId` or `sectionId`, naming where the attachment hangs. A recording " +
+        "attachment requires that the recording is yours; a folder attachment requires that you can see the " +
+        "folder. 404 for anything you cannot reach - the two are not distinguished, so a stranger cannot " +
+        "probe for ids. 400 for a file type with no text in it (an archive, an image) or a document that " +
+        "yields nothing.")]
+    public async Task<ActionResult<ChatAttachmentDto>> LibraryAttachment(
+        ChatLibraryAttachmentRequest req, CancellationToken ct)
+    {
+        if (req.RecordingId is null == (req.SectionId is null))
+            return BadRequest("Give exactly one of recordingId or sectionId.");
+
+        AttachmentRef? target = null;
+        if (req.RecordingId is { } recordingId)
+        {
+            // Ownership is the access rule for a recording attachment, exactly as the bulk context path
+            // requires (a.Recording!.UserId == UserId).
+            var a = await _db.Attachments.FirstOrDefaultAsync(
+                x => x.Id == req.AttachmentId && x.RecordingId == recordingId && x.Recording!.UserId == UserId, ct);
+            if (a is not null) target = new AttachmentRef(a.Kind, a.Name, a.BlobKey, a.ContentType, a.Url);
+        }
+        else if (req.SectionId is { } sectionId)
+        {
+            // Folder attachments are gated on being able to VIEW the folder, mirroring
+            // SectionAttachmentsController's read gate rather than inventing a second rule.
+            if (await _rooms.ViewableSectionAsync(UserId, sectionId) is null) return NotFound();
+            var a = await _db.SectionAttachments.FirstOrDefaultAsync(
+                x => x.Id == req.AttachmentId && x.SectionId == sectionId, ct);
+            if (a is not null) target = new AttachmentRef(a.Kind, a.Name, a.BlobKey, a.ContentType, a.Url);
+        }
+
+        if (target is not { } attachment) return NotFound();
+
+        // Checked here rather than inside the resolver so the message can say WHY. The resolver returns a
+        // bare null because its other caller (the bulk path) skips silently and needs no reason.
+        if (attachment.Kind == AttachmentKind.File && !_extractor.IsSupported(attachment.Name, attachment.ContentType))
+            return BadRequest(
+                "Only PDF, text, Office (.docx/.xlsx/.pptx), email (.eml) and calendar (.ics) files can be read as text.");
+
+        var text = await _attachmentText.ResolveAsync(attachment, ct);
+        if (text is null) return BadRequest("No text could be read from this attachment.");
+        return new ChatAttachmentDto(text.Name, text.Chars, text.Text);
+    }
+
     // ---- Voice dictation (server fallback path) ----
 
     /// <summary>Transcribe one short audio utterance for chat voice dictation. Server-level STT config
