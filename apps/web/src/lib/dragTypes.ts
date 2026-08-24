@@ -27,3 +27,18 @@ export function dragHasFiles(e: DragEvent): boolean {
   const types = Array.from(e.dataTransfer.types ?? []);
   return types.includes("Files") && !types.includes(SCREENSHOT_DRAG_TYPE);
 }
+
+/// An existing attachment being dragged into the chat composer, from a recording's Attachments tab or from
+/// either folder attachment list. Its own type so the composer cannot mistake a dragged word or link for one,
+/// and - just as importantly - so the drag carries NOTHING else: the recordings panel reads a bare
+/// `text/plain` payload as a recording id being reordered, and would act on one if we set it.
+export const ATTACHMENT_DRAG_TYPE = "application/x-diariz-attachment";
+
+/// `ownerId` is the recording id for `scope: "recording"` and the folder (section) id for `scope: "section"` -
+/// which is also what decides the access rule the server applies when the composer asks for its text.
+export interface AttachmentDragPayload {
+  scope: "recording" | "section";
+  ownerId: string;
+  attachmentId: string;
+  name: string;
+}

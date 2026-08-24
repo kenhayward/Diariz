@@ -382,6 +382,7 @@
   "urlAddressPlaceholder": "https://…",
   "urlNamePlaceholder": "Linktext (optional)",
   "attachmentName": "Name",
+  "dragAttachmentToChat": "Auf das Chatfeld ziehen, um dies dem Gespraech hinzuzufuegen",
   "attachmentSize": "Größe",
   "attachmentUrlType": "Link",
   "dropToAttach": "Dateien zum Anhängen ablegen",

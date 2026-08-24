@@ -975,7 +975,23 @@ large folders silently rolled up only their first ~18 meetings. The old per-work
   are read into text by **`AttachmentExtractor`** (PDF, text, Office `.docx/.xlsx/.pptx`, email/calendar
   `.eml/.ics` — via PdfPig / Open XML SDK / MimeKit), and **URL** attachments are fetched by
   **`UrlFetcher`** behind **SSRF guards** (`UrlFetchGuard` — blocks loopback/private/link-local IPs and
-  non-http(s) schemes), with a size cap, redirect re-validation, and HTML→text reduction. Conversations
+  non-http(s) schemes), with a size cap, redirect re-validation, and HTML→text reduction. Both of those live
+  behind **`IAttachmentTextResolver`** (`Services/AttachmentTextResolver.cs`), which turns ONE attachment - a
+  small `AttachmentRef` struct, so the recording-owned `Attachment` and the folder-owned `SectionAttachment`
+  need no shared base type - into text, or null. It is registered **scoped**, not singleton, because
+  `IUrlFetcher` is scoped and a singleton capturing it would be a captive dependency DI refuses at startup.
+  Two callers share it, with deliberately different failure behaviour: the bulk path above **skips** anything
+  it cannot read, because one bad attachment must not fail a whole chat turn, while
+  **`POST api/chat/attachment/library`** - what dragging one attachment onto the composer calls - **reports**
+  it (400), because the user is waiting on that one document. That endpoint takes exactly one of
+  `recordingId` or `sectionId` (400 otherwise), and applies the access rule of whichever owns it: recording
+  ownership for the former, `IRoomScope.ViewableSectionAsync` for the latter, mirroring
+  `SectionAttachmentsController`'s read gate rather than inventing a second rule; both fail as 404 so ids
+  cannot be probed. On the web the drag carries **only** `application/x-diariz-attachment`
+  (`lib/dragTypes.ts`) - never `text/plain`, which the recordings panel reads as a recording id being
+  reordered - and the composer merges the result into its **single** context pill, which stays
+  single-origin (`file` or `ocr`) because the preview renders Markdown for one and preformatted text for the
+  other. Conversations
   save to **`ChatSession`** rows (thread + context stored as `jsonb`, including a folder chat's `SectionId`
   so reopening it resumes the folder context), so the server stays stateless between turns — each request
   resends the full history and context.
