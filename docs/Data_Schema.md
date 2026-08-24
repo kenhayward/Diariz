@@ -115,6 +115,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddLlmTestRecording` | `UserSettings.LlmTestRecordingId` (uuid, nullable, **no FK**) - the recording an administrator last chose to test an AI model against in the model editor's test rail. Deliberately unconstrained: it is resolved on read and nulled out when the recording is gone, so an admin's convenience setting can never be a reason a user's recording will not delete (and a nullable tracked FK would not enforce anything anyway - EF nulls it first). Additive and nullable, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddLlmModelDescription` | `LlmModels.Description` (varchar(200) null) - the administrator's short phrase for a model, shown beside its name in the chat model picker. Additive and nullable, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddScreenshotOcr` | `MeetingScreenshots.OcrText` (text null), `OcrModel` (text null), `OcrGeneratedAt` (timestamptz null) - text read off a capture by an OCR model, plus which model read it and when. Additive and nullable, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddTranscriptChunkHnswIndex` | An **HNSW** index on `TranscriptChunks.Embedding` (`vector_cosine_ops`, pgvector defaults for `m`/`ef_construction`) - the ANN index behind semantic search, which until now sequentially scanned and detoasted every chunk on every query. Index-only, no column change; forward-restore-safe (no `MaintenanceController.CurrentFormat` bump). **Not built `CONCURRENTLY`** - EF runs each migration in a transaction and Postgres forbids it there - so it takes a SHARE lock and blocks chunk writes while it builds; the API migrates before it serves traffic, so that is startup latency rather than a user-visible stall |
 
 ### Entity-relationship overview
 
@@ -248,9 +249,23 @@ configured.
 | `Embedding` | **vector(768)** null | chunk embedding (dimension-pinned to the server embed model; `nomic-embed-text` = 768); Postgres-only |
 | `CreatedAt` | timestamptz | |
 
-Indexes: `(UserId, RecordingId)` (owner-scoped pre-filter) and `TranscriptionId`. No ANN index yet - a flat
-scan is fine per-user; HNSW is a later optimization. Chunks are always the latest transcription's (replaced on
+Indexes: `(UserId, RecordingId)` (owner-scoped pre-filter), `TranscriptionId`, and an **HNSW** ANN index on
+`Embedding` (`vector_cosine_ops` - it must match the `<=>` the search orders by, or it is simply never used;
+pgvector defaults for `m`/`ef_construction`). Chunks are always the latest transcription's (replaced on
 re-transcribe), so retrieval needs no version filtering.
+
+The ANN index is **not used unconditionally**. HNSW is approximate and pgvector **post-filters** - it walks the
+graph in distance order, discards rows failing the `WHERE`, and stops after `hnsw.ef_search` candidates - and
+neither filter the search applies (room membership, or an explicit recording scope) can be pushed into it. So
+`TranscriptSearch` chooses per query: a scoped search, or a caller who can see less than half of
+`RoomRecordings`, gets an **exact** scan of that slice behind an `OFFSET 0` optimisation fence; anyone else gets
+the index with `hnsw.ef_search` raised to `limit * 8`. See the retrieval bullet in
+`Overall_Synopsis_of_Platform.md`.
+
+The vectors are **TOASTed**, which is the real reason the index was needed: `vector(768)` is 3,076 bytes and
+pgvector declares the type `STORAGE = external`, so every embedding lives out-of-line (measured at 5,265 chunks:
+8.8 MB heap against a 21 MB TOAST table). The pre-index sequential scan therefore cost ~503 MB of buffer traffic
+to answer one query - reassembling vectors from TOAST, not the distance arithmetic, was the expensive part.
 
 #### `Summaries`
 LLM summary of a specific transcription version (1:1 with `Transcription`).
