@@ -39,6 +39,10 @@ public class RbacIntegrationTests(ContainersFixture fx)
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<DiarizDbContext>()
             .AddDefaultTokenProviders();
+        // The seeder keeps the seed user's person and personal room in step with its display name, so this
+        // slice of the real container has to offer them too.
+        services.AddScoped<IPeopleDirectory, PeopleDirectory>();
+        services.AddScoped<IRoomScope, RoomScope>();
         return services.BuildServiceProvider();
     }
 
