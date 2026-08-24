@@ -11,7 +11,7 @@ import ChatAttachmentPreviewModal from "./ChatAttachmentPreviewModal";
 import { useActiveRecordingId, useActiveSectionId } from "../lib/activeRoute";
 import { useRoomBasePath } from "../lib/rooms";
 import { useSelection } from "../lib/selection";
-import { SCREENSHOT_DRAG_TYPE } from "../lib/dragTypes";
+import { ATTACHMENT_DRAG_TYPE, SCREENSHOT_DRAG_TYPE, type AttachmentDragPayload } from "../lib/dragTypes";
 import { onChatScreenshotAttached, onChatTextAttached } from "../lib/chatAttachments";
 import {
   inferCurrentContext, currentContextLabelKey, currentContextRequest, type CurrentContext,
@@ -130,7 +130,7 @@ export default function ChatPanel() {
   // to OCR, and only asks before overwriting a file. Optional so a restored conversation (which predates the
   // field) simply reads as a file - the conservative default, since that is the one the confirm protects.
   const [attachment, setAttachment] = useState<
-    { name: string; text: string; chars: number; origin?: "file" | "ocr"; captures?: number } | null
+    { name: string; text: string; chars: number; origin?: "file" | "ocr"; parts?: number } | null
   >(null);
   const [uploading, setUploading] = useState(false);
 
@@ -149,20 +149,43 @@ export default function ChatPanel() {
         : [...prev, shot]);
   }
 
-  /// Accept a capture dropped on the composer. Its own MIME type, so a dragged word or link cannot be
-  /// mistaken for one.
-  function onDropShot(e: React.DragEvent) {
-    const raw = e.dataTransfer.getData(SCREENSHOT_DRAG_TYPE);
+  /// Accept either kind of payload dropped on the composer: a screen capture, which rides to a vision model
+  /// as pixels, or an existing attachment, whose text the server reads for us. Each has its own MIME type, so
+  /// a dragged word or link cannot be mistaken for either.
+  function onDropOnComposer(e: React.DragEvent) {
     setDropActive(false);
-    if (!raw) return;
-    e.preventDefault();
-    try {
-      const parsed = JSON.parse(raw) as ChatScreenshotRef;
-      if (!parsed?.recordingId || !parsed?.screenshotId) return;
-      addShot({ recordingId: parsed.recordingId, screenshotId: parsed.screenshotId });
-    } catch {
-      return; // a malformed payload is not worth an error message; it cannot have come from our own strip
+
+    const shotRaw = e.dataTransfer.getData(SCREENSHOT_DRAG_TYPE);
+    if (shotRaw) {
+      e.preventDefault();
+      try {
+        const parsed = JSON.parse(shotRaw) as ChatScreenshotRef;
+        if (!parsed?.recordingId || !parsed?.screenshotId) return;
+        addShot({ recordingId: parsed.recordingId, screenshotId: parsed.screenshotId });
+      } catch {
+        return; // a malformed payload is not worth an error message; it cannot have come from our own strip
+      }
+      return;
     }
+
+    const docRaw = e.dataTransfer.getData(ATTACHMENT_DRAG_TYPE);
+    if (!docRaw) return;
+    e.preventDefault();
+    let payload: AttachmentDragPayload;
+    try {
+      payload = JSON.parse(docRaw) as AttachmentDragPayload;
+    } catch {
+      return; // as above - it cannot have come from our own drag handle
+    }
+    if (!payload?.attachmentId || !payload?.ownerId) return;
+
+    setError(null);
+    setUploading(true);
+    api
+      .chatAttachmentFromLibrary(payload)
+      .then((r) => mergeAttachment(r.name, r.text, "file"))
+      .catch((err: unknown) => setError(apiErrorMessage(err, t("couldNotReadFile"))))
+      .finally(() => setUploading(false));
   }
 
   /// The other way in: the screenshot viewer's "Add to chat context" button, which cannot reach this panel
@@ -172,22 +195,32 @@ export default function ChatPanel() {
   useEffect(() => onChatScreenshotAttached((shot) =>
     addShot({ recordingId: shot.recordingId, screenshotId: shot.screenshotId })), []);
 
-  /// Text extracted from a capture, arriving on the sibling channel. It lands in the SAME single pill the
-  /// paperclip fills, so nothing about the wire contract or the saved-conversation shape changes - which is
-  /// why the accumulation rules live here rather than in a second slot.
-  useEffect(() => onChatTextAttached(({ name, text }) => {
+  /// Merge new text into the single context pill, whether it came from OCR, the paperclip, or an attachment
+  /// dragged in.
+  ///
+  /// Accumulation used to be an OCR-only rule: extracted text appended, and a picked file replaced whatever
+  /// was there. That made two ways of adding the same kind of thing behave differently, so both now append.
+  ///
+  /// The pill stays SINGLE-ORIGIN on purpose. The preview renders Markdown for OCR text (this app generated
+  /// it, so a table read off a capture should look like a table) and preformatted plain text for a document
+  /// (rendering it would eat underscores and asterisks out of ordinary prose), so a mixed pill would render
+  /// half of itself wrong. Crossing origins therefore asks first - in both directions, where it used to ask
+  /// in only one.
+  function mergeAttachment(name: string, text: string, origin: "file" | "ocr") {
     setAttachment((current) => {
-      if (current && current.origin !== "ocr") {
-        // An uploaded document is the user's own work and arrived from somewhere else entirely; silently
-        // replacing it with OCR output would lose it with no way back.
-        if (!window.confirm(t("replaceAttachmentWithExtractedText", { name: current.name }))) return current;
-        return { name, text, chars: text.length, origin: "ocr", captures: 1 };
+      if (current && (current.origin ?? "file") !== origin) {
+        const question =
+          origin === "ocr"
+            ? t("replaceAttachmentWithExtractedText", { name: current.name })
+            : t("replaceExtractedTextWithFile", { name });
+        if (!window.confirm(question)) return current;
+        return { name, text, chars: text.length, origin, parts: 1 };
       }
-      if (!current) return { name, text, chars: text.length, origin: "ocr", captures: 1 };
+      if (!current) return { name, text, chars: text.length, origin, parts: 1 };
 
-      // Second and later extractions accumulate. Each block keeps its own heading so the model can tell
-      // which capture a line came from, and the label counts them rather than naming only the newest.
-      const captures = (current.captures ?? 1) + 1;
+      // Second and later additions accumulate. Each block keeps its own heading so the model can tell which
+      // capture or document a line came from, and the label counts them rather than naming only the newest.
+      const parts = (current.parts ?? 1) + 1;
       const merged = `${current.text}
 
 ---
@@ -196,15 +229,23 @@ export default function ChatPanel() {
 
 ${text}`;
       return {
-        name: t("extractedTextFromCaptures", { count: captures }),
+        name:
+          origin === "ocr"
+            ? t("extractedTextFromCaptures", { count: parts })
+            : t("attachedDocuments", { count: parts }),
         text: merged,
         chars: merged.length,
-        origin: "ocr",
-        captures,
+        origin,
+        parts,
       };
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), []);
+  }
+
+  /// Text extracted from a capture, arriving on the sibling channel. It lands in the SAME single pill the
+  /// paperclip fills, so nothing about the wire contract or the saved-conversation shape changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => onChatTextAttached(({ name, text }) => mergeAttachment(name, text, "ocr")), []);
+
 
   // Voice dictation: the mic button toggles listening; finalized speech is appended to `input`, interim
   // speech shows as a live preview above the box. Engine is chosen once from capabilities.
@@ -724,7 +765,7 @@ ${text}`;
     setUploading(true);
     api
       .uploadChatAttachment(file)
-      .then((r) => setAttachment({ name: r.name, text: r.text, chars: r.chars, origin: "file" }))
+      .then((r) => mergeAttachment(r.name, r.text, "file"))
       .catch((err: unknown) => setError(apiErrorMessage(err, t("couldNotReadFile"))))
       .finally(() => setUploading(false));
   }
@@ -1020,13 +1061,14 @@ ${text}`;
       <div
         data-testid="chat-drop-zone"
         onDragOver={(e) => {
-          if (!e.dataTransfer.types.includes(SCREENSHOT_DRAG_TYPE)) return;
+          const types = e.dataTransfer.types;
+          if (!types.includes(SCREENSHOT_DRAG_TYPE) && !types.includes(ATTACHMENT_DRAG_TYPE)) return;
           e.preventDefault(); // without this the browser refuses the drop entirely
           e.dataTransfer.dropEffect = "copy";
           setDropActive(true);
         }}
         onDragLeave={() => setDropActive(false)}
-        onDrop={onDropShot}
+        onDrop={onDropOnComposer}
         className={
           dropActive
             ? "shrink-0 border-t border-blue-400 bg-blue-50/60 px-2 py-1.5 dark:border-blue-500 dark:bg-blue-900/20"

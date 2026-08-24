@@ -27,6 +27,8 @@
   "viewAttachment": "Voir le texte joint",
   "replaceAttachmentWithExtractedText": "Remplacer le fichier joint « {{name}} » par le texte extrait ?",
   "extractedTextFromCaptures": "Texte extrait ({{count}} captures)",
+  "attachedDocuments": "{{count}} documents",
+  "replaceExtractedTextWithFile": "Remplacer le texte extrait par \"{{name}}\" ?",
   "reading": "Lecture…",
   "attachFile": "+ Joindre un fichier",
   "askPlaceholder": "Posez une question sur vos transcriptions\nTapez / pour la liste des commandes",

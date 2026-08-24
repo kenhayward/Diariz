@@ -92,6 +92,30 @@ The button shows a spinner while it is working. The first run of the day can tak
 model has to load before it can read anything; after that it is quick. A tick appears on the button that
 did the work.
 
+## Dragging in a document you already have
+
+Every attachment row - on a meeting's Attachments tab, on a folder's own attachments, and in the list of
+everything attached across a folder - has a small grip at the left of its name. Drag it onto the chat box and
+that document's text is added to your next question. It works for links as well as files: a URL attachment is
+fetched and read the same way.
+
+This is the narrow version of the **Include attachments** tick box. That one pulls in every attachment on
+every meeting in scope, which is what you want sometimes and wasteful when you had one document in mind.
+Dropping one gives you just that one.
+
+If the document cannot be read, it says so rather than leaving the box unchanged. Archives and images have no
+text in them; a PDF that is a photograph of a page has none either, until it is put through screen-capture
+text extraction instead.
+
+Documents build up rather than replacing one another, each under a heading naming the file, so you can drop
+two and ask about both. **This is also true of the paperclip now**: attaching a file adds to whatever is
+already attached instead of replacing it. If you attach the wrong one, remove the pill with its X and start
+again.
+
+You cannot mix a document with text read off a screen capture in the same attachment - they are shown
+differently, one as formatted Markdown and one as plain text. If you drop a document while capture text is
+attached, or the other way round, you are asked before anything is replaced.
+
 ## Checking what is attached
 
 The chat box shows a paperclip and a name for whatever is attached to your next question - an uploaded file,
