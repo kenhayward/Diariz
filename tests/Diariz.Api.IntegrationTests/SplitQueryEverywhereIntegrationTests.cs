@@ -188,7 +188,8 @@ public class SplitQueryEverywhereIntegrationTests(ContainersFixture fx)
                 new AttachmentExtractor(), new FakeAudioStorage(), new FakeUrlFetcher(),
                 new FakeChatToolSettingsResolver(), new ChatToolOrchestrator(new FakeChatStreamClient()),
                 new RoomScope(db), null!, Options.Create(new DictationOptions()),
-                new VisionImageEncoder(new FakeAudioStorage()))
+                new VisionImageEncoder(new FakeAudioStorage()),
+                new AttachmentTextResolver(new AttachmentExtractor(), new FakeAudioStorage(), new FakeUrlFetcher()))
             {
                 ControllerContext = Http.Context(userId),
             };

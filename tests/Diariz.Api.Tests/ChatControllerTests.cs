@@ -38,7 +38,8 @@ public class ChatControllerTests
         var controller = new ChatController(db, chat, settings, ctxResolver, new AttachmentExtractor(),
             blobs, urlFetcher ?? new FakeUrlFetcher(),
             toolSettings ?? new FakeChatToolSettingsResolver(), orchestrator, new RoomScope(db),
-            null!, Options.Create(new DictationOptions()), new VisionImageEncoder(blobs))
+            null!, Options.Create(new DictationOptions()), new VisionImageEncoder(blobs),
+            new AttachmentTextResolver(new AttachmentExtractor(), blobs, urlFetcher ?? new FakeUrlFetcher()))
         {
             ControllerContext = Http.Context(userId),
         };
@@ -453,6 +454,41 @@ public class ChatControllerTests
         Assert.Contains("Ship in Q3.", system);
         Assert.Contains("Roadmap", system);
         Assert.Contains("spec.txt", system);
+    }
+
+    /// <summary>One unreadable attachment must never fail the whole chat turn. Characterised BEFORE the
+    /// resolver extraction, so the refactor cannot quietly change it.</summary>
+    [Fact]
+    public async Task Stream_IncludeAttachments_SkipsAnAttachmentThatCannotBeRead()
+    {
+        var me = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var (controller, db, chat, _) = Build(me, storage: storage);
+        var rid = await SeedTranscribedRecording(db, me);
+
+        storage.Objects["good"] = Encoding.UTF8.GetBytes("The widget must be blue.");
+        db.Attachments.Add(new Attachment
+        {
+            Id = Guid.NewGuid(), RecordingId = rid, Kind = AttachmentKind.File,
+            Name = "spec.txt", ContentType = "text/plain", BlobKey = "good", SizeBytes = 10, Ordinal = 0,
+        });
+        // Its blob is not in storage at all - FakeAudioStorage throws for an unknown key, exactly as a
+        // deleted object would.
+        db.Attachments.Add(new Attachment
+        {
+            Id = Guid.NewGuid(), RecordingId = rid, Kind = AttachmentKind.File,
+            Name = "missing.txt", ContentType = "text/plain", BlobKey = "gone", SizeBytes = 10, Ordinal = 1,
+        });
+        await db.SaveChangesAsync();
+
+        controller.ControllerContext.HttpContext.Response.Body = new MemoryStream();
+        await controller.Stream(
+            new ChatStreamRequest([rid], null, null, [new ChatTurnDto("user", "What colour?")], IncludeAttachments: true),
+            default);
+
+        var system = chat.LastMessages![0].Content;
+        Assert.Contains("The widget must be blue.", system);
+        Assert.DoesNotContain("missing.txt", system);
     }
 
     [Fact]

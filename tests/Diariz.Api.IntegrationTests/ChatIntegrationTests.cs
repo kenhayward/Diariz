@@ -37,7 +37,8 @@ public class ChatIntegrationTests(ContainersFixture fx)
             new ChatContextResolver(db, Options.Create(new ChatOptions { ContextLength = 50000 }), new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions()))),
             new AttachmentExtractor(), new FakeAudioStorage(), new FakeUrlFetcher(),
             toolSettings, new ChatToolOrchestrator(streamClient), new RoomScope(db),
-            null!, Options.Create(new DictationOptions()), new VisionImageEncoder(new FakeAudioStorage()))
+            null!, Options.Create(new DictationOptions()), new VisionImageEncoder(new FakeAudioStorage()),
+            new AttachmentTextResolver(new AttachmentExtractor(), new FakeAudioStorage(), new FakeUrlFetcher()))
         {
             ControllerContext = Http.Context(userId),
         };

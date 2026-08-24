@@ -70,6 +70,7 @@ public class ChatController : ControllerBase
     private readonly IDictationClient _dictation;
     private readonly DictationOptions _dictationOptions;
     private readonly IVisionImageEncoder _vision;
+    private readonly IAttachmentTextResolver _attachmentText;
 
     public ChatController(
         DiarizDbContext db, IChatStreamClient chat, ILlmSettingsResolver settings,
@@ -77,7 +78,7 @@ public class ChatController : ControllerBase
         IAudioStorage storage, IUrlFetcher urlFetcher,
         IChatToolSettingsResolver toolSettings, IChatToolOrchestrator orchestrator, IRoomScope rooms,
         IDictationClient dictation, IOptions<DictationOptions> dictationOptions,
-        IVisionImageEncoder vision)
+        IVisionImageEncoder vision, IAttachmentTextResolver attachmentText)
     {
         _db = db;
         _chat = chat;
@@ -92,6 +93,7 @@ public class ChatController : ControllerBase
         _dictation = dictation;
         _dictationOptions = dictationOptions.Value;
         _vision = vision;
+        _attachmentText = attachmentText;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -578,28 +580,12 @@ public class ChatController : ControllerBase
         var docs = new List<TranscriptContext>();
         foreach (var a in attachments)
         {
-            try
-            {
-                if (a.Kind == AttachmentKind.Url && a.Url is not null)
-                {
-                    var text = await _urlFetcher.FetchTextAsync(a.Url, ct);
-                    if (!string.IsNullOrWhiteSpace(text)) docs.Add(new TranscriptContext(a.Name, text!));
-                }
-                else if (a.Kind == AttachmentKind.File && a.BlobKey is not null
-                         && _extractor.IsSupported(a.Name, a.ContentType))
-                {
-                    await using var stream = await _storage.OpenReadAsync(a.BlobKey, ct);
-                    using var buffer = new MemoryStream();
-                    await stream.CopyToAsync(buffer, ct);
-                    var extracted = _extractor.Extract(a.Name, a.ContentType, buffer.ToArray());
-                    if (!string.IsNullOrWhiteSpace(extracted.Text))
-                        docs.Add(new TranscriptContext(extracted.Name, extracted.Text));
-                }
-            }
-            catch
-            {
-                // Skip an attachment that can't be fetched/extracted — never fail the whole chat turn.
-            }
+            var text = await _attachmentText.ResolveAsync(
+                new AttachmentRef(a.Kind, a.Name, a.BlobKey, a.ContentType, a.Url), ct);
+            // Still skipped silently here: one bad attachment must not fail a whole chat turn. The
+            // single-drop endpoint reports its failures instead, because there the user is waiting on that
+            // one document and an unchanged composer tells them nothing.
+            if (text is not null) docs.Add(new TranscriptContext(text.Name, text.Text));
         }
         return docs;
     }
