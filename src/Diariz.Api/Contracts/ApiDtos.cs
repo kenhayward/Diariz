@@ -490,7 +490,12 @@ public record VoiceSampleDto(
     /// it. <b>Derived</b> by joining to the speaker's <c>EmbeddingStale</c>, never stored twice.</summary>
     bool Stale = false,
     /// <summary>A recompute is queued and has not reported back.</summary>
-    bool Pending = false);
+    bool Pending = false,
+    /// <summary>The spans of the recording's audio this sample trains on. <b>Empty means the whole
+    /// speaker</b>, matching the column's null. The client needs these to know which segments to show as
+    /// selected; there are a handful per sample, not thousands, so unlike segment words they ride along on
+    /// the person payload.</summary>
+    IReadOnlyList<VoiceprintSpan>? Spans = null);
 
 /// <summary>Replace the spans of audio that train one voice sample. An <b>empty list</b> means the whole
 /// speaker, which is what every sample does by default.</summary>

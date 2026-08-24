@@ -203,7 +203,8 @@ public class PeopleController : ControllerBase
                 // Derived from the speaker rather than stored on the sample: two columns saying the same
                 // thing would eventually disagree.
                 speaker?.EmbeddingStale ?? false,
-                v.SpansJson is not null && v.UsedMs is null);
+                v.SpansJson is not null && v.UsedMs is null,
+                spans);
         }).ToList();
 
         return new PersonDetailDto(ToDto(person, await CanManagePeopleAsync()), identifiedCount, samples);

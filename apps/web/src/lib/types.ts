@@ -318,6 +318,8 @@ export interface VoiceSample {
   stale: boolean;
   /// A recompute is queued and has not reported back. Server-derived, so it survives a reload.
   pending: boolean;
+  /// The spans of audio this sample trains on. Empty means the whole speaker.
+  spans: { startMs: number; endMs: number }[];
 }
 
 /// A group of people who look like the same human. `reason` is "email" or "name".

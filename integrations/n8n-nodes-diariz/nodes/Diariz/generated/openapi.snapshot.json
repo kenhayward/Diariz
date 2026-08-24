@@ -5217,6 +5217,15 @@
               "string"
             ]
           },
+          "spans": {
+            "items": {
+              "$ref": "#/components/schemas/VoiceprintSpan"
+            },
+            "type": [
+              "null",
+              "array"
+            ]
+          },
           "speakerLabel": {
             "type": "string"
           },
