@@ -27,6 +27,8 @@
   "viewAttachment": "View the attached text",
   "replaceAttachmentWithExtractedText": "Replace the attached file \"{{name}}\" with the extracted text?",
   "extractedTextFromCaptures": "Extracted text ({{count}} captures)",
+  "attachedDocuments": "{{count}} documents",
+  "replaceExtractedTextWithFile": "Replace the extracted text with \"{{name}}\"?",
   "reading": "Reading…",
   "attachFile": "+ Attach file",
   "askPlaceholder": "Ask about your transcripts\nType / for the command list",

@@ -27,6 +27,8 @@
   "viewAttachment": "Ver el texto adjunto",
   "replaceAttachmentWithExtractedText": "¿Reemplazar el archivo adjunto \"{{name}}\" por el texto extraído?",
   "extractedTextFromCaptures": "Texto extraído ({{count}} capturas)",
+  "attachedDocuments": "{{count}} documentos",
+  "replaceExtractedTextWithFile": "Sustituir el texto extraido por \"{{name}}\"?",
   "reading": "Leyendo…",
   "attachFile": "+ Adjuntar archivo",
   "askPlaceholder": "Pregunta sobre tus transcripciones\nEscribe / para ver los comandos",
