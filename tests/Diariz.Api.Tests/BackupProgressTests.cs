@@ -92,4 +92,60 @@ public class BackupProgressTests
 
         Assert.True(progress.Current.Running);
     }
+
+    [Fact]
+    public void Current_BeforeAnyBuild_ReportsNoOutcome()
+    {
+        Assert.Null(new BackupProgress().Current.LastOutcome);
+    }
+
+    [Fact]
+    public void AScopeDisposedAfterSucceeded_ReportsCompleted()
+    {
+        var progress = new BackupProgress();
+
+        using (var scope = progress.Begin()) scope.Succeeded();
+
+        Assert.Equal(BackupOutcome.Completed, progress.Current.LastOutcome);
+    }
+
+    [Fact]
+    public void AScopeDisposedWithoutSucceeded_ReportsFailed()
+    {
+        // A build that threw unwinds through the using without ever committing, which is the whole point:
+        // the panel used to read "went from running to idle" as success.
+        var progress = new BackupProgress();
+
+        progress.Begin().Dispose();
+
+        Assert.Equal(BackupOutcome.Failed, progress.Current.LastOutcome);
+    }
+
+    [Fact]
+    public void AFailedBuild_PublishesNoOutcomeWhileAnotherIsStillRunning()
+    {
+        // Two admins downloading at once: the first one failing must not be read as the second one's verdict.
+        var progress = new BackupProgress();
+        var first = progress.Begin();
+        var second = progress.Begin();
+
+        first.Dispose();
+        Assert.Null(progress.Current.LastOutcome);
+
+        second.Succeeded();
+        second.Dispose();
+        Assert.Equal(BackupOutcome.Completed, progress.Current.LastOutcome);
+    }
+
+    [Fact]
+    public void StartingABuild_ClearsThePreviousOutcome()
+    {
+        // Otherwise a new build reports the last one's verdict before it has reached one of its own.
+        var progress = new BackupProgress();
+        progress.Begin().Dispose();
+
+        using var second = progress.Begin();
+
+        Assert.Null(progress.Current.LastOutcome);
+    }
 }

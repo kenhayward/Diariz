@@ -110,6 +110,9 @@ public class MaintenanceController : ControllerBase
         var name = $"diariz-backup-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}-{ver}.zip";
         var stream = new FileStream(tempPath, FileMode.Open, FileAccess.Read, FileShare.None, 1 << 16,
             FileOptions.Asynchronous | FileOptions.DeleteOnClose);
+        // Commit the build: the tracker records a failure for any scope disposed without this, so an
+        // exception unwinding out of the archive assembly reports itself without a catch block.
+        tracked.Succeeded();
         return File(stream, "application/zip", name);
     }
 
