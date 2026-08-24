@@ -192,7 +192,7 @@ public class VectorIndexIntegrationTests(ContainersFixture fx)
         // The query shape, the opclass and the operator all line up, so the index is reachable by this query.
         // Whether the planner then picks it at a given size is its own cost decision - and correctly, it does
         // not until the table is large enough for the index to pay for itself.
-        Assert.Contains("hnsw", plan, StringComparison.OrdinalIgnoreCase);
+        Assert.True(plan.Contains("hnsw", StringComparison.OrdinalIgnoreCase), "expected the plan to reach the HNSW index; it was:" + Environment.NewLine + plan);
     }
 
     [Fact]
@@ -212,7 +212,7 @@ public class VectorIndexIntegrationTests(ContainersFixture fx)
         // The fence must hold even here, where the filter is wide open and the planner has been told sequential
         // scans are prohibitive - that is, where it actively wants the index. Post-filtering an approximate walk
         // is what silently loses true neighbours once a real caller's filter is narrow.
-        Assert.DoesNotContain("hnsw", plan, StringComparison.OrdinalIgnoreCase);
+        Assert.False(plan.Contains("hnsw", StringComparison.OrdinalIgnoreCase), "the fence should have kept the planner off the HNSW index; plan was:" + Environment.NewLine + plan);
     }
 
     /// <summary>Both tables the semantic query plans over. Without stats the planner guesses, and which path it
@@ -243,7 +243,7 @@ public class VectorIndexIntegrationTests(ContainersFixture fx)
         // Recall only means something if the approximate run actually went through the index. A seq scan would
         // match the exact answer trivially and the assertion below would prove nothing.
         var plan = string.Join("\n", await ExplainAsync(db, annSql, cmd => Bind(cmd, roomIds, query, 20, null)));
-        Assert.Contains("hnsw", plan, StringComparison.OrdinalIgnoreCase);
+        Assert.True(plan.Contains("hnsw", StringComparison.OrdinalIgnoreCase), "expected the plan to reach the HNSW index; it was:" + Environment.NewLine + plan);
 
         var approx = await StartMsAsync(db, annSql, roomIds, query, ann: true);
         var exact = await StartMsAsync(db, TranscriptSearch.BuildSemanticSql(hasScope: false, exact: true), roomIds, query, ann: false);
