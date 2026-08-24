@@ -2413,6 +2413,17 @@ into it with no URL or per-user setup at all.
     - **Triggers:** the once-per-launch sync (on the renderer's `outlook:ready`), the tray item
       (`trayOutlookItems`, hidden unless the reader is present *and* the user opted in), and `outlook:sync-now`
       from the web app. A 60 s per-machine cooldown (`shouldStartSync`) sits in front of the server's own.
+    - **Phase, pushed and asked.** The shell reports where a run has got to on `outlook:state`
+      (`idle`/`reading`/`pushing`), which is what greys out the Calendar toolbar's two sync buttons and drives
+      the counting status line. That channel carries *changes* only, so `outlook:state` also exists as an
+      **`ipcMain.handle`** returning the current phase, and the web's `onOutlookState` **asks once on
+      subscribe** before listening. Without it a renderer that arrived mid-run - every launch sync, every
+      toolbar remount, every reload - never learned a sync was happening, left both buttons live, and a quick
+      sync pressed then was refused by the shell and spent the rest of the full run waiting to join it. The
+      replay is dropped if a real push beats it back (a stale answer would report a finished run as still
+      going) or if the subscriber has gone, and is skipped entirely on a shell that predates the handler.
+      The run's state lives in **`CalendarSyncProvider`** (mounted in `WorkspaceLayout`), not in `ListToolbar`
+      - the toolbar unmounts on the Actions tab and with a collapsed panel, and a run has to outlive it.
     - **Packaging/CI:** `npm run build:outlook` runs `dotnet publish`, and `dist`/`publish` depend on it so a
       stale reader can never be packaged; `desktop-release.yml` gains a `setup-dotnet` step plus a verify step
       that fails legibly rather than shipping an installer whose sync could never find a reader. The Windows

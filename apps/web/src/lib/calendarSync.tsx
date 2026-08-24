@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { formatLongDate } from "./format";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -184,11 +184,7 @@ function syncOutlookAndWait(
 }
 
 /// The Calendar toolbar's sync controls: what is running, how long it has been running, and how to start one.
-///
-/// Mounted by the toolbar rather than the Calendar tab, because the buttons live there now - and because the
-/// toolbar stays mounted across tab switches, so a sync started from the Calendar keeps counting if the user
-/// wanders off to the list while they wait.
-export function useCalendarSync(): {
+export interface CalendarSyncValue {
   /// The scope of the run in progress, or null when idle.
   syncing: CalendarSyncScope | null;
   /// Whether **any** sync is under way, including one this app did not start - the shell's launch sync, or one
@@ -200,7 +196,11 @@ export function useCalendarSync(): {
   /// `date` is the day the quick sync should read, as a `yyyy-MM-dd` local calendar key - the day selected in
   /// the calendar, not necessarily today. Ignored for the full sync.
   sync: (scope: CalendarSyncScope, date?: string) => void;
-} {
+}
+
+/// The run's whole state machine. Lives in `CalendarSyncProvider`, never in a component that comes and goes -
+/// see the provider's own note for why.
+function useCalendarSyncState(): CalendarSyncValue {
   const { t, i18n } = useTranslation("workspace");
   const qc = useQueryClient();
   const { setStatus } = useStatus();
@@ -299,11 +299,12 @@ export function useCalendarSync(): {
     return () => clearInterval(tick);
   }, [busy, syncing, setStatus, t]);
 
-  // The message must not outlive the hook that owns it. The effect above only clears its interval, so a
-  // toolbar unmounted mid-sync - switching to the Actions tab, which swaps this toolbar out, or collapsing the
-  // left panel - left a **sticky** progress line frozen on screen with nothing left to count it, and a
-  // remounted toolbar would not clear it either: `pushed` is per-instance, and the new instance's copy
-  // correctly says it wrote nothing. Only ever clears a line we put there ourselves, same guard as above.
+  // The message must not outlive the hook that owns it. The effect above only clears its interval, so an
+  // unmount mid-sync left a **sticky** progress line frozen on screen with nothing left to count it. Only ever
+  // clears a line we put there ourselves, same guard as above.
+  //
+  // Now that this lives in the provider, the unmount it guards is leaving the workspace entirely rather than
+  // switching tabs - which is the point: a tab switch no longer takes the run's state with it.
   //
   // Deliberately its own effect rather than a clause in the one above: that one's cleanup runs on every tick
   // of `busy`/`syncing`/`t`, and clearing there would blank the bar between each second. `setStatus` is
@@ -362,5 +363,30 @@ export function useCalendarSync(): {
     [busy, outlook, qc, setStatus, t],
   );
 
-  return { syncing, busy, sync };
+  // Memoised so the ticking status line does not re-render every consumer once a second. This provider reads
+  // the status context itself (to write that line), so it re-renders on each tick whether anything it exposes
+  // changed or not.
+  return useMemo(() => ({ syncing, busy, sync }), [syncing, busy, sync]);
+}
+
+/// No default. A consumer outside the provider is a wiring mistake, and the benign-looking alternative - two
+/// permanently-enabled sync buttons that quietly do nothing - is exactly the failure this whole change exists
+/// to remove, only harder to notice.
+const CalendarSyncContext = createContext<CalendarSyncValue | null>(null);
+
+/// Owns the calendar sync for the whole workspace.
+///
+/// It lives here, above everything, because the run outlives any one view of it. The state used to sit in
+/// `ListToolbar`, which unmounts on the Actions tab and when the left panel is collapsed - so the counter
+/// restarted, a finished run could write over a message a newer instance owned, and the toolbar had to carry a
+/// dedicated effect to stop a sticky progress line freezing on screen behind it. Mounted beside
+/// `OutlookSyncBridge`, so it is listening before the bridge's `outlook:ready` can license the launch sync.
+export function CalendarSyncProvider({ children }: { children: ReactNode }) {
+  return <CalendarSyncContext.Provider value={useCalendarSyncState()}>{children}</CalendarSyncContext.Provider>;
+}
+
+export function useCalendarSync(): CalendarSyncValue {
+  const value = useContext(CalendarSyncContext);
+  if (!value) throw new Error("useCalendarSync must be used inside a CalendarSyncProvider");
+  return value;
 }

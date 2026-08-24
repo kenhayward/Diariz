@@ -23,6 +23,11 @@ vi.mock("../lib/status", () => ({
 vi.mock("../lib/rooms", () => ({
   RoomProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
+// Stubbed for the same reason as the rest: the real one runs the whole calendar-sync state machine, which
+// wants a QueryClient and the desktop bridge - neither of which this wiring test has any business supplying.
+vi.mock("../lib/calendarSync", () => ({
+  CalendarSyncProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));
 // ../lib/toast is deliberately NOT mocked here (unlike the providers above): the whole point of the
 // toast-provider-position test below is to exercise the REAL ToastProvider/useToast wired through the
 // REAL WorkspaceLayout, so a consumer outside the provider is caught instead of silently swallowed by a

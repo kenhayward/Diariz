@@ -64,6 +64,7 @@ interface OutlookShell {
   onOutlookPush?: (cb: (payload: OutlookPushPayload) => void) => () => void;
   reportOutlookResult?: (result: OutlookPushResult) => void;
   onOutlookState?: (cb: (state: OutlookShellState) => void) => () => void;
+  outlookState?: () => Promise<OutlookShellState>;
 }
 
 function shell(): OutlookShell | undefined {
@@ -130,11 +131,44 @@ export function reportOutlookResult(result: OutlookPushResult): void {
   shell()?.reportOutlookResult?.(result);
 }
 
-/// Subscribe to the shell's sync phase. Returns an unsubscribe function (a no-op in a browser).
+/// Subscribe to the shell's sync phase: the phase it is in **now**, then every change. Returns an unsubscribe
+/// function (a no-op in a browser).
+///
+/// The replay is the load-bearing half. The shell only pushes *changes*, so a subscriber that arrived after a
+/// run had started never learned one was running - which is what left the Calendar toolbar's two sync buttons
+/// live, and its status bar silent, through the whole of every launch sync. The subscription is established
+/// per mount, so the same blindness hit every remount: the Actions tab, a collapsed panel, a reload mid-sync.
+///
+/// Asking is deliberately best-effort. Web and desktop ship separately, so a current web build routinely runs
+/// against a shell with no accessor; there, this is exactly the subscription it always was.
 export function onOutlookState(cb: (state: OutlookShellState) => void): () => void {
   const api = shell();
   if (!api?.onOutlookState) return () => {};
-  return api.onOutlookState(cb);
+
+  // Either of these cancels the replay: a push has already told this subscriber where the shell is (so the
+  // answer in flight is now stale), or the subscriber has gone.
+  let pushed = false;
+  let disposed = false;
+
+  const off = api.onOutlookState((state) => {
+    pushed = true;
+    cb(state);
+  });
+
+  // Resolves a turn or more after the subscribe, so a phase change can overtake it. Delivering the stale
+  // answer then would report a finished sync as still running - and `busy` would stay stuck on it until the
+  // staleness timer in `useCalendarSync` finally disbelieved the shell, 150s later.
+  void api.outlookState?.()
+    .then((state) => {
+      if (disposed || pushed || !state) return;
+      cb(state);
+    })
+    .catch(() => {}); // a shell that errors answering is one we simply know nothing about yet
+
+  return () => {
+    disposed = true;
+    off();
+  };
 }
 
 /// Split a harvested window into pages. Chunking is the web app's job because it is an HTTP concern - the

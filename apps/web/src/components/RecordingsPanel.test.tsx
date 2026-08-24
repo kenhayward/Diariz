@@ -36,6 +36,13 @@ vi.mock("../lib/uploadContext", () => ({
   }),
 }));
 
+// The calendar sync is the workspace's, not the panel's: its provider sits above this whole subtree and runs
+// a state machine against the desktop bridge. The toolbar only needs the hook to answer, and the sync itself
+// is covered in nav/ListToolbar.test.tsx.
+vi.mock("../lib/calendarSync", () => ({
+  useCalendarSync: () => ({ syncing: null, busy: false, sync: vi.fn() }),
+}));
+
 vi.mock("../lib/api", () => ({
   api: {
     listRecordings: vi.fn(),
