@@ -877,6 +877,32 @@ large folders silently rolled up only their first ~18 meetings. The old per-work
   no transcripts are pre-loaded, and the system prompt tells the model to answer by searching the whole library
   and citing the meetings it draws from. Finer filters (dates, people, folders) are typed in plain language and
   resolved by the model - there are no filter widgets. **Milestone 3 (RAG) is shipped.**
+- **The ANN index, and when the search refuses to use it.** The semantic arm is backed by an **HNSW** index on
+  `TranscriptChunks.Embedding` (`vector_cosine_ops`). Before it, every semantic search sequentially scanned every
+  chunk *and detoasted every vector*: a `vector(768)` is 3,076 bytes and pgvector stores the type `EXTERNAL`, so
+  each embedding is reassembled from TOAST before a distance is computed - measured at 5,265 chunks, ~503 MB of
+  buffer traffic per query, of which only 1,100 buffers were the heap. That cost grows with the library and stops
+  being cacheable long before it stops being correct.
+  **But the index cannot simply be switched on**, because HNSW is *approximate* and pgvector *post-filters*: it
+  walks the graph in distance order, throws away rows failing the `WHERE`, and stops once it has seen
+  `hnsw.ef_search` candidates. Neither filter this query applies - room membership, or an explicit recording
+  scope - can be pushed into the index, so against a selective filter the walk is exhausted by rows the caller
+  cannot see and the search quietly returns too few results, or the wrong ones. That is a **correctness**
+  regression, not a slow query, so `TranscriptSearch` decides deterministically rather than leaving it to the
+  planner: a **scoped** search (selective by construction), or a caller who can see **less than half** of
+  `RoomRecordings` (selective by measurement - one index-only count against `pg_class.reltuples`, not a chunk
+  count), takes an **exact** path, where the filtered rows are wrapped in a subquery ending in `OFFSET 0` so the
+  planner cannot push the `ORDER BY` down into the index. Everyone else takes the ANN path with
+  `hnsw.ef_search` raised to `limit * 8` (pgvector's default of 40 is sized for an unfiltered top-10), set
+  transaction-locally via `set_config` so it cannot leak onto the next user of a pooled connection. The slices
+  that take the exact path are a minority of the corpus by definition, so that path is also the fast one for
+  them. Note that the gate is what makes this deterministic, not the planner: Postgres picks by cost, so on a
+  small table it declines the index anyway (it costed a top-10 semantic query at 18.64 and chose a sequential
+  scan plus a top-N sort on a few thousand test rows - correct, and the reason the index only starts paying at
+  library scale). The gate does not depend on the table having been ANALYZEd, or on the planner continuing to
+  cost it that way. `VectorIndexIntegrationTests` pins both plans and measures ANN recall against the exact
+  scan; because of that cost behaviour its plan tests price sequential scans out and assert what the index is
+  *reachable* by, rather than what the planner happens to prefer at test-data scale.
 - **Search as a REST endpoint (`GET /api/search`).** `SearchController` is the **second consumer** of
   `ITranscriptSearch`, alongside `Tools/*`. The distinction matters: the tools render **markdown** for a model to
   read (`ToolFormat`), whereas this returns **structured JSON** for the web left-nav's search bar -
