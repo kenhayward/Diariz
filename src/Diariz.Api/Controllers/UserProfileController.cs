@@ -24,10 +24,12 @@ public class UserProfileController : ControllerBase
     private readonly IPlatformSettingsService _platform;
     private readonly IUserPermissions _permissions;
     private readonly IPeopleDirectory _people;
+    private readonly IRoomScope _rooms;
 
     public UserProfileController(
         UserManager<ApplicationUser> users, DiarizDbContext db, ITokenService tokens,
-        IPlatformSettingsService platform, IUserPermissions permissions, IPeopleDirectory people)
+        IPlatformSettingsService platform, IUserPermissions permissions, IPeopleDirectory people,
+        IRoomScope rooms)
     {
         _users = users;
         _db = db;
@@ -35,6 +37,7 @@ public class UserProfileController : ControllerBase
         _platform = platform;
         _permissions = permissions;
         _people = people;
+        _rooms = rooms;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -107,6 +110,11 @@ public class UserProfileController : ControllerBase
         // A user is also a person, and their name is denormalised onto every speaker they have been
         // identified as - so a rename here has to reach the directory, or past transcripts keep the old one.
         await _people.SyncFromUserAsync(UserId);
+
+        // A personal room is named from the display name when it is created and is immutable to the user, so
+        // it has to follow a rename too. It did not, and a renamed account kept showing the name it was
+        // seeded with.
+        await _rooms.SyncPersonalRoomNameAsync(UserId);
 
         var s = await _db.UserSettings.FindAsync(UserId);
         if (s is null)

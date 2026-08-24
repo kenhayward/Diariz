@@ -87,7 +87,7 @@ public class RbacIntegrationTests(ContainersFixture fx)
             Options.Create(new GoogleAuthOptions()), Options.Create(new AppPublicOptions()),
             sp.GetRequiredService<IDataProtectionProvider>(), NullLogger<AuthController>.Instance,
             db, new GoogleTokenProtector(sp.GetRequiredService<IDataProtectionProvider>()),
-            new FakeDesktopAuthCodeStore(), new PeopleDirectory(db));
+            new FakeDesktopAuthCodeStore(), new PeopleDirectory(db), new RoomScope(db));
 
         var email = $"life-{Guid.NewGuid():N}@x.test";
 

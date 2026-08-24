@@ -40,7 +40,7 @@ public class AuthController : ControllerBase
         IGoogleAuthService google, IGoogleSignInHandler googleSignIn, IOptions<GoogleAuthOptions> googleOpts,
         IOptions<AppPublicOptions> appOpts, IDataProtectionProvider dataProtection, ILogger<AuthController> logger,
         DiarizDbContext db, IGoogleTokenProtector tokenProtector, IDesktopAuthCodeStore desktopCodes,
-        IPeopleDirectory people)
+        IPeopleDirectory people, IRoomScope rooms)
     {
         _users = users;
         _tokens = tokens;
@@ -55,9 +55,11 @@ public class AuthController : ControllerBase
         _tokenProtector = tokenProtector;
         _desktopCodes = desktopCodes;
         _people = people;
+        _rooms = rooms;
     }
 
     private readonly IPeopleDirectory _people;
+    private readonly IRoomScope _rooms;
 
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
@@ -183,6 +185,10 @@ public class AuthController : ControllerBase
         // user becomes a routable person. The backfill covers everyone who existed before this shipped.
         await _people.EnsureForUserAsync(user.Id);
         await _people.SyncFromUserAsync(user.Id);
+        // ...and their personal room, which is named from the same display name. Usually a no-op here (the
+        // room is minted, correctly named, on first use), but the invariant holds at every FullName write
+        // site rather than at most of them.
+        await _rooms.SyncPersonalRoomNameAsync(user.Id);
 
         return await TokenResponse(user);
     }

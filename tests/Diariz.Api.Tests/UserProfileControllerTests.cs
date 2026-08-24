@@ -25,7 +25,7 @@ public class UserProfileControllerTests
 
         return new UserProfileController(
             host.Users, host.Db, Tokens(), new PlatformSettingsService(host.Db),
-            new UserPermissions(host.Db), new PeopleDirectory(host.Db))
+            new UserPermissions(host.Db), new PeopleDirectory(host.Db), new RoomScope(host.Db))
         {
             ControllerContext = Http.Context(user.Id),
         };
@@ -147,5 +147,35 @@ public class UserProfileControllerTests
         await sut.Update(new UpdateUserProfileRequest(null, null, null, TranscriptionLanguage: ""));
 
         Assert.Null((await sut.Get()).Value!.TranscriptionLanguage);
+    }
+
+    /// <summary>The invariant: after any rename, the personal room reads the same as the display name. It
+    /// used to drift silently - the person was re-synced on save and the room was not, so a production
+    /// account sat under the seeded name "Platform Administrator" long after being renamed. This test is the
+    /// guard against a fourth FullName write site forgetting to call the sync.</summary>
+    [Fact]
+    public async Task Renaming_AlsoRenamesThePersonalRoom()
+    {
+        using var host = new IdentityTestHost();
+        var user = new ApplicationUser
+        {
+            UserName = "rename@b.test", Email = "rename@b.test", IsEnabled = true, FullName = "Old Name",
+        };
+        await host.Users.CreateAsync(user);
+        var rooms = new RoomScope(host.Db);
+        var roomId = await rooms.PersonalRoomIdAsync(user.Id);
+        Assert.Equal("Old Name", host.Db.Rooms.Single(r => r.Id == roomId).Name);
+
+        var sut = new UserProfileController(
+            host.Users, host.Db, Tokens(), new PlatformSettingsService(host.Db),
+            new UserPermissions(host.Db), new PeopleDirectory(host.Db), rooms)
+        {
+            ControllerContext = Http.Context(user.Id),
+        };
+
+        await sut.Update(new UpdateUserProfileRequest(
+            FullName: "New Name", NativeLanguage: null, UiLanguage: null));
+
+        Assert.Equal("New Name", host.Db.Rooms.Single(r => r.Id == roomId).Name);
     }
 }

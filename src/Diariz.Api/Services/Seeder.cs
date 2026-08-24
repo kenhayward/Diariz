@@ -59,6 +59,11 @@ public static class Seeder
             user.FullName = fullName;
         await users.UpdateAsync(user);
 
+        // The seeder only fills a BLANK name, so this rarely fires - but when it does, the person and the
+        // personal room must follow it as they do at every other FullName write site.
+        await sp.GetRequiredService<IPeopleDirectory>().SyncFromUserAsync(user.Id);
+        await sp.GetRequiredService<IRoomScope>().SyncPersonalRoomNameAsync(user.Id);
+
         if (!await users.IsInRoleAsync(user, Roles.PlatformAdministrator))
             await users.AddToRoleAsync(user, Roles.PlatformAdministrator);
 

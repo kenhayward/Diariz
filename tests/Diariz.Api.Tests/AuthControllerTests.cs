@@ -38,7 +38,8 @@ public class AuthControllerTests
             host.Db,
             new GoogleTokenProtector(new EphemeralDataProtectionProvider()),
             desktopCodes ?? new FakeDesktopAuthCodeStore(),
-            new PeopleDirectory(host.Db));
+            new PeopleDirectory(host.Db),
+            new RoomScope(host.Db));
     }
 
     private static async Task<ApplicationUser> CreateUser(
@@ -688,5 +689,24 @@ public class AuthControllerTests
         public Task<GoogleTokens> RefreshAsync(string refreshToken, CancellationToken ct = default) => Task.FromResult(Tokens);
         public Task<GoogleUserInfo> ValidateIdTokenAsync(string idToken) => Task.FromResult(Result!);
         public Task RevokeAsync(string token, CancellationToken ct = default) => Task.CompletedTask;
+    }
+
+    /// <summary>Setup gives an invited account its real name for the first time, so the personal room has to
+    /// follow. At this point the room usually does not exist yet, and the sync must cope with that rather
+    /// than throw or mint one out of order - the room is created, correctly named, on first use.</summary>
+    [Fact]
+    public async Task Setup_LeavesThePersonalRoomNameCorrect()
+    {
+        using var host = new IdentityTestHost();
+        var (user, token) = await SeedInvited(host, "set@x.test");
+
+        var result = await BuildController(host)
+            .Setup(new SetupRequest("set@x.test", token, "Ada Lovelace", GoodPassword));
+
+        Assert.IsType<OkObjectResult>(result);
+        // Either the room already existed and was renamed, or it is minted here with the right name. Both
+        // are the invariant.
+        var roomId = await new RoomScope(host.Db).PersonalRoomIdAsync(user.Id);
+        Assert.Equal("Ada Lovelace", host.Db.Rooms.Single(r => r.Id == roomId).Name);
     }
 }
