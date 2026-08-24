@@ -1,4 +1,4 @@
-﻿using Diariz.Domain.Entities;
+using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;

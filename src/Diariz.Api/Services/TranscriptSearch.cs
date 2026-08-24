@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Data.Common;
 using System.Globalization;
 using System.Text;
@@ -244,7 +244,7 @@ public sealed class TranscriptSearch : ITranscriptSearch
         }
         catch
         {
-            // Embedding endpoint down/misconfigured -> degrade to lexical-only rather than failing the search.
+            // Embedding endpoint down/misconfigured → degrade to lexical-only rather than failing the search.
             return [];
         }
 
