@@ -104,6 +104,28 @@ export const RELEASES: Release[] = [
     ],
   },
   {
+    version: "0.245.2",
+    date: "2026-08-24",
+    pr: 599,
+    headline: "The capture bar's floating prompts no longer have the page showing through them",
+    summary:
+      "The capture bar floats a few panels below itself over whatever page you are on: the prompt asking whether to keep recording a meeting that has overrun, and the banners offering to recover a recording, set of notes, or set of screenshots that did not make it to the server. In dark mode all of these were nearly see-through, so whatever was on the page behind them read straight through the panel. On a calendar event, that page's own Join the Meeting and Link a recording buttons sat visibly on top of the prompt's Extend this meeting and Stop now buttons - two sets of controls in the same place, with no way to tell which one you were about to press.\n\nThey now paint on solid panels, like every other popover in the capture bar, and their outline-only buttons (Stop now, Discard) carry their own fill instead of letting the page show through the button itself. While one of these panels is up, the only controls you can see are the ones it is offering.",
+    fixed: [
+      "The prompt shown when a meeting overruns, and the unsaved-recording / notes / screenshots recovery banners, were all translucent in dark mode - the page's own controls showed through them and overlapped their buttons.",
+    ],
+  },
+  {
+    version: "0.245.1",
+    date: "2026-08-24",
+    pr: 595,
+    headline: "Meaning-based search stops reading every transcript to answer one question",
+    summary:
+      "Searching by meaning has always compared your question against every stored passage in turn. At the size most libraries are today that is fine - it answers in a small fraction of a second - but the work grew with the library rather than staying flat, so it was on course to get slower every month, and to fall off a cliff rather than degrade gently once the passages stopped fitting in memory.\n\nIt now uses an index, so the cost of a search stops tracking the size of your library. A library that has been collecting meetings for years answers as fast as one that started last week.\n\nThis needed more than just adding the index. The index finds near matches quickly but approximately, and it has no notion of which meetings you are allowed to see. Left to itself it searches the whole platform, discards everything that was not yours, and hands back a short answer with the best matches missing - which looks like a search that found nothing rather than one that went wrong. So it is used only where it cannot cost you results: when you can already see most of the library. A search inside one meeting or one folder, or a search on a shared platform where your rooms are a small slice of the whole, still compares every passage in that slice exactly. Those slices are small enough to be fast either way, and they stay exactly right.",
+    fixed: [
+      "Semantic transcript search read and unpacked every stored passage on every query. It now uses a pgvector HNSW index wherever doing so cannot cost it results, and an exact scan of your own slice wherever it could.",
+    ],
+  },
+  {
     version: "0.245.0",
     date: "2026-08-24",
     pr: 592,

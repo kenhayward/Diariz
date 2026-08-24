@@ -38,15 +38,19 @@ public class PersonalRoomNameBackfillTests(ContainersFixture fx)
         var user = await SeedUserAsync(db, "Ken Hayward");
         var room = new Room
         {
-            Id = Guid.NewGuid(), Name = "Engineering", Kind = RoomKind.Shared, OwnerUserId = user.Id,
+            // Unique: Rooms.Name carries a filtered unique index for SHARED rooms, and every class in this
+            // collection shares one database - a fixed name collides with whatever another test picked.
+            Id = Guid.NewGuid(), Name = $"Engineering-{Guid.NewGuid():N}", Kind = RoomKind.Shared,
+            OwnerUserId = user.Id,
         };
         db.Rooms.Add(room);
+        var originalName = room.Name;
         await db.SaveChangesAsync();
 
         await db.Database.ExecuteSqlRawAsync(PersonalRoomNameBackfill.Sql);
 
         db.ChangeTracker.Clear();
-        Assert.Equal("Engineering", (await db.Rooms.SingleAsync(r => r.Id == room.Id)).Name);
+        Assert.Equal(originalName, (await db.Rooms.SingleAsync(r => r.Id == room.Id)).Name);
     }
 
     /// <summary>Mirrors RoomScope.Display: a blank display name falls back to the email, never to blank -
