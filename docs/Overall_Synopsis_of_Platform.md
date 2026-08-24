@@ -3148,6 +3148,26 @@ LLM API keys can't be decrypted (users re-enter them); everything else is faithf
 shell-out is behind `IDatabaseBackup` so the archive/object orchestration is unit-tested; the real round-trip
 is an integration test that skips when the client tools aren't on the host PATH.
 
+**Reporting a backup end to end.** The build is invisible from the browser (no response byte is sent until the
+whole zip exists), so `IBackupProgress` tracks it in memory and the panel polls `GET
+/api/maintenance/backup/status`. It is per-instance, which is all that is needed: one request, one node, and the
+admin polling it is talking to that node. The scope is **commit-or-rollback** - `Begin()` returns an
+`IBackupScope` and the controller calls `Succeeded()` just before returning the file, so any scope disposed
+without it (an exception unwinding out of the archive assembly) is recorded as `LastOutcome = Failed`. Without
+that, the running -> idle transition a crashed build makes is identical to a successful one's, and the panel
+reported success for a backup that never existed. Only an explicit `Failed` means failure: a server too old to
+send the field returns null, and the web treats null as success so it stays correct against an older API.
+
+The **transfer** that follows is the browser's own, and the desktop shell has no download shelf - so `main.js`
+registers a generic `will-download` handler that forwards `download:event` (`started`/`progress`/`done`, with
+**raw byte counts**, the final Electron state and the save path) to the renderer, and raises an OS notification
+from `downloadState.js` for a download that ran over 5 s (and for any failure, however quick). The renderer owns
+all arithmetic and copy (`apps/web/src/lib/desktopDownloads.ts` + the locale catalogs) - the shell has no i18n,
+and a second byte formatter there would only drift from `formatBytes`. The handler is generic, so audio,
+transcript and formula-result downloads report the same way; the Maintenance panel filters by URL. It
+deliberately does **not** call `item.setSavePath`, keeping Electron's Save-As dialog: a backup carries every
+password hash on the platform and should land where the admin chose.
+
 **Proxy limits are the restore's real ceiling.** The API applies **no** size limit of its own here - the action
 is `[DisableRequestSizeLimit]` and reads the raw body - so every refusal comes from a proxy in front of it, and
 a restore body is not comparable to a recording upload: it carries the dump *plus every stored blob,

@@ -811,8 +811,12 @@ deletion). A **Run now** button runs the same pass on demand. Off by default.
 the Postgres database (`pg_dump`) plus every stored file — as one transferable archive, and restore from
 one. Both report progress while they run: the panel shows the archive being built (the stage it is on, how
 many files are in so far, and elapsed time) before the download begins, and during a restore it distinguishes
-uploading the archive from the server applying it. Restore is destructive (replaces all data) and accepts a
-backup from this app version or an older, forward-migratable one.
+uploading the archive from the server applying it. In the **desktop app**, which has no browser download
+shelf, the panel goes on to report the transfer itself - a percentage of the archive as it comes down, the
+path it was saved to, and a failure if it did not finish - and the shell raises a notification when a download
+that ran more than a few seconds completes (this covers every download in the app, not just backups). A build
+that fails says so, rather than showing the same message as one that worked. Restore is destructive (replaces
+all data) and accepts a backup from this app version or an older, forward-migratable one.
 - **Provide Feedback.** Any signed-in user can open **Provide Feedback** from the account menu and describe
 something that looks or behaves wrong, even when nothing raised an error. A short technical trail of recent
 app activity (API calls and route changes, scrubbed of anything sensitive before it ever leaves the browser)
