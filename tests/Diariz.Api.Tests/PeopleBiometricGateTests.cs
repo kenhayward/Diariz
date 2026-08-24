@@ -21,7 +21,7 @@ public class PeopleBiometricGateTests
     {
         Users.Ensure(db, userId);
         return new(db, new Diariz.Api.Services.RoomScope(db), new Diariz.Api.Services.PeopleDirectory(db),
-            new Diariz.Api.Services.UserPermissions(db))
+            new Diariz.Api.Services.UserPermissions(db), new FakeJobQueue())
         {
             ControllerContext = Http.Context(userId),
         };

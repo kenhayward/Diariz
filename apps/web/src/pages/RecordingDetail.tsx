@@ -73,10 +73,10 @@ import SegmentEditModal from "../components/detail/SegmentEditModal";
 import RecordingNameForm from "../components/detail/RecordingNameForm";
 import SpeakerRow from "../components/detail/SpeakerRow";
 import SegmentRow, { NoteRow, type SegmentAssign } from "../components/detail/SegmentRow";
+import SegmentSplitModal from "../components/detail/SegmentSplitModal";
 import {
   RefreshIcon, PencilIcon, MailIcon, UsersIcon, SlidersIcon, PlayIcon,
-  PauseIcon, SelectIcon, MergeIcon, TrashIcon, GlobeIcon, EyeIcon,
-} from "../components/detail/icons";
+  PauseIcon, SelectIcon, MergeIcon, TrashIcon, GlobeIcon, EyeIcon, ScissorsIcon,} from "../components/detail/icons";
 
 
 
@@ -352,6 +352,7 @@ export default function RecordingDetail() {
   const [managingTypes, setManagingTypes] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [editingSeg, setEditingSeg] = useState<SegmentDto | null>(null);
+  const [splittingSeg, setSplittingSeg] = useState<SegmentDto | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionInfo, setActionInfo] = useState<string | null>(null);
   const [retranscribeOpen, setRetranscribeOpen] = useState(false);
@@ -1025,6 +1026,19 @@ export default function RecordingDetail() {
     if (seg) setEditingSeg(seg);
   }
 
+  /// The one selected segment, or null. Both Edit and Split act on exactly one row.
+  function singleSelectedSeg(): SegmentDto | null {
+    if (selectedSegIds.size !== 1) return null;
+    return rec?.current?.segments.find((s) => s.id === [...selectedSegIds][0]) ?? null;
+  }
+
+  function splitSelected() {
+    // hasWords is the server's answer; a segment without word timings has no exact cut point and the
+    // endpoint refuses it.
+    const seg = singleSelectedSeg();
+    if (seg?.hasWords) setSplittingSeg(seg);
+  }
+
   async function deleteSelected() {
     const ids = [...selectedSegIds];
     if (ids.length === 0) return;
@@ -1440,6 +1454,19 @@ export default function RecordingDetail() {
             onClick={() => setSelectMode((v) => !v)}
           />
           <ToolbarButton label={t("workspace:editSegment")} icon={PencilIcon} onClick={editSelected} disabled={selectedSegIds.size !== 1} />
+          {/* Disabled with an explanation rather than hidden when the segment has no word timings: a user
+              who cannot split needs to know it is because the recording predates them, not because the
+              feature is missing. ToolbarButton uses the label as its tooltip, so the label carries it. */}
+          <ToolbarButton
+            label={
+              selectedSegIds.size === 1 && singleSelectedSeg()?.hasWords === false
+                ? t("workspace:splitNoWords")
+                : t("workspace:splitSegment")
+            }
+            icon={ScissorsIcon}
+            onClick={splitSelected}
+            disabled={selectedSegIds.size !== 1 || !singleSelectedSeg()?.hasWords}
+          />
           {nativeLang && (
             <ToolbarButton
               label={t("recordings:translateTo", { language: nativeLang.englishName })}
@@ -1744,6 +1771,20 @@ export default function RecordingDetail() {
           onSave={async (text) => {
             await api.updateSegment(id, editingSeg.id, text);
             setEditingSeg(null);
+            qc.invalidateQueries({ queryKey: ["recording", id] });
+          }}
+        />
+      )}
+
+      {splittingSeg && (
+        <SegmentSplitModal
+          recordingId={id}
+          seg={splittingSeg}
+          speakers={rec.speakers}
+          onClose={() => setSplittingSeg(null)}
+          onDone={() => {
+            setSplittingSeg(null);
+            setSelectedSegIds(new Set());
             qc.invalidateQueries({ queryKey: ["recording", id] });
           }}
         />

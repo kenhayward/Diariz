@@ -87,6 +87,9 @@ public class WorkerCallbackController : ControllerBase
                 // Collapse repeated line feeds / blank lines so the stored transcript uses a single
                 // end-of-paragraph mark between lines (see TranscriptText).
                 Original = TranscriptText.Normalize(s.Text),
+                // Null when the worker sent none: null is what the split endpoint refuses on, and an
+                // empty array would make an unsplittable segment look splittable.
+                WordsJson = SegmentWords.Serialize(s.Words),
                 Ordinal = ordinal++
             });
         }

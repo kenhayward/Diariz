@@ -494,6 +494,58 @@ describe("RecordingDetail", () => {
     expect(await screen.findByText(/transcribed in 1:05/)).toBeTruthy();
   });
 
+  /// A user who cannot split needs to know it is because the recording predates word timings, not because
+  /// the feature is missing - so the control stays, disabled, and says why. ToolbarButton renders its label
+  /// as both the tooltip and the accessible name.
+  it("disables Split for a segment with no word timings and explains why", async () => {
+    renderPage({
+      ...base,
+      current: {
+        ...base.current!,
+        segments: [{ id: "seg-1", speaker: "SPEAKER_00", speakerDisplay: "Alice", startMs: 0, endMs: 1000, text: "Hi", hasWords: false }],
+      },
+    } as unknown as RecordingDetailType);
+    await loaded();
+    openTab("Transcript");
+
+    fireEvent.click(await screen.findByText("Hi"));
+
+    const split = screen.getByRole("button", { name: /Re-transcribe this recording to split/ });
+    expect(split.hasAttribute("disabled")).toBe(true);
+  });
+
+  it("enables Split for a segment that has word timings", async () => {
+    renderPage({
+      ...base,
+      current: {
+        ...base.current!,
+        segments: [{ id: "seg-1", speaker: "SPEAKER_00", speakerDisplay: "Alice", startMs: 0, endMs: 1000, text: "Hi", hasWords: true }],
+      },
+    } as unknown as RecordingDetailType);
+    await loaded();
+    openTab("Transcript");
+
+    fireEvent.click(await screen.findByText("Hi"));
+
+    expect(screen.getByRole("button", { name: "Split segment" }).hasAttribute("disabled")).toBe(false);
+  });
+
+  it("does not offer Split until exactly one segment is selected", async () => {
+    renderPage({
+      ...base,
+      current: {
+        ...base.current!,
+        segments: [{ id: "seg-1", speaker: "SPEAKER_00", speakerDisplay: "Alice", startMs: 0, endMs: 1000, text: "Hi", hasWords: true }],
+      },
+    } as unknown as RecordingDetailType);
+    await loaded();
+    openTab("Transcript");
+    await screen.findByText("Hi");
+
+    // Nothing selected: splitting has no subject.
+    expect(screen.getByRole("button", { name: "Split segment" }).hasAttribute("disabled")).toBe(true);
+  });
+
   it("clicking a segment (Transcript tab) selects it; Play selected then plays it", async () => {
     const play = vi.spyOn(window.HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     renderPage({

@@ -64,6 +64,25 @@ public class WorkerCallbackControllerTests
     }
 
     [Fact]
+    public async Task Result_PersistsWordTimingsOnEachSegment()
+    {
+        var (controller, db, _) = Build(Secret);
+        var (_, transcriptionId) = await SeedQueuedRecording(db, Guid.NewGuid());
+
+        await controller.Result(new TranscriptionResult(transcriptionId, "en", [
+            new SegmentResult("SPEAKER_00", 1200, 2500, "Hello world",
+                [new SegmentWord("Hello", 1200, 1600), new SegmentWord("world", 1700, 2500)]),
+            new SegmentResult("SPEAKER_01", 3000, 3500, "Yes"),
+        ]));
+
+        var segs = db.Segments.OrderBy(s => s.Ordinal).ToList();
+        Assert.Equal(2, SegmentWords.Parse(segs[0].WordsJson).Count);
+        // A segment the worker sent no words for stays null, not "[]" - the split endpoint keys off null,
+        // and an empty array would make an unsplittable segment look splittable.
+        Assert.Null(segs[1].WordsJson);
+    }
+
+    [Fact]
     public async Task Result_WithWrongSecret_ReturnsUnauthorized()
     {
         var (controller, db, _) = Build(presentedSecret: "not-the-secret");

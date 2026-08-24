@@ -1,3 +1,4 @@
+using Diariz.Api.Contracts;
 using Diariz.Api.Services;
 using static Diariz.Api.Services.SegmentMerger;
 
@@ -134,4 +135,47 @@ public class SegmentMergerTests
 
     [Fact]
     public void Merge_Empty_ReturnsEmpty() => Assert.Empty(Merge([]));
+
+    /// <summary>Auto-merge runs on every transcription for users who enabled it, and it deletes and
+    /// rebuilds every segment. If word timings did not survive that rebuild, merging would silently
+    /// destroy splittability for exactly the users most likely to want it - and no results-based test
+    /// would have noticed, because the transcript reads identically either way.</summary>
+    [Fact]
+    public void Merge_ConcatenatesWordsOfMergedParts()
+    {
+        var merged = Merge([
+            new Part("k", "S0", 0, 1000, "Hello", Words: [new SegmentWord("Hello", 0, 1000)]),
+            new Part("k", "S0", 1100, 2000, "world", Words: [new SegmentWord("world", 1100, 2000)]),
+        ]);
+
+        var block = Assert.Single(merged);
+        Assert.Equal([new SegmentWord("Hello", 0, 1000), new SegmentWord("world", 1100, 2000)], block.Words);
+    }
+
+    [Fact]
+    public void Merge_DropsWordsWhenAnyPartInTheRunHasNone()
+    {
+        // One unaligned part makes the block's word list an incomplete description of its own text.
+        // Splitting on that would cut at a boundary that is not where the text says it is, so the whole
+        // block becomes unsplittable instead - visibly, via a null.
+        var merged = Merge([
+            new Part("k", "S0", 0, 1000, "Hello", Words: [new SegmentWord("Hello", 0, 1000)]),
+            new Part("k", "S0", 1100, 2000, "world", Words: null),
+        ]);
+
+        Assert.Null(Assert.Single(merged).Words);
+    }
+
+    [Fact]
+    public void Merge_KeepsEachUnmergedPartsOwnWords()
+    {
+        var merged = Merge([
+            new Part("a", "S0", 0, 1000, "Hello", Words: [new SegmentWord("Hello", 0, 1000)]),
+            new Part("b", "S1", 1100, 2000, "world", Words: [new SegmentWord("world", 1100, 2000)]),
+        ]);
+
+        Assert.Equal(2, merged.Count);
+        Assert.Equal([new SegmentWord("Hello", 0, 1000)], merged[0].Words);
+        Assert.Equal([new SegmentWord("world", 1100, 2000)], merged[1].Words);
+    }
 }

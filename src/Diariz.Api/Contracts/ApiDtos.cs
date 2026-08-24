@@ -264,7 +264,16 @@ public record MergeRecordingsRequest(IReadOnlyList<Guid> Ids);
 
 public record SegmentDto(
     Guid Id, string Speaker, string SpeakerDisplay, long StartMs, long EndMs,
-    string Original, string? Revised = null)
+    string Original, string? Revised = null,
+    /// <summary>True when this segment has aligned word timings and can therefore be split. False for
+    /// anything transcribed before word timings were kept, for a language with no alignment model, and for
+    /// a merged block whose run contained an edited segment.
+    ///
+    /// <para>The words themselves are deliberately not here: roughly 10k per recording would dominate a
+    /// payload that also feeds exports, MCP, webhooks and the n8n node, so they are fetched one segment at
+    /// a time. Only the recording-detail endpoint sets this - the prompt builders and export formatters
+    /// that also project a <c>SegmentDto</c> offer no splitting, so false is correct for them.</para></summary>
+    bool HasWords = false)
 {
     /// <summary>The text shown/exported: the user's revision (or translation) when present, else the
     /// model's original. Server-side consumers (formatters, email, chat, summarisation) read this.</summary>
@@ -470,7 +479,27 @@ public record PersonDto(
 /// <summary>One voice sample feeding a person's voiceprint: the recording/speaker it came from, and the
 /// start (ms) of that speaker's first segment so the UI can play a sample to identify them.</summary>
 public record VoiceSampleDto(
-    Guid Id, Guid RecordingId, string RecordingName, string SpeakerLabel, long StartMs, DateTimeOffset CreatedAt);
+    Guid Id, Guid RecordingId, string RecordingName, string SpeakerLabel, long StartMs, DateTimeOffset CreatedAt,
+    /// <summary>Total ms of audio selected, or the speaker's whole span when nothing is selected.</summary>
+    long SelectedMs = 0,
+    /// <summary>Ms the last embedding actually consumed, or null while a recompute is queued. Less than
+    /// <paramref name="SelectedMs"/> when the worker's cap truncated the selection - the UI states both
+    /// rather than implying the whole selection was used.</summary>
+    int? UsedMs = null,
+    /// <summary>The contributing speaker's audio was re-attributed, so this snapshot no longer describes
+    /// it. <b>Derived</b> by joining to the speaker's <c>EmbeddingStale</c>, never stored twice.</summary>
+    bool Stale = false,
+    /// <summary>A recompute is queued and has not reported back.</summary>
+    bool Pending = false,
+    /// <summary>The spans of the recording's audio this sample trains on. <b>Empty means the whole
+    /// speaker</b>, matching the column's null. The client needs these to know which segments to show as
+    /// selected; there are a handful per sample, not thousands, so unlike segment words they ride along on
+    /// the person payload.</summary>
+    IReadOnlyList<VoiceprintSpan>? Spans = null);
+
+/// <summary>Replace the spans of audio that train one voice sample. An <b>empty list</b> means the whole
+/// speaker, which is what every sample does by default.</summary>
+public record SetVoiceSampleSpansRequest(IReadOnlyList<VoiceprintSpan> Spans);
 
 /// <summary>A person with their voiceprint's training provenance and how many recording-speakers they
 /// currently label.</summary>
@@ -510,7 +539,20 @@ public record SetVoiceprintOptOutRequest(bool OptOut);
 public record SpeakerInfoDto(
     string Label, string DisplayName, Guid? PersonId, bool IdentifiedAuto, bool IsMultiSpeaker = false,
     string? Title = null, string? CompanyName = null, string? Email = null, string? Phone = null,
-    bool? IsInternal = null);
+    bool? IsInternal = null,
+    /// <summary>A segment was moved into or out of this speaker, so its stored voiceprint no longer
+    /// describes the audio it is attributed to. Nothing recomputes on its own - that needs the worker and
+    /// the original audio - so this is what tells the user it is worth doing.</summary>
+    bool EmbeddingStale = false);
+
+/// <summary>Move one segment to a different speaker. A null <see cref="Label"/> asks the API to mint a new
+/// speaker for this recording: the interrupting voice often has no diarization slot of its own, and the
+/// client must not invent a label into the worker's namespace.</summary>
+public record AssignSegmentSpeakerRequest(string? Label);
+
+/// <summary>The speaker a segment now belongs to - including a label the API minted, which the caller
+/// could not have known in advance.</summary>
+public record SegmentSpeakerDto(string Label, string DisplayName);
 public record RenameRecordingRequest(string? Name);
 /// <summary>Diarization speaker-count hints. Either bound may be null (= no bound / auto).</summary>
 public record SpeakerHints(int? Min, int? Max);
@@ -526,6 +568,14 @@ public record RetranscribeRequest(string? Model, SpeakerHints? Speakers = null, 
 /// is preserved); null = reset to the model's original (clears the revision); "" = a deliberately blank
 /// revision.</summary>
 public record UpdateSegmentRequest(string? Text);
+
+/// <summary>Split one segment in two, before the word at <see cref="WordIndex"/> (so an index of 1 puts one
+/// word on the left). The cut snaps to the stored word timings, and the silence between the two words falls
+/// into neither half - which is what a voiceprint trained on the result needs.</summary>
+/// <param name="DiscardRevision">Required when the segment carries a manual edit. There is no principled
+/// way to divide edited prose at a word index the edit may not even contain, so both halves take their text
+/// from the model's original and the caller has to say explicitly that losing the edit is intended.</param>
+public record SplitSegmentRequest(int WordIndex, bool DiscardRevision = false);
 /// <summary>Delete a set of segments from the current transcription in one call (survivors are renumbered
 /// once). Ids not on the caller's recording are ignored.</summary>
 public record DeleteSegmentsRequest(IReadOnlyList<Guid> Ids);

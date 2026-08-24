@@ -6,6 +6,7 @@ import { useAuth } from "../auth";
 import HelpButton from "./HelpButton";
 import PersonEditor from "./PersonEditor";
 import MergePeopleDialog from "./MergePeopleDialog";
+import PersonIdentityLine from "./PersonIdentityLine";
 import type { PersonDuplicateGroup } from "../lib/types";
 
 type Filter = "all" | "internal" | "external" | "hasVoiceprint";
@@ -147,13 +148,25 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
                 <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-300">{t("people:duplicatesHint")}</p>
                 <ul className="mt-2 space-y-1">
                   {visibleDuplicates.map((group, i) => (
-                    <li key={i} className="flex flex-wrap items-center gap-2 text-xs">
-                      <span className="text-gray-600 dark:text-gray-300">
+                    <li key={i} className="flex flex-wrap items-start gap-2 text-xs">
+                      {/* One line per person, each with its account identity. Joining the names produced
+                          "Same name: Ken Hayward, Ken Hayward", which cannot be decided on without
+                          opening the dialog - and the pair most worth reporting is the one where the
+                          names are identical. A div, not a span: it contains a list. */}
+                      <div className="min-w-0 flex-1 text-gray-600 dark:text-gray-300">
                         {group.reason === "email"
                           ? t("people:duplicatesReasonEmail")
                           : t("people:duplicatesReasonName")}
-                        : {group.people.map((p) => p.name).join(", ")}
-                      </span>
+                        :
+                        <ul className="mt-0.5 space-y-0.5">
+                          {group.people.map((p) => (
+                            <li key={p.id} className="truncate">
+                              {p.name}{" "}
+                              <PersonIdentityLine person={p} className="text-gray-500 dark:text-gray-400" />
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                       {group.people.length > 1 && (
                         <button
                           type="button"
@@ -212,13 +225,22 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
                       type="button"
                       onClick={() => setSelectedId(p.id)}
                       aria-pressed={p.id === selectedId}
-                      // One line per person: the name truncates and the voiceprint marker keeps its place
-                      // at the end, so a long list stays scannable.
+                      // Name over account identity, with the voiceprint marker keeping its place at the
+                      // end. The second line is what makes two people of the same name tellable apart;
+                      // both lines truncate so a long directory still stays scannable.
                       className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800 ${
                         p.id === selectedId ? "bg-gray-100 dark:bg-gray-800" : ""
                       }`}
                     >
-                      <span className="min-w-0 flex-1 truncate text-gray-800 dark:text-gray-100">{p.name}</span>
+                      <span className="min-w-0 flex-1">
+                        {/* truncate needs a block: on an inline span it sets only white-space:nowrap,
+                            so the text would neither wrap nor ellipsise and would overflow the row. */}
+                        <span className="block truncate text-gray-800 dark:text-gray-100">{p.name}</span>
+                        <PersonIdentityLine
+                          person={p}
+                          className="block truncate text-xs text-gray-500 dark:text-gray-400"
+                        />
+                      </span>
                       <span
                         title={p.hasVoiceprint ? t("people:hasVoiceprint") : t("people:noVoiceprint")}
                         aria-label={p.hasVoiceprint ? t("people:hasVoiceprint") : t("people:noVoiceprint")}

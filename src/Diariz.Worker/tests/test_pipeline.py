@@ -396,3 +396,45 @@ def test_transcribe_pins_the_language_for_the_asr_and_the_aligner(monkeypatch):
     assert captured["asr_language"] == "en"
     assert captured["align_language"] == "en"
     assert out["language"] == "en"
+
+def test_keeps_aligned_word_timings():
+    raw = [{
+        "text": "Hello world", "speaker": "SPEAKER_00", "start": 1.2, "end": 2.5,
+        "words": [
+            {"word": "Hello", "start": 1.2, "end": 1.6},
+            {"word": "world", "start": 1.7, "end": 2.5},
+        ],
+    }]
+    assert pipeline._shape_segments(raw)[0]["Words"] == [
+        {"W": "Hello", "S": 1200, "E": 1600},
+        {"W": "world", "S": 1700, "E": 2500},
+    ]
+
+
+def test_drops_words_missing_timings_rather_than_guessing():
+    # whisperx leaves start/end off a word it could not align. A guessed timing would cut the audio in
+    # the wrong place, which is exactly what word snapping exists to prevent.
+    raw = [{
+        "text": "Hello world", "speaker": "S", "start": 0.0, "end": 2.0,
+        "words": [
+            {"word": "Hello", "start": 0.0, "end": 0.5},
+            {"word": "world"},
+        ],
+    }]
+    assert pipeline._shape_segments(raw)[0]["Words"] == [{"W": "Hello", "S": 0, "E": 500}]
+
+
+def test_omits_the_words_key_when_no_word_is_usable():
+    # The languages with no alignment model produce no usable words at all. The key must be absent, not
+    # null, so the segment contract stays exactly what it was before this change.
+    raw = [{"text": "Hola", "speaker": "S", "start": 0.0, "end": 1.0, "words": [{"word": "Hola"}]}]
+    assert "Words" not in pipeline._shape_segments(raw)[0]
+    assert "Words" not in pipeline._shape_segments([{"text": "Hola", "speaker": "S", "start": 0, "end": 1}])[0]
+
+
+def test_strips_whitespace_around_words():
+    raw = [{
+        "text": "Hello world", "speaker": "S", "start": 0.0, "end": 2.0,
+        "words": [{"word": " Hello ", "start": 0.0, "end": 0.5}, {"word": "world", "start": 0.6, "end": 2.0}],
+    }]
+    assert pipeline._shape_segments(raw)[0]["Words"][0]["W"] == "Hello"

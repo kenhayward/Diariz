@@ -245,7 +245,7 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
         // Destructive writes on the shared directory need ManagePeople now; these tests are about the
         // pgvector behaviour underneath, not the gate (PeopleBiometricGateTests covers that).
         Perms.Grant(db, userId, PlatformPermission.ManagePeople);
-        return new(db, new RoomScope(db), new PeopleDirectory(db), new UserPermissions(db))
+        return new(db, new RoomScope(db), new PeopleDirectory(db), new UserPermissions(db), new FakeJobQueue())
         {
             ControllerContext = Http.Context(userId),
         };

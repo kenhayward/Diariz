@@ -106,6 +106,8 @@ import type {
   LlmTestRecording,
   ScreenshotOcr,
   OcrStatus,
+  SegmentWord,
+  SegmentSpeakerDto,
 } from "./types";
 
 const TOKEN_KEY = "diariz.token";
@@ -420,6 +422,28 @@ export const api = {
   /// `null` resets to the model's original (clears the revision).
   async updateSegment(id: string, segmentId: string, text: string | null): Promise<void> {
     await http.put(`/api/recordings/${id}/segments/${segmentId}`, { text });
+  },
+
+  /// Word timings for one segment, fetched only when the split editor opens. Not on the transcript
+  /// payload: roughly 10k words per recording would dominate a response that also feeds exports and MCP.
+  /// Empty for a segment with none - check `hasWords` on the segment first.
+  async getSegmentWords(id: string, segmentId: string): Promise<SegmentWord[]> {
+    const { data } = await http.get<SegmentWord[]>(`/api/recordings/${id}/segments/${segmentId}/words`);
+    return data;
+  },
+
+  /// Move one segment to another speaker. Pass null to have the server mint a new speaker for this
+  /// recording and tell you which label it chose.
+  async assignSegmentSpeaker(id: string, segmentId: string, label: string | null): Promise<SegmentSpeakerDto> {
+    const { data } = await http.put<SegmentSpeakerDto>(
+      `/api/recordings/${id}/segments/${segmentId}/speaker`, { label });
+    return data;
+  },
+
+  /// Split a segment in two before the given word. `discardRevision` is required when the segment carries
+  /// a manual edit: the server refuses rather than dropping it silently, so ask the user first.
+  async splitSegment(id: string, segmentId: string, wordIndex: number, discardRevision = false): Promise<void> {
+    await http.post(`/api/recordings/${id}/segments/${segmentId}/split`, { wordIndex, discardRevision });
   },
 
   /// Delete a single segment from the current transcription (permanent for this version).
@@ -891,6 +915,14 @@ export const api = {
 
   async removeVoiceSample(id: string, sampleId: string): Promise<void> {
     await http.delete(`/api/people/${id}/voiceprint/samples/${sampleId}`);
+  },
+
+  /// Replace the spans of audio that train one voice sample, and queue a re-embed. An empty list goes
+  /// back to the whole speaker. Returns as soon as the job is queued - poll the person for `pending`.
+  async setVoiceSampleSpans(
+    id: string, sampleId: string, spans: { startMs: number; endMs: number }[],
+  ): Promise<void> {
+    await http.put(`/api/people/${id}/voiceprint/samples/${sampleId}/spans`, { spans });
   },
 
   /// Reassign a recording's speaker to a person, or pass null to unassign.

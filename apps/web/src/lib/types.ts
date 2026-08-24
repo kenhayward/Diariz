@@ -223,6 +223,26 @@ export interface SegmentDto {
   revised: string | null;
   /** The text shown/exported: the revision when present, else the original. */
   text: string;
+  /**
+   * Whether this segment has word timings and can therefore be split. False for anything transcribed
+   * before they were kept, so the split control is disabled with an explanation rather than absent.
+   * The words themselves are fetched per segment via `api.getSegmentWords` - ~10k per recording would
+   * dominate this payload.
+   */
+  hasWords: boolean;
+}
+
+/** The speaker a segment now belongs to, including a label the server minted. */
+export interface SegmentSpeakerDto {
+  label: string;
+  displayName: string;
+}
+
+/** One aligned word inside a segment. Short keys because the server stores ~10k of these per recording. */
+export interface SegmentWord {
+  w: string;
+  s: number;
+  e: number;
 }
 
 export interface TranscriptionDto {
@@ -253,6 +273,9 @@ export interface SpeakerInfo {
   /// The user has marked this slot as overlapping/simultaneous speech ("Multiple Speakers").
   /// Such a speaker is never auto-identified or enrolled into a voiceprint.
   isMultiSpeaker: boolean;
+  /// A segment was moved into or out of this speaker, so its stored voiceprint no longer describes the
+  /// audio attributed to it. Nothing recomputes on its own - this is what prompts the user to.
+  embeddingStale: boolean;
 }
 
 /// Someone who appears in meetings. Platform-wide, and the voiceprint is optional: `hasVoiceprint` is false
@@ -286,6 +309,17 @@ export interface VoiceSample {
   /// Start (ms) of that speaker's first segment, so the UI can play a sample of the voice.
   startMs: number;
   createdAt: string;
+  /// Total ms of audio selected, or the speaker's whole span when nothing is selected.
+  selectedMs: number;
+  /// Ms the last embedding actually consumed, or null while a recompute is queued. Less than `selectedMs`
+  /// when the worker's cap truncated the selection - show both rather than implying it used it all.
+  usedMs: number | null;
+  /// This speaker's audio was re-attributed, so the snapshot no longer describes it.
+  stale: boolean;
+  /// A recompute is queued and has not reported back. Server-derived, so it survives a reload.
+  pending: boolean;
+  /// The spans of audio this sample trains on. Empty means the whole speaker.
+  spans: { startMs: number; endMs: number }[];
 }
 
 /// A group of people who look like the same human. `reason` is "email" or "name".

@@ -117,6 +117,9 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddScreenshotOcr` | `MeetingScreenshots.OcrText` (text null), `OcrModel` (text null), `OcrGeneratedAt` (timestamptz null) - text read off a capture by an OCR model, plus which model read it and when. Additive and nullable, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddTranscriptChunkHnswIndex` | An **HNSW** index on `TranscriptChunks.Embedding` (`vector_cosine_ops`, pgvector defaults for `m`/`ef_construction`) - the ANN index behind semantic search, which until now sequentially scanned and detoasted every chunk on every query. Index-only, no column change; forward-restore-safe (no `MaintenanceController.CurrentFormat` bump). **Not built `CONCURRENTLY`** - EF runs each migration in a transaction and Postgres forbids it there - so it takes a SHARE lock and blocks chunk writes while it builds; the API migrates before it serves traffic, so that is startup latency rather than a user-visible stall |
 | `SyncPersonalRoomNames` | **No schema change.** A one-time data correction (`PersonalRoomNameBackfill`): points every Personal room's `Name` at its owner's display name, using the same `COALESCE(NULLIF(TRIM("FullName"), ''), "Email", 'Personal')` expression `RoomScope.Display` applies. Personal rooms are immutable to the user, so the name is purely derived and this cannot clobber anything hand-typed. Not destructive - `MaintenanceController.CurrentFormat` is unchanged and older backups still restore |
+| `AddSegmentWords` | `Segments.WordsJson` (jsonb, nullable). WhisperX's aligned word timings, which a segment split snaps to. Additive and nullable, so an older backup restores cleanly - **no `CurrentFormat` bump** |
+| `AddSpeakerEmbeddingStale` | `Speakers.EmbeddingStale` (boolean, not-null, default false). Flags a speaker whose audio was re-attributed by a per-segment reassignment - **no `CurrentFormat` bump** |
+| `AddVoiceSampleSpans` | `ProfileContributions.SpansJson` (jsonb, nullable - null = the whole speaker) + `ProfileContributions.UsedMs` (integer, nullable). Which audio trains each voice sample, and how much of it the last embed used. No data backfill: null already means what every existing row did - **no `CurrentFormat` bump** |
 
 ### Entity-relationship overview
 
@@ -226,6 +229,7 @@ A contiguous, single-speaker span of transcribed speech.
 | `Original` | text | the model's verbatim output for this span — never overwritten after the worker writes it |
 | `Revised` | text null | a user edit (later: a translation) of `Original`; null = unchanged. The effective text = `Revised ?? Original` |
 | `Ordinal` | int | order within the transcription |
+| `WordsJson` | **jsonb** null | WhisperX's aligned word timings, `[{"w":"Hi","s":1,"e":2}]` (ms; single-letter keys because a long meeting carries ~10k of them per recording). **Null = no word timings** — every recording transcribed before this existed, any language with no alignment model, and a merged block whose run contained an edited segment. Null is what the split endpoint refuses on; read/written only through `SegmentWords`. Postgres-only (plain text under the in-memory provider) |
 | `Embedding` | **vector(768)** null | legacy per-segment RAG slot - **unused/null**, superseded by `TranscriptChunks` (a segment is too small a retrieval unit); kept to avoid a drop migration; Postgres-only |
 
 Indexes: `(TranscriptionId, Ordinal)`; GIN trigram index `IX_Segments_Text_Trgm` on
@@ -664,6 +668,7 @@ Per-recording diarization label → display name, plus its voiceprint and any id
 | `ProfileId` | uuid FK → SpeakerProfiles null | = CLR `PersonId`; the identified person; **SetNull** on person delete |
 | `IdentifiedAuto` | bool | true when name/profile were set by auto-ID (vs a manual rename) |
 | `IsMultiSpeaker` | bool | user marked this slot as overlapping speech ("Multiple Speakers"); never auto-identified or enrolled into a voiceprint |
+| `EmbeddingStale` | bool | not-null, default false. A segment was moved **into or out of** this speaker, so `Embedding` no longer describes the audio attributed to it. Set by `PUT /api/recordings/{id}/segments/{segmentId}/speaker` on **both** the losing and the gaining label; cleared when a re-embed job reports back. A *split* sets nothing — the same audio is still that speaker's, only divided |
 
 Unique index: `(RecordingId, Label)`.
 
@@ -721,9 +726,14 @@ for the same backup-compatibility reason as `SpeakerProfiles` above.
 | `SpeakerId` | uuid FK → Speakers | cascade (deleting the source speaker drops the contribution) |
 | `RecordingId` | uuid | loose Guid for display; **no FK** |
 | `Embedding` | **vector(192)** | snapshot of the contributing speaker's embedding (lets the centroid be recomputed without the worker) |
+| `SpansJson` | **jsonb** null | the spans of the recording's audio this sample trains on, `[{"startMs":1000,"endMs":3000}]`. **Null = the whole speaker** — what every sample enrolled before selection existed already did, which is why the migration backfills nothing. **Spans, not segment ids**: segment rows belong to a transcription *version* and a re-transcribe replaces every one of them, where wall-clock times survive. Read/written only through `VoiceprintSpans`. Postgres-only (plain text under the in-memory provider) |
+| `UsedMs` | int null | how much audio the last embedding actually consumed. Two jobs: the honest figure behind "using 1:20 of the 4:12 selected" (the worker caps pooled audio at `EMBED_MAX_SECONDS`), and the **pending marker** — the enqueue clears it and the callback sets it, so a recompute in flight survives a page reload instead of living only in component state. A *failed* re-embed sets it to **0**, so a dead job is not indistinguishable from a slow one |
 | `CreatedAt` | timestamptz | |
 
 Index: `(ProfileId)`.
+
+**A voice sample has no staleness column of its own.** It is derived by joining to its `Speaker`'s
+`EmbeddingStale` — two columns saying the same thing would eventually disagree.
 
 #### `Sections`
 User-defined group recordings are filed under.

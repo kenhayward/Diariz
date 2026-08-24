@@ -8,6 +8,9 @@ class Config:
     STREAM_KEY = os.getenv("STREAM_KEY", "transcription-jobs")
     # Second stream this worker also consumes: audio-concatenation merge jobs (shares the same group).
     MERGE_STREAM_KEY = os.getenv("MERGE_STREAM_KEY", "audio-merge-jobs")
+    # On-demand voiceprint re-embeds. Third stream on this worker; needs only the ECAPA embedder, so
+    # it is seconds of work - but it shares this process, so it can queue behind a transcription.
+    VOICEPRINT_STREAM_KEY = os.getenv("VOICEPRINT_STREAM_KEY", "voiceprint-jobs")
     CONSUMER_GROUP = os.getenv("CONSUMER_GROUP", "workers")
     CONSUMER_NAME = os.getenv("CONSUMER_NAME", "worker-1")
 
@@ -40,7 +43,10 @@ class Config:
     SAMPLE_RATE = 16000  # whisperx.load_audio resamples to 16 kHz
     ENABLE_SPEAKER_EMBEDDINGS = os.getenv("ENABLE_SPEAKER_EMBEDDINGS", "1") not in ("0", "false", "False", "")
     EMBED_MODEL = os.getenv("EMBED_MODEL", "speechbrain/spkrec-ecapa-voxceleb")  # 192-d, Apache-2.0
-    EMBED_MAX_SECONDS = float(os.getenv("EMBED_MAX_SECONDS", "30"))  # cap pooled audio per speaker
+    # Cap on pooled audio per speaker. Raised from 30 s so a hand-picked selection is actually used;
+    # ECAPA on 120 s vs 30 s costs a rounding error on GPU and the vectors stay comparable with centroids
+    # built at 30 s. One cap for both the transcription-time and on-demand paths, so they cannot drift.
+    EMBED_MAX_SECONDS = float(os.getenv("EMBED_MAX_SECONDS", "120"))
     EMBED_CACHE_DIR = os.getenv("EMBED_CACHE_DIR", "")  # speechbrain savedir (blank => default)
 
 

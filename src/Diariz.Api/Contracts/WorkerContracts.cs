@@ -57,12 +57,30 @@ public record TagsJob(
     Guid RecordingId,
     Guid TranscriptionId);
 
+/// <summary>A span of a recording's audio, in ms from its start, that trains a voiceprint. Stored on the
+/// voice sample and sent to the worker verbatim.
+///
+/// <para>Spans rather than segment ids, because segment rows belong to a transcription <em>version</em>:
+/// a re-transcribe replaces every one of them, and stored ids would dangle where wall-clock times do
+/// not.</para></summary>
+public record VoiceprintSpan(long StartMs, long EndMs);
+
+/// <summary>One aligned word inside a segment. The single-letter members are deliberate: this is stored as
+/// jsonb on every segment and a long meeting carries roughly 10k of them, so the key names are part of the
+/// storage cost. <c>S</c> and <c>E</c> are ms from the start of the recording, matching
+/// <see cref="SegmentResult"/>.</summary>
+public record SegmentWord(string W, long S, long E);
+
 /// <summary>One diarized, timestamped segment returned by the worker.</summary>
 public record SegmentResult(
     string Speaker,
     long StartMs,
     long EndMs,
-    string Text);
+    string Text,
+    /// <summary>Aligned word timings, or null when whisperx produced none - a language with no alignment
+    /// model, or a recording transcribed before these were kept. A segment without them cannot be
+    /// split.</summary>
+    IReadOnlyList<SegmentWord>? Words = null);
 
 /// <summary>One diarized speaker's voice embedding (ECAPA, 192-d) for identification.</summary>
 public record SpeakerEmbeddingResult(
@@ -79,6 +97,29 @@ public record TranscriptionResult(
     /// <summary>Full-pipeline wall-clock time the worker spent on this job (download + transcribe +
     /// diarize + embed), in milliseconds.</summary>
     long? ProcessingMs = null);
+
+/// <summary>Job payload for an on-demand voiceprint re-embed, consumed by the Python worker. It downloads
+/// <paramref name="BlobKey"/>, slices exactly <paramref name="Spans"/> out of the waveform, embeds them with
+/// ECAPA and reports back.
+///
+/// <para>No Whisper and no pyannote involved, so it is seconds of work - but it shares the worker process
+/// with transcription, so it can queue behind one. The UI shows it as pending rather than pretending
+/// otherwise.</para>
+///
+/// <para>An empty <paramref name="Spans"/> means the whole speaker, matching the column's null.</para></summary>
+public record VoiceprintJob(
+    Guid VoiceSampleId,
+    Guid RecordingId,
+    string BlobKey,
+    IReadOnlyList<VoiceprintSpan> Spans);
+
+/// <summary>Callback body the worker POSTs when a re-embed succeeds. <paramref name="UsedMs"/> may be less
+/// than <paramref name="SelectedMs"/>, because the worker still caps how much audio it pools - the UI states
+/// both rather than implying the whole selection was used.</summary>
+public record VoiceprintResult(Guid VoiceSampleId, float[] Embedding, int UsedMs, int SelectedMs);
+
+/// <summary>Callback body the worker POSTs when a re-embed fails.</summary>
+public record VoiceprintFailure(Guid VoiceSampleId, string Error);
 
 /// <summary>Callback body the worker POSTs when a job fails.</summary>
 public record TranscriptionFailure(

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import HelpButton from "./HelpButton";
+import PersonIdentityLine from "./PersonIdentityLine";
 import type { Person } from "../lib/types";
 
 /// Confirms a merge by describing what it will actually do to *these two records*.
@@ -80,9 +81,13 @@ export default function MergePeopleDialog({
           <p className="font-medium text-gray-900 dark:text-gray-50">
             {t("people:mergeKeeps", { name: target.name })}
           </p>
+          {/* Which account each record IS. With two same-named people this is the only thing that tells
+              them apart, and for a linked/linked pair it is the reason the merge is refused. */}
+          <PersonIdentityLine person={target} className="block text-xs text-gray-500 dark:text-gray-400" />
           <p className="text-gray-500 line-through dark:text-gray-400">
             {t("people:mergeDeletes", { name: source.name })}
           </p>
+          <PersonIdentityLine person={source} className="block text-xs text-gray-500 dark:text-gray-400" />
           <button
             type="button"
             onClick={() => setFlipped((f) => !f)}

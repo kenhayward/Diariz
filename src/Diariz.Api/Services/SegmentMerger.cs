@@ -1,3 +1,5 @@
+using Diariz.Api.Contracts;
+
 namespace Diariz.Api.Services;
 
 /// <summary>Pure (EF-free) collapsing of consecutive same-speaker transcript segments into one, so a
@@ -12,7 +14,13 @@ public static class SegmentMerger
     /// <param name="BreakBefore">When true, this part always starts a new block even if its speaker key
     /// matches the previous one - used to stop a note-taker's note being swallowed by a same-speaker merge
     /// (the note sits between the two parts, so they must stay separate).</param>
-    public record Part(string SpeakerKey, string SpeakerLabel, long StartMs, long EndMs, string Text, bool BreakBefore = false);
+    /// <param name="Words">Aligned word timings for this part, or null when it has none. A merged block
+    /// concatenates its parts' words, and is null when <em>any</em> part in the run is null: a partial word
+    /// list describes the block's text incompletely, and a split made against it would cut somewhere other
+    /// than where the text says. Auto-merge deletes and rebuilds every segment, so without this a merge
+    /// would silently make a transcript unsplittable while reading identically.</param>
+    public record Part(string SpeakerKey, string SpeakerLabel, long StartMs, long EndMs, string Text,
+        bool BreakBefore = false, IReadOnlyList<SegmentWord>? Words = null);
 
     /// <summary>Merge runs of adjacent parts that share a speaker <em>key</em>: the parts are joined with a
     /// single line break (never a blank line - see <see cref="TranscriptText"/>), the span runs from the first
@@ -28,7 +36,12 @@ public static class SegmentMerger
                 var prev = result[^1];
                 // One line break between merged sections, and collapse any blank lines the parts carried.
                 var text = TranscriptText.Normalize($"{prev.Text}\n{p.Text}");
-                result[^1] = prev with { EndMs = p.EndMs, Text = text };
+                // Null when either side has none: a half-described block would let a split cut somewhere
+                // other than where the text says. See the note on Part.Words.
+                var words = prev.Words is null || p.Words is null
+                    ? null
+                    : (IReadOnlyList<SegmentWord>)[.. prev.Words, .. p.Words];
+                result[^1] = prev with { EndMs = p.EndMs, Text = text, Words = words };
             }
             else
             {

@@ -1,11 +1,20 @@
-import { render, screen, act, waitFor } from "@testing-library/react";
+import { render, screen, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { useState } from "react";
 import { StatusProvider, useStatus } from "./status";
 
 vi.mock("./api", () => ({
-  api: { getUserSettings: vi.fn().mockResolvedValue({ outlookSyncEnabled: true }) },
+  // Deliberately not instant. The desktop gate needs this query AND the shell probe, and a mock that
+  // resolves on the first microtask lets a test that never waits for either pass by luck - which is what
+  // these tests used to do, until CI was slow enough to lose the race. Microtask turns rather than a timer,
+  // so it still resolves under the fake clock the second describe installs.
+  api: {
+    getUserSettings: vi.fn(async () => {
+      for (let i = 0; i < 5; i++) await Promise.resolve();
+      return { outlookSyncEnabled: true };
+    }),
+  },
   apiErrorMessage: (e: unknown) => String(e),
 }));
 
@@ -29,7 +38,7 @@ function installShell(over: Record<string, unknown> = {}) {
     ...over,
   };
   (window as unknown as { diariz: unknown }).diariz = shell;
-  return { emit: (phase: string) => listeners.forEach((cb) => cb({ phase })) };
+  return { emit: (phase: string) => listeners.forEach((cb) => cb({ phase })), shell };
 }
 
 /// The toolbar: reads the hook, and can be unmounted independently of the provider above it - which is exactly
@@ -75,6 +84,31 @@ function renderHarness() {
   );
 }
 
+/// Start a sync, waiting until the hook actually believes it is on the desktop.
+///
+/// The gate is two async things deep - the shell-availability probe **and** the user-settings query - and
+/// the toolbar's button renders before either lands. Waiting for the BUTTON therefore proves nothing: it is
+/// there on the very first render, so `waitFor`'s first check passes, the click goes down the browser path,
+/// and that path finishes immediately and clears the status line. These tests failed on CI reporting
+/// `expected 'none' to contain 'Syncing calendar'` for exactly that reason, while passing locally.
+///
+/// So this waits for the thing that matters - the sync reaching the shell - rather than for a button that
+/// was never the question. Re-clicking is safe: `sync` returns early while `busy`, and a browser-path run
+/// resolves at once. Microtasks only, no `waitFor`, so it behaves the same under the fake clock the second
+/// describe installs.
+async function startDesktopSync(shell: { syncOutlookNow: ReturnType<typeof vi.fn> }) {
+  for (let i = 0; i < 50; i++) {
+    await act(async () => {
+      screen.getByText("start-sync").click();
+    });
+    if (shell.syncOutlookNow.mock.calls.length > 0) return;
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+  throw new Error("the desktop gate never opened - the sync never reached the shell");
+}
+
 const msg = () => screen.getByTestId("msg").textContent;
 const busy = () => screen.getByTestId("busy").textContent;
 
@@ -87,8 +121,9 @@ async function settle() {
 }
 
 describe("useCalendarSync status message", () => {
+  let shell: ReturnType<typeof installShell>["shell"];
   beforeEach(() => {
-    installShell();
+    ({ shell } = installShell());
   });
   afterEach(() => {
     delete (window as unknown as { diariz?: unknown }).diariz;
@@ -102,11 +137,7 @@ describe("useCalendarSync status message", () => {
   it("keeps counting when the toolbar unmounts mid-sync", async () => {
     renderHarness();
 
-    // Wait for the shell probe to settle, so the sync takes the desktop path and hangs on the shell.
-    await waitFor(() => expect(screen.getByText("start-sync")).toBeTruthy());
-    await act(async () => {
-      screen.getByText("start-sync").click();
-    });
+    await startDesktopSync(shell);
     expect(msg()).toContain("Syncing calendar");
 
     await act(async () => {
@@ -122,10 +153,7 @@ describe("useCalendarSync status message", () => {
   it("clears its progress message when the workspace unmounts mid-sync", async () => {
     renderHarness();
 
-    await waitFor(() => expect(screen.getByText("start-sync")).toBeTruthy());
-    await act(async () => {
-      screen.getByText("start-sync").click();
-    });
+    await startDesktopSync(shell);
     expect(msg()).toContain("Syncing calendar");
 
     await act(async () => {
@@ -139,7 +167,7 @@ describe("useCalendarSync status message", () => {
   /// the workspace would wipe an upload or recording message on the way out.
   it("leaves a message it did not write alone", async () => {
     renderHarness();
-    await waitFor(() => expect(screen.getByText("start-sync")).toBeTruthy());
+    await settle();
 
     // Nothing pushed by the hook - the bar is showing somebody else's message.
     await act(async () => {
@@ -165,11 +193,8 @@ describe("useCalendarSync when the shell goes quiet", () => {
       syncOutlookNow: vi.fn().mockResolvedValue({ started: false, reason: "busy" }),
     });
     renderHarness();
-    await settle();
+    await startDesktopSync(shell.shell);
 
-    await act(async () => {
-      screen.getByText("start-sync").click();
-    });
     // In act, or the phase lands after the clock below has already run past the stale window and the timer
     // that bounds it would be armed too late to fire.
     act(() => shell.emit("reading")); // the shell says it is working...

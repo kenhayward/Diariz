@@ -30,7 +30,8 @@ export const PERMISSION_GATED_SURFACES: readonly string[] = [
   // The directory modal and its editor are reachable only with ManagePeople - the modal checks the same
   // permission the endpoints enforce, and renders an explanation instead when it is absent.
   "components/PeopleModal.tsx",
-  "components/PersonEditor.tsx",
+  // PersonEditor is now a tab shell with no api calls of its own; the gated ones live in the Profile tab.
+  "components/PersonProfileTab.tsx",
 ];
 
 /// True when `source` references `api.<method>` for a gated method. Deliberately crude: a substring match

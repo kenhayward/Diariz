@@ -37,6 +37,48 @@ beforeEach(() => {
 });
 
 describe("MergePeopleDialog", () => {
+  /// The refusal is the whole reason this pair cannot be merged, so it has to say which two accounts it
+  /// means. Before this, both rows read "Ken Hayward" and the message named neither.
+  it("names both accounts when it refuses a linked/linked merge", () => {
+    render_(
+      person("a", "Ken Hayward", { linkedUserId: "u1", isSelf: true, email: "ken@example.com" }),
+      person("b", "Ken Hayward", { linkedUserId: "u2", email: "ken@acme.com" }),
+    );
+
+    expect(screen.getByText("ken@example.com - your account")).toBeTruthy();
+    expect(screen.getByText("ken@acme.com - Diariz account")).toBeTruthy();
+    // And it must still refuse.
+    expect(screen.queryByRole("button", { name: /Merge/ })).toBeNull();
+  });
+
+  it("shows the no-account state for an unlinked person", () => {
+    render_(
+      person("a", "Ken Hayward", { linkedUserId: "u1", isSelf: true, email: "ken@example.com" }),
+      person("b", "Ken Hayward"),
+    );
+
+    expect(screen.getByText("no Diariz account")).toBeTruthy();
+    // This pair IS mergeable, so the confirm must still be offered.
+    expect(screen.getByRole("button", { name: /Merge/ })).toBeTruthy();
+  });
+
+  it("swaps the identities along with the names", async () => {
+    // Direction is the decision that matters here, and the identity line is what makes it decidable - so
+    // it has to follow the swap rather than staying pinned to a position.
+    render_(
+      person("a", "Ken Hayward", { linkedUserId: "u1", isSelf: true, email: "ken@example.com" }),
+      person("b", "Ken Hayward"),
+    );
+
+    const keptBefore = screen.getByText(/Keep/).parentElement!;
+    expect(keptBefore.textContent).toContain("ken@example.com - your account");
+
+    fireEvent.click(screen.getByText(/Swap/));
+
+    const keptAfter = screen.getByText(/Keep/).parentElement!;
+    expect(keptAfter.textContent).toContain("no Diariz account");
+  });
+
   it("names which record is kept and which is deleted", () => {
     render_();
 

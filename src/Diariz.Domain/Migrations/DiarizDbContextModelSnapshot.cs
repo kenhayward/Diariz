@@ -1825,6 +1825,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<Guid>("TranscriptionId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("WordsJson")
+                        .HasColumnType("jsonb");
+
                     b.HasKey("Id");
 
                     b.HasIndex("TranscriptionId", "Ordinal");
@@ -1845,6 +1848,9 @@ namespace Diariz.Domain.Migrations
 
                     b.Property<Vector>("Embedding")
                         .HasColumnType("vector(192)");
+
+                    b.Property<bool>("EmbeddingStale")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IdentifiedAuto")
                         .HasColumnType("boolean");
@@ -2160,8 +2166,14 @@ namespace Diariz.Domain.Migrations
                     b.Property<Guid>("RecordingId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("SpansJson")
+                        .HasColumnType("jsonb");
+
                     b.Property<Guid>("SpeakerId")
                         .HasColumnType("uuid");
+
+                    b.Property<int?>("UsedMs")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 

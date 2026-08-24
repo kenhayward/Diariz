@@ -1134,6 +1134,20 @@ const GENERATED: GeneratedResource[] = [
         "returnsArray": false
       },
       {
+        "value": "chooseWhichAudioTrainsOneVoiceSample",
+        "displayName": "Choose which audio trains one voice sample",
+        "description": "Replaces the spans of the contributing recording's audio that this sample is embedded from, and queues a re-embed. Send an empty list to go back to the whole speaker, which is what every sample does by default. Adjacent spans are merged, so you can send one per segment the user ticked.",
+        "method": "PUT",
+        "path": "/api/people/{id}/voiceprint/samples/{sampleId}/spans",
+        "pathParams": [
+          "id",
+          "sampleId"
+        ],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": false
+      },
+      {
         "value": "deleteAPerson",
         "displayName": "Delete a person",
         "description": "Removes the person, their voiceprint and all its training data, and unlinks them from every recording - the GDPR erasure path, so nothing recognisable is retained.",
@@ -1587,6 +1601,20 @@ const GENERATED: GeneratedResource[] = [
         "returnsArray": false
       },
       {
+        "value": "getASegmentSWordTimings",
+        "displayName": "Get a segment's word timings",
+        "description": "The aligned word timings for one segment, used to split it at an exact word boundary. Returned per segment rather than on the transcript, because a long meeting carries roughly 10k words and they would dominate the recording payload.",
+        "method": "GET",
+        "path": "/api/recordings/{id}/segments/{segmentId}/words",
+        "pathParams": [
+          "id",
+          "segmentId"
+        ],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": false
+      },
+      {
         "value": "linkARecordingToACalendarEvent",
         "displayName": "Link a recording to a calendar event",
         "description": "Stores the link, whether you are accepting the suggested match or picking an event by hand (the times need not line up). Only a lightweight snapshot is kept - title, times, colour - and the richer invite details are fetched live when displayed.",
@@ -1694,6 +1722,20 @@ const GENERATED: GeneratedResource[] = [
         "returnsArray": false
       },
       {
+        "value": "reassignOneSegmentToADifferentSpeaker",
+        "displayName": "Reassign one segment to a different speaker",
+        "description": "Moves a single segment to another speaker - what you need after splitting a block that contained a second voice. Pass an existing label, or null to have a new speaker minted for this recording when the interrupting voice has no diarization slot of its own; the response says which label was used.",
+        "method": "PUT",
+        "path": "/api/recordings/{id}/segments/{segmentId}/speaker",
+        "pathParams": [
+          "id",
+          "segmentId"
+        ],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": false
+      },
+      {
         "value": "removeARecordingSCalendarLink",
         "displayName": "Remove a recording's calendar link",
         "description": "Detaches the recording from its calendar event. Idempotent - unlinking a recording that has no link succeeds. Only the link is removed; the calendar event itself is never touched.",
@@ -1783,6 +1825,20 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/recordings/{id}/share",
         "pathParams": [
           "id"
+        ],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": false
+      },
+      {
+        "value": "splitASegmentAtAWordBoundary",
+        "displayName": "Split a segment at a word boundary",
+        "description": "Divides one segment in two before the word at wordIndex, so a block that contains a second voice can be separated and the interloper moved with the segment-speaker endpoint. The cut snaps to the stored word timings, and the silence between the two words falls into neither half - which is what a voiceprint trained on the result needs.",
+        "method": "POST",
+        "path": "/api/recordings/{id}/segments/{segmentId}/split",
+        "pathParams": [
+          "id",
+          "segmentId"
         ],
         "queryParams": [],
         "hasBody": true,

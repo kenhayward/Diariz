@@ -77,6 +77,22 @@ describe("PeopleModal", () => {
     expect(within(without).queryByLabelText("No voiceprint")).toBeTruthy();
   });
 
+  /// Two people with the same name are indistinguishable in a platform-wide directory. The row has to
+  /// carry the one fact that separates them: which account each person is.
+  it("shows each person's account identity in the list", async () => {
+    mock(api.listPeople).mockResolvedValue([
+      person("a", "Ken Hayward", { linkedUserId: "u1", isSelf: true, email: "ken@example.com" }),
+      person("b", "Ken Hayward", { linkedUserId: "u2", isSelf: false, email: "ken@acme.com" }),
+      person("c", "Ken Hayward"),
+    ]);
+    render_();
+
+    expect(await screen.findByText("ken@example.com - your account")).toBeTruthy();
+    expect(screen.getByText("ken@acme.com - Diariz account")).toBeTruthy();
+    // A blank would read as "not loaded yet"; an unlinked person says so plainly.
+    expect(screen.getByText("no Diariz account")).toBeTruthy();
+  });
+
   it("searches the directory server-side", async () => {
     render_();
     await screen.findByRole("button", { name: /Ada Lovelace/ });
@@ -128,6 +144,25 @@ describe("PeopleModal", () => {
 
     expect(screen.getByRole("dialog", { name: "Merge two records" })).toBeTruthy();
     expect(api.mergePeople).not.toHaveBeenCalled();
+  });
+
+
+  /// Before this the banner joined bare names - "Same name: Ken Hayward, Ken Hayward" - which is
+  /// undecidable without opening the dialog. Each person gets their own line and their own identity.
+  it("lists each duplicate with its identity rather than joining bare names", async () => {
+    const dupes: PersonDuplicateGroup[] = [{
+      reason: "name",
+      people: [
+        person("a", "Ken Hayward", { linkedUserId: "u1", isSelf: true, email: "ken@example.com" }),
+        person("b", "Ken Hayward"),
+      ],
+    }];
+    mock(api.findPersonDuplicates).mockResolvedValue(dupes);
+    render_();
+
+    const banner = (await screen.findByText("Possible duplicates")).closest("div")!;
+    expect(within(banner).getByText(/ken@example\.com - your account/)).toBeTruthy();
+    expect(within(banner).getByText(/no Diariz account/)).toBeTruthy();
   });
 
   it("merges once the review dialog is confirmed", async () => {

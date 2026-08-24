@@ -10,6 +10,10 @@ vi.mock("../lib/api", () => ({
     updatePerson: vi.fn(),
     deletePerson: vi.fn(),
     deleteVoiceprint: vi.fn(),
+    // The Voiceprint tab fetches through this. Its absence used to be the guard that the Profile tab
+    // never fetched; that guarantee is now an explicit assertion below, since a missing mock method
+    // would fail as a crash rather than as the thing it was protecting.
+    getPerson: vi.fn(),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }));
@@ -38,9 +42,51 @@ beforeEach(() => {
   mock(api.updatePerson).mockResolvedValue(undefined);
   mock(api.deleteVoiceprint).mockResolvedValue(undefined);
   mock(api.deletePerson).mockResolvedValue(undefined);
+  mock(api.getPerson).mockResolvedValue({ person: person(), identifiedCount: 0, samples: [] });
 });
 
 describe("PersonEditor", () => {
+  /// Profile is the default because the common task is fixing a job title while reading a transcript;
+  /// Voiceprint is an audit surface you go looking for.
+  it("opens on the Profile tab", () => {
+    setup(person());
+
+    expect(screen.getByLabelText("Name")).toBeTruthy();
+    expect((screen.getByRole("tab", { name: "Profile" }) as HTMLElement).getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("does not fetch the voiceprint until its tab is opened", () => {
+    // Opening the directory should not pull a person's training data for every row you click through.
+    setup(person());
+
+    expect(api.getPerson).not.toHaveBeenCalled();
+  });
+
+  it("switches to the Voiceprint tab", async () => {
+    setup(person());
+
+    fireEvent.click(screen.getByRole("tab", { name: "Voiceprint" }));
+
+    // The profile panel is hidden rather than unmounted - see the note on PersonEditor.
+    expect(screen.getByTestId("profile-panel").hasAttribute("hidden")).toBe(true);
+    expect(screen.getByTestId("voiceprint-panel").hasAttribute("hidden")).toBe(false);
+    await waitFor(() => expect(api.getPerson).toHaveBeenCalledWith("p1"));
+  });
+
+  it("keeps a half-typed edit when you look at the voiceprint and come back", async () => {
+    // Both tabs read `person` from the caller, so the draft lives in the Profile tab and survives its own
+    // unmount only if the tab is not remounted from scratch - worth pinning, because losing a half-typed
+    // correction to a name is exactly the kind of thing nobody reports as a bug.
+    setup(person());
+    fireEvent.change(screen.getByLabelText("Job title"), { target: { value: "Countess" } });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Voiceprint" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Profile" }));
+
+    await waitFor(() =>
+      expect((screen.getByLabelText("Job title") as HTMLInputElement).value).toBe("Countess"));
+  });
+
   it("saves the contact fields", async () => {
     setup(person());
 

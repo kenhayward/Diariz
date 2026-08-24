@@ -31,6 +31,12 @@ public class Segment
     /// <summary>Ordering index within the transcription.</summary>
     public int Ordinal { get; set; }
 
+    /// <summary>Aligned word timings as JSON (<c>[{"w":"Hi","s":1,"e":2}]</c>), or null when there are
+    /// none - every recording transcribed before these were kept, and any language with no alignment
+    /// model. Read and written through <c>SegmentWords</c>; a segment with null here cannot be split,
+    /// because a cut point estimated from the text would slice the wrong audio.</summary>
+    public string? WordsJson { get; set; }
+
     /// <summary>Embedding for RAG retrieval (populated in Milestone 3). Nullable until computed.</summary>
     public Vector? Embedding { get; set; }
 }

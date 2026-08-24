@@ -2172,6 +2172,413 @@ public class RecordingsControllerTests
 
     // ---- Transcript download ----
 
+
+    // ---- Word timings: hasWords on the transcript, and the per-segment words endpoint ----
+
+    /// <summary>Give a seeded recording's first segment word timings, leaving the second without.</summary>
+    private static async Task<(Guid firstSegmentId, Guid secondSegmentId)> AddWordsToFirstSegment(
+        DiarizDbContext db, Recording rec)
+    {
+        var segs = await db.Segments.Include(s => s.Transcription)
+            .Where(s => s.Transcription!.RecordingId == rec.Id)
+            .OrderBy(s => s.Ordinal).ToListAsync();
+        segs[0].WordsJson = SegmentWords.Serialize(
+            [new SegmentWord("Hel", 0, 400), new SegmentWord("lo", 500, 1000)]);
+        await db.SaveChangesAsync();
+        return (segs[0].Id, segs[1].Id);
+    }
+
+    /// <summary>The transcript says which segments can be split, without carrying the words themselves -
+    /// roughly 10k per recording would dominate a payload that also feeds exports, MCP and the n8n node.</summary>
+    [Fact]
+    public async Task Get_ReportsHasWordsPerSegment()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId);
+        await AddWordsToFirstSegment(db, rec);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var dto = (await controller.Get(rec.Id)).Value!;
+
+        var segs = dto.Current!.Segments;
+        Assert.True(segs[0].HasWords);
+        Assert.False(segs[1].HasWords);
+    }
+
+    [Fact]
+    public async Task Words_ReturnsTheSegmentsWords()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId);
+        var (withWords, _) = await AddWordsToFirstSegment(db, rec);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = Assert.IsType<OkObjectResult>(await controller.Words(rec.Id, withWords));
+
+        var words = Assert.IsAssignableFrom<IReadOnlyList<SegmentWord>>(result.Value);
+        Assert.Equal([new SegmentWord("Hel", 0, 400), new SegmentWord("lo", 500, 1000)], words);
+    }
+
+    [Fact]
+    public async Task Words_ForASegmentWithNone_IsEmptyRatherThanAnError()
+    {
+        // Every recording transcribed before word timings existed is in this state. The editor asks first
+        // and disables itself; a 404 here would be indistinguishable from a bad segment id.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId);
+        var (_, withoutWords) = await AddWordsToFirstSegment(db, rec);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = Assert.IsType<OkObjectResult>(await controller.Words(rec.Id, withoutWords));
+
+        Assert.Empty(Assert.IsAssignableFrom<IReadOnlyList<SegmentWord>>(result.Value));
+    }
+
+    [Fact]
+    public async Task Words_ForAnotherUsersRecording_IsNotFound()
+    {
+        // Ownership on every recording endpoint, and a 404 rather than a 403 so it does not confirm that
+        // the id exists.
+        using var db = TestDb.Create();
+        var rec = await SeedTranscribedRecording(db, Guid.NewGuid());
+        var (withWords, _) = await AddWordsToFirstSegment(db, rec);
+        var controller = Build(db, Guid.NewGuid(), new FakeJobQueue());
+
+        Assert.IsType<NotFoundResult>(await controller.Words(rec.Id, withWords));
+    }
+
+    [Fact]
+    public async Task Words_ForASegmentOfADifferentRecording_IsNotFound()
+    {
+        // The segment id is not scoped by the route on its own; without this check a caller could read
+        // any segment's words by pairing it with a recording they do own.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var mine = await SeedTranscribedRecording(db, userId);
+        var theirs = await SeedTranscribedRecording(db, userId);
+        var (theirSegment, _) = await AddWordsToFirstSegment(db, theirs);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        Assert.IsType<NotFoundResult>(await controller.Words(mine.Id, theirSegment));
+    }
+
+
+    // ---- Splitting a segment at a word boundary ----
+
+    /// <summary>A recording whose middle segment is splittable, so the renumbering of the segment after it
+    /// is exercised too. Segments: "One"(0), "Hello world again"(1, with words), "Three"(2).</summary>
+    private static async Task<(Recording rec, Guid splittableId)> SeedSplittableRecording(
+        DiarizDbContext db, Guid userId, string? revised = null, bool withWords = true)
+    {
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var tr = await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id);
+        var middle = new Segment
+        {
+            Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00",
+            StartMs = 900, EndMs = 2600, Original = "Hello world again", Revised = revised, Ordinal = 1,
+            WordsJson = withWords
+                ? SegmentWords.Serialize([
+                    new SegmentWord("Hello", 1000, 1400),
+                    new SegmentWord("world", 1500, 1900),
+                    new SegmentWord("again", 2100, 2500)])
+                : null,
+        };
+        db.Segments.AddRange(
+            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 0, EndMs = 800, Original = "One", Ordinal = 0 },
+            middle,
+            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 2700, EndMs = 3500, Original = "Three", Ordinal = 2 });
+        db.Speakers.Add(new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "Alice" });
+        await db.SaveChangesAsync();
+        return (rec, middle.Id);
+    }
+
+    [Fact]
+    public async Task SplitSegment_ReplacesTheSegmentWithTwoAndRenumbers()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, splittableId) = await SeedSplittableRecording(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        Assert.IsType<NoContentResult>(
+            await controller.SplitSegment(rec.Id, splittableId, new SplitSegmentRequest(WordIndex: 2)));
+
+        var segs = await db.Segments.Include(s => s.Transcription)
+            .Where(s => s.Transcription!.RecordingId == rec.Id).OrderBy(s => s.Ordinal).ToListAsync();
+        Assert.Equal(4, segs.Count);
+        Assert.Equal([0, 1, 2, 3], segs.Select(s => s.Ordinal));
+        // The halves land where the original was, and the segment after it shifts along - not to the end.
+        Assert.Equal(["One", "Hello world", "again", "Three"], segs.Select(s => s.Original));
+    }
+
+    [Fact]
+    public async Task SplitSegment_GivesBothHalvesTheSameSpeakerAndTheirOwnWords()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, splittableId) = await SeedSplittableRecording(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        await controller.SplitSegment(rec.Id, splittableId, new SplitSegmentRequest(2));
+
+        var segs = await db.Segments.Include(s => s.Transcription)
+            .Where(s => s.Transcription!.RecordingId == rec.Id).OrderBy(s => s.Ordinal).ToListAsync();
+        Assert.Equal("SPEAKER_00", segs[1].SpeakerLabel);
+        Assert.Equal("SPEAKER_00", segs[2].SpeakerLabel);
+        Assert.Equal(2, SegmentWords.Parse(segs[1].WordsJson).Count);
+        Assert.Single(SegmentWords.Parse(segs[2].WordsJson));
+    }
+
+    [Fact]
+    public async Task SplitSegment_LeavesTheInterWordGapInNeitherHalf()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, splittableId) = await SeedSplittableRecording(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        await controller.SplitSegment(rec.Id, splittableId, new SplitSegmentRequest(2));
+
+        var segs = await db.Segments.Include(s => s.Transcription)
+            .Where(s => s.Transcription!.RecordingId == rec.Id).OrderBy(s => s.Ordinal).ToListAsync();
+        Assert.Equal(900, segs[1].StartMs);   // the original row's start, unchanged
+        Assert.Equal(1900, segs[1].EndMs);    // end of "world"
+        Assert.Equal(2100, segs[2].StartMs);  // start of "again"
+        Assert.Equal(2600, segs[2].EndMs);    // the original row's end, unchanged
+    }
+
+    [Fact]
+    public async Task SplitSegment_WithoutWords_IsConflict()
+    {
+        // Every recording transcribed before word timings were kept. Estimating a cut point instead would
+        // slice the wrong audio, which is what a split exists to avoid.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, splittableId) = await SeedSplittableRecording(db, userId, withWords: false);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        Assert.IsType<ConflictObjectResult>(
+            await controller.SplitSegment(rec.Id, splittableId, new SplitSegmentRequest(1)));
+        Assert.Equal(3, await db.Segments.CountAsync());
+    }
+
+    [Fact]
+    public async Task SplitSegment_OfARevisedSegment_WithoutDiscardFlag_IsConflictAndChangesNothing()
+    {
+        // The API must not throw away a correction on an unconfirmed call. The web asks first and then
+        // sends the flag; a client that forgets gets a refusal, not silent data loss.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, splittableId) = await SeedSplittableRecording(db, userId, revised: "my correction");
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        Assert.IsType<ConflictObjectResult>(
+            await controller.SplitSegment(rec.Id, splittableId, new SplitSegmentRequest(2)));
+        Assert.Equal("my correction", (await db.Segments.SingleAsync(s => s.Id == splittableId)).Revised);
+    }
+
+    [Fact]
+    public async Task SplitSegment_OfARevisedSegment_WithDiscardFlag_DropsTheRevisionFromBothHalves()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, splittableId) = await SeedSplittableRecording(db, userId, revised: "my correction");
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        Assert.IsType<NoContentResult>(await controller.SplitSegment(
+            rec.Id, splittableId, new SplitSegmentRequest(2, DiscardRevision: true)));
+
+        var segs = await db.Segments.Include(s => s.Transcription)
+            .Where(s => s.Transcription!.RecordingId == rec.Id).OrderBy(s => s.Ordinal).ToListAsync();
+        Assert.Equal(4, segs.Count);
+        Assert.All(segs, s => Assert.Null(s.Revised));
+        // Both halves take their text from the model's Original, which is what the words describe.
+        Assert.Equal("Hello world", segs[1].Original);
+        Assert.Equal("again", segs[2].Original);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(3)]
+    public async Task SplitSegment_AtAnIndexThatWouldLeaveAHalfEmpty_IsConflict(int wordIndex)
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, splittableId) = await SeedSplittableRecording(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        Assert.IsType<ConflictObjectResult>(
+            await controller.SplitSegment(rec.Id, splittableId, new SplitSegmentRequest(wordIndex)));
+        Assert.Equal(3, await db.Segments.CountAsync());
+    }
+
+    [Fact]
+    public async Task SplitSegment_ForAnotherUsersRecording_IsNotFound()
+    {
+        using var db = TestDb.Create();
+        var (rec, splittableId) = await SeedSplittableRecording(db, Guid.NewGuid());
+        var controller = Build(db, Guid.NewGuid(), new FakeJobQueue());
+
+        Assert.IsType<NotFoundResult>(
+            await controller.SplitSegment(rec.Id, splittableId, new SplitSegmentRequest(2)));
+        Assert.Equal(3, await db.Segments.CountAsync());
+    }
+
+
+    // ---- Moving one segment to a different speaker ----
+
+    /// <summary>Two speakers, two segments each, so a reassignment can be checked without also emptying a
+    /// label. Returns the id of SPEAKER_00's first segment.</summary>
+    private static async Task<(Recording rec, Guid segmentId)> SeedTwoSpeakers(DiarizDbContext db, Guid userId)
+    {
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var tr = await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id);
+        var first = new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 0, EndMs = 1000, Original = "A", Ordinal = 0 };
+        db.Segments.AddRange(
+            first,
+            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 1000, EndMs = 2000, Original = "B", Ordinal = 1 },
+            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_01", StartMs = 2000, EndMs = 3000, Original = "C", Ordinal = 2 });
+        db.Speakers.AddRange(
+            new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "Alice" },
+            new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_01", DisplayName = "Bob" });
+        await db.SaveChangesAsync();
+        return (rec, first.Id);
+    }
+
+    [Fact]
+    public async Task AssignSegmentSpeaker_MovesOneSegmentToAnExistingLabel()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, segmentId) = await SeedTwoSpeakers(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = Assert.IsType<OkObjectResult>(await controller.AssignSegmentSpeaker(
+            rec.Id, segmentId, new AssignSegmentSpeakerRequest("SPEAKER_01")));
+
+        Assert.Equal("SPEAKER_01", Assert.IsType<SegmentSpeakerDto>(result.Value).Label);
+        Assert.Equal("SPEAKER_01", (await db.Segments.SingleAsync(s => s.Id == segmentId)).SpeakerLabel);
+    }
+
+    [Fact]
+    public async Task AssignSegmentSpeaker_MarksBothLabelsStale()
+    {
+        // The audio behind each embedding changed: one speaker lost a segment, the other gained one.
+        // Marking only the receiver would leave the donor's voiceprint quietly describing audio that is
+        // no longer theirs.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, segmentId) = await SeedTwoSpeakers(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        await controller.AssignSegmentSpeaker(rec.Id, segmentId, new AssignSegmentSpeakerRequest("SPEAKER_01"));
+
+        var speakers = await db.Speakers.Where(s => s.RecordingId == rec.Id).ToListAsync();
+        Assert.Equal(2, speakers.Count);
+        Assert.All(speakers, s => Assert.True(s.EmbeddingStale));
+    }
+
+    [Fact]
+    public async Task AssignSegmentSpeaker_ToTheSpeakerItAlreadyHas_ChangesNothing()
+    {
+        // A no-op must not mark a voiceprint stale, or reassigning by mistake and undoing it would leave
+        // both speakers permanently flagged.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, segmentId) = await SeedTwoSpeakers(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        Assert.IsType<OkObjectResult>(await controller.AssignSegmentSpeaker(
+            rec.Id, segmentId, new AssignSegmentSpeakerRequest("SPEAKER_00")));
+
+        Assert.All(await db.Speakers.Where(s => s.RecordingId == rec.Id).ToListAsync(),
+            s => Assert.False(s.EmbeddingStale));
+    }
+
+    [Fact]
+    public async Task AssignSegmentSpeaker_WithNullLabel_MintsTheNextFreeSpeaker()
+    {
+        // The interrupting voice often has no diarization slot of its own. The client asks; the API
+        // allocates, so nothing writes into the worker's label namespace.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, segmentId) = await SeedTwoSpeakers(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = Assert.IsType<OkObjectResult>(await controller.AssignSegmentSpeaker(
+            rec.Id, segmentId, new AssignSegmentSpeakerRequest(null)));
+
+        Assert.Equal("SPEAKER_02", Assert.IsType<SegmentSpeakerDto>(result.Value).Label);
+        var minted = await db.Speakers.SingleAsync(s => s.RecordingId == rec.Id && s.Label == "SPEAKER_02");
+        Assert.Equal("SPEAKER_02", minted.DisplayName);
+        Assert.Null(minted.PersonId);
+    }
+
+    [Fact]
+    public async Task AssignSegmentSpeaker_DropsASpeakerLeftWithNoSegments()
+    {
+        // Same rule DeleteSegment already applies: a label with nothing under it is not a speaker in this
+        // recording, and leaving it puts an empty row in the Speakers panel.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var tr = await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id);
+        var only = new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 0, EndMs = 1000, Original = "A", Ordinal = 0 };
+        db.Segments.AddRange(only,
+            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_01", StartMs = 1000, EndMs = 2000, Original = "B", Ordinal = 1 });
+        db.Speakers.AddRange(
+            new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "Alice" },
+            new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_01", DisplayName = "Bob" });
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        await controller.AssignSegmentSpeaker(rec.Id, only.Id, new AssignSegmentSpeakerRequest("SPEAKER_01"));
+
+        Assert.DoesNotContain(await db.Speakers.Where(s => s.RecordingId == rec.Id).ToListAsync(),
+            s => s.Label == "SPEAKER_00");
+    }
+
+    [Fact]
+    public async Task AssignSegmentSpeaker_ToAnUnknownLabel_IsNotFound()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, segmentId) = await SeedTwoSpeakers(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        Assert.IsType<NotFoundResult>(await controller.AssignSegmentSpeaker(
+            rec.Id, segmentId, new AssignSegmentSpeakerRequest("SPEAKER_99")));
+    }
+
+    [Fact]
+    public async Task AssignSegmentSpeaker_ForAnotherUsersRecording_IsNotFound()
+    {
+        using var db = TestDb.Create();
+        var (rec, segmentId) = await SeedTwoSpeakers(db, Guid.NewGuid());
+        var controller = Build(db, Guid.NewGuid(), new FakeJobQueue());
+
+        Assert.IsType<NotFoundResult>(await controller.AssignSegmentSpeaker(
+            rec.Id, segmentId, new AssignSegmentSpeakerRequest("SPEAKER_01")));
+        Assert.Equal("SPEAKER_00", (await db.Segments.SingleAsync(s => s.Id == segmentId)).SpeakerLabel);
+    }
+
+    [Fact]
+    public async Task Get_ReportsWhichSpeakersNeedRecomputing()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, segmentId) = await SeedTwoSpeakers(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
+        await controller.AssignSegmentSpeaker(rec.Id, segmentId, new AssignSegmentSpeakerRequest("SPEAKER_01"));
+
+        var dto = (await controller.Get(rec.Id)).Value!;
+
+        Assert.All(dto.Speakers, s => Assert.True(s.EmbeddingStale));
+    }
+
     private static async Task<Recording> SeedTranscribedRecording(
         DiarizDbContext db, Guid userId, string? name = null)
     {

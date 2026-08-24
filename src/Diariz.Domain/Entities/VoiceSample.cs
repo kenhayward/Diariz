@@ -28,5 +28,24 @@ public class VoiceSample
     /// <summary>Snapshot of the contributing speaker's embedding (ECAPA, 192-d).</summary>
     public Vector Embedding { get; set; } = null!;
 
+    /// <summary>The spans of this recording's audio that train the voiceprint, as JSON. <b>Null means the
+    /// whole speaker</b> - the state every sample enrolled before selection existed is in, and the
+    /// behaviour that has always applied, so nothing needed backfilling.
+    ///
+    /// <para>Spans, not segment ids: segment rows belong to a transcription <em>version</em>, and a
+    /// re-transcribe replaces every one of them, where wall-clock times survive. Read and written through
+    /// <c>VoiceprintSpans</c>.</para></summary>
+    public string? SpansJson { get; set; }
+
+    /// <summary>How much audio the last embedding actually consumed, in ms, or null while a recompute is
+    /// queued and has not reported back.
+    ///
+    /// <para>Two jobs, deliberately. It is the honest figure behind "using 1:20 of the 4:12 selected" -
+    /// the worker still caps how much it pools, so a selection is not necessarily what was used. And
+    /// because the enqueue clears it and the callback sets it, it is also the <b>pending marker</b>, which
+    /// means a recompute in flight survives a page reload instead of living only in component
+    /// state.</para></summary>
+    public int? UsedMs { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

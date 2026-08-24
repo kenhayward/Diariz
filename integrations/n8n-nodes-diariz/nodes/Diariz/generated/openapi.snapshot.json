@@ -182,6 +182,20 @@
         ],
         "type": "object"
       },
+      "AssignSegmentSpeakerRequest": {
+        "properties": {
+          "label": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "type": "object"
+      },
       "AssignSpeakerRequest": {
         "properties": {
           "personId": {
@@ -3938,6 +3952,10 @@
               "string"
             ]
           },
+          "hasWords": {
+            "default": false,
+            "type": "boolean"
+          },
           "id": {
             "format": "uuid",
             "type": "string"
@@ -4081,6 +4099,20 @@
         ],
         "type": "object"
       },
+      "SetVoiceSampleSpansRequest": {
+        "properties": {
+          "spans": {
+            "items": {
+              "$ref": "#/components/schemas/VoiceprintSpan"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "spans"
+        ],
+        "type": "object"
+      },
       "SetupRequest": {
         "properties": {
           "email": {
@@ -4218,6 +4250,10 @@
               "string"
             ]
           },
+          "embeddingStale": {
+            "default": false,
+            "type": "boolean"
+          },
           "identifiedAuto": {
             "type": "boolean"
           },
@@ -4259,6 +4295,26 @@
           "displayName",
           "personId",
           "identifiedAuto"
+        ],
+        "type": "object"
+      },
+      "SplitSegmentRequest": {
+        "properties": {
+          "discardRevision": {
+            "default": false,
+            "type": "boolean"
+          },
+          "wordIndex": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "wordIndex"
         ],
         "type": "object"
       },
@@ -5141,6 +5197,10 @@
             "format": "uuid",
             "type": "string"
           },
+          "pending": {
+            "default": false,
+            "type": "boolean"
+          },
           "recordingId": {
             "format": "uuid",
             "type": "string"
@@ -5148,13 +5208,44 @@
           "recordingName": {
             "type": "string"
           },
+          "selectedMs": {
+            "default": 0,
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "spans": {
+            "items": {
+              "$ref": "#/components/schemas/VoiceprintSpan"
+            },
+            "type": [
+              "null",
+              "array"
+            ]
+          },
           "speakerLabel": {
             "type": "string"
+          },
+          "stale": {
+            "default": false,
+            "type": "boolean"
           },
           "startMs": {
             "format": "int64",
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "usedMs": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
               "integer",
               "string"
             ]
@@ -5167,6 +5258,31 @@
           "speakerLabel",
           "startMs",
           "createdAt"
+        ],
+        "type": "object"
+      },
+      "VoiceprintSpan": {
+        "properties": {
+          "endMs": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "startMs": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "startMs",
+          "endMs"
         ],
         "type": "object"
       },
@@ -8461,6 +8577,60 @@
         ]
       }
     },
+    "/api/people/{id}/voiceprint/samples/{sampleId}/spans": {
+      "put": {
+        "description": "Replaces the spans of the contributing recording's audio that this sample is embedded from, and queues a re-embed. Send an **empty list** to go back to the whole speaker, which is what every sample does by default. Adjacent spans are merged, so you can send one per segment the user ticked.\n\nReturns **202**: the worker does the work, and it shares a process with transcription, so it can queue behind one. Until it reports back the sample reads as pending (`usedMs` is null). The worker still caps how much audio it pools, so `usedMs` may be less than the total selected - the UI states both.\n\n**409** when the person has opted out of voice-printing, or the recording's audio has been deleted. **403** without permission to manage this person's biometrics (Manage people, or it is you).",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sampleId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetVoiceSampleSpansRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetVoiceSampleSpansRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetVoiceSampleSpansRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Choose which audio trains one voice sample",
+        "tags": [
+          "People"
+        ]
+      }
+    },
     "/api/recordings": {
       "get": {
         "description": "Every recording placed in one room, in the order it appears in the app. Defaults to your personal room; pass `roomId` for a shared room you belong to. Each entry carries its folder, duration, transcription status, and whether its audio is still stored. Returns 404 if you are not a member of the room, rather than revealing that it exists.",
@@ -9576,6 +9746,148 @@
           }
         },
         "summary": "Edit a segment's text",
+        "tags": [
+          "Recordings"
+        ]
+      }
+    },
+    "/api/recordings/{id}/segments/{segmentId}/speaker": {
+      "put": {
+        "description": "Moves a single segment to another speaker - what you need after splitting a block that contained a second voice. Pass an existing label, or **null** to have a new speaker minted for this recording when the interrupting voice has no diarization slot of its own; the response says which label was used.\n\nBoth the losing and the gaining speaker have their stored voiceprint marked stale, since the audio behind it changed. Nothing is recomputed here - that needs the worker and the original audio. A speaker left with no segments drops off the recording, exactly as when its last segment is deleted.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "segmentId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignSegmentSpeakerRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignSegmentSpeakerRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignSegmentSpeakerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Reassign one segment to a different speaker",
+        "tags": [
+          "Recordings"
+        ]
+      }
+    },
+    "/api/recordings/{id}/segments/{segmentId}/split": {
+      "post": {
+        "description": "Divides one segment in two before the word at `wordIndex`, so a block that contains a second voice can be separated and the interloper moved with the segment-speaker endpoint. The cut snaps to the stored word timings, and the silence between the two words falls into neither half - which is what a voiceprint trained on the result needs.\n\nBoth halves keep the original speaker; reassign one afterwards. **409** when the segment has no word timings (re-transcribe first), when the index would leave a half empty, or when the segment has a manual edit and `discardRevision` was not set - a split cannot divide edited prose, so both halves fall back to the model's original text.\n\n**Permanent for this transcription version.** Re-transcribe to regenerate the original segments.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "segmentId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SplitSegmentRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SplitSegmentRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SplitSegmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Split a segment at a word boundary",
+        "tags": [
+          "Recordings"
+        ]
+      }
+    },
+    "/api/recordings/{id}/segments/{segmentId}/words": {
+      "get": {
+        "description": "The aligned word timings for one segment, used to split it at an exact word boundary. Returned per segment rather than on the transcript, because a long meeting carries roughly 10k words and they would dominate the recording payload.\n\n**Empty** when the segment has none - a recording transcribed before word timings were kept, a language with no alignment model, or a merged block whose run contained an edited segment. Such a segment cannot be split; re-transcribe the recording first. The transcript's `hasWords` flag says which is which without fetching anything.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "segmentId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Get a segment's word timings",
         "tags": [
           "Recordings"
         ]

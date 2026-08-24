@@ -222,7 +222,9 @@ public class RecordingsController : ControllerBase
                 s.Id,
                 s.SpeakerLabel,
                 names.TryGetValue(s.SpeakerLabel, out var dn) ? dn : s.SpeakerLabel,
-                s.StartMs, s.EndMs, s.Original, s.Revised)).ToList(),
+                s.StartMs, s.EndMs, s.Original, s.Revised,
+                // Whether the segment can be split, not the words themselves - see SegmentDto.HasWords.
+                s.WordsJson != null)).ToList(),
             current.ProcessingMs);
         SummaryDto? sDto = current?.Summary is null ? null
             : new(current.Summary.Model, current.Summary.Text, current.Summary.CreatedAt, current.Summary.IsUserEdited);
@@ -909,6 +911,30 @@ public class RecordingsController : ControllerBase
         return NoContent();
     }
 
+    [HttpGet("{id:guid}/segments/{segmentId:guid}/words")]
+    [EndpointSummary("Get a segment's word timings")]
+    [EndpointDescription(
+        "The aligned word timings for one segment, used to split it at an exact word boundary. Returned per " +
+        "segment rather than on the transcript, because a long meeting carries roughly 10k words and they " +
+        "would dominate the recording payload.\n\n" +
+        "**Empty** when the segment has none - a recording transcribed before word timings were kept, a " +
+        "language with no alignment model, or a merged block whose run contained an edited segment. Such a " +
+        "segment cannot be split; re-transcribe the recording first. The transcript's `hasWords` flag says " +
+        "which is which without fetching anything.")]
+    public async Task<IActionResult> Words(Guid id, Guid segmentId)
+    {
+        var owned = await _db.Recordings.AnyAsync(r => r.Id == id && r.UserId == UserId);
+        if (!owned) return NotFound();
+
+        // The segment id is not scoped by the route on its own: without re-checking that it belongs to
+        // this recording, any segment's words could be read by pairing it with a recording you do own.
+        var seg = await _db.Segments.Include(s => s.Transcription)
+            .FirstOrDefaultAsync(s => s.Id == segmentId);
+        if (seg?.Transcription is null || seg.Transcription.RecordingId != id) return NotFound();
+
+        return Ok(SegmentWords.Parse(seg.WordsJson));
+    }
+
     [HttpPut("{id:guid}/segments/{segmentId:guid}")]
     [EndpointSummary("Edit a segment's text")]
     [EndpointDescription(
@@ -931,6 +957,126 @@ public class RecordingsController : ControllerBase
         seg.Revised = req.Text;
         await _db.SaveChangesAsync();
         return NoContent();
+    }
+
+    [HttpPost("{id:guid}/segments/{segmentId:guid}/split")]
+    [EndpointSummary("Split a segment at a word boundary")]
+    [EndpointDescription(
+        "Divides one segment in two before the word at `wordIndex`, so a block that contains a second voice " +
+        "can be separated and the interloper moved with the segment-speaker endpoint. The cut snaps to the " +
+        "stored word timings, and the silence between the two words falls into neither half - which is what " +
+        "a voiceprint trained on the result needs.\n\n" +
+        "Both halves keep the original speaker; reassign one afterwards. **409** when the segment has no " +
+        "word timings (re-transcribe first), when the index would leave a half empty, or when the segment " +
+        "has a manual edit and `discardRevision` was not set - a split cannot divide edited prose, so both " +
+        "halves fall back to the model's original text.\n\n" +
+        "**Permanent for this transcription version.** Re-transcribe to regenerate the original segments.")]
+    public async Task<IActionResult> SplitSegment(Guid id, Guid segmentId, SplitSegmentRequest req)
+    {
+        var owned = await _db.Recordings.AnyAsync(r => r.Id == id && r.UserId == UserId);
+        if (!owned) return NotFound();
+
+        var seg = await _db.Segments.Include(s => s.Transcription)
+            .FirstOrDefaultAsync(s => s.Id == segmentId);
+        if (seg?.Transcription is null || seg.Transcription.RecordingId != id) return NotFound();
+
+        var words = SegmentWords.Parse(seg.WordsJson);
+        if (words.Count == 0)
+            return Conflict("This segment has no word timings; re-transcribe the recording to split it.");
+        if (seg.Revised is not null && !req.DiscardRevision)
+            return Conflict("This segment has an edit. Splitting discards it; resend with discardRevision.");
+
+        var split = TranscriptSegmentSplit.Split(seg.StartMs, seg.EndMs, seg.Original, words, req.WordIndex);
+        if (split is null) return Conflict("That split point would leave one half empty.");
+
+        var transcriptionId = seg.Transcription.Id;
+        var label = seg.SpeakerLabel;
+        var ordinal = seg.Ordinal;
+
+        // Shift everything after this row along by one and drop the halves into the gap, rather than
+        // appending and re-sorting: two segments can share a start time, and a sort would then be free to
+        // put the halves either side of a neighbour.
+        var later = await _db.Segments
+            .Where(s => s.TranscriptionId == transcriptionId && s.Ordinal > ordinal)
+            .ToListAsync();
+        foreach (var s in later) s.Ordinal += 1;
+
+        _db.Segments.Remove(seg);
+        var offset = 0;
+        foreach (var half in new[] { split.Left, split.Right })
+            _db.Segments.Add(new Segment
+            {
+                Id = Guid.NewGuid(),
+                TranscriptionId = transcriptionId,
+                SpeakerLabel = label,
+                StartMs = half.StartMs,
+                EndMs = half.EndMs,
+                // The model's original, never the revision: the words describe the original, and a
+                // revision divided at a word index it may not contain would land anywhere.
+                Original = TranscriptText.Normalize(half.Text),
+                WordsJson = SegmentWords.Serialize(half.Words),
+                Ordinal = ordinal + offset++,
+            });
+
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpPut("{id:guid}/segments/{segmentId:guid}/speaker")]
+    [EndpointSummary("Reassign one segment to a different speaker")]
+    [EndpointDescription(
+        "Moves a single segment to another speaker - what you need after splitting a block that contained a " +
+        "second voice. Pass an existing label, or **null** to have a new speaker minted for this recording " +
+        "when the interrupting voice has no diarization slot of its own; the response says which label was " +
+        "used.\n\n" +
+        "Both the losing and the gaining speaker have their stored voiceprint marked stale, since the audio " +
+        "behind it changed. Nothing is recomputed here - that needs the worker and the original audio. A " +
+        "speaker left with no segments drops off the recording, exactly as when its last segment is deleted.")]
+    public async Task<IActionResult> AssignSegmentSpeaker(
+        Guid id, Guid segmentId, AssignSegmentSpeakerRequest req)
+    {
+        var owned = await _db.Recordings.AnyAsync(r => r.Id == id && r.UserId == UserId);
+        if (!owned) return NotFound();
+
+        var seg = await _db.Segments.Include(s => s.Transcription)
+            .FirstOrDefaultAsync(s => s.Id == segmentId);
+        if (seg?.Transcription is null || seg.Transcription.RecordingId != id) return NotFound();
+
+        var speakers = await _db.Speakers.Where(s => s.RecordingId == id).ToListAsync();
+        var from = speakers.FirstOrDefault(s => s.Label == seg.SpeakerLabel);
+
+        Speaker to;
+        if (req.Label is null)
+        {
+            var label = SpeakerLabels.NextFree(speakers.Select(s => s.Label));
+            to = new Speaker { Id = Guid.NewGuid(), RecordingId = id, Label = label, DisplayName = label };
+            _db.Speakers.Add(to);
+            speakers.Add(to);
+        }
+        else
+        {
+            var found = speakers.FirstOrDefault(s => s.Label == req.Label);
+            if (found is null) return NotFound();
+            to = found;
+        }
+
+        // A no-op must not flag anything: reassigning by mistake and putting it back would otherwise leave
+        // both speakers permanently marked stale.
+        if (to.Label == seg.SpeakerLabel) return Ok(new SegmentSpeakerDto(to.Label, to.DisplayName));
+
+        seg.SpeakerLabel = to.Label;
+        if (from is not null) from.EmbeddingStale = true;
+        to.EmbeddingStale = true;
+        await _db.SaveChangesAsync();
+
+        // A label with nothing left under it is not a speaker in this recording - the same rule
+        // DeleteSegment applies when it empties one.
+        var survivors = await _db.Segments
+            .Where(s => s.TranscriptionId == seg.Transcription.Id).ToListAsync();
+        await PruneOrphanSpeakersAsync(id, survivors);
+        await _db.SaveChangesAsync();
+
+        return Ok(new SegmentSpeakerDto(to.Label, to.DisplayName));
     }
 
     /// <summary>Delete a single segment from the current transcription (e.g. a meaningless filler row).
@@ -2056,10 +2202,12 @@ public class RecordingsController : ControllerBase
     private static SpeakerInfoDto Describe(Speaker s, IReadOnlyDictionary<Guid, Person> people)
     {
         if (s.IsMultiSpeaker || s.PersonId is not { } personId || !people.TryGetValue(personId, out var person))
-            return new SpeakerInfoDto(s.Label, s.DisplayName, s.PersonId, s.IdentifiedAuto, s.IsMultiSpeaker);
+            return new SpeakerInfoDto(s.Label, s.DisplayName, s.PersonId, s.IdentifiedAuto, s.IsMultiSpeaker,
+                EmbeddingStale: s.EmbeddingStale);
 
         return new SpeakerInfoDto(
             s.Label, s.DisplayName, s.PersonId, s.IdentifiedAuto, s.IsMultiSpeaker,
-            person.Title, person.CompanyName, person.Email, person.Phone, person.IsInternal);
+            person.Title, person.CompanyName, person.Email, person.Phone, person.IsInternal,
+            s.EmbeddingStale);
     }
 }
