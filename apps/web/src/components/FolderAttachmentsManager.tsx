@@ -4,6 +4,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { isMarkdownAttachment } from "../lib/attachments";
 import { formatBytes } from "../lib/format";
 import type { Attachment } from "../lib/types";
+import AttachmentDragHandle from "./AttachmentDragHandle";
 import MarkdownAttachmentEditModal from "./MarkdownAttachmentEditModal";
 
 /// Open a folder-direct attachment: a file streams from a self-authenticating URL; a URL opens its address.
@@ -135,6 +136,8 @@ export default function FolderAttachmentsManager({
             {attachments.map((a) => (
               <tr key={a.id} className="border-t dark:border-gray-700">
                 <td className="py-1 pr-2">
+                  <div className="flex min-w-0 items-center gap-1">
+                  <AttachmentDragHandle scope="section" ownerId={sectionId} attachmentId={a.id} name={a.name} />
                   {canManage ? (
                     <input
                       defaultValue={a.name}
@@ -146,8 +149,9 @@ export default function FolderAttachmentsManager({
                       className="w-full rounded border px-2 py-1 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                     />
                   ) : (
-                    <span className="dark:text-gray-100">{a.name}</span>
+                    <span className="min-w-0 truncate dark:text-gray-100">{a.name}</span>
                   )}
+                  </div>
                 </td>
                 <td className="py-1 pr-2 whitespace-nowrap text-gray-500 dark:text-gray-400">
                   {a.kind === "Url" ? t("attachmentUrlType") : formatBytes(a.sizeBytes)}

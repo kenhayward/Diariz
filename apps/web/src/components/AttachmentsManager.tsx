@@ -4,6 +4,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { isMarkdownAttachment } from "../lib/attachments";
 import { formatBytes } from "../lib/format";
 import type { Attachment } from "../lib/types";
+import AttachmentDragHandle from "./AttachmentDragHandle";
 import MarkdownAttachmentEditModal from "./MarkdownAttachmentEditModal";
 
 /// Open an attachment using the browser's default behaviour: a file streams from a self-authenticating
@@ -124,15 +125,18 @@ export default function AttachmentsManager({
             {attachments.map((a) => (
               <tr key={a.id} className="border-t dark:border-gray-700">
                 <td className="py-1 pr-2">
-                  <input
-                    defaultValue={a.name}
-                    aria-label={t("attachmentName")}
-                    onBlur={(e) => {
-                      const v = e.target.value.trim();
-                      if (v && v !== a.name) void run(() => api.renameAttachment(recordingId, a.id, v), "errRenameAttachment");
-                    }}
-                    className="w-full rounded border px-2 py-1 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                  />
+                  <div className="flex min-w-0 items-center gap-1">
+                    <AttachmentDragHandle scope="recording" ownerId={recordingId} attachmentId={a.id} name={a.name} />
+                    <input
+                      defaultValue={a.name}
+                      aria-label={t("attachmentName")}
+                      onBlur={(e) => {
+                        const v = e.target.value.trim();
+                        if (v && v !== a.name) void run(() => api.renameAttachment(recordingId, a.id, v), "errRenameAttachment");
+                      }}
+                      className="w-full min-w-0 rounded border px-2 py-1 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                    />
+                  </div>
                 </td>
                 <td className="py-1 pr-2 whitespace-nowrap text-gray-500 dark:text-gray-400">
                   {a.kind === "Url" ? t("attachmentUrlType") : formatBytes(a.sizeBytes)}
