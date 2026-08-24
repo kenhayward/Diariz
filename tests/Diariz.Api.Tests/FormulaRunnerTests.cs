@@ -361,4 +361,157 @@ public class FormulaRunnerTests
 
         await Assert.ThrowsAsync<FormulaNotConfiguredException>(() => runner.RunAsync(userId, rec.Id, formula.Id));
     }
+
+    // ---- $USERNAME substitution ----
+    //
+    // These drive the real run path rather than calling the name-resolution helper directly: it is internal,
+    // this repo has no InternalsVisibleTo, and asserting on the system message the model actually received
+    // proves the wiring as well as the resolution order. A helper-only test could not.
+
+    /// <summary>$USERNAME reaches the model already substituted, with the name taken from the linked person -
+    /// the name the transcript itself shows.</summary>
+    [Fact]
+    public async Task RunAsync_SubstitutesTheLinkedPersonsNameIntoThePrompt()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, _) = await SeedRecordingWithTranscript(db, userId);
+        db.Users.Add(new ApplicationUser
+        {
+            Id = userId, UserName = "a@b.test", Email = "a@b.test", FullName = "Display Name",
+        });
+        db.People.Add(new Person { Id = Guid.NewGuid(), LinkedUserId = userId, Name = "Ken Hayward" });
+        var formula = await SeedPromptFormula(db, userId, "What role did $USERNAME play in this meeting?");
+
+        var chat = new FakeChatStreamClient();
+        await MakeRunner(db, chat, new FakeLlmSettingsResolver()).RunAsync(userId, rec.Id, formula.Id);
+
+        Assert.Equal("What role did Ken Hayward play in this meeting?", chat.LastMessages![0].Content);
+    }
+
+    /// <summary>No directory entry (an account that predates it) falls back to the display name.</summary>
+    [Fact]
+    public async Task RunAsync_FallsBackToTheDisplayName_WhenThereIsNoLinkedPerson()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, _) = await SeedRecordingWithTranscript(db, userId);
+        db.Users.Add(new ApplicationUser
+        {
+            Id = userId, UserName = "a@b.test", Email = "a@b.test", FullName = "Display Name",
+        });
+        var formula = await SeedPromptFormula(db, userId, "Ask $USERNAME");
+
+        var chat = new FakeChatStreamClient();
+        await MakeRunner(db, chat, new FakeLlmSettingsResolver()).RunAsync(userId, rec.Id, formula.Id);
+
+        Assert.Equal("Ask Display Name", chat.LastMessages![0].Content);
+    }
+
+    /// <summary>An invited account with no name yet falls back to the email rather than substituting
+    /// nothing.</summary>
+    [Fact]
+    public async Task RunAsync_FallsBackToTheEmail_WhenTheAccountHasNoName()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, _) = await SeedRecordingWithTranscript(db, userId);
+        db.Users.Add(new ApplicationUser { Id = userId, UserName = "a@b.test", Email = "a@b.test" });
+        var formula = await SeedPromptFormula(db, userId, "Ask $USERNAME");
+
+        var chat = new FakeChatStreamClient();
+        await MakeRunner(db, chat, new FakeLlmSettingsResolver()).RunAsync(userId, rec.Id, formula.Id);
+
+        Assert.Equal("Ask a@b.test", chat.LastMessages![0].Content);
+    }
+
+    /// <summary>Somebody else's directory entry must not be picked up. The column beside LinkedUserId
+    /// (CreatedByUserId, mapped to "UserId") records who ENROLLED a person and means something else
+    /// entirely.</summary>
+    [Fact]
+    public async Task RunAsync_IgnoresAPersonLinkedToSomeoneElse()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, _) = await SeedRecordingWithTranscript(db, userId);
+        db.Users.Add(new ApplicationUser
+        {
+            Id = userId, UserName = "a@b.test", Email = "a@b.test", FullName = "Display Name",
+        });
+        db.People.Add(new Person
+        {
+            Id = Guid.NewGuid(), LinkedUserId = Guid.NewGuid(), CreatedByUserId = userId, Name = "Somebody Else",
+        });
+        var formula = await SeedPromptFormula(db, userId, "Ask $USERNAME");
+
+        var chat = new FakeChatStreamClient();
+        await MakeRunner(db, chat, new FakeLlmSettingsResolver()).RunAsync(userId, rec.Id, formula.Id);
+
+        Assert.Equal("Ask Display Name", chat.LastMessages![0].Content);
+    }
+
+    /// <summary>A run must never write to the people directory as a side effect - which is why the name is
+    /// looked up with a plain query and not IPeopleDirectory.EnsureForUserAsync, which mints a person.</summary>
+    [Fact]
+    public async Task RunAsync_DoesNotProvisionAPersonForTheRunningUser()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, _) = await SeedRecordingWithTranscript(db, userId);
+        db.Users.Add(new ApplicationUser
+        {
+            Id = userId, UserName = "a@b.test", Email = "a@b.test", FullName = "Display Name",
+        });
+        var formula = await SeedPromptFormula(db, userId, "Ask $USERNAME");
+
+        await MakeRunner(db, new FakeChatStreamClient(), new FakeLlmSettingsResolver())
+            .RunAsync(userId, rec.Id, formula.Id);
+
+        Assert.Empty(db.People);
+    }
+
+    /// <summary>Literal text is substituted too, so a token in boilerplate does not survive into the produced
+    /// document looking like a bug.</summary>
+    [Fact]
+    public async Task RunAsync_SubstitutesTheUserNameIntoBoilerplate()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, _) = await SeedRecordingWithTranscript(db, userId);
+        db.Users.Add(new ApplicationUser
+        {
+            Id = userId, UserName = "a@b.test", Email = "a@b.test", FullName = "Ken Hayward",
+        });
+
+        var content = new TemplateContent([
+            new TemplateSection(1, "Report", [
+                new TemplateBlock(TemplateBlock.Boilerplate, Text: "Prepared for $USERNAME."),
+            ]),
+        ]);
+        var formula = new Formula
+        {
+            Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = userId, Name = "Report",
+            ContentJson = content.Serialize(), Context = FormulaContext.Transcript, Enabled = true,
+        };
+        db.Formulas.Add(formula);
+        await db.SaveChangesAsync();
+
+        var result = await MakeRunner(db, new FakeChatStreamClient(), new FakeLlmSettingsResolver())
+            .RunAsync(userId, rec.Id, formula.Id);
+
+        Assert.Contains("Prepared for Ken Hayward.", result.Text);
+    }
+
+    private static async Task<Formula> SeedPromptFormula(DiarizDbContext db, Guid userId, string prompt)
+    {
+        var formula = new Formula
+        {
+            Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = userId, Name = "Token",
+            ContentJson = TemplateContent.FromPrompt(prompt).Serialize(),
+            Context = FormulaContext.Transcript, Enabled = true,
+        };
+        db.Formulas.Add(formula);
+        await db.SaveChangesAsync();
+        return formula;
+    }
 }

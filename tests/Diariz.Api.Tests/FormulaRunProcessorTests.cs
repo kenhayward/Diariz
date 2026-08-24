@@ -460,4 +460,31 @@ public class FormulaRunProcessorTests
         var msg = Assert.Single(hub.Sent);
         Assert.Equal("FormulaResultStatusChanged", msg.Method);
     }
+
+    // ---- $USERNAME on the async path ----
+
+    /// <summary>The async path has no "current user" - it must take the name from job.UserId, which for an
+    /// automatic meeting-type-triggered run is the recording's owner.</summary>
+    [Fact]
+    public async Task ProcessAsync_SubstitutesTheJobUsersName()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecordingWithTranscript(db, userId);
+        var (formula, result) = await SeedFormulaAndResult(db, userId, rec.Id);
+
+        formula.ContentJson = TemplateContent.FromPrompt("Ask $USERNAME").Serialize();
+        db.Users.Add(new ApplicationUser
+        {
+            Id = userId, UserName = "a@b.test", Email = "a@b.test", FullName = "Ignored Display Name",
+        });
+        db.People.Add(new Person { Id = Guid.NewGuid(), LinkedUserId = userId, Name = "Ken Hayward" });
+        await db.SaveChangesAsync();
+
+        var chat = new FakeChatStreamClient();
+        await Run(db, chat, new FakeLlmSettingsResolver(), new FakeHubContext(),
+            new FormulaRunJob(rec.Id, null, result.Id, formula.Id, userId));
+
+        Assert.Equal("Ask Ken Hayward", chat.LastMessages![0].Content);
+    }
 }

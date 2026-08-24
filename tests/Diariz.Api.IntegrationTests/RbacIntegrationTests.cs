@@ -39,6 +39,10 @@ public class RbacIntegrationTests(ContainersFixture fx)
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<DiarizDbContext>()
             .AddDefaultTokenProviders();
+        // The seeder keeps the seed user's person and personal room in step with its display name, so this
+        // slice of the real container has to offer them too.
+        services.AddScoped<IPeopleDirectory, PeopleDirectory>();
+        services.AddScoped<IRoomScope, RoomScope>();
         return services.BuildServiceProvider();
     }
 
@@ -87,7 +91,7 @@ public class RbacIntegrationTests(ContainersFixture fx)
             Options.Create(new GoogleAuthOptions()), Options.Create(new AppPublicOptions()),
             sp.GetRequiredService<IDataProtectionProvider>(), NullLogger<AuthController>.Instance,
             db, new GoogleTokenProtector(sp.GetRequiredService<IDataProtectionProvider>()),
-            new FakeDesktopAuthCodeStore(), new PeopleDirectory(db));
+            new FakeDesktopAuthCodeStore(), new PeopleDirectory(db), new RoomScope(db));
 
         var email = $"life-{Guid.NewGuid():N}@x.test";
 
