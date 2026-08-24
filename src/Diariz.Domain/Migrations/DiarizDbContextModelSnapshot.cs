@@ -2166,8 +2166,14 @@ namespace Diariz.Domain.Migrations
                     b.Property<Guid>("RecordingId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("SpansJson")
+                        .HasColumnType("jsonb");
+
                     b.Property<Guid>("SpeakerId")
                         .HasColumnType("uuid");
+
+                    b.Property<int?>("UsedMs")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 

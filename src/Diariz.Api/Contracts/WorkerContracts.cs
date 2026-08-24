@@ -57,6 +57,14 @@ public record TagsJob(
     Guid RecordingId,
     Guid TranscriptionId);
 
+/// <summary>A span of a recording's audio, in ms from its start, that trains a voiceprint. Stored on the
+/// voice sample and sent to the worker verbatim.
+///
+/// <para>Spans rather than segment ids, because segment rows belong to a transcription <em>version</em>:
+/// a re-transcribe replaces every one of them, and stored ids would dangle where wall-clock times do
+/// not.</para></summary>
+public record VoiceprintSpan(long StartMs, long EndMs);
+
 /// <summary>One aligned word inside a segment. The single-letter members are deliberate: this is stored as
 /// jsonb on every segment and a long meeting carries roughly 10k of them, so the key names are part of the
 /// storage cost. <c>S</c> and <c>E</c> are ms from the start of the recording, matching

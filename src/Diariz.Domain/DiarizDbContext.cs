@@ -631,9 +631,15 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.Property(v => v.PersonId).HasColumnName("ProfileId");
             e.HasIndex(v => v.PersonId);
             if (isNpgsql)
+            {
                 e.Property(v => v.Embedding).HasColumnType("vector(192)");
+                // jsonb on Postgres, plain text elsewhere - the same treatment as Segment.WordsJson.
+                e.Property(v => v.SpansJson).HasColumnType("jsonb");
+            }
             else
+            {
                 e.Ignore(v => v.Embedding);
+            }
             e.HasOne(v => v.Person)
                 .WithMany(p => p.VoiceSamples)
                 .HasForeignKey(v => v.PersonId)
