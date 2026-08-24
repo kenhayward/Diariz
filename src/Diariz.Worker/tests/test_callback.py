@@ -101,3 +101,54 @@ def test_post_failure_swallows_exceptions(monkeypatch):
 
     monkeypatch.setattr(callback.requests, "post", boom)
     callback.post_failure("tid-9", "some error")  # no exception => pass
+
+def test_post_voiceprint_result_sends_pascalcase_body_and_secret_header(monkeypatch):
+    captured = {}
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        captured.update(url=url, json=json, headers=headers, timeout=timeout)
+        return _OkResponse()
+
+    monkeypatch.setattr(callback.requests, "post", fake_post)
+
+    callback.post_voiceprint_result("vs-1", [0.6, 0.8], 120000, 200000)
+
+    assert captured["url"].endswith("/internal/people/voiceprint-result")
+    assert captured["headers"]["X-Worker-Secret"] == callback.config.CALLBACK_SECRET
+    # The .NET WorkerVoiceprintCallbackController binds these PascalCase keys exactly.
+    assert captured["json"] == {
+        "VoiceSampleId": "vs-1",
+        "Embedding": [0.6, 0.8],
+        "UsedMs": 120000,
+        "SelectedMs": 200000,
+    }
+
+
+def test_post_voiceprint_failure_sends_the_error(monkeypatch):
+    captured = {}
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        captured.update(url=url, json=json)
+        return _OkResponse()
+
+    monkeypatch.setattr(callback.requests, "post", fake_post)
+
+    callback.post_voiceprint_failure("vs-2", "audio gone")
+
+    assert captured["url"].endswith("/internal/people/voiceprint-failure")
+    assert captured["json"] == {"VoiceSampleId": "vs-2", "Error": "audio gone"}
+
+
+def test_post_voiceprint_failure_swallows_a_dead_api(monkeypatch):
+    # Failure reporting is best-effort: raising here would take down the worker loop over a job that had
+    # already failed, and the sample would stay pending either way.
+    monkeypatch.setattr(callback.requests, "post", lambda *a, **k: _ErrorResponse())
+    callback.post_voiceprint_failure("vs-3", "boom")
+
+
+def test_post_voiceprint_result_raises_so_the_worker_can_report_it(monkeypatch):
+    # The opposite rule to the failure path: if the result cannot be delivered the caller must find out,
+    # or the sample sits pending forever with a vector nobody stored.
+    monkeypatch.setattr(callback.requests, "post", lambda *a, **k: _ErrorResponse())
+    with pytest.raises(RuntimeError):
+        callback.post_voiceprint_result("vs-4", [1.0], 1, 1)

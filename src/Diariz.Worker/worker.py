@@ -30,6 +30,7 @@ import pipeline  # noqa: E402
 import storage
 import telemetry
 import torch_compat
+import voiceprint  # noqa: E402
 from config import config
 
 logging.basicConfig(
@@ -178,6 +179,43 @@ def handle_merge(job: dict) -> None:
                 os.remove(path)
 
 
+def _load_audio(path: str):
+    """Decode an audio file to the 16 kHz mono waveform the embedder expects. A seam, so the voiceprint
+    handler's failure path can be tested without whisperx."""
+    return pipeline.whisperx.load_audio(path)
+
+
+def handle_voiceprint(job: dict) -> None:
+    """Re-embed one voice sample from the spans the user chose.
+
+    Cheap next to a transcription - no Whisper, no pyannote - but it shares this process, so it can queue
+    behind one. Failures are reported rather than raised: leaving the sample pending forever would be
+    indistinguishable from a slow job.
+    """
+    sample_id = job["VoiceSampleId"]
+    spans = job.get("Spans") or []
+    log.info("Re-embedding voice sample %s from %d span(s)", sample_id, len(spans))
+
+    path = None
+    try:
+        with telemetry.transaction("voiceprint-embed"):
+            path = storage.download(job["BlobKey"])
+            audio = _load_audio(path)
+            result = voiceprint.embed_spans(audio, spans, pipeline._get_embedder())
+            if result is None:
+                callback.post_voiceprint_failure(sample_id, "The selected audio is empty.")
+                return
+            callback.post_voiceprint_result(
+                sample_id, result["Embedding"], result["UsedMs"], result["SelectedMs"])
+    except Exception as e:  # noqa: BLE001 - report and continue
+        log.exception("Voiceprint re-embed failed for sample %s", sample_id)
+        telemetry.capture_exception(e)
+        callback.post_voiceprint_failure(sample_id, str(e))
+    finally:
+        if path and os.path.exists(path):
+            os.remove(path)
+
+
 def run_loop(r: redis.Redis, keep_going=lambda: True) -> None:
     """Consume jobs until stopped. A long-running blocking consumer must survive transient Redis hiccups:
     a socket read timeout or a dropped connection (e.g. Redis restart) is caught and retried rather than
@@ -186,7 +224,8 @@ def run_loop(r: redis.Redis, keep_going=lambda: True) -> None:
         try:
             resp = r.xreadgroup(
                 config.CONSUMER_GROUP, config.CONSUMER_NAME,
-                {config.STREAM_KEY: ">", config.MERGE_STREAM_KEY: ">"}, count=1, block=BLOCK_MS)
+                {config.STREAM_KEY: ">", config.MERGE_STREAM_KEY: ">",
+                 config.VOICEPRINT_STREAM_KEY: ">"}, count=1, block=BLOCK_MS)
         except (redis.TimeoutError, redis.ConnectionError) as e:
             log.warning("Redis unavailable (%s); retrying in %ds", e, RECONNECT_DELAY)
             time.sleep(RECONNECT_DELAY)
@@ -195,7 +234,8 @@ def run_loop(r: redis.Redis, keep_going=lambda: True) -> None:
         # rather than only at startup also recovers from another worker dying while this one runs.
         if not resp:
             resp = [(key, reclaim_stale(r, key))
-                    for key in (config.STREAM_KEY, config.MERGE_STREAM_KEY)]
+                    for key in (config.STREAM_KEY, config.MERGE_STREAM_KEY,
+                                config.VOICEPRINT_STREAM_KEY)]
             if not any(messages for _, messages in resp):
                 continue
 
@@ -208,6 +248,8 @@ def run_loop(r: redis.Redis, keep_going=lambda: True) -> None:
                     job = json.loads(fields["job"])
                     if stream == config.MERGE_STREAM_KEY:
                         handle_merge(job)
+                    elif stream == config.VOICEPRINT_STREAM_KEY:
+                        handle_voiceprint(job)
                     else:
                         handle(job)
                 finally:
@@ -239,8 +281,10 @@ def main() -> None:
 
     ensure_group(r, config.STREAM_KEY)
     ensure_group(r, config.MERGE_STREAM_KEY)
-    log.info("Worker %s listening on streams %s, %s",
-             config.CONSUMER_NAME, config.STREAM_KEY, config.MERGE_STREAM_KEY)
+    ensure_group(r, config.VOICEPRINT_STREAM_KEY)
+    log.info("Worker %s listening on streams %s, %s, %s",
+             config.CONSUMER_NAME, config.STREAM_KEY, config.MERGE_STREAM_KEY,
+             config.VOICEPRINT_STREAM_KEY)
 
     # Start the liveness heartbeat (read by the Docker healthcheck) once we're up and consuming.
     heartbeat.start()

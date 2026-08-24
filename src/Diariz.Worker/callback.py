@@ -62,3 +62,31 @@ def post_merge_failure(recording_id: str, error: str) -> None:
         requests.post(url, json=body, headers=_HEADERS, timeout=30).raise_for_status()
     except Exception:  # noqa: BLE001 - best-effort failure reporting
         log.exception("Failed to report merge failure for %s", recording_id)
+
+def post_voiceprint_result(voice_sample_id: str, embedding: list, used_ms: int, selected_ms: int) -> None:
+    """Report a finished voiceprint re-embed: the new vector, and how much audio went into it against how
+    much was selected (the cap can make those differ, and the UI states both).
+
+    Raises on a failed POST, unlike the failure path below: if the result cannot be delivered the caller
+    must find out, or the sample sits pending forever with a vector nobody stored."""
+    url = f"{config.API_BASE_URL}/internal/people/voiceprint-result"
+    body = {
+        "VoiceSampleId": voice_sample_id,
+        "Embedding": embedding,
+        "UsedMs": used_ms,
+        "SelectedMs": selected_ms,
+    }
+    resp = requests.post(url, json=body, headers=_HEADERS, timeout=60)
+    resp.raise_for_status()
+    log.info("Posted voiceprint result for sample %s (used=%dms)", voice_sample_id, used_ms)
+
+
+def post_voiceprint_failure(voice_sample_id: str, error: str) -> None:
+    """Best-effort, like the other failure reporters: raising here would take down the consumer loop over
+    a job that had already failed."""
+    url = f"{config.API_BASE_URL}/internal/people/voiceprint-failure"
+    body = {"VoiceSampleId": voice_sample_id, "Error": error[:2000]}
+    try:
+        requests.post(url, json=body, headers=_HEADERS, timeout=30).raise_for_status()
+    except Exception:  # noqa: BLE001 - best-effort failure reporting
+        log.exception("Failed to report voiceprint failure for %s", voice_sample_id)

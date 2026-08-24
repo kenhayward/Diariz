@@ -1,5 +1,8 @@
 """Tests for the job orchestration + temp-file cleanup in worker.handle()."""
 import json
+
+import numpy as np
+import pytest
 import os
 
 import redis
@@ -216,6 +219,90 @@ def test_run_loop_routes_merge_jobs_to_handle_merge(monkeypatch):
 
     assert merged == [{"RecordingId": "r1"}]
     assert r.acked == [(worker.config.MERGE_STREAM_KEY, "9-0")]
+
+
+def test_run_loop_routes_voiceprint_jobs_to_handle_voiceprint(monkeypatch):
+    seen = []
+    monkeypatch.setattr(worker, "handle_voiceprint", lambda job: seen.append(job))
+    msg = [(worker.config.VOICEPRINT_STREAM_KEY,
+            [("7-0", {"job": json.dumps({"VoiceSampleId": "vs1"})})])]
+    r = _FakeRedis([msg])
+
+    worker.run_loop(r, keep_going=_keep_going(2))
+
+    assert seen == [{"VoiceSampleId": "vs1"}]
+    assert r.acked == [(worker.config.VOICEPRINT_STREAM_KEY, "7-0")]
+
+
+def test_run_loop_does_not_send_a_voiceprint_job_to_the_transcriber(monkeypatch):
+    # The three streams share one consumer group, so the only thing keeping a re-embed out of
+    # whisperx is the dispatch below. Getting it wrong would try to transcribe a job with no BlobKey
+    # handling of its own and burn a GPU slot.
+    monkeypatch.setattr(worker, "handle", lambda job: pytest.fail("transcriber got a voiceprint job"))
+    monkeypatch.setattr(worker, "handle_voiceprint", lambda job: None)
+    msg = [(worker.config.VOICEPRINT_STREAM_KEY,
+            [("7-1", {"job": json.dumps({"VoiceSampleId": "vs1"})})])]
+
+    worker.run_loop(_FakeRedis([msg]), keep_going=_keep_going(2))
+
+
+def test_handle_voiceprint_posts_the_embedding_and_removes_the_download(monkeypatch, tmp_path):
+    path = tmp_path / "a.webm"
+    path.write_bytes(b"x")
+    monkeypatch.setattr(worker.storage, "download", lambda k: str(path))
+    monkeypatch.setattr(worker, "_load_audio", lambda p: np.arange(32000, dtype="float32"))
+    monkeypatch.setattr(worker.pipeline, "_get_embedder",
+                        lambda: (lambda w: np.array([3.0, 4.0], dtype="float32")))
+    posted = []
+    monkeypatch.setattr(worker.callback, "post_voiceprint_result",
+                        lambda *a: posted.append(a))
+
+    worker.handle_voiceprint({"VoiceSampleId": "vs1", "RecordingId": "r", "BlobKey": "k",
+                              "Spans": [{"StartMs": 0, "EndMs": 1000}]})
+
+    assert posted and posted[0][0] == "vs1"
+    assert posted[0][2] == 1000  # UsedMs: the one span, not the whole clip
+    assert not path.exists()
+
+
+def test_handle_voiceprint_reports_failure_and_removes_the_temp_file(monkeypatch, tmp_path):
+    # A failed re-embed must not strand the sample as permanently pending, and must not leak the
+    # download - the worker is long-running, so a leak per failure accumulates.
+    path = tmp_path / "a.webm"
+    path.write_bytes(b"x")
+    monkeypatch.setattr(worker.storage, "download", lambda k: str(path))
+
+    def boom(_p):
+        raise RuntimeError("bad audio")
+
+    monkeypatch.setattr(worker, "_load_audio", boom)
+    failures = []
+    monkeypatch.setattr(worker.callback, "post_voiceprint_failure",
+                        lambda i, e: failures.append((i, e)))
+
+    worker.handle_voiceprint({"VoiceSampleId": "vs2", "RecordingId": "r", "BlobKey": "k", "Spans": []})
+
+    assert failures and failures[0][0] == "vs2"
+    assert "bad audio" in failures[0][1]
+    assert not path.exists()
+
+
+def test_handle_voiceprint_reports_an_empty_selection_rather_than_embedding_silence(monkeypatch, tmp_path):
+    path = tmp_path / "a.webm"
+    path.write_bytes(b"x")
+    monkeypatch.setattr(worker.storage, "download", lambda k: str(path))
+    monkeypatch.setattr(worker, "_load_audio", lambda p: np.arange(16000, dtype="float32"))
+    monkeypatch.setattr(worker.pipeline, "_get_embedder",
+                        lambda: (lambda w: pytest.fail("embedded an empty selection")))
+    failures = []
+    monkeypatch.setattr(worker.callback, "post_voiceprint_failure",
+                        lambda i, e: failures.append((i, e)))
+
+    # A span entirely past the end of the clip selects nothing.
+    worker.handle_voiceprint({"VoiceSampleId": "vs3", "RecordingId": "r", "BlobKey": "k",
+                              "Spans": [{"StartMs": 90000, "EndMs": 95000}]})
+
+    assert failures and failures[0][0] == "vs3"
 
 
 def test_run_loop_survives_redis_timeout_and_connection_errors(monkeypatch):
