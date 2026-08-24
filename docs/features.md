@@ -573,7 +573,16 @@ your quota. **Markdown attachments are editable in place**: click Open and a ric
 seeded with the document; Save overwrites it. You can also save a **whole chat conversation** as a Markdown
 attachment with the **`/attach`** chat command (onto the current transcript, the first selected one, or the
 current folder). Turn on **Include attachments** in chat to feed them to the LLM (documents are read into
-text; URLs are fetched behind SSRF guards).
+text; URLs are fetched behind SSRF guards) Or feed in **one** of them: every attachment row carries a
+**drag handle**, and dropping it on the chat box reads that document's text into the chat context pill -
+the narrow version of the same thing, for when you had a particular document in mind rather than all of
+them. It works from a recording's Attachments tab, a folder's own attachments, and the aggregated list
+across a folder, and for **URL** attachments as well as files. Unlike the bulk toggle, which skips an
+attachment it cannot read so that one bad file never fails a whole chat turn, a dropped one **reports**
+the failure: you are waiting on that document, and a composer that did not change would tell you nothing.
+Click the pill to read exactly what the model was handed. Documents accumulate under a heading each, the
+same way extracted screen-capture text does - which now also applies to the paperclip, so attaching a
+file adds to what is there rather than replacing it.
 - **Manage audio & merge**: **delete a recording's audio** to reclaim its storage while keeping the
 transcript, and **merge** several recordings into the earliest one — their transcripts are laid end-to-end
 and their action items are folded in. Audio is concatenated server-side (ffmpeg) for the recordings that

@@ -32,7 +32,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Voice dictation** | Speak your chat questions - transcribed into the chat box in Chrome/Edge or via a server speech-to-text endpoint. |
 | **MCP access** | Let an AI assistant read your own meetings over MCP - via OAuth (the claude.ai connector) or a personal token (Claude Desktop, Claude Code), when the platform's MCP toggle is on - including a \`run_formula\` tool to run your saved Formulas. Set up on the **Integrations** tab in Preferences, alongside API access and Automations, a card each. |
 | **Translate** | Translate a whole transcript or a single segment, stored as revisions you can flip back. |
-| **Attachments** | Attach files or URLs (PDF, Office, email, calendar, images) to a recording or directly to a folder, edit Markdown attachments in place, save a chat conversation as an attachment with /attach, and optionally feed them to chat. |
+| **Attachments** | Attach files or URLs (PDF, Office, email, calendar, images) to a recording or directly to a folder, edit Markdown attachments in place, save a chat conversation as an attachment with /attach, and optionally feed them to chat - either every attachment in scope with one tick box, or a single one dragged straight onto the chat box by its handle and read back by clicking the pill it leaves. |
 | **Rooms** | A private Personal Room per account plus shareable Rooms: invite users and groups with per-member permissions. Each Shared Room has its **own folder structure** (folders/sub-folders, drag-and-drop, per-room order) and its own List/Calendar/Actions/Tags scoped to it; record or upload files straight into a room (your Personal Room keeps the original), and search + chat over every room you belong to. A member who can read a shared recording sees its notes and screenshots too - only the owner can add, edit, or delete them. Your Google Calendar and its linking stay personal. The switcher shows each room's folder and meeting counts (shared ones labelled), ticks the one you are in, and remembers where you were. Manage rooms from the switcher. |
 | **Organise & merge** | Folders nested up to 8 levels deep with drag-and-drop (dragging one of several ticked rows moves the whole selection); the meetings list drills in one folder at a time (coloured folder rows with counts, a breadcrumb showing the full path with every part clickable, browser back pops a level) so it stays readable however many recordings you have, with a page button beside the breadcrumb's menu opening the folder's own page, a separate target from browsing deeper; an open recording shows its folder path as clickable chips under its name, each taking the list straight to that folder; choose where a new recording is filed (Ungrouped, the open folder, or a specific folder); sort the list by date/time, name or duration (ascending or descending) or keep your manual order, remembered between visits, with each row showing when it was made; cut one or more recordings, or a folder, and paste them into another folder in one move (landing at the bottom, in the order you cut them), with the Paste control showing why it's disabled when a move isn't allowed yet; browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
@@ -64,6 +64,20 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.248.0",
+    date: "2026-08-24",
+    pr: 601,
+    headline: "Drag a document into the chat box",
+    summary:
+      "You could already hand chat a screen capture by dragging its thumbnail into the prompt. Now you can do the same with a document you have already filed - a PDF, a spreadsheet, an email, a link - from a meeting's Attachments tab, from a folder's attachments, or from the list of everything attached across a folder. Grab the handle at the left of the row, drop it on the chat box, and its text joins the conversation. Click the pill it leaves behind to read exactly what the model was given, which for a long PDF is the difference between trusting an answer and checking it.\n\nUntil now the only way to put a filed document in front of the model was the Include attachments tick box, which pulls in every attachment on every meeting in scope - fine when that is what you want, wasteful when you had one document in mind. Dropping one is the narrow version of the same thing, and it says so when it cannot read something rather than leaving the composer unchanged.\n\nOne change to existing behaviour comes with it: attaching a file now adds to whatever is already attached instead of replacing it, which is how screen-capture text has always behaved. Two ways of adding the same kind of thing should not behave differently. If you attach the wrong file, remove the pill and start again.",
+    added: [
+      "Chat: drag an attachment from a meeting or a folder onto the chat box to add its text to the conversation, and click the pill to read it.",
+    ],
+    changed: [
+      "Attaching a file to chat now adds to what is already attached rather than replacing it, matching how extracted screen-capture text already worked.",
+    ],
+  },
   {
     version: "0.247.0",
     date: "2026-08-24",
