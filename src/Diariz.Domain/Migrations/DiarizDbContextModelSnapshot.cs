@@ -1825,6 +1825,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<Guid>("TranscriptionId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("WordsJson")
+                        .HasColumnType("jsonb");
+
                     b.HasKey("Id");
 
                     b.HasIndex("TranscriptionId", "Ordinal");

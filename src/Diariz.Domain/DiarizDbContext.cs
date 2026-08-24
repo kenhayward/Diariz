@@ -512,9 +512,15 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         {
             e.HasIndex(s => new { s.TranscriptionId, s.Ordinal });
             if (isNpgsql)
+            {
                 e.Property(s => s.Embedding).HasColumnType("vector(768)");
+                // jsonb on Postgres, plain text elsewhere - the same treatment as MeetingType.ContentJson.
+                e.Property(s => s.WordsJson).HasColumnType("jsonb");
+            }
             else
+            {
                 e.Ignore(s => s.Embedding);
+            }
         });
 
         // Windowed retrieval chunks (Milestone 3 RAG). Provider-agnostic except the vector column, which is

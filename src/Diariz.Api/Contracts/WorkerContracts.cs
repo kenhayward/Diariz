@@ -57,12 +57,22 @@ public record TagsJob(
     Guid RecordingId,
     Guid TranscriptionId);
 
+/// <summary>One aligned word inside a segment. The single-letter members are deliberate: this is stored as
+/// jsonb on every segment and a long meeting carries roughly 10k of them, so the key names are part of the
+/// storage cost. <c>S</c> and <c>E</c> are ms from the start of the recording, matching
+/// <see cref="SegmentResult"/>.</summary>
+public record SegmentWord(string W, long S, long E);
+
 /// <summary>One diarized, timestamped segment returned by the worker.</summary>
 public record SegmentResult(
     string Speaker,
     long StartMs,
     long EndMs,
-    string Text);
+    string Text,
+    /// <summary>Aligned word timings, or null when whisperx produced none - a language with no alignment
+    /// model, or a recording transcribed before these were kept. A segment without them cannot be
+    /// split.</summary>
+    IReadOnlyList<SegmentWord>? Words = null);
 
 /// <summary>One diarized speaker's voice embedding (ECAPA, 192-d) for identification.</summary>
 public record SpeakerEmbeddingResult(
