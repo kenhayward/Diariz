@@ -629,6 +629,14 @@ ipcMain.on("outlook:ready", async (_e, cfg) => {
 });
 
 ipcMain.handle("outlook:available", () => outlookAvailability());
+// Where a sync has got to *right now*. `outlook:state` is otherwise push-only, and pushes only changes - so a
+// renderer that subscribed after a run started (every launch sync, and every reload mid-sync) had no way to
+// find out one was under way, and left its calendar sync buttons live through the whole of it.
+ipcMain.handle("outlook:state", () => ({
+  phase: outlook.phase,
+  lastSyncAt: outlook.lastSyncAt,
+  lastError: outlook.lastError,
+}));
 ipcMain.handle("outlook:sync-now", (_e, options) => syncOutlook(options || {}));
 // Preferences asking us to look again: the only thing that clears a remembered "no classic Outlook here".
 ipcMain.handle("outlook:recheck", () => outlookAvailability({ force: true }));

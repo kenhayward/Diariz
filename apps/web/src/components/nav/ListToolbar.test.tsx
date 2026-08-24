@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { SelectionProvider } from "../../lib/selection";
 import { StatusProvider } from "../../lib/status";
+import { CalendarSyncProvider } from "../../lib/calendarSync";
 import StatusBar from "../StatusBar";
 import type { RecordingSummary } from "../../lib/types";
 
@@ -22,13 +23,15 @@ import ListToolbar from "./ListToolbar";
 
 const recordings: RecordingSummary[] = [];
 
-/// The toolbar as the panel mounts it, with the status bar underneath so what a sync tells the user is
-/// observable rather than inferred from internals.
+/// The toolbar as the app mounts it: inside the workspace's CalendarSyncProvider (which owns the run, so it
+/// survives this toolbar), with the status bar underneath so what a sync tells the user is observable rather
+/// than inferred from internals.
 function renderToolbar(over: Partial<Parameters<typeof ListToolbar>[0]> = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = render(
     <QueryClientProvider client={qc}>
       <StatusProvider>
+        <CalendarSyncProvider>
         <SelectionProvider>
           <ListToolbar
             recordings={recordings}
@@ -44,15 +47,20 @@ function renderToolbar(over: Partial<Parameters<typeof ListToolbar>[0]> = {}) {
           />
           <StatusBar />
         </SelectionProvider>
+        </CalendarSyncProvider>
       </StatusProvider>
     </QueryClientProvider>,
   );
   return { ...view, qc };
 }
 
-/// A desktop shell whose sync phase the test drives. The real one pushes state changes and replays nothing on
-/// subscribe, so `emit` is the only way a run learns the shell has finished.
-function fakeShell(started: { started: boolean; reason?: string } = { started: true }) {
+/// A desktop shell whose sync phase the test drives. It pushes state *changes*, so `emit` is how a run learns
+/// the shell has finished; `phase` is what it answers when asked where it is right now, which is what a
+/// subscriber arriving mid-run has to go on. Left `idle` (the default) it behaves like a shell sitting still.
+function fakeShell(
+  started: { started: boolean; reason?: string } = { started: true },
+  phase: "idle" | "reading" | "pushing" = "idle",
+) {
   const listeners: ((s: { phase: string }) => void)[] = [];
   const syncOutlookNow = vi.fn().mockResolvedValue(started);
   (window as { diariz?: unknown }).diariz = {
@@ -63,6 +71,7 @@ function fakeShell(started: { started: boolean; reason?: string } = { started: t
       listeners.push(cb);
       return () => listeners.splice(listeners.indexOf(cb), 1);
     },
+    outlookState: () => Promise.resolve({ phase }),
   };
   return { syncOutlookNow, emit: (phase: string) => act(() => listeners.forEach((cb) => cb({ phase }))) };
 }
@@ -204,6 +213,25 @@ describe("ListToolbar calendar sync", () => {
     emit("idle");
     await waitFor(() => expect(today).toHaveProperty("disabled", false));
     expect(all).toHaveProperty("disabled", false);
+  });
+
+  // The half of that regression the pair above could never catch, because it emits the phase change itself.
+  // The shell pushes only *changes*, so a toolbar that mounts while a run is already reading - which is every
+  // launch sync, and every remount after one starts (the Actions tab, a collapsed panel, a reload) - was told
+  // nothing at all. Both buttons stayed live and the bar stayed silent for the whole read, and a quick sync
+  // pressed in that window was refused by the shell and then spent the rest of the full sync waiting to join
+  // it. That is the "sync today takes forever" report.
+  it("disables both buttons and reports a sync that was already running when it mounted", async () => {
+    (api.getUserSettings as Mock).mockResolvedValue({ outlookSyncEnabled: true });
+    fakeShell({ started: true }, "reading");
+    renderToolbar({ calendarMode: true, listMode: false });
+
+    const today = await screen.findByRole("button", { name: /sync selected day/i });
+    const all = screen.getByRole("button", { name: /sync calendar/i });
+
+    await waitFor(() => expect(today).toHaveProperty("disabled", true));
+    expect(all).toHaveProperty("disabled", true);
+    expect(await screen.findByText(/syncing calendar 0s/i)).toBeTruthy();
   });
 
   // ...and say so, rather than leaving two dead buttons and no explanation for why they will not press.

@@ -65,6 +65,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.244.1",
+    date: "2026-08-24",
+    pr: 590,
+    headline: "The calendar sync buttons now know when a sync is already running",
+    summary:
+      "The desktop app syncs your Outlook calendar when it starts. While that was happening, the two sync buttons above the Calendar tab stayed live and the status bar said nothing - so there was no sign a sync was under way at all.\n\nPressing Sync today in that window looked like it had hung. It had not: a sync was already reading your mailbox, so the button quietly attached itself to that one and waited for it to finish, which on a busy mailbox is around half a minute. All you saw was a button that appeared to do nothing.\n\nThe cause was that the app was only ever told when the sync's state changed, never what it was. If the Calendar toolbar appeared after a sync had started - which is what happens every time the app opens, and again whenever you switch tabs or collapse the panel - it had missed the announcement and had no way to ask.\n\nNow it asks. Both buttons grey out and the status bar counts up for the whole of an automatic sync, exactly as it does for one you start yourself. The sync itself also moved above the meetings panel, so switching to Actions and back no longer restarts the counter or loses track of a run in progress.",
+    fixed: [
+      "Both calendar sync buttons now grey out, and the status bar counts up, during the sync that runs when the desktop app opens - and during one started from the tray.",
+      "Sync today no longer appears to hang when pressed while a full sync is already running.",
+      "A calendar sync keeps counting when you switch away from the Calendar tab and back, instead of restarting.",
+    ],
+  },
+  {
     version: "0.244.0",
     date: "2026-08-23",
     pr: 587,

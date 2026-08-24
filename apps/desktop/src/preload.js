@@ -144,6 +144,10 @@ contextBridge.exposeInMainWorld("diariz", {
   /// Report what the API did with a pushed window, so the tray and its notification are honest.
   reportOutlookResult: (result) => ipcRenderer.send("outlook:result", result),
 
+  /// Where a sync has got to right now. The subscription below reports *changes*, so this is the only way a
+  /// renderer that arrived mid-run can find out one is happening.
+  outlookState: () => ipcRenderer.invoke("outlook:state"),
+
   /// Subscribe to the shell's sync phase, so on-screen buttons can disable themselves while one runs.
   /// Returns an unsubscribe function.
   onOutlookState: (cb) => {

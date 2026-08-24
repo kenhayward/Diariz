@@ -9,7 +9,7 @@ vi.mock("./api", () => ({
   apiErrorMessage: (e: unknown) => String(e),
 }));
 
-import { useCalendarSync } from "./calendarSync";
+import { CalendarSyncProvider, useCalendarSync } from "./calendarSync";
 
 /// A desktop shell that starts a sync and then goes quiet - the shape every stuck message has in common.
 /// Nothing here replays on subscribe, matching the real bridge, so only `emit` can end a run.
@@ -32,8 +32,9 @@ function installShell(over: Record<string, unknown> = {}) {
   return { emit: (phase: string) => listeners.forEach((cb) => cb({ phase })) };
 }
 
-/// The toolbar: mounts the hook, and can be unmounted independently of the status provider above it - which
-/// is exactly the real arrangement (StatusProvider lives in the app shell, ListToolbar inside the panel).
+/// The toolbar: reads the hook, and can be unmounted independently of the provider above it - which is exactly
+/// the real arrangement (CalendarSyncProvider lives in the app shell, ListToolbar inside a tab that comes and
+/// goes).
 function Toolbar() {
   const { sync, busy } = useCalendarSync();
   // `busy` is what disables the real buttons, so a stuck one is a calendar you can never sync again.
@@ -51,15 +52,19 @@ function Probe() {
   return <span data-testid="msg">{status ? status.text : "none"}</span>;
 }
 
+/// The two unmounts the app can actually perform, kept separate because they now mean different things:
+/// losing the toolbar is a tab switch (the run carries on), losing the provider is leaving the workspace.
 function renderHarness() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   function App() {
-    const [mounted, setMounted] = useState(true);
+    const [workspace, setWorkspace] = useState(true);
+    const [toolbar, setToolbar] = useState(true);
     return (
       <StatusProvider>
         <Probe />
-        <button onClick={() => setMounted(false)}>unmount-toolbar</button>
-        {mounted && <Toolbar />}
+        <button onClick={() => setToolbar(false)}>unmount-toolbar</button>
+        <button onClick={() => setWorkspace(false)}>unmount-workspace</button>
+        {workspace && <CalendarSyncProvider>{toolbar && <Toolbar />}</CalendarSyncProvider>}
       </StatusProvider>
     );
   }
@@ -90,11 +95,11 @@ describe("useCalendarSync status message", () => {
     vi.useRealTimers();
   });
 
-  /// The bug: the progress message is pushed `sticky`, so nothing ever expires it, and the effect's cleanup
-  /// only cleared its interval. Unmounting the toolbar mid-sync therefore froze the message on screen for the
-  /// rest of the session - the counter stopped, and the remounted toolbar refused to clear a message its own
-  /// `pushed` ref said it had not written.
-  it("clears its progress message when the toolbar unmounts mid-sync", async () => {
+  /// A tab switch is not a cancellation. The run belongs to the workspace, so wandering off to the Actions tab
+  /// - which swaps the toolbar out - leaves the sync running and the bar still counting it. When the state
+  /// lived in the toolbar this cleared the message instead, and the remounted toolbar could not pick it back
+  /// up: `pushed` was per-instance, and the new instance's copy correctly said it had written nothing.
+  it("keeps counting when the toolbar unmounts mid-sync", async () => {
     renderHarness();
 
     // Wait for the shell probe to settle, so the sync takes the desktop path and hangs on the shell.
@@ -108,18 +113,37 @@ describe("useCalendarSync status message", () => {
       screen.getByText("unmount-toolbar").click();
     });
 
+    expect(msg()).toContain("Syncing calendar");
+  });
+
+  /// The guard that still matters, at its new home. The progress message is pushed `sticky`, so nothing ever
+  /// expires it and the ticking effect's cleanup only clears its interval - an unmount with the line still up
+  /// would freeze it on screen with nothing left to count it.
+  it("clears its progress message when the workspace unmounts mid-sync", async () => {
+    renderHarness();
+
+    await waitFor(() => expect(screen.getByText("start-sync")).toBeTruthy());
+    await act(async () => {
+      screen.getByText("start-sync").click();
+    });
+    expect(msg()).toContain("Syncing calendar");
+
+    await act(async () => {
+      screen.getByText("unmount-workspace").click();
+    });
+
     expect(msg()).toBe("none");
   });
 
-  /// The other half of the same guard: a message this hook did NOT write must survive its unmount, or the
-  /// toolbar would wipe an upload or recording message on its way out.
+  /// The other half of the same guard: a message this hook did NOT write must survive its unmount, or leaving
+  /// the workspace would wipe an upload or recording message on the way out.
   it("leaves a message it did not write alone", async () => {
     renderHarness();
     await waitFor(() => expect(screen.getByText("start-sync")).toBeTruthy());
 
     // Nothing pushed by the hook - the bar is showing somebody else's message.
     await act(async () => {
-      screen.getByText("unmount-toolbar").click();
+      screen.getByText("unmount-workspace").click();
     });
 
     expect(msg()).toBe("none"); // still nothing, and crucially no crash
