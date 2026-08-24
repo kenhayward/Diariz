@@ -7,6 +7,7 @@ import { formatBytes } from "../lib/format";
 import { useRoomBasePath } from "../lib/rooms";
 import type { SectionAttachmentItem } from "../lib/types";
 import { openAttachment } from "./AttachmentsManager";
+import AttachmentDragHandle from "./AttachmentDragHandle";
 import MarkdownAttachmentEditModal from "./MarkdownAttachmentEditModal";
 
 /// The folder Attachments tab: every attachment across the folder's recordings (and sub-folders), with a
@@ -60,7 +61,14 @@ export default function FolderAttachmentsList({
                     {a.recordingName}
                   </NavLink>
                 </td>
-                <td className="truncate py-1 pr-2" title={a.name}>{a.name}</td>
+                <td className="py-1 pr-2" title={a.name}>
+                  {/* min-w-0 on both the row and the label: Tailwind's truncate needs a shrinkable block, and
+                      without it the grip pushes the name out and gives the table a horizontal scrollbar. */}
+                  <div className="flex min-w-0 items-center gap-1">
+                    <AttachmentDragHandle scope="recording" ownerId={a.recordingId} attachmentId={a.id} name={a.name} />
+                    <span className="min-w-0 truncate">{a.name}</span>
+                  </div>
+                </td>
                 <td className="py-1 pr-2 text-xs text-gray-500 dark:text-gray-400">
                   {a.kind === "Url" ? t("workspace:attachmentUrlType") : formatBytes(a.sizeBytes)}
                 </td>

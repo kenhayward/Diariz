@@ -1,5 +1,6 @@
 import axios from "axios";
 import { record } from "./trail";
+import type { AttachmentDragPayload } from "./dragTypes";
 
 // A per-request opt-out of the global 401→/login redirect (used by the silent token refresh).
 declare module "axios" {
@@ -1396,6 +1397,18 @@ export const api = {
     const form = new FormData();
     form.append("file", file);
     const { data } = await http.post<ChatAttachment>("/api/chat/attachment", form);
+    return data;
+  },
+
+  /// Read an attachment the user already has (on a recording, or filed against a folder) into chat context.
+  /// Unlike the bulk "include attachments" toggle, this reports failures - the user dropped this one document
+  /// and is waiting on it, so a composer that silently did not change would tell them nothing.
+  async chatAttachmentFromLibrary(payload: AttachmentDragPayload): Promise<ChatAttachment> {
+    const { data } = await http.post<ChatAttachment>("/api/chat/attachment/library", {
+      attachmentId: payload.attachmentId,
+      recordingId: payload.scope === "recording" ? payload.ownerId : null,
+      sectionId: payload.scope === "section" ? payload.ownerId : null,
+    });
     return data;
   },
 

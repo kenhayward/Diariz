@@ -27,6 +27,7 @@ vi.mock("../lib/api", () => ({
     listFormulas: vi.fn(),
     runFormula: vi.fn(),
     listFormulaResults: vi.fn(),
+    chatAttachmentFromLibrary: vi.fn(),
     getFormulaResultText: vi.fn(),
   },
   apiErrorMessage: (e: unknown) => String(e),
@@ -1040,5 +1041,126 @@ describe("ChatPanel - attached text is kept in the thread", () => {
     await ask("Plain question");
 
     expect(screen.getByTestId("chat-thread").querySelector("[data-role=attachment]")).toBeNull();
+  });
+
+  describe("document attachments dragged in", () => {
+    /// jsdom has no DataTransfer, so the drop is driven through a stub shaped like the real one - the same
+    /// approach the screenshot tests above use.
+    function dropDoc(payload: Record<string, unknown>) {
+      const type = "application/x-diariz-attachment";
+      fireEvent.drop(screen.getByTestId("chat-drop-zone"), {
+        dataTransfer: { getData: (t: string) => (t === type ? JSON.stringify(payload) : ""), types: [type] },
+      });
+    }
+
+    async function renderReady() {
+      renderPanel();
+      await waitFor(() => expect(api.listChatModels).toHaveBeenCalled());
+    }
+
+    const docA = { scope: "recording", ownerId: "rec-1", attachmentId: "att-a", name: "Plan.pdf" };
+    const docB = { scope: "recording", ownerId: "rec-1", attachmentId: "att-b", name: "Budget.xlsx" };
+
+    it("adds a pill when an attachment is dropped on the composer", async () => {
+      vi.mocked(api.chatAttachmentFromLibrary).mockResolvedValue({
+        name: "Plan.pdf", chars: 14, text: "The plan text.",
+      });
+      await renderReady();
+
+      act(() => dropDoc(docA));
+
+      await waitFor(() => expect(screen.getByText("Plan.pdf")).toBeTruthy());
+      expect(api.chatAttachmentFromLibrary).toHaveBeenCalledWith({
+        scope: "recording", ownerId: "rec-1", attachmentId: "att-a", name: "Plan.pdf",
+      });
+    });
+
+    it("accumulates a second attachment instead of replacing the first", async () => {
+      vi.mocked(api.chatAttachmentFromLibrary)
+        .mockResolvedValueOnce({ name: "Plan.pdf", chars: 14, text: "The plan text." })
+        .mockResolvedValueOnce({ name: "Budget.xlsx", chars: 16, text: "The budget text." });
+      await renderReady();
+
+      act(() => dropDoc(docA));
+      await waitFor(() => expect(screen.getByText("Plan.pdf")).toBeTruthy());
+      act(() => dropDoc(docB));
+
+      await waitFor(() => expect(screen.getByText("2 documents")).toBeTruthy());
+    });
+
+    it("opens the preview with both documents when the pill is clicked", async () => {
+      vi.mocked(api.chatAttachmentFromLibrary)
+        .mockResolvedValueOnce({ name: "Plan.pdf", chars: 14, text: "The plan text." })
+        .mockResolvedValueOnce({ name: "Budget.xlsx", chars: 16, text: "The budget text." });
+      await renderReady();
+
+      act(() => dropDoc(docA));
+      await waitFor(() => expect(screen.getByText("Plan.pdf")).toBeTruthy());
+      act(() => dropDoc(docB));
+      await waitFor(() => expect(screen.getByText("2 documents")).toBeTruthy());
+
+      await userEvent.click(screen.getByText("2 documents"));
+
+      const dialog = await screen.findByRole("dialog");
+      expect(dialog.textContent).toContain("The plan text.");
+      expect(dialog.textContent).toContain("The budget text.");
+    });
+
+    it("shows an error when the attachment cannot be read", async () => {
+      vi.mocked(api.chatAttachmentFromLibrary).mockRejectedValue(new Error("Could not read the file."));
+      await renderReady();
+
+      act(() => dropDoc(docA));
+
+      await waitFor(() => expect(screen.getByText(/could not read the file/i)).toBeTruthy());
+    });
+
+    /// A mixed pill would render half wrong: the preview renders Markdown for OCR text and preformatted plain
+    /// text for a document. The confirm is what keeps a pill single-origin, and it now works both ways.
+    it("asks before a document replaces extracted text, and keeps the text when refused", async () => {
+      vi.mocked(api.chatAttachmentFromLibrary).mockResolvedValue({
+        name: "Plan.pdf", chars: 14, text: "The plan text.",
+      });
+      const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+      await renderReady();
+      act(() => attachTextToChat({ name: "Extracted text", text: "From a capture" }));
+      await waitFor(() => expect(screen.getByText("Extracted text")).toBeTruthy());
+
+      act(() => dropDoc(docA));
+
+      await waitFor(() => expect(confirm).toHaveBeenCalled());
+      expect(screen.queryByText("Plan.pdf")).toBeNull();
+      expect(screen.getByText("Extracted text")).toBeTruthy();
+      confirm.mockRestore();
+    });
+
+    it("replaces the extracted text when the user accepts", async () => {
+      vi.mocked(api.chatAttachmentFromLibrary).mockResolvedValue({
+        name: "Plan.pdf", chars: 14, text: "The plan text.",
+      });
+      const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+      await renderReady();
+      act(() => attachTextToChat({ name: "Extracted text", text: "From a capture" }));
+      await waitFor(() => expect(screen.getByText("Extracted text")).toBeTruthy());
+
+      act(() => dropDoc(docA));
+
+      await waitFor(() => expect(screen.getByText("Plan.pdf")).toBeTruthy());
+      confirm.mockRestore();
+    });
+
+    /// A malformed payload cannot have come from our own handle, so it is ignored rather than reported.
+    it("ignores a malformed payload", async () => {
+      await renderReady();
+
+      act(() => {
+        const type = "application/x-diariz-attachment";
+        fireEvent.drop(screen.getByTestId("chat-drop-zone"), {
+          dataTransfer: { getData: (t: string) => (t === type ? "not json" : ""), types: [type] },
+        });
+      });
+
+      expect(api.chatAttachmentFromLibrary).not.toHaveBeenCalled();
+    });
   });
 });

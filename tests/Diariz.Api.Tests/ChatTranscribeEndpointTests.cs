@@ -56,7 +56,8 @@ public class ChatTranscribeEndpointTests
         var controller = new ChatController(
             db: db, chat: null!, settings: null!, contextResolver: null!, extractor: null!,
             storage: null!, urlFetcher: null!, toolSettings: null!, orchestrator: null!, rooms: null!,
-            dictation: dictation, dictationOptions: Options.Create(opts), vision: null!);
+            dictation: dictation, dictationOptions: Options.Create(opts), vision: null!,
+            attachmentText: null!);
         controller.ControllerContext = Http.Context(userId);
         return controller;
     }

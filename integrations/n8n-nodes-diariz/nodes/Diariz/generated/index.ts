@@ -458,6 +458,17 @@ const GENERATED: GeneratedResource[] = [
         "returnsArray": false
       },
       {
+        "value": "readAnExistingAttachmentIntoChatContext",
+        "displayName": "Read an existing attachment into chat context",
+        "description": "Returns the extracted text of an attachment you already have - one filed against a recording, or one filed against a folder - so it can be added to a chat turn as context. Nothing is stored and nothing is copied: this reads the attachment you already own.",
+        "method": "POST",
+        "path": "/api/chat/attachment/library",
+        "pathParams": [],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": false
+      },
+      {
         "value": "saveAConversation",
         "displayName": "Save a conversation",
         "description": "Stores a chat's messages and its context selection, returning the new id and title. The title is generated for you - a short LLM-written phrase, falling back to the first user message when chat is not configured or generation fails - so there is no title parameter. Saving an empty conversation is rejected with 400.",

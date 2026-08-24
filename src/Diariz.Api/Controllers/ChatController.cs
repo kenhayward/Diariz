@@ -70,6 +70,7 @@ public class ChatController : ControllerBase
     private readonly IDictationClient _dictation;
     private readonly DictationOptions _dictationOptions;
     private readonly IVisionImageEncoder _vision;
+    private readonly IAttachmentTextResolver _attachmentText;
 
     public ChatController(
         DiarizDbContext db, IChatStreamClient chat, ILlmSettingsResolver settings,
@@ -77,7 +78,7 @@ public class ChatController : ControllerBase
         IAudioStorage storage, IUrlFetcher urlFetcher,
         IChatToolSettingsResolver toolSettings, IChatToolOrchestrator orchestrator, IRoomScope rooms,
         IDictationClient dictation, IOptions<DictationOptions> dictationOptions,
-        IVisionImageEncoder vision)
+        IVisionImageEncoder vision, IAttachmentTextResolver attachmentText)
     {
         _db = db;
         _chat = chat;
@@ -92,6 +93,7 @@ public class ChatController : ControllerBase
         _dictation = dictation;
         _dictationOptions = dictationOptions.Value;
         _vision = vision;
+        _attachmentText = attachmentText;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -323,6 +325,56 @@ public class ChatController : ControllerBase
         {
             return BadRequest(ex.Message);
         }
+    }
+
+
+    [HttpPost("attachment/library")]
+    [EndpointSummary("Read an existing attachment into chat context")]
+    [EndpointDescription(
+        "Returns the **extracted text** of an attachment you already have - one filed against a recording, " +
+        "or one filed against a folder - so it can be added to a chat turn as context. Nothing is stored and " +
+        "nothing is copied: this reads the attachment you already own.\n\n" +
+        "Give exactly one of `recordingId` or `sectionId`, naming where the attachment hangs. A recording " +
+        "attachment requires that the recording is yours; a folder attachment requires that you can see the " +
+        "folder. 404 for anything you cannot reach - the two are not distinguished, so a stranger cannot " +
+        "probe for ids. 400 for a file type with no text in it (an archive, an image) or a document that " +
+        "yields nothing.")]
+    public async Task<ActionResult<ChatAttachmentDto>> LibraryAttachment(
+        ChatLibraryAttachmentRequest req, CancellationToken ct)
+    {
+        if (req.RecordingId is null == (req.SectionId is null))
+            return BadRequest("Give exactly one of recordingId or sectionId.");
+
+        AttachmentRef? target = null;
+        if (req.RecordingId is { } recordingId)
+        {
+            // Ownership is the access rule for a recording attachment, exactly as the bulk context path
+            // requires (a.Recording!.UserId == UserId).
+            var a = await _db.Attachments.FirstOrDefaultAsync(
+                x => x.Id == req.AttachmentId && x.RecordingId == recordingId && x.Recording!.UserId == UserId, ct);
+            if (a is not null) target = new AttachmentRef(a.Kind, a.Name, a.BlobKey, a.ContentType, a.Url);
+        }
+        else if (req.SectionId is { } sectionId)
+        {
+            // Folder attachments are gated on being able to VIEW the folder, mirroring
+            // SectionAttachmentsController's read gate rather than inventing a second rule.
+            if (await _rooms.ViewableSectionAsync(UserId, sectionId) is null) return NotFound();
+            var a = await _db.SectionAttachments.FirstOrDefaultAsync(
+                x => x.Id == req.AttachmentId && x.SectionId == sectionId, ct);
+            if (a is not null) target = new AttachmentRef(a.Kind, a.Name, a.BlobKey, a.ContentType, a.Url);
+        }
+
+        if (target is not { } attachment) return NotFound();
+
+        // Checked here rather than inside the resolver so the message can say WHY. The resolver returns a
+        // bare null because its other caller (the bulk path) skips silently and needs no reason.
+        if (attachment.Kind == AttachmentKind.File && !_extractor.IsSupported(attachment.Name, attachment.ContentType))
+            return BadRequest(
+                "Only PDF, text, Office (.docx/.xlsx/.pptx), email (.eml) and calendar (.ics) files can be read as text.");
+
+        var text = await _attachmentText.ResolveAsync(attachment, ct);
+        if (text is null) return BadRequest("No text could be read from this attachment.");
+        return new ChatAttachmentDto(text.Name, text.Chars, text.Text);
     }
 
     // ---- Voice dictation (server fallback path) ----
@@ -578,28 +630,12 @@ public class ChatController : ControllerBase
         var docs = new List<TranscriptContext>();
         foreach (var a in attachments)
         {
-            try
-            {
-                if (a.Kind == AttachmentKind.Url && a.Url is not null)
-                {
-                    var text = await _urlFetcher.FetchTextAsync(a.Url, ct);
-                    if (!string.IsNullOrWhiteSpace(text)) docs.Add(new TranscriptContext(a.Name, text!));
-                }
-                else if (a.Kind == AttachmentKind.File && a.BlobKey is not null
-                         && _extractor.IsSupported(a.Name, a.ContentType))
-                {
-                    await using var stream = await _storage.OpenReadAsync(a.BlobKey, ct);
-                    using var buffer = new MemoryStream();
-                    await stream.CopyToAsync(buffer, ct);
-                    var extracted = _extractor.Extract(a.Name, a.ContentType, buffer.ToArray());
-                    if (!string.IsNullOrWhiteSpace(extracted.Text))
-                        docs.Add(new TranscriptContext(extracted.Name, extracted.Text));
-                }
-            }
-            catch
-            {
-                // Skip an attachment that can't be fetched/extracted — never fail the whole chat turn.
-            }
+            var text = await _attachmentText.ResolveAsync(
+                new AttachmentRef(a.Kind, a.Name, a.BlobKey, a.ContentType, a.Url), ct);
+            // Still skipped silently here: one bad attachment must not fail a whole chat turn. The
+            // single-drop endpoint reports its failures instead, because there the user is waiting on that
+            // one document and an unchanged composer tells them nothing.
+            if (text is not null) docs.Add(new TranscriptContext(text.Name, text.Text));
         }
         return docs;
     }

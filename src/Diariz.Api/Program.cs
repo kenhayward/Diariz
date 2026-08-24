@@ -399,6 +399,9 @@ builder.Services.AddSingleton<IExportLocalizer>(_ => new JsonExportLocalizer(exp
 AddLlmClient<IChatStreamClient, ChatStreamClient>(NoHttpTimeout);
 builder.Services.AddScoped<IChatContextResolver, ChatContextResolver>();
 builder.Services.AddSingleton<IAttachmentExtractor, AttachmentExtractor>();
+// Scoped, NOT singleton: it depends on IUrlFetcher, which is scoped. A singleton capturing a scoped service
+// is a captive dependency and DI validation refuses it at startup.
+builder.Services.AddScoped<IAttachmentTextResolver, AttachmentTextResolver>();
 // Rescales a screen capture for a vision-model chat attachment. Stateless over IAudioStorage, so singleton.
 builder.Services.AddSingleton<IVisionImageEncoder, VisionImageEncoder>();
 builder.Services.AddSingleton<IOcrImageEncoder, OcrImageEncoder>();
