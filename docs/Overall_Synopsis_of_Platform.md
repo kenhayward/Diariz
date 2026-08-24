@@ -657,6 +657,7 @@ any good at the job. Four things about it are deliberate:
   thirteen parameter names Diariz can send (word-bounded, first mention wins) to drive the editor's
   one-click "omit this here" fix.
 
+Test calls are the one LLM client with **retry off** (`AddLlmClient(..., retry: false)`): Run test exists to report what the endpoint did with these settings, once, and quietly trying twice more would both hide an intermittent endpoint and triple the cost of a button an admin presses while iterating.
 Test calls are scoped `LlmCallKind.AdminTest` so `LlmTelemetryHandler` logs them like any other call.
 `LlmCallGroups.GroupFor` maps it to **null** - the group comes from what the admin is editing, so the
 resolver never decides it. The model's reply is returned in the HTTP response and never persisted; the usage
@@ -1240,6 +1241,25 @@ content-out-of-telemetry rule `SentryScrubber` already enforces for Sentry/Glitc
 5. **`LlmCalls`** (Postgres) is the resting place - see `Data_Schema.md` for every column, its five indexes,
    and its three `ON DELETE SET NULL` foreign keys (each paired with a denormalized snapshot column so a row
    stays readable after its subject is deleted).
+
+**Retry, and why the log may show a call twice.** `LlmRetryHandler` (`Services/Llm/LlmRetryHandler.cs`)
+sits **outside** `LlmTelemetryHandler` on every LLM client except the administrator's test probe, so a
+retried call produces one `LlmCalls` row per attempt rather than hiding the extra spend behind a single
+row. It makes at most `MaxAttempts` = 3 attempts, waiting 2s then 8s, and retries a transport failure or
+any failure status except `401`, `403`, `404`, `413`, `422` - the ones no retry can fix. **`400` is
+retried**, counter-intuitively: LM Studio answers "model is not loaded" with a 400 while it JIT-loads or
+swaps a model, and that is the commonest transient refusal in practice, so classifying by status alone
+would exclude the case the handler exists for. Only a JSON request body is re-sent; the dictation upload is
+a multipart audio stream and keeps its single shot, since buffering it to enable a retry would defeat the
+streaming upload. The backoff runs on the caller's `CancellationToken`, so the per-call timeout still
+bounds the whole thing. This covers a short refusal, not an outage: an endpoint down for minutes still
+fails the recording, and re-running it by hand remains the recovery.
+
+Failures themselves are reported by **`LlmResponse.EnsureSuccessAsync`** (`Services/Llm/LlmResponse.cs`),
+which every pipeline client calls in place of `EnsureSuccessStatusCode()`. It reads the endpoint's error
+body - flattened to one line, bounded at 1,000 chars - into the exception message, and names the offending
+parameter when `LlmErrorDiagnosis` recognises one. Without it a failure reduced to "400 (Bad Request)"
+everywhere it was recorded, including the `Recording.Error` shown to the user.
 
 **Retention.** A nightly `LlmUsageRetentionWorker` (a singleton `BackgroundService`, mirroring
 `AudioRetentionWorker`'s schedule helper and server-local run time) deletes `LlmCalls` rows older than
