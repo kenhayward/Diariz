@@ -5,6 +5,7 @@ using Diariz.Api.Services;
 using Diariz.Api.Configuration;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.Tests;
@@ -17,6 +18,14 @@ public class UserProfileControllerTests
     {
         Key = "unit-test-signing-key-at-least-32-bytes!!", AccessTokenMinutes = 60,
     }));
+
+    /// <summary>The controller for an EXISTING user, when a test needs to seed against that user first.</summary>
+    private static UserProfileController Build(IdentityTestHost host, Guid userId) =>
+        new(host.Users, host.Db, Tokens(), new PlatformSettingsService(host.Db),
+            new UserPermissions(host.Db), new PeopleDirectory(host.Db), new RoomScope(host.Db))
+        {
+            ControllerContext = Http.Context(userId),
+        };
 
     private static async Task<UserProfileController> BuildAsync(IdentityTestHost host)
     {
@@ -177,5 +186,81 @@ public class UserProfileControllerTests
             FullName: "New Name", NativeLanguage: null, UiLanguage: null));
 
         Assert.Equal("New Name", host.Db.Rooms.Single(r => r.Id == roomId).Name);
+    }
+
+    /// <summary>Every account is also a Person (Person.LinkedUserId), and that person is what carries the
+    /// voiceprint - but the directory that would show it is gated behind ManagePeople, so an ordinary user
+    /// had no way to see their own row at all. The profile reports it read-only.</summary>
+    [Fact]
+    public async Task Profile_reports_the_linked_person_and_its_voiceprint()
+    {
+        using var host = new IdentityTestHost();
+        var user = new ApplicationUser
+        {
+            UserName = "vp@b.test", Email = "vp@b.test", IsEnabled = true, FullName = "Ken Hayward",
+        };
+        await host.Users.CreateAsync(user);
+        var person = await new PeopleDirectory(host.Db).EnsureForUserAsync(user.Id);
+        person.SampleCount = 8;
+        await host.Db.SaveChangesAsync();
+        var sut = Build(host, user.Id);
+
+        var res = await sut.Get();
+
+        Assert.Equal(person.Id, res.Value!.Person!.Id);
+        Assert.Equal("Ken Hayward", res.Value.Person.Name);
+        Assert.True(res.Value.Person.HasVoiceprint);
+        Assert.Equal(8, res.Value.Person.SampleCount);
+        Assert.False(res.Value.Person.VoiceprintOptOut);
+    }
+
+    /// <summary>No samples means no voiceprint, which is the ordinary case and the one the UI has to tell
+    /// the user about.</summary>
+    [Fact]
+    public async Task Profile_reports_no_voiceprint_when_there_are_no_samples()
+    {
+        using var host = new IdentityTestHost();
+        var sut = await BuildAsync(host);
+
+        var res = await sut.Get();
+
+        Assert.NotNull(res.Value!.Person);
+        Assert.False(res.Value.Person!.HasVoiceprint);
+        Assert.Equal(0, res.Value.Person.SampleCount);
+    }
+
+    /// <summary>Self-heal, mirroring PeopleController.List: an account created by a path that forgot to
+    /// provision still gets a block rather than a blank one.</summary>
+    [Fact]
+    public async Task Profile_provisions_the_person_when_the_account_has_none()
+    {
+        using var host = new IdentityTestHost();
+        var user = new ApplicationUser { UserName = "np@b.test", Email = "np@b.test", IsEnabled = true };
+        await host.Users.CreateAsync(user);
+        Assert.Equal(0, await host.Db.People.CountAsync(p => p.LinkedUserId == user.Id));
+        var sut = Build(host, user.Id);
+
+        var res = await sut.Get();
+
+        Assert.NotNull(res.Value!.Person);
+        Assert.Equal(1, await host.Db.People.CountAsync(p => p.LinkedUserId == user.Id));
+    }
+
+    /// <summary>Someone who has opted out has no voiceprint and never will until they opt back in and are
+    /// enrolled again, so the block says that rather than "none yet".</summary>
+    [Fact]
+    public async Task Profile_reports_the_voiceprint_opt_out()
+    {
+        using var host = new IdentityTestHost();
+        var user = new ApplicationUser { UserName = "oo@b.test", Email = "oo@b.test", IsEnabled = true };
+        await host.Users.CreateAsync(user);
+        var person = await new PeopleDirectory(host.Db).EnsureForUserAsync(user.Id);
+        person.VoiceprintOptOut = true;
+        await host.Db.SaveChangesAsync();
+        var sut = Build(host, user.Id);
+
+        var res = await sut.Get();
+
+        Assert.True(res.Value!.Person!.VoiceprintOptOut);
     }
 }

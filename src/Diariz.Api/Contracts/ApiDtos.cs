@@ -541,6 +541,11 @@ public record LanguageDto(string Code, string EnglishName, string NativeName, bo
 /// <summary>The signed-in user's editable profile: display name + language preferences (BCP-47, or null
 /// = not set / follow the browser). Email is read-only. <paramref name="GoogleConnected"/> is true when the
 /// account is linked to a Google identity (used by the Preferences "Google account" section).</summary>
+/// <summary>The <c>Person</c> the signed-in account <em>is</em> (<c>Person.LinkedUserId</c>) - the name they
+/// appear under in transcripts, and the row that carries their voiceprint. Read-only on the profile: the name
+/// follows the account's display name, and the biometric controls live in the people UI.</summary>
+public record SelfPersonDto(Guid Id, string Name, bool HasVoiceprint, int SampleCount, bool VoiceprintOptOut);
+
 public record UserProfileDto(
     string Email, string? FullName, string? NativeLanguage, string? UiLanguage, bool GoogleConnected = false,
     bool GoogleCalendar = false,
@@ -563,7 +568,10 @@ public record UserProfileDto(
     /// request: the web must not infer authority from the JWT, which goes stale when membership changes.</summary>
     PermissionsDto? Permissions = null,
     /// <summary>The default spoken language for this user's recordings (BCP-47), or null to auto-detect.</summary>
-    string? TranscriptionLanguage = null);
+    string? TranscriptionLanguage = null,
+    /// <summary>Who the caller is in the people directory, and whether that person has a voiceprint. Always
+    /// sent; nullable only so the positional record stays source-compatible.</summary>
+    SelfPersonDto? Person = null);
 
 /// <summary>A user's platform permissions, expanded into booleans so the client never does bit arithmetic.</summary>
 public record PermissionsDto(

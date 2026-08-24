@@ -67,6 +67,9 @@ public class UserProfileController : ControllerBase
         var apiAccessEnabled = settings.ApiAccessEnabled;
         var webhooksEnabled = settings.WebhooksEnabled;
         var mcpAccessEnabled = settings.McpAccessEnabled;
+        // Self-heal, exactly as PeopleController.List does: an account provisioned by a path that predates
+        // the directory still gets a person here rather than a blank block.
+        var person = await _people.EnsureForUserAsync(UserId);
         return new UserProfileDto(user.Email ?? "", user.FullName, s?.NativeLanguage, s?.UiLanguage,
             GoogleConnected: user.GoogleSubject is not null,
             GoogleCalendar: s?.GoogleCalendarGranted ?? false,
@@ -77,7 +80,12 @@ public class UserProfileController : ControllerBase
             ApiAccessEnabled: apiAccessEnabled,
             WebhooksEnabled: webhooksEnabled,
             McpAccessEnabled: mcpAccessEnabled,
-            Permissions: ToDto(await _permissions.ForAsync(UserId)));
+            Permissions: ToDto(await _permissions.ForAsync(UserId)),
+            Person: new SelfPersonDto(
+                person.Id, person.Name,
+                // Same rule as PersonDto: an embedding or any sample counts as having a voiceprint.
+                HasVoiceprint: person.Embedding is not null || person.SampleCount > 0,
+                person.SampleCount, person.VoiceprintOptOut));
     }
 
     [HttpPut]
