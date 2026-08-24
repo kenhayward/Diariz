@@ -22,6 +22,20 @@ public class VectorIndexIntegrationTests(ContainersFixture fx)
 {
     private const int Dim = 768;
 
+    /// <summary>EF's generated name for the ANN index (asserted below, so the plan tests can rely on it).</summary>
+    private const string AnnIndex = "IX_TranscriptChunks_Embedding";
+
+    /// <summary>Whether a plan reaches the ANN index as an <b>ordered</b> scan, which is the only way pgvector
+    /// answers a nearest-neighbour query from it.
+    ///
+    /// <para>EXPLAIN never prints the access method, only the index name - grepping a plan for "hnsw" finds
+    /// nothing however well the query is planned, which is a quietly convincing way to write a test that can
+    /// never pass. The `Order By:` line is the real evidence: a plain index scan does not have one, so its
+    /// presence together with this index name means the walk is being driven by cosine distance.</para></summary>
+    private static bool UsesAnnIndex(string plan) =>
+        plan.Contains("Index Scan using \"" + AnnIndex + "\"", StringComparison.Ordinal)
+        && plan.Contains("Order By:", StringComparison.Ordinal);
+
     /// <summary>A unit vector at angle <paramref name="theta"/> radians in the (<paramref name="a"/>,
     /// <paramref name="b"/>) plane. Cosine distance between two such vectors is <c>1 - cos(dtheta)</c>, so a
     /// family of them is ordered by angle - which lets a test say exactly which chunk is the nearest neighbour,
@@ -165,6 +179,9 @@ public class VectorIndexIntegrationTests(ContainersFixture fx)
         // would exist, look right, and never be used.
         Assert.Contains("vector_cosine_ops", def);
         Assert.Contains("\"Embedding\"", def);
+        // Ties the name the plan tests match on to the index that is actually an HNSW cosine one, so a rename
+        // cannot leave them passing against some other index.
+        Assert.Contains(AnnIndex, def);
     }
 
     // ---- what the two query shapes plan to --------------------------------------------------------------
@@ -192,7 +209,7 @@ public class VectorIndexIntegrationTests(ContainersFixture fx)
         // The query shape, the opclass and the operator all line up, so the index is reachable by this query.
         // Whether the planner then picks it at a given size is its own cost decision - and correctly, it does
         // not until the table is large enough for the index to pay for itself.
-        Assert.True(plan.Contains("hnsw", StringComparison.OrdinalIgnoreCase), "expected the plan to reach the HNSW index; it was:" + Environment.NewLine + plan);
+        Assert.True(UsesAnnIndex(plan), "expected an ordered scan of " + AnnIndex + "; the plan was:" + Environment.NewLine + plan);
     }
 
     [Fact]
@@ -212,7 +229,7 @@ public class VectorIndexIntegrationTests(ContainersFixture fx)
         // The fence must hold even here, where the filter is wide open and the planner has been told sequential
         // scans are prohibitive - that is, where it actively wants the index. Post-filtering an approximate walk
         // is what silently loses true neighbours once a real caller's filter is narrow.
-        Assert.False(plan.Contains("hnsw", StringComparison.OrdinalIgnoreCase), "the fence should have kept the planner off the HNSW index; plan was:" + Environment.NewLine + plan);
+        Assert.False(UsesAnnIndex(plan), "the fence should have kept the planner off " + AnnIndex + "; the plan was:" + Environment.NewLine + plan);
     }
 
     /// <summary>Both tables the semantic query plans over. Without stats the planner guesses, and which path it
@@ -243,7 +260,7 @@ public class VectorIndexIntegrationTests(ContainersFixture fx)
         // Recall only means something if the approximate run actually went through the index. A seq scan would
         // match the exact answer trivially and the assertion below would prove nothing.
         var plan = string.Join("\n", await ExplainAsync(db, annSql, cmd => Bind(cmd, roomIds, query, 20, null)));
-        Assert.True(plan.Contains("hnsw", StringComparison.OrdinalIgnoreCase), "expected the plan to reach the HNSW index; it was:" + Environment.NewLine + plan);
+        Assert.True(UsesAnnIndex(plan), "expected an ordered scan of " + AnnIndex + "; the plan was:" + Environment.NewLine + plan);
 
         var approx = await StartMsAsync(db, annSql, roomIds, query, ann: true);
         var exact = await StartMsAsync(db, TranscriptSearch.BuildSemanticSql(hasScope: false, exact: true), roomIds, query, ann: false);

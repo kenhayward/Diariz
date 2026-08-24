@@ -896,13 +896,13 @@ large folders silently rolled up only their first ~18 meetings. The old per-work
   `hnsw.ef_search` raised to `limit * 8` (pgvector's default of 40 is sized for an unfiltered top-10), set
   transaction-locally via `set_config` so it cannot leak onto the next user of a pooled connection. The slices
   that take the exact path are a minority of the corpus by definition, so that path is also the fast one for
-  them. The planner turns out to be a **second line of defence** rather than a redundant one: given stats, it
-  independently declines the HNSW index when the room filter really is selective (observed on a shared test
-  database, where it estimated four matching rows and chose an exact plan on its own). The gate above is still
-  what makes the behaviour deterministic - it does not depend on the table having been ANALYZEd, or on the
-  planner continuing to cost it that way. `VectorIndexIntegrationTests` pins both plans and measures ANN recall
-  against the exact scan; its plan tests bind **every** room, because binding one test user's own room makes the
-  filter look selective and tests the wrong branch.
+  them. Note that the gate is what makes this deterministic, not the planner: Postgres picks by cost, so on a
+  small table it declines the index anyway (it costed a top-10 semantic query at 18.64 and chose a sequential
+  scan plus a top-N sort on a few thousand test rows - correct, and the reason the index only starts paying at
+  library scale). The gate does not depend on the table having been ANALYZEd, or on the planner continuing to
+  cost it that way. `VectorIndexIntegrationTests` pins both plans and measures ANN recall against the exact
+  scan; because of that cost behaviour its plan tests price sequential scans out and assert what the index is
+  *reachable* by, rather than what the planner happens to prefer at test-data scale.
 - **Search as a REST endpoint (`GET /api/search`).** `SearchController` is the **second consumer** of
   `ITranscriptSearch`, alongside `Tools/*`. The distinction matters: the tools render **markdown** for a model to
   read (`ToolFormat`), whereas this returns **structured JSON** for the web left-nav's search bar -
