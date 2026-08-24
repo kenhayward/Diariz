@@ -205,6 +205,17 @@ async function notify(title: string, body: string) {
   }
 }
 
+/// The three recovery banners share one panel style, defined once so they cannot drift apart - they were
+/// three copies of the same class string and the alpha background below had to be fixed in all three.
+///
+/// The background must stay fully opaque. These banners float over the routed page (see the popover block
+/// that renders them), so an alpha tint - this was `dark:bg-amber-900/30` - lets that page's own controls
+/// read straight through the panel and tangle with the banner's buttons (#601). It is the same reason
+/// HubPopover paints on the solid `--hub-popover-bg` token rather than a tint.
+const RECOVERY_BANNER =
+  "flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm " +
+  "text-amber-800 shadow-xl dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200";
+
 export default function Recorder({
   onUploaded,
   compact = false,
@@ -1658,7 +1669,7 @@ export default function Recorder({
           className="absolute left-1/2 top-full z-40 mt-1 w-[28rem] max-w-[calc(100vw-2rem)] -translate-x-1/2 space-y-2"
         >
           {pending && (
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 shadow-xl dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+            <div className={RECOVERY_BANNER}>
               <span>{t("unsavedRecording", { time: new Date(pending.createdAt).toLocaleString() })}</span>
               <div className="ml-auto flex gap-2">
                 <button
@@ -1673,7 +1684,9 @@ export default function Recorder({
                   type="button"
                   onClick={discardPending}
                   disabled={busy}
-                  className="rounded border border-amber-400 px-2 py-1 text-xs disabled:opacity-50 dark:border-amber-700"
+                  /* Carries its own background rather than being outline-only: a transparent fill would
+                     let the page behind the banner show through the button itself (#601). */
+                  className="rounded border border-amber-400 bg-white px-2 py-1 text-xs hover:bg-amber-100 disabled:opacity-50 dark:border-amber-700 dark:bg-amber-900 dark:hover:bg-amber-800"
                 >
                   {t("recDiscardPending")}
                 </button>
@@ -1682,7 +1695,7 @@ export default function Recorder({
           )}
           {/* Notes attached-failure banner: the audio uploaded, the lines are safe - offer a retry. */}
           {notesAttach && (
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 shadow-xl dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+            <div className={RECOVERY_BANNER}>
               <span>{t("notesAttachFailed")}</span>
               <button
                 type="button"
@@ -1695,7 +1708,7 @@ export default function Recorder({
           )}
           {/* Screenshots attached-failure banner: the audio uploaded, the captures are safe - offer a retry. */}
           {shotsAttach && (
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 shadow-xl dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+            <div className={RECOVERY_BANNER}>
               <span>{t("screenshotsAttachFailed")}</span>
               <button
                 type="button"

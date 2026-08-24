@@ -144,6 +144,18 @@ afterEach(() => {
   roomState.currentRoom = undefined;
 });
 
+/// The recovery banners and the overrun prompt all float over the routed page. A background with an alpha
+/// modifier (`bg-amber-900/30`) lets that page's own controls read through the panel and tangle with the
+/// banner's buttons, and a button with no background of its own shows the page through the button itself.
+/// Asserting on the classes is the only handle jsdom gives us - it computes no compositing (#601).
+function expectOpaqueFloatingPanel(panel: HTMLElement) {
+  const backgrounds = panel.className.split(/\s+/).filter((c) => /(^|:)bg-/.test(c));
+  expect(backgrounds.length).toBeGreaterThan(0);
+  for (const cls of backgrounds) expect(cls).not.toMatch(/\//);
+  for (const button of Array.from(panel.querySelectorAll("button")))
+    expect(button.className).toMatch(/(^|\s)(dark:)?bg-/);
+}
+
 describe("Recorder recovery", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -273,6 +285,16 @@ describe("Recorder recovery", () => {
     const popover = await screen.findByTestId("recorder-popover");
     expect(popover.className).toContain("absolute");
     expect(within(popover).getByRole("button", { name: /upload now/i })).toBeTruthy();
+  });
+
+  // Floating over the page is only safe if the panel actually hides it. The banner used to be a 30% tint
+  // in dark mode, so the page's own buttons read through it and sat on top of Upload now / Discard.
+  it("floats the unsaved-recording banner on a solid panel, so page controls cannot read through it (#601)", async () => {
+    (loadPendingRecording as Mock).mockResolvedValue(pending);
+    render(<Recorder onUploaded={() => {}} />);
+
+    const popover = await screen.findByTestId("recorder-popover");
+    expectOpaqueFloatingPanel(popover.firstElementChild as HTMLElement);
   });
 });
 
@@ -1017,6 +1039,24 @@ describe("live notes", () => {
     fireEvent.click(screen.getByRole("button", { name: /attach notes/i }));
     await waitFor(() => expect(api.createNotes).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.queryByText(/could not be attached/i)).toBeNull());
+  });
+
+  // Same defect as the unsaved-recording banner beside it: all three recovery panels share one class
+  // string, so this covers the screenshots banner too.
+  it("floats the attach-failure banner on a solid panel, so page controls cannot read through it (#601)", async () => {
+    (api.createNotes as Mock).mockRejectedValueOnce(new Error("boom"));
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByText(/notes while recording/i);
+    const box = screen.getByPlaceholderText(/add a note/i);
+    fireEvent.change(box, { target: { value: "x" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await screen.findByText(/could not be attached/i);
+    const popover = screen.getByTestId("recorder-popover");
+    expectOpaqueFloatingPanel(popover.firstElementChild as HTMLElement);
   });
 
   it("does not re-offer the already-uploaded audio when a storage hiccup breaks note-attach recovery", async () => {
