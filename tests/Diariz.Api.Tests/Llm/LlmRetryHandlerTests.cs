@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
+using Diariz.Api.Services;
 using Diariz.Api.Services.Llm;
 using Diariz.Api.Tests.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
@@ -179,6 +180,30 @@ public class LlmRetryHandlerTests
             http.PostAsync("http://llm.test/v1/chat/completions", Json("{}"), cts.Token));
 
         Assert.Equal(1, inner.Calls);
+    }
+
+    [Fact]
+    public async Task EachAttemptIsItsOwnUsageLogRow()
+    {
+        // The handler is registered OUTSIDE LlmTelemetryHandler (added first = outermost), so telemetry
+        // runs per attempt. Pinned because the alternative ordering is a one-line change that would make
+        // the usage log silently understate what a retried call cost - the exact thing that log is for.
+        var sink = new FakeLlmUsageSink();
+        var inner = new ScriptedHandler(
+            ScriptedHandler.Json(HttpStatusCode.BadRequest, """{"error":"model is not loaded"}"""),
+            Ok);
+        var telemetry = new LlmTelemetryHandler(new FakeLlmTrace(), sink) { InnerHandler = inner };
+        var retry = new LlmRetryHandler(
+            NullLogger<LlmRetryHandler>.Instance, (_, _) => Task.CompletedTask)
+        { InnerHandler = telemetry };
+        using var http = new HttpClient(retry);
+
+        using var resp = await http.PostAsync("http://llm.test/v1/chat/completions", Json("{}"));
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        Assert.Equal(2, sink.Calls.Count);
+        Assert.Equal("Http400", sink.Calls[0].ErrorKind);
+        Assert.Null(sink.Calls[1].ErrorKind);
     }
 
     [Fact]
