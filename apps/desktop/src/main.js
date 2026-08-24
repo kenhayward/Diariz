@@ -22,6 +22,7 @@ const Store = require("electron-store");
 const { normalizeServerUrl } = require("./url");
 const { trayRecorderItems, trayTooltip, notificationFor, quitConfirmation } = require("./recorderState");
 const { updateRestartItem, notificationForUpdate, isNewerVersion } = require("./updateState");
+const { notificationForDownload } = require("./downloadState");
 const { documentLoadOptions, trayReloadItem } = require("./documentLoad");
 const { buildStartUrl, codeFromArgv, notificationForAuthError } = require("./desktopAuth");
 const { cropRectFor, resizeDims, clampRect, sourceForDisplay } = require("./captureTarget");
@@ -128,6 +129,46 @@ function createMainWindow(url) {
     },
     { useSystemPicker: false },
   );
+
+  // The shell replaced the browser, and with it the download shelf: without this, a download has no
+  // progress, no completion notice and no visible failure - a multi-GB platform backup just goes quiet.
+  // Deliberately does NOT call item.setSavePath, so Electron's Save-As dialog stays: a backup carries every
+  // password hash on the platform and should land where the admin chose.
+  //
+  // Raw byte counts only. The renderer owns the arithmetic and the wording, where formatBytes and the
+  // locale catalogs already live.
+  let downloadSeq = 0;
+  mainWindow.webContents.session.on("will-download", (_event, item) => {
+    const id = ++downloadSeq;
+    // Not `url`: that name belongs to the window's start address in the enclosing scope.
+    const downloadUrl = item.getURL();
+    const filename = item.getFilename();
+    const startedAt = Date.now();
+    const send = (payload) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.webContents.send("download:event", { id, url: downloadUrl, filename, ...payload });
+    };
+
+    send({ type: "started", totalBytes: item.getTotalBytes(), receivedBytes: 0 });
+    item.on("updated", () => {
+      send({
+        type: "progress",
+        totalBytes: item.getTotalBytes(),
+        receivedBytes: item.getReceivedBytes(),
+      });
+    });
+    item.once("done", (_doneEvent, state) => {
+      send({
+        type: "done",
+        state,
+        savePath: item.getSavePath(),
+        totalBytes: item.getTotalBytes(),
+        receivedBytes: item.getReceivedBytes(),
+      });
+      const note = notificationForDownload(state, { filename, elapsedMs: Date.now() - startedAt });
+      if (note && Notification.isSupported()) new Notification(note).show();
+    });
+  });
 
   const origin = new URL(url).origin;
   // Open external links in the system browser; keep navigation within the server origin.

@@ -155,4 +155,17 @@ contextBridge.exposeInMainWorld("diariz", {
     ipcRenderer.on("outlook:state", listener);
     return () => ipcRenderer.removeListener("outlook:state", listener);
   },
+
+  // ---- Downloads ----
+  // The shell has no download shelf, so a transfer is invisible without this. See apps/web/src/lib/
+  // desktopDownloads.ts for the consuming interface.
+
+  /// Subscribe to download lifecycle events for this window's session. `cb` receives
+  /// { type: "started"|"progress"|"done", id, url, filename, receivedBytes, totalBytes, state?, savePath? }.
+  /// Raw byte counts - the web app formats them. Returns an unsubscribe function.
+  onDownloadEvent: (cb) => {
+    const listener = (_event, payload) => cb(payload);
+    ipcRenderer.on("download:event", listener);
+    return () => ipcRenderer.removeListener("download:event", listener);
+  },
 });
