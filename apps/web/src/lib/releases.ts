@@ -65,6 +65,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.245.0",
+    date: "2026-08-24",
+    pr: 592,
+    headline: "See how a backup download is going, and whether it worked",
+    summary:
+      "Downloading a platform backup from the desktop app used to go silent the moment the archive had been built. The panel reported the build - copying the database, archiving files - and then said \"Backup ready, check your browser's downloads\". In the desktop app there are no browser downloads to check: the shell has no download shelf, so the transfer that followed had no progress, no completion notice and no visible failure. On a large platform that is several minutes of a multi-gigabyte file moving with nothing to show for it, and no way to tell a finished backup from one that stopped half way.\n\nThe desktop app now reports the transfer itself. You get a percentage as the archive comes down, the full path it was saved to when it lands, and a notification if the download ran long enough that you had probably looked away. Downloads that fail say so. This covers every download in the app, not just backups - audio, transcripts and formula results all report the same way.\n\nA backup that failed to build also stops reporting success. The panel used to treat the server going quiet as \"archive ready\", which is exactly what a build that crashed does too - so a backup that never existed showed the same green message as one that worked. It now says the backup could not be created. A failed request can also no longer replace the desktop app window with an error page.",
+    added: [
+      "Desktop: live download progress, the saved file's location, and a notification when a long download finishes - for backups and every other download in the app.",
+    ],
+    fixed: [
+      "A backup whose archive failed to build reported success instead of the failure.",
+      "A failed backup request could navigate the desktop app window away to the error page.",
+    ],
+  },
+  {
     version: "0.244.1",
     date: "2026-08-24",
     pr: 590,

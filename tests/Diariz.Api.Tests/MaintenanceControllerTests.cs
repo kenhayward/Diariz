@@ -107,6 +107,31 @@ public class MaintenanceControllerTests
     }
 
     [Fact]
+    public async Task Backup_WhenTheArchiveIsBuilt_RecordsCompleted()
+    {
+        var progress = new BackupProgress();
+
+        await Build(new FakeAudioStorage(), new FakeDatabaseBackup(), progress: progress).Backup();
+
+        Assert.Equal(BackupOutcome.Completed, progress.Current.LastOutcome);
+    }
+
+    [Fact]
+    public async Task Backup_WhenTheDumpFails_RecordsFailed()
+    {
+        // The panel reads the running->idle transition as "archive built"; without an outcome a thrown build
+        // is indistinguishable from a good one and reports success.
+        var progress = new BackupProgress();
+        var backup = new FakeDatabaseBackup { DumpFailure = new InvalidOperationException("pg_dump died") };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Build(new FakeAudioStorage(), backup, progress: progress).Backup());
+
+        Assert.Equal(BackupOutcome.Failed, progress.Current.LastOutcome);
+        Assert.False(progress.Current.Running);
+    }
+
+    [Fact]
     public async Task Restore_LoadsDump_AndReplacesObjectStore()
     {
         var storage = new FakeAudioStorage();

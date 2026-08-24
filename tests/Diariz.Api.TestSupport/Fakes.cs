@@ -773,9 +773,13 @@ public sealed class FakeDatabaseBackup : IDatabaseBackup
     public bool DumpCalled { get; private set; }
     public bool RestoreCalled { get; private set; }
 
+    /// <summary>Thrown from <see cref="DumpToAsync"/> when set, to exercise a build that dies mid-archive.</summary>
+    public Exception? DumpFailure { get; set; }
+
     public async Task DumpToAsync(Stream destination, CancellationToken ct = default)
     {
         DumpCalled = true;
+        if (DumpFailure is not null) throw DumpFailure;
         await destination.WriteAsync(DumpBytes, ct);
     }
 

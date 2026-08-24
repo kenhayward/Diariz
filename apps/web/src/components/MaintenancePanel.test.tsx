@@ -16,7 +16,35 @@ vi.mock("../lib/api", () => ({
 import { api } from "../lib/api";
 import MaintenancePanel from "./MaintenancePanel";
 
-const idle = { running: false, phase: null, objectsArchived: 0, startedAt: null };
+const idle = { running: false, phase: null, objectsArchived: 0, startedAt: null, lastOutcome: null };
+const built = { ...idle, lastOutcome: "Completed" as const };
+
+/// Install a fake of the Electron shell's download bridge, and return an emitter for it.
+function installDesktopBridge() {
+  const listeners: ((e: unknown) => void)[] = [];
+  (window as unknown as { diariz?: unknown }).diariz = {
+    isElectron: true,
+    onDownloadEvent: (cb: (e: unknown) => void) => {
+      listeners.push(cb);
+      return () => {
+        const i = listeners.indexOf(cb);
+        if (i >= 0) listeners.splice(i, 1);
+      };
+    },
+  };
+  return (e: Record<string, unknown>) => {
+    for (const l of [...listeners]) {
+      l({
+        id: 1,
+        url: "/api/maintenance/backup?access_token=t",
+        filename: "diariz-backup.zip",
+        receivedBytes: 0,
+        totalBytes: 0,
+        ...e,
+      });
+    }
+  };
+}
 
 function chooseFileAndConfirm() {
   const file = new File(["zip"], "backup.zip", { type: "application/zip" });
@@ -36,6 +64,7 @@ describe("MaintenancePanel backup", () => {
   afterEach(() => {
     document.removeEventListener("click", blockNavigation, true);
     vi.useRealTimers();
+    delete (window as unknown as { diariz?: unknown }).diariz;
   });
 
   it("reports the backup as running while the server assembles the archive, then clears", async () => {
@@ -74,6 +103,126 @@ describe("MaintenancePanel backup", () => {
     // Gave up rather than spinning forever, and made no claim that a backup was produced.
     expect(screen.queryByText(/preparing your backup/i)).toBeNull();
     expect(screen.queryByText(/backup ready/i)).toBeNull();
+  });
+
+  it("reports the transfer instead of claiming the backup is ready, in the desktop shell", async () => {
+    // The shell has no download shelf: "check your browser's downloads" is unfollowable there, and the
+    // archive build finishing is the START of a multi-GB transfer, not the end of the job.
+    vi.useFakeTimers();
+    const emit = installDesktopBridge();
+    (api.backupStatus as Mock)
+      .mockResolvedValueOnce({ ...built, running: true, phase: "Objects", objectsArchived: 3 })
+      .mockResolvedValue(built);
+    render(<MaintenancePanel />);
+
+    fireEvent.click(screen.getByRole("link", { name: /download backup/i }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(1600); });
+    await act(async () => {
+      emit({ type: "started", totalBytes: 1024 });
+      await vi.advanceTimersByTimeAsync(1600);
+    });
+
+    expect(screen.queryByText(/backup ready/i)).toBeNull();
+    expect(screen.getByText(/starting download/i)).toBeTruthy();
+  });
+
+  it("shows the percentage as the archive transfers", async () => {
+    const emit = installDesktopBridge();
+    (api.backupStatus as Mock).mockResolvedValue(built);
+    render(<MaintenancePanel />);
+
+    fireEvent.click(screen.getByRole("link", { name: /download backup/i }));
+    await act(async () => { emit({ type: "progress", receivedBytes: 512, totalBytes: 1024 }); });
+
+    expect(screen.getByText(/50% of 1 KB/i)).toBeTruthy();
+  });
+
+  it("says where the file landed once the transfer finishes", async () => {
+    const emit = installDesktopBridge();
+    (api.backupStatus as Mock).mockResolvedValue(built);
+    render(<MaintenancePanel />);
+
+    fireEvent.click(screen.getByRole("link", { name: /download backup/i }));
+    await act(async () => {
+      emit({
+        type: "done", state: "completed", savePath: "C:\\Users\\me\\diariz-backup.zip",
+        receivedBytes: 1024, totalBytes: 1024,
+      });
+    });
+
+    expect(screen.getByText(/backup saved to/i)).toBeTruthy();
+    expect(screen.getByText(/diariz-backup\.zip/i)).toBeTruthy();
+  });
+
+  it("reports an interrupted transfer as a failure, not a success", async () => {
+    const emit = installDesktopBridge();
+    (api.backupStatus as Mock).mockResolvedValue(built);
+    render(<MaintenancePanel />);
+
+    fireEvent.click(screen.getByRole("link", { name: /download backup/i }));
+    await act(async () => {
+      emit({ type: "done", state: "interrupted", receivedBytes: 10, totalBytes: 1024 });
+    });
+    // Assert synchronously after a flushed tick: waitFor checks once immediately, so a "must not appear"
+    // assertion inside it passes before the thing could ever have appeared.
+    await act(async () => { await Promise.resolve(); });
+
+    expect(screen.getByText(/did not finish/i)).toBeTruthy();
+    expect(screen.queryByText(/backup ready/i)).toBeNull();
+    expect(screen.queryByText(/backup saved to/i)).toBeNull();
+  });
+
+  it("returns to idle when the user cancels the save dialog", async () => {
+    const emit = installDesktopBridge();
+    (api.backupStatus as Mock).mockResolvedValue(built);
+    render(<MaintenancePanel />);
+
+    fireEvent.click(screen.getByRole("link", { name: /download backup/i }));
+    await act(async () => { emit({ type: "done", state: "cancelled", savePath: "" }); });
+    await act(async () => { await Promise.resolve(); });
+
+    expect(screen.queryByText(/did not finish/i)).toBeNull();
+    expect(screen.queryByText(/backup saved to/i)).toBeNull();
+  });
+
+  it("reports a build that failed instead of showing the ready message", async () => {
+    // A thrown build leaves the tracker idle exactly as a good one does; only the outcome tells them apart.
+    vi.useFakeTimers();
+    (api.backupStatus as Mock)
+      .mockResolvedValueOnce({ ...idle, running: true, phase: "Database" })
+      .mockResolvedValue({ ...idle, lastOutcome: "Failed" });
+    render(<MaintenancePanel />);
+
+    fireEvent.click(screen.getByRole("link", { name: /download backup/i }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(1600); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1600); });
+
+    expect(screen.getByText(/could not be created/i)).toBeTruthy();
+    expect(screen.queryByText(/backup ready/i)).toBeNull();
+  });
+
+  it("keeps the browser wording when there is no desktop shell", async () => {
+    // No window.diariz: the browser's own download shelf still does this job, so nothing should change.
+    vi.useFakeTimers();
+    (api.backupStatus as Mock)
+      .mockResolvedValueOnce({ ...built, running: true, phase: "Objects", objectsArchived: 1 })
+      .mockResolvedValue(built);
+    render(<MaintenancePanel />);
+
+    fireEvent.click(screen.getByRole("link", { name: /download backup/i }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(1600); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1600); });
+
+    expect(screen.getByText(/backup ready/i)).toBeTruthy();
+  });
+
+  it("marks the download link as a download so a failure cannot navigate the app away", async () => {
+    // Without this a 500 response replaces the desktop window with the error body.
+    render(<MaintenancePanel />);
+
+    const link = screen.getByRole("link", { name: /download backup/i });
+
+    expect(link.hasAttribute("download")).toBe(true);
   });
 });
 

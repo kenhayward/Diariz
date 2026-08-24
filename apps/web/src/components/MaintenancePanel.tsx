@@ -2,6 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 import { formatDuration } from "../lib/format";
+import {
+  watchDesktopDownloads,
+  downloadProgress,
+  type DesktopDownloadEvent,
+} from "../lib/desktopDownloads";
 import type { BackupStatus, RestoreResult } from "../lib/types";
 import { useAuth } from "../auth";
 
@@ -11,6 +16,22 @@ const BACKUP_POLL_MS = 1500;
 /// produced a request (blocked download, dropped connection) and a tiny platform whose archive was built
 /// between two polls - without it the progress line would sit there for ever.
 const BACKUP_GRACE_MS = 9000;
+
+/// The one line describing where the shell's download has got to. Kept out of the component so the
+/// event-shape-to-copy mapping is readable in one piece.
+function transferMessage(
+  e: DesktopDownloadEvent,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string {
+  if (e.type === "done") {
+    if (e.state === "completed") return t("backupSavedTo", { path: e.savePath });
+    return t("backupDownloadFailed");
+  }
+  const p = downloadProgress(e);
+  if (p.phase === "starting") return t("backupDownloadStarting");
+  if (p.percent === null) return t("backupDownloadingUnknown", { size: p.sizeText });
+  return t("backupDownloading", { percent: p.percent, size: p.sizeText });
+}
 
 /// Platform-Administrator-only Maintenance tab content: download a full backup (Postgres + all object-store
 /// blobs) and restore from one. Restore is destructive — it replaces ALL data — so it's gated behind an
@@ -36,6 +57,11 @@ export default function MaintenancePanel() {
   const [backupReady, setBackupReady] = useState(false);
   const backupStartedAt = useRef(0);
   const sawBuildRunning = useRef(false);
+  // What the shell's download is doing. Null in a browser, where the download shelf already reports this.
+  // A transfer event outranks the poll: the two are independent signals and can interleave either way at a
+  // 1.5s poll interval, and only the transfer knows anything after the archive was built.
+  const [transfer, setTransfer] = useState<DesktopDownloadEvent | null>(null);
+  const [buildFailed, setBuildFailed] = useState(false);
   // The upload is only the first half of a restore; the server-side work that follows has no progress to
   // report, so it gets its own elapsed timer.
   const [applyElapsed, setApplyElapsed] = useState(0);
@@ -47,8 +73,24 @@ export default function MaintenancePanel() {
     setBackupStatus(null);
     setBackupElapsed(0);
     setBackupReady(false);
+    setTransfer(null);
+    setBuildFailed(false);
     setBackupWatching(true);
   }
+
+  useEffect(
+    () =>
+      watchDesktopDownloads(
+        window.diariz,
+        (url) => url.includes("/api/maintenance/backup"),
+        (e) => {
+          // Cancelling the Save dialog is the user's own doing - go quiet rather than report it.
+          setTransfer(e.type === "done" && e.state === "cancelled" ? null : e);
+          setBackupWatching(false);
+        },
+      ),
+    [],
+  );
 
   useEffect(() => {
     if (!backupWatching) return;
@@ -69,7 +111,10 @@ export default function MaintenancePanel() {
       // never did, stop watching once the grace window is up rather than claiming a backup was made.
       if (sawBuildRunning.current) {
         setBackupWatching(false);
-        setBackupReady(true);
+        // Only an explicit failure is a failure: a server too old to report an outcome sends nothing, and
+        // treating that as failed would claim every good backup had broken.
+        if (status.lastOutcome === "Failed") setBuildFailed(true);
+        else setBackupReady(true);
       } else if (Date.now() - backupStartedAt.current > BACKUP_GRACE_MS) {
         setBackupWatching(false);
       }
@@ -138,6 +183,9 @@ export default function MaintenancePanel() {
         </p>
         <a
           href={api.backupUrl()}
+          // Without this a failed build's 500 body navigates the window - in the desktop shell that
+          // replaces the app itself with an error page until it is reloaded.
+          download
           onClick={watchBackup}
           className="inline-block rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
         >
@@ -156,7 +204,19 @@ export default function MaintenancePanel() {
             <p className="text-xs text-gray-500 dark:text-gray-400">{t("backupPreparing")}</p>
           </div>
         )}
-        {backupReady && <p className="text-xs text-green-600 dark:text-green-400">{t("backupReady")}</p>}
+        {buildFailed && (
+          <p role="status" className="text-xs text-red-600 dark:text-red-400">
+            {t("backupBuildFailed")}
+          </p>
+        )}
+        {transfer && (
+          <p role="status" className="text-xs text-gray-600 dark:text-gray-300">
+            {transferMessage(transfer, t)}
+          </p>
+        )}
+        {backupReady && !transfer && (
+          <p className="text-xs text-green-600 dark:text-green-400">{t("backupReady")}</p>
+        )}
       </section>
 
       <section className="space-y-2 border-t pt-4 dark:border-gray-700">
