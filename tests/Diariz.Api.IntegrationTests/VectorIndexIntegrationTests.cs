@@ -106,6 +106,15 @@ public class VectorIndexIntegrationTests(ContainersFixture fx)
         }
     }
 
+    /// <summary>Every room in the database. The ANN path is only ever taken for a caller who can see most of
+    /// the corpus (<c>TranscriptSearch</c> routes everyone else to the exact path), so the tests that examine
+    /// that path have to bind the room filter the way it looks for such a caller. Binding one test user's own
+    /// room instead makes the filter look selective - in a database several hundred tests have written to, the
+    /// planner then estimates a handful of rows and correctly declines the index, which says nothing about
+    /// whether the index works.</summary>
+    private static async Task<Guid[]> AllRoomIdsAsync(DiarizDbContext db) =>
+        await db.RoomRecordings.Select(rr => rr.RoomId).Distinct().ToArrayAsync();
+
     private static void Bind(DbCommand cmd, Guid[] roomIds, float[] query, int limit, Guid[]? scope)
     {
         cmd.Parameters.Add(new NpgsqlParameter("roomIds", NpgsqlDbType.Array | NpgsqlDbType.Uuid) { Value = roomIds });
@@ -137,14 +146,20 @@ public class VectorIndexIntegrationTests(ContainersFixture fx)
 
     // ---- what the two query shapes plan to --------------------------------------------------------------
 
+    // These two are deliberately an A/B pair: identical SQL inputs, identical bindings, differing only in
+    // `exact`. That isolates the OFFSET 0 fence as the single cause of the plan changing - if the fenced test
+    // narrowed the room filter as well, it could pass because the filter looked selective rather than because
+    // the fence worked, and would keep passing if the fence were deleted.
+
     [Fact]
     public async Task UnfencedSemanticSql_PlansAnIndexScan_NotASequentialScan()
     {
         var (userId, recId, trId) = await SeedRecording();
         await AddChunks(userId, recId, trId, 200, 0.01, 0.004, "Index");
         await using var db = fx.CreateDbContext();
-        await db.Database.ExecuteSqlRawAsync("ANALYZE \"TranscriptChunks\"");
-        var roomIds = (await new RoomScope(db).RoomIdsForUserAsync(userId)).ToArray();
+        await Analyze(db);
+
+        var roomIds = await AllRoomIdsAsync(db);
 
         var plan = string.Join("\n", await ExplainAsync(
             db, TranscriptSearch.BuildSemanticSql(hasScope: false, exact: false),
@@ -160,17 +175,24 @@ public class VectorIndexIntegrationTests(ContainersFixture fx)
         var (userId, recId, trId) = await SeedRecording();
         await AddChunks(userId, recId, trId, 200, 0.01, 0.004, "Fence");
         await using var db = fx.CreateDbContext();
-        await db.Database.ExecuteSqlRawAsync("ANALYZE \"TranscriptChunks\"");
-        var roomIds = (await new RoomScope(db).RoomIdsForUserAsync(userId)).ToArray();
+        await Analyze(db);
+
+        var roomIds = await AllRoomIdsAsync(db);
 
         var plan = string.Join("\n", await ExplainAsync(
-            db, TranscriptSearch.BuildSemanticSql(hasScope: true, exact: true),
-            cmd => Bind(cmd, roomIds, Angle(0), 10, [recId])));
+            db, TranscriptSearch.BuildSemanticSql(hasScope: false, exact: true),
+            cmd => Bind(cmd, roomIds, Angle(0), 10, null)));
 
-        // The OFFSET 0 fence must keep the planner off the ANN index: post-filtering an approximate walk
-        // against a selective filter is exactly what silently loses true neighbours.
+        // The fence must keep the planner off the ANN index even here, where the filter is wide open and the
+        // index is otherwise the obvious choice - post-filtering an approximate walk is what silently loses
+        // true neighbours once a real caller's filter is narrow.
         Assert.DoesNotContain("hnsw", plan, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>Both tables the semantic query plans over. Without stats the planner guesses, and which path it
+    /// guesses into is exactly what these tests assert.</summary>
+    private static async Task Analyze(DiarizDbContext db) =>
+        await db.Database.ExecuteSqlRawAsync("ANALYZE \"TranscriptChunks\", \"RoomRecordings\", \"Recordings\"");
 
     // ---- recall ----------------------------------------------------------------------------------------
 
@@ -187,11 +209,17 @@ public class VectorIndexIntegrationTests(ContainersFixture fx)
         var (userId, recId, trId) = await SeedRecording();
         await AddChunks(userId, recId, trId, 300, 0.01, 0.004, "Recall", A, B);
         await using var db = fx.CreateDbContext();
-        await db.Database.ExecuteSqlRawAsync("ANALYZE \"TranscriptChunks\"");
-        var roomIds = (await new RoomScope(db).RoomIdsForUserAsync(userId)).ToArray();
+        await Analyze(db);
+        var roomIds = await AllRoomIdsAsync(db);
         var query = Angle(0, A, B);
 
-        var approx = await StartMsAsync(db, TranscriptSearch.BuildSemanticSql(hasScope: false, exact: false), roomIds, query, ann: true);
+        var annSql = TranscriptSearch.BuildSemanticSql(hasScope: false, exact: false);
+        // Recall only means something if the approximate run actually went through the index. A seq scan would
+        // match the exact answer trivially and the assertion below would prove nothing.
+        var plan = string.Join("\n", await ExplainAsync(db, annSql, cmd => Bind(cmd, roomIds, query, 20, null)));
+        Assert.Contains("hnsw", plan, StringComparison.OrdinalIgnoreCase);
+
+        var approx = await StartMsAsync(db, annSql, roomIds, query, ann: true);
         var exact = await StartMsAsync(db, TranscriptSearch.BuildSemanticSql(hasScope: false, exact: true), roomIds, query, ann: false);
 
         Assert.Equal(20, exact.Count);
