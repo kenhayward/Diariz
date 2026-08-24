@@ -1,3 +1,4 @@
+using Diariz.Api.Services.Llm;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -50,7 +51,7 @@ public class EmbeddingClient : IEmbeddingClient
         cts.CancelAfter(TimeSpan.FromSeconds(config.TimeoutSeconds));
 
         using var resp = await _http.SendAsync(req, cts.Token);
-        resp.EnsureSuccessStatusCode();
+        await LlmResponse.EnsureSuccessAsync(resp, cts.Token);
         var json = await resp.Content.ReadAsStringAsync(cts.Token);
         return ParseVectors(json, batch.Length);
     }

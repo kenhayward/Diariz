@@ -65,6 +65,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.248.1",
+    date: "2026-08-24",
+    pr: 604,
+    headline: "A failed AI request now says what the model endpoint actually objected to",
+    summary:
+      "When a summary, set of minutes, tags, actions, a translation, a dictation, an OCR read or an embedding failed, the only thing recorded anywhere was the HTTP status: \"Response status code does not indicate success: 400 (Bad Request).\" That is what went into the error log, into the LLM usage log, and into the message shown on the failed recording itself.\n\nThe endpoint had already explained itself. An OpenAI-compatible server answers a rejected request with a body saying why - the model is not loaded, the prompt overflowed its context window, a parameter is not supported - and Diariz was reading the status and throwing that explanation away. So an intermittent failure looked exactly like a permanent misconfiguration, and neither could be told apart from the log.\n\nThe explanation now survives. A failed call reports the endpoint's own words alongside the status, trimmed to one line and bounded, so a server that echoes the whole prompt back inside its error cannot fill the screen with it. Where the endpoint blamed one of the parameters Diariz sends, the message names it, the same way the model editor's Run test already did. That test call had always shown this detail; the background work that runs unattended now shows it too, which is where it is much harder to come by.",
+    fixed: [
+      "A failed AI request reported only its HTTP status. The endpoint's explanation of what it rejected was discarded, leaving the recording's error message, the usage log and the error report with nothing to diagnose from.",
+    ],
+  },
+  {
     version: "0.248.0",
     date: "2026-08-24",
     pr: 602,

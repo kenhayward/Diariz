@@ -76,7 +76,7 @@ public class TranslationClient : ITranslationClient
         cts.CancelAfter(TimeSpan.FromSeconds(config.TimeoutSeconds));
 
         using var resp = await _http.SendAsync(req, cts.Token);
-        resp.EnsureSuccessStatusCode();
+        await LlmResponse.EnsureSuccessAsync(resp, cts.Token);
         var json = await resp.Content.ReadAsStringAsync(cts.Token);
 
         var map = TranslationPrompt.ParseTranslations(json);
