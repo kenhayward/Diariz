@@ -33,14 +33,17 @@ public class PeopleController : ControllerBase
     private readonly IRoomScope _rooms;
     private readonly IPeopleDirectory _people;
     private readonly IUserPermissions _permissions;
+    private readonly IJobQueue _queue;
 
     public PeopleController(
-        DiarizDbContext db, IRoomScope rooms, IPeopleDirectory people, IUserPermissions permissions)
+        DiarizDbContext db, IRoomScope rooms, IPeopleDirectory people, IUserPermissions permissions,
+        IJobQueue queue)
     {
         _db = db;
         _rooms = rooms;
         _people = people;
         _permissions = permissions;
+        _queue = queue;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -149,7 +152,7 @@ public class PeopleController : ControllerBase
         var raw = await _db.VoiceSamples
             .Where(v => v.PersonId == id)
             .OrderBy(v => v.CreatedAt)
-            .Select(v => new { v.Id, v.RecordingId, v.SpeakerId, v.CreatedAt })
+            .Select(v => new { v.Id, v.RecordingId, v.SpeakerId, v.CreatedAt, v.SpansJson, v.UsedMs })
             .ToListAsync();
         var recIds = raw.Select(v => v.RecordingId).ToList();
         var spIds = raw.Select(v => v.SpeakerId).ToList();
@@ -157,8 +160,8 @@ public class PeopleController : ControllerBase
                 .Select(r => new { r.Id, Display = r.Name ?? r.Title }).ToListAsync())
             .ToDictionary(r => r.Id, r => r.Display);
         var spMap = (await _db.Speakers.Where(s => spIds.Contains(s.Id))
-                .Select(s => new { s.Id, s.Label }).ToListAsync())
-            .ToDictionary(s => s.Id, s => s.Label);
+                .Select(s => new { s.Id, s.Label, s.EmbeddingStale }).ToListAsync())
+            .ToDictionary(s => s.Id, s => s);
 
         // Earliest segment start (ms) for each contributing speaker in its recording's current transcription,
         // so the UI can play a sample of that voice. Computed in memory (provider-agnostic).
@@ -168,23 +171,39 @@ public class PeopleController : ControllerBase
             .GroupBy(t => t.RecordingId)
             .ToDictionary(g => g.Key, g => g.OrderByDescending(t => t.Version).First().Id);
         var trIds = currentTrByRecording.Values.ToList();
-        var minStart = (await _db.Segments
+        var segs = (await _db.Segments
                 .Where(s => trIds.Contains(s.TranscriptionId))
-                .Select(s => new { s.TranscriptionId, s.SpeakerLabel, s.StartMs }).ToListAsync())
+                .Select(s => new { s.TranscriptionId, s.SpeakerLabel, s.StartMs, s.EndMs }).ToListAsync())
             .GroupBy(s => (s.TranscriptionId, s.SpeakerLabel))
-            .ToDictionary(g => g.Key, g => g.Min(s => s.StartMs));
+            .ToDictionary(g => g.Key, g => g.ToList());
 
         long StartFor(Guid recordingId, string label) =>
             currentTrByRecording.TryGetValue(recordingId, out var trId)
-            && minStart.TryGetValue((trId, label), out var ms) ? ms : 0;
+            && segs.TryGetValue((trId, label), out var rows) && rows.Count > 0 ? rows.Min(s => s.StartMs) : 0;
+
+        // With nothing selected the sample trains on the whole speaker, so "selected" is everything that
+        // speaker says. Reporting 0 there would read as "trains on nothing".
+        long WholeSpeakerMs(Guid recordingId, string label) =>
+            currentTrByRecording.TryGetValue(recordingId, out var trId)
+            && segs.TryGetValue((trId, label), out var rows)
+                ? rows.Sum(s => Math.Max(0, s.EndMs - s.StartMs))
+                : 0;
 
         var samples = raw.Select(v =>
         {
-            var label = spMap.TryGetValue(v.SpeakerId, out var l) ? l : "";
+            var speaker = spMap.TryGetValue(v.SpeakerId, out var sp) ? sp : null;
+            var label = speaker?.Label ?? "";
+            var spans = VoiceprintSpans.Parse(v.SpansJson);
             return new VoiceSampleDto(
                 v.Id, v.RecordingId,
                 recMap.TryGetValue(v.RecordingId, out var d) ? d : "(deleted recording)",
-                label, StartFor(v.RecordingId, label), v.CreatedAt);
+                label, StartFor(v.RecordingId, label), v.CreatedAt,
+                spans.Count > 0 ? VoiceprintSpans.TotalMs(spans) : WholeSpeakerMs(v.RecordingId, label),
+                v.UsedMs,
+                // Derived from the speaker rather than stored on the sample: two columns saying the same
+                // thing would eventually disagree.
+                speaker?.EmbeddingStale ?? false,
+                v.SpansJson is not null && v.UsedMs is null);
         }).ToList();
 
         return new PersonDetailDto(ToDto(person, await CanManagePeopleAsync()), identifiedCount, samples);
@@ -500,6 +519,48 @@ public class PeopleController : ControllerBase
         await _db.SaveChangesAsync();
         await _people.RecomputeVoiceprintAsync(id);
         return NoContent();
+    }
+
+    [HttpPut("{id:guid}/voiceprint/samples/{sampleId:guid}/spans")]
+    [EndpointSummary("Choose which audio trains one voice sample")]
+    [EndpointDescription(
+        "Replaces the spans of the contributing recording's audio that this sample is embedded from, and " +
+        "queues a re-embed. Send an **empty list** to go back to the whole speaker, which is what every " +
+        "sample does by default. Adjacent spans are merged, so you can send one per segment the user " +
+        "ticked.\n\n" +
+        "Returns **202**: the worker does the work, and it shares a process with transcription, so it can " +
+        "queue behind one. Until it reports back the sample reads as pending (`usedMs` is null). The " +
+        "worker still caps how much audio it pools, so `usedMs` may be less than the total selected - the " +
+        "UI states both.\n\n" +
+        "**409** when the person has opted out of voice-printing, or the recording's audio has been " +
+        "deleted. **403** without permission to manage this person's biometrics (Manage people, or it is " +
+        "you).")]
+    public async Task<IActionResult> SetVoiceSampleSpans(
+        Guid id, Guid sampleId, SetVoiceSampleSpansRequest req)
+    {
+        var person = await _db.People.FirstOrDefaultAsync(p => p.Id == id);
+        if (person is null) return NotFound();
+        if (!await CanManageBiometricsAsync(person)) return Forbid();
+        if (person.VoiceprintOptOut) return Conflict("This person has opted out of voice-printing.");
+
+        var sample = await _db.VoiceSamples.FirstOrDefaultAsync(v => v.Id == sampleId && v.PersonId == id);
+        if (sample is null) return NotFound();
+
+        // Queueing a job the worker can only fail is worse than saying so here.
+        var recording = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == sample.RecordingId);
+        if (recording is null || recording.AudioDeletedAt is not null)
+            return Conflict("This recording's audio is no longer available to re-embed from.");
+
+        var spans = VoiceprintSpans.FromSegments(req.Spans.Select(s => (s.StartMs, s.EndMs)));
+        sample.SpansJson = VoiceprintSpans.Serialize(spans);
+        // Clearing this is what makes "pending" survive a page reload: it is derived, not held in the
+        // component. The callback sets it again.
+        sample.UsedMs = null;
+        await _db.SaveChangesAsync();
+
+        await _queue.EnqueueVoiceprintAsync(
+            new VoiceprintJob(sample.Id, recording.Id, recording.BlobKey, spans));
+        return Accepted();
     }
 
     [HttpDelete("voiceprints")]

@@ -187,4 +187,48 @@ public class RedisJobQueueIntegrationTests(ContainersFixture fx)
         var roundTripped = JsonSerializer.Deserialize<FormulaRunJob>(json);
         Assert.Equal(job, roundTripped);
     }
+
+    /// <summary>The voiceprint re-embed contract crosses the .NET -> Python boundary by name. Nothing else
+    /// pairs the keys this side writes with the ones <c>worker.handle_voiceprint</c> reads, so a rename on
+    /// either side is silent until a real job runs and fails on a KeyError.</summary>
+    [Fact]
+    public async Task EnqueueVoiceprintAsync_WritesThePascalCaseShapeTheWorkerReads()
+    {
+        using var mux = await ConnectionMultiplexer.ConnectAsync(fx.RedisConnectionString);
+        var opts = Options.Create(new JobQueueOptions { VoiceprintStreamKey = $"voiceprint-{Guid.NewGuid()}" });
+        var queue = new RedisJobQueue(mux, opts, Options.Create(new SummarizationOptions()),
+            Options.Create(new MeetingMinutesOptions()), Options.Create(new ActionsOptions()), Options.Create(new EmbeddingOptions()),
+            Options.Create(new TagsOptions()), Options.Create(new SectionSummaryOptions()), Options.Create(new SectionMinutesOptions()),
+            Options.Create(new FormulaRunOptions()));
+
+        var job = new VoiceprintJob(Guid.NewGuid(), Guid.NewGuid(), "user/blob.webm",
+            [new VoiceprintSpan(1000, 3000), new VoiceprintSpan(5000, 6000)]);
+        await queue.EnqueueVoiceprintAsync(job);
+
+        var entries = await mux.GetDatabase().StreamRangeAsync(opts.Value.VoiceprintStreamKey, "-", "+");
+        var json = Assert.Single(entries).Values.Single(v => v.Name == "job").Value.ToString();
+
+        var roundTripped = JsonSerializer.Deserialize<VoiceprintJob>(json);
+        Assert.Equal(job.VoiceSampleId, roundTripped!.VoiceSampleId);
+        Assert.Equal("user/blob.webm", roundTripped.BlobKey);
+        Assert.Equal(job.Spans, roundTripped.Spans);
+
+        // Every key the worker indexes by name.
+        Assert.Contains("\"VoiceSampleId\"", json);
+        Assert.Contains("\"BlobKey\"", json);
+        Assert.Contains("\"Spans\"", json);
+        Assert.Contains("\"StartMs\"", json);
+        Assert.Contains("\"EndMs\"", json);
+    }
+
+    /// <summary>The voiceprint stream must be its own key. Sharing one with transcription would hand a
+    /// re-embed to <c>worker.handle</c>, which would try to transcribe it.</summary>
+    [Fact]
+    public void VoiceprintStreamKey_DefaultsToItsOwnStream()
+    {
+        var opts = new JobQueueOptions();
+        Assert.Equal("voiceprint-jobs", opts.VoiceprintStreamKey);
+        Assert.NotEqual(opts.StreamKey, opts.VoiceprintStreamKey);
+        Assert.NotEqual(opts.MergeStreamKey, opts.VoiceprintStreamKey);
+    }
 }

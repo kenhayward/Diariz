@@ -917,6 +917,14 @@ export const api = {
     await http.delete(`/api/people/${id}/voiceprint/samples/${sampleId}`);
   },
 
+  /// Replace the spans of audio that train one voice sample, and queue a re-embed. An empty list goes
+  /// back to the whole speaker. Returns as soon as the job is queued - poll the person for `pending`.
+  async setVoiceSampleSpans(
+    id: string, sampleId: string, spans: { startMs: number; endMs: number }[],
+  ): Promise<void> {
+    await http.put(`/api/people/${id}/voiceprint/samples/${sampleId}/spans`, { spans });
+  },
+
   /// Reassign a recording's speaker to a person, or pass null to unassign.
   async assignSpeaker(id: string, label: string, personId: string | null): Promise<void> {
     await http.put(`/api/recordings/${id}/speakers/${encodeURIComponent(label)}/assign`, { personId });

@@ -479,7 +479,22 @@ public record PersonDto(
 /// <summary>One voice sample feeding a person's voiceprint: the recording/speaker it came from, and the
 /// start (ms) of that speaker's first segment so the UI can play a sample to identify them.</summary>
 public record VoiceSampleDto(
-    Guid Id, Guid RecordingId, string RecordingName, string SpeakerLabel, long StartMs, DateTimeOffset CreatedAt);
+    Guid Id, Guid RecordingId, string RecordingName, string SpeakerLabel, long StartMs, DateTimeOffset CreatedAt,
+    /// <summary>Total ms of audio selected, or the speaker's whole span when nothing is selected.</summary>
+    long SelectedMs = 0,
+    /// <summary>Ms the last embedding actually consumed, or null while a recompute is queued. Less than
+    /// <paramref name="SelectedMs"/> when the worker's cap truncated the selection - the UI states both
+    /// rather than implying the whole selection was used.</summary>
+    int? UsedMs = null,
+    /// <summary>The contributing speaker's audio was re-attributed, so this snapshot no longer describes
+    /// it. <b>Derived</b> by joining to the speaker's <c>EmbeddingStale</c>, never stored twice.</summary>
+    bool Stale = false,
+    /// <summary>A recompute is queued and has not reported back.</summary>
+    bool Pending = false);
+
+/// <summary>Replace the spans of audio that train one voice sample. An <b>empty list</b> means the whole
+/// speaker, which is what every sample does by default.</summary>
+public record SetVoiceSampleSpansRequest(IReadOnlyList<VoiceprintSpan> Spans);
 
 /// <summary>A person with their voiceprint's training provenance and how many recording-speakers they
 /// currently label.</summary>

@@ -148,7 +148,7 @@ public class PeopleSchemaTests(ContainersFixture fx)
         await db.SaveChangesAsync();
 
         var controller = new Diariz.Api.Controllers.PeopleController(
-            db, new RoomScope(db), new PeopleDirectory(db), new UserPermissions(db))
+            db, new RoomScope(db), new PeopleDirectory(db), new UserPermissions(db), new FakeJobQueue())
         {
             ControllerContext = Http.Context(actor.Id),
         };

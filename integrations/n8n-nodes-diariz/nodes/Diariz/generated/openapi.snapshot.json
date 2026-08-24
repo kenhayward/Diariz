@@ -4099,6 +4099,20 @@
         ],
         "type": "object"
       },
+      "SetVoiceSampleSpansRequest": {
+        "properties": {
+          "spans": {
+            "items": {
+              "$ref": "#/components/schemas/VoiceprintSpan"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "spans"
+        ],
+        "type": "object"
+      },
       "SetupRequest": {
         "properties": {
           "email": {
@@ -5183,6 +5197,10 @@
             "format": "uuid",
             "type": "string"
           },
+          "pending": {
+            "default": false,
+            "type": "boolean"
+          },
           "recordingId": {
             "format": "uuid",
             "type": "string"
@@ -5190,13 +5208,35 @@
           "recordingName": {
             "type": "string"
           },
+          "selectedMs": {
+            "default": 0,
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
           "speakerLabel": {
             "type": "string"
+          },
+          "stale": {
+            "default": false,
+            "type": "boolean"
           },
           "startMs": {
             "format": "int64",
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "usedMs": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
               "integer",
               "string"
             ]
@@ -5209,6 +5249,31 @@
           "speakerLabel",
           "startMs",
           "createdAt"
+        ],
+        "type": "object"
+      },
+      "VoiceprintSpan": {
+        "properties": {
+          "endMs": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "startMs": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "startMs",
+          "endMs"
         ],
         "type": "object"
       },
@@ -8498,6 +8563,60 @@
           }
         },
         "summary": "Remove a voice sample",
+        "tags": [
+          "People"
+        ]
+      }
+    },
+    "/api/people/{id}/voiceprint/samples/{sampleId}/spans": {
+      "put": {
+        "description": "Replaces the spans of the contributing recording's audio that this sample is embedded from, and queues a re-embed. Send an **empty list** to go back to the whole speaker, which is what every sample does by default. Adjacent spans are merged, so you can send one per segment the user ticked.\n\nReturns **202**: the worker does the work, and it shares a process with transcription, so it can queue behind one. Until it reports back the sample reads as pending (`usedMs` is null). The worker still caps how much audio it pools, so `usedMs` may be less than the total selected - the UI states both.\n\n**409** when the person has opted out of voice-printing, or the recording's audio has been deleted. **403** without permission to manage this person's biometrics (Manage people, or it is you).",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sampleId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetVoiceSampleSpansRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetVoiceSampleSpansRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetVoiceSampleSpansRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Choose which audio trains one voice sample",
         "tags": [
           "People"
         ]

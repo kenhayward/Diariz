@@ -19,7 +19,20 @@ public class PeopleControllerTests
     {
         Users.Ensure(db, userId);
         Perms.Grant(db, userId, perms);
-        return new(db, new RoomScope(db), new PeopleDirectory(db), new UserPermissions(db))
+        return new(db, new RoomScope(db), new PeopleDirectory(db), new UserPermissions(db), new FakeJobQueue())
+        {
+            ControllerContext = Http.Context(userId),
+        };
+    }
+
+    /// <summary>Build with a queue the test can inspect - the spans endpoint's whole job is to enqueue.</summary>
+    private static PeopleController BuildWithQueue(
+        DiarizDbContext db, Guid userId, FakeJobQueue queue,
+        PlatformPermission perms = PlatformPermission.ManagePeople)
+    {
+        Users.Ensure(db, userId);
+        if (perms != PlatformPermission.None) Perms.Grant(db, userId, perms);
+        return new(db, new RoomScope(db), new PeopleDirectory(db), new UserPermissions(db), queue)
         {
             ControllerContext = Http.Context(userId),
         };
@@ -531,5 +544,220 @@ public class PeopleControllerTests
         Assert.Equal("ada@example.com", kept.Email);
         Assert.Equal("Mathematician", kept.Title);
         Assert.Equal("0100", kept.Phone);
+    }
+
+    // ---- Choosing which audio trains a voice sample ----
+
+    /// <summary>A person with one voice sample from one recording. Embedding is left null: the vector
+    /// column is Ignore'd under the in-memory provider, and none of these cases read it.</summary>
+    private static async Task<(Person person, VoiceSample sample, Recording recording)> SeedSample(
+        DiarizDbContext db, Guid ownerId, bool optedOut = false, int? usedMs = 30000,
+        DateTimeOffset? audioDeletedAt = null, Guid? linkedUserId = null)
+    {
+        var person = new Person
+        {
+            Id = Guid.NewGuid(), Name = "Alice", SampleCount = 1,
+            VoiceprintOptOut = optedOut, LinkedUserId = linkedUserId,
+        };
+        var rec = new Recording
+        {
+            Id = Guid.NewGuid(), UserId = ownerId, Title = "Standup", BlobKey = "audio/r1.webm",
+            AudioDeletedAt = audioDeletedAt,
+        };
+        var speaker = new Speaker
+        {
+            Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "Alice",
+            PersonId = person.Id,
+        };
+        var sample = new VoiceSample
+        {
+            Id = Guid.NewGuid(), PersonId = person.Id, SpeakerId = speaker.Id, RecordingId = rec.Id,
+            UsedMs = usedMs,
+        };
+        db.AddRange(person, rec, speaker, sample);
+        await db.SaveChangesAsync();
+        return (person, sample, rec);
+    }
+
+    [Fact]
+    public async Task SetVoiceSampleSpans_StoresThemAndQueuesAJobCarryingTheBlobKey()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var (person, sample, _) = await SeedSample(db, userId);
+        var controller = BuildWithQueue(db, userId, queue);
+
+        var result = await controller.SetVoiceSampleSpans(person.Id, sample.Id,
+            new SetVoiceSampleSpansRequest([new VoiceprintSpan(1000, 3000)]));
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.Equal([new VoiceprintSpan(1000, 3000)],
+            VoiceprintSpans.Parse(db.VoiceSamples.Single().SpansJson));
+        var job = Assert.Single(queue.VoiceprintJobs);
+        Assert.Equal("audio/r1.webm", job.BlobKey);
+        Assert.Equal(sample.Id, job.VoiceSampleId);
+        Assert.Equal([new VoiceprintSpan(1000, 3000)], job.Spans);
+    }
+
+    [Fact]
+    public async Task SetVoiceSampleSpans_ClearsUsedMsSoTheRowReadsAsPending()
+    {
+        // Pending has to be server-derived, or a reload during a recompute shows the old "using 0:30" as
+        // though the new selection had already been applied.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (person, sample, _) = await SeedSample(db, userId, usedMs: 30000);
+        var controller = BuildWithQueue(db, userId, new FakeJobQueue());
+
+        await controller.SetVoiceSampleSpans(person.Id, sample.Id,
+            new SetVoiceSampleSpansRequest([new VoiceprintSpan(1000, 3000)]));
+
+        Assert.Null(db.VoiceSamples.Single().UsedMs);
+    }
+
+    [Fact]
+    public async Task SetVoiceSampleSpans_MergesAdjacentSelections()
+    {
+        // The client sends one span per ticked segment. Without collapsing them a 40-minute selection
+        // becomes hundreds of one-line spans in the job payload.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var (person, sample, _) = await SeedSample(db, userId);
+        var controller = BuildWithQueue(db, userId, queue);
+
+        await controller.SetVoiceSampleSpans(person.Id, sample.Id, new SetVoiceSampleSpansRequest(
+            [new VoiceprintSpan(1000, 2000), new VoiceprintSpan(2000, 3000)]));
+
+        Assert.Equal([new VoiceprintSpan(1000, 3000)], Assert.Single(queue.VoiceprintJobs).Spans);
+    }
+
+    [Fact]
+    public async Task SetVoiceSampleSpans_WithNoSpans_RevertsToTheWholeSpeaker()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var (person, sample, _) = await SeedSample(db, userId);
+        var controller = BuildWithQueue(db, userId, queue);
+
+        await controller.SetVoiceSampleSpans(person.Id, sample.Id, new SetVoiceSampleSpansRequest([]));
+
+        Assert.Null(db.VoiceSamples.Single().SpansJson);
+        // Still recomputes: going back to the whole speaker is itself a change to what trains it.
+        Assert.Single(queue.VoiceprintJobs);
+    }
+
+    [Fact]
+    public async Task SetVoiceSampleSpans_ForAnOptedOutPerson_IsConflictAndQueuesNothing()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var (person, sample, _) = await SeedSample(db, userId, optedOut: true);
+        var controller = BuildWithQueue(db, userId, queue);
+
+        Assert.IsType<ConflictObjectResult>(await controller.SetVoiceSampleSpans(person.Id, sample.Id,
+            new SetVoiceSampleSpansRequest([new VoiceprintSpan(1000, 3000)])));
+        Assert.Empty(queue.VoiceprintJobs);
+    }
+
+    [Fact]
+    public async Task SetVoiceSampleSpans_WhenTheAudioIsGone_IsConflictAndQueuesNothing()
+    {
+        // Audio can be deleted while the sample survives. Queueing a job the worker can only fail is worse
+        // than saying so up front.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var (person, sample, _) = await SeedSample(db, userId, audioDeletedAt: DateTimeOffset.UtcNow);
+        var controller = BuildWithQueue(db, userId, queue);
+
+        Assert.IsType<ConflictObjectResult>(await controller.SetVoiceSampleSpans(person.Id, sample.Id,
+            new SetVoiceSampleSpansRequest([new VoiceprintSpan(1000, 3000)])));
+        Assert.Empty(queue.VoiceprintJobs);
+    }
+
+    [Fact]
+    public async Task SetVoiceSampleSpans_WithoutBiometricPermission_IsForbidden()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var (person, sample, _) = await SeedSample(db, userId);
+        var controller = BuildWithQueue(db, userId, queue, PlatformPermission.None);
+
+        Assert.IsType<ForbidResult>(await controller.SetVoiceSampleSpans(person.Id, sample.Id,
+            new SetVoiceSampleSpansRequest([new VoiceprintSpan(1000, 3000)])));
+        Assert.Empty(queue.VoiceprintJobs);
+    }
+
+    [Fact]
+    public async Task SetVoiceSampleSpans_ForYourOwnPerson_IsAllowedWithoutManagePeople()
+    {
+        // The self exception: withdrawing or reshaping consent for your own biometric is the data
+        // subject's right, and routing it through an administrator would be a weak posture.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var (person, sample, _) = await SeedSample(db, userId, linkedUserId: userId);
+        var controller = BuildWithQueue(db, userId, queue, PlatformPermission.None);
+
+        Assert.IsType<AcceptedResult>(await controller.SetVoiceSampleSpans(person.Id, sample.Id,
+            new SetVoiceSampleSpansRequest([new VoiceprintSpan(1000, 3000)])));
+        Assert.Single(queue.VoiceprintJobs);
+    }
+
+    [Fact]
+    public async Task SetVoiceSampleSpans_ForASampleOfAnotherPerson_IsNotFound()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var (_, sample, _) = await SeedSample(db, userId);
+        var other = await SeedPerson(db, "Bob");
+        var controller = BuildWithQueue(db, userId, queue);
+
+        Assert.IsType<NotFoundResult>(await controller.SetVoiceSampleSpans(other.Id, sample.Id,
+            new SetVoiceSampleSpansRequest([new VoiceprintSpan(1000, 3000)])));
+        Assert.Empty(queue.VoiceprintJobs);
+    }
+
+    [Fact]
+    public async Task Get_ReportsSelectedAndUsedAndPendingPerSample()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var (person, sample, _) = await SeedSample(db, userId);
+        var controller = BuildWithQueue(db, userId, queue);
+        await controller.SetVoiceSampleSpans(person.Id, sample.Id,
+            new SetVoiceSampleSpansRequest([new VoiceprintSpan(1000, 3000)]));
+
+        var detail = (await controller.Get(person.Id)).Value!;
+
+        var dto = Assert.Single(detail.Samples);
+        Assert.Equal(2000, dto.SelectedMs);
+        Assert.Null(dto.UsedMs);
+        Assert.True(dto.Pending);
+    }
+
+    [Fact]
+    public async Task Get_ReportsASampleAsStaleWhenItsSpeakersAudioWasReattributed()
+    {
+        // Derived by joining to the speaker rather than stored twice: two columns saying the same thing
+        // would eventually disagree.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (person, _, rec) = await SeedSample(db, userId);
+        var speaker = db.Speakers.Single(s => s.RecordingId == rec.Id);
+        speaker.EmbeddingStale = true;
+        await db.SaveChangesAsync();
+        var controller = BuildWithQueue(db, userId, new FakeJobQueue());
+
+        var detail = (await controller.Get(person.Id)).Value!;
+
+        Assert.True(Assert.Single(detail.Samples).Stale);
     }
 }

@@ -43,6 +43,10 @@ public class JobQueueOptions
     public string ConsumerGroup { get; set; } = "workers";
     /// <summary>Stream the GPU worker consumes audio-concatenation merge jobs from.</summary>
     public string MergeStreamKey { get; set; } = "audio-merge-jobs";
+
+    /// <summary>On-demand voiceprint re-embeds. Third stream on the Python worker, alongside
+    /// transcription and audio merge.</summary>
+    public string VoiceprintStreamKey { get; set; } = "voiceprint-jobs";
 }
 
 public class WorkerOptions

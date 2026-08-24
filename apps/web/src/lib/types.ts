@@ -309,6 +309,15 @@ export interface VoiceSample {
   /// Start (ms) of that speaker's first segment, so the UI can play a sample of the voice.
   startMs: number;
   createdAt: string;
+  /// Total ms of audio selected, or the speaker's whole span when nothing is selected.
+  selectedMs: number;
+  /// Ms the last embedding actually consumed, or null while a recompute is queued. Less than `selectedMs`
+  /// when the worker's cap truncated the selection - show both rather than implying it used it all.
+  usedMs: number | null;
+  /// This speaker's audio was re-attributed, so the snapshot no longer describes it.
+  stale: boolean;
+  /// A recompute is queued and has not reported back. Server-derived, so it survives a reload.
+  pending: boolean;
 }
 
 /// A group of people who look like the same human. `reason` is "email" or "name".

@@ -98,6 +98,29 @@ public record TranscriptionResult(
     /// diarize + embed), in milliseconds.</summary>
     long? ProcessingMs = null);
 
+/// <summary>Job payload for an on-demand voiceprint re-embed, consumed by the Python worker. It downloads
+/// <paramref name="BlobKey"/>, slices exactly <paramref name="Spans"/> out of the waveform, embeds them with
+/// ECAPA and reports back.
+///
+/// <para>No Whisper and no pyannote involved, so it is seconds of work - but it shares the worker process
+/// with transcription, so it can queue behind one. The UI shows it as pending rather than pretending
+/// otherwise.</para>
+///
+/// <para>An empty <paramref name="Spans"/> means the whole speaker, matching the column's null.</para></summary>
+public record VoiceprintJob(
+    Guid VoiceSampleId,
+    Guid RecordingId,
+    string BlobKey,
+    IReadOnlyList<VoiceprintSpan> Spans);
+
+/// <summary>Callback body the worker POSTs when a re-embed succeeds. <paramref name="UsedMs"/> may be less
+/// than <paramref name="SelectedMs"/>, because the worker still caps how much audio it pools - the UI states
+/// both rather than implying the whole selection was used.</summary>
+public record VoiceprintResult(Guid VoiceSampleId, float[] Embedding, int UsedMs, int SelectedMs);
+
+/// <summary>Callback body the worker POSTs when a re-embed fails.</summary>
+public record VoiceprintFailure(Guid VoiceSampleId, string Error);
+
 /// <summary>Callback body the worker POSTs when a job fails.</summary>
 public record TranscriptionFailure(
     Guid TranscriptionId,

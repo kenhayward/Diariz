@@ -13,6 +13,7 @@ public interface IJobQueue
     Task EnqueueMeetingMinutesAsync(MeetingMinutesJob job, CancellationToken ct = default);
     Task EnqueueActionsAsync(ActionsJob job, CancellationToken ct = default);
     Task EnqueueAudioMergeAsync(AudioMergeJob job, CancellationToken ct = default);
+    Task EnqueueVoiceprintAsync(VoiceprintJob job, CancellationToken ct = default);
     Task EnqueueEmbeddingAsync(EmbeddingJob job, CancellationToken ct = default);
     Task EnqueueTagsAsync(TagsJob job, CancellationToken ct = default);
     Task EnqueueSectionSummaryAsync(SectionSummaryJob job, CancellationToken ct = default);
@@ -85,6 +86,13 @@ public class RedisJobQueue : IJobQueue
         var db = _redis.GetDatabase();
         var payload = JsonSerializer.Serialize(job);
         await db.StreamAddAsync(_opts.MergeStreamKey, "job", payload);
+    }
+
+    public async Task EnqueueVoiceprintAsync(VoiceprintJob job, CancellationToken ct = default)
+    {
+        var db = _redis.GetDatabase();
+        var payload = JsonSerializer.Serialize(job);
+        await db.StreamAddAsync(_opts.VoiceprintStreamKey, "job", payload);
     }
 
     public async Task EnqueueEmbeddingAsync(EmbeddingJob job, CancellationToken ct = default)

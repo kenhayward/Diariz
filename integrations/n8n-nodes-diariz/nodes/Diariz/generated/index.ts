@@ -1134,6 +1134,20 @@ const GENERATED: GeneratedResource[] = [
         "returnsArray": false
       },
       {
+        "value": "chooseWhichAudioTrainsOneVoiceSample",
+        "displayName": "Choose which audio trains one voice sample",
+        "description": "Replaces the spans of the contributing recording's audio that this sample is embedded from, and queues a re-embed. Send an empty list to go back to the whole speaker, which is what every sample does by default. Adjacent spans are merged, so you can send one per segment the user ticked.",
+        "method": "PUT",
+        "path": "/api/people/{id}/voiceprint/samples/{sampleId}/spans",
+        "pathParams": [
+          "id",
+          "sampleId"
+        ],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": false
+      },
+      {
         "value": "deleteAPerson",
         "displayName": "Delete a person",
         "description": "Removes the person, their voiceprint and all its training data, and unlinks them from every recording - the GDPR erasure path, so nothing recognisable is retained.",
