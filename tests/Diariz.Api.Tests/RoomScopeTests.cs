@@ -185,4 +185,73 @@ public class RoomScopeTests
             () => sut.RequireAsync(userId, room.Id, RoomPermission.ManageRoom));
         Assert.Contains("ManageRoom", ex.Message);
     }
+
+    // ---- Personal room name follows the display name ----
+
+    /// <summary>A personal room was named once at creation and then never touched again, so renaming
+    /// yourself left the room showing the old name forever. Personal rooms are immutable to the user
+    /// (UpdateRoomAsync refuses them), so there is no hand-typed name this can clobber.</summary>
+    [Fact]
+    public async Task SyncPersonalRoomName_FollowsTheDisplayName()
+    {
+        using var db = TestDb.Create();
+        var userId = await NewUserAsync(db, "Old Name");
+        var sut = new RoomScope(db);
+        var roomId = await sut.PersonalRoomIdAsync(userId);
+
+        db.Users.Single(u => u.Id == userId).FullName = "New Name";
+        await db.SaveChangesAsync();
+        await sut.SyncPersonalRoomNameAsync(userId);
+
+        Assert.Equal("New Name", db.Rooms.Single(r => r.Id == roomId).Name);
+    }
+
+    /// <summary>A blank name falls back to the email, exactly as room creation does - otherwise clearing
+    /// your display name would blank the Name column, which is required.</summary>
+    [Fact]
+    public async Task SyncPersonalRoomName_FallsBackToEmail_WhenTheNameIsCleared()
+    {
+        using var db = TestDb.Create();
+        var userId = await NewUserAsync(db, "Old Name");
+        var sut = new RoomScope(db);
+        var roomId = await sut.PersonalRoomIdAsync(userId);
+        var email = db.Users.Single(u => u.Id == userId).Email;
+
+        db.Users.Single(u => u.Id == userId).FullName = "   ";
+        await db.SaveChangesAsync();
+        await sut.SyncPersonalRoomNameAsync(userId);
+
+        Assert.Equal(email, db.Rooms.Single(r => r.Id == roomId).Name);
+    }
+
+    /// <summary>Called on the invite-setup path before the room exists. Minting one here would create it
+    /// out of order; doing nothing is correct, because creation names it correctly anyway.</summary>
+    [Fact]
+    public async Task SyncPersonalRoomName_DoesNothing_WhenThereIsNoPersonalRoomYet()
+    {
+        using var db = TestDb.Create();
+        var userId = await NewUserAsync(db, "Ada");
+
+        await new RoomScope(db).SyncPersonalRoomNameAsync(userId);
+
+        Assert.Empty(db.Rooms);
+    }
+
+    /// <summary>A shared room the user happens to own must not be renamed to their display name.</summary>
+    [Fact]
+    public async Task SyncPersonalRoomName_LeavesSharedRoomsAlone()
+    {
+        using var db = TestDb.Create();
+        var userId = await NewUserAsync(db, "Ada");
+        var shared = new Room
+        {
+            Id = Guid.NewGuid(), Name = "Engineering", Kind = RoomKind.Shared, OwnerUserId = userId,
+        };
+        db.Rooms.Add(shared);
+        await db.SaveChangesAsync();
+
+        await new RoomScope(db).SyncPersonalRoomNameAsync(userId);
+
+        Assert.Equal("Engineering", db.Rooms.Single(r => r.Id == shared.Id).Name);
+    }
 }

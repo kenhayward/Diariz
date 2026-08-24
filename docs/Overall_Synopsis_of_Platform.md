@@ -1058,7 +1058,18 @@ large folders silently rolled up only their first ~18 meetings. The old per-work
   substituted from the recording, and each `prompt` block is one LLM call (that prompt as the system message,
   the assembled context as the user message). A `field` is stamped into the **output only** and never enters a
   prompt, so the unbounded `transcript` field costs no tokens and is independent of `FormulaContext` (which
-  governs only what the model reads); its segments are loaded lazily, only when the template asks for it. A formula that is *just* a prompt is stored as one **headless
+  governs only what the model reads); its segments are loaded lazily, only when the template asks for it. The
+  one substitution that goes the **other** way is `PromptTokens` (`Services/PromptTokens.cs`): `$USERNAME` is
+  replaced across the **parsed `TemplateContent`** - every section title and every block's text, prompts
+  included - immediately after `TemplateContent.Parse` and before composing, so prompt and literal blocks agree
+  without either knowing about tokens. It is a separate mechanism from `TemplateFields` precisely *because*
+  fields never reach the model. The name is the run user's linked `Person.Name`, falling back to `FullName`
+  then `Email`, resolved once per run by `FormulaRunProcessor.TranscriptNameAsync` and threaded into
+  `RunOverRecordingAsync`/`RunOverSectionAsync` as a plain string - the caller is `FormulaRunner` (the
+  synchronous/tool/MCP path, using its `userId`) or the job handler (using `job.UserId`, so an automatic
+  meeting-type-triggered run resolves to the recording's owner). The lookup is a plain query, **not**
+  `IPeopleDirectory.EnsureForUserAsync`, so a run never provisions a directory entry as a side effect. Scoped
+  to formulas: meeting-type minutes templates share the composer but are not token-substituted. A formula that is *just* a prompt is stored as one **headless
   (`level: 0`) section holding one prompt block**, so it composes to exactly one call with that prompt and no
   heading around it - which is why making formulas structured changed no existing formula's output. A `Formula` has a **`FormulaScope`**: `Personal` (owned by one user, `OwnerUserId` set,
   always usable by its owner, cascade-deleted with the user), `Platform` (shared, admin-managed), or `Diariz`
@@ -1963,6 +1974,14 @@ into it with no URL or per-user setup at all.
     remembering to. The filtered unique index on `Rooms.OwnerUserId` makes the race safe. Pre-existing users were
     given rooms **once**, by the `AddRooms` migration (`PersonalRoomBackfill`) — never on boot, or a seeder would
     recreate a room the user had since changed.
+  - **A personal room's name is derived, and must stay derived.** It is stamped from the owner's display name
+    (`RoomScope.Display`, the same expression `PeopleDirectory` uses) and the user cannot change it -
+    `UpdateRoomAsync` refuses Personal rooms. It was stamped at creation and then never re-synced, so a renamed
+    account kept the name it had been created with indefinitely, with no way to correct it. Every site that
+    writes `ApplicationUser.FullName` now calls **`RoomScope.SyncPersonalRoomNameAsync`** beside the existing
+    `IPeopleDirectory.SyncFromUserAsync`: `UserProfileController.Update`, `AuthController.Setup`, and `Seeder`.
+    Rooms that had already drifted were corrected **once**, by the `SyncPersonalRoomNames` migration
+    (`PersonalRoomNameBackfill`) - a migration and not the seeder, for the same reason as above.
   - **Recording placement.** A recording's folder is a property of its **`RoomRecording`** placement, not of
     the recording: `Recording.SectionId` no longer exists. Each recording has exactly one **main** placement,
     always in its recorder's Personal room (`IsMainRoom`, a filtered-unique invariant), which is what stops a

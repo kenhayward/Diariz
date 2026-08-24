@@ -298,6 +298,12 @@ whether a voiceprint is held - with a search box matching **name, email address 
 internal, external, and voiceprint. Selecting someone opens an editor beside the list; only the list
 scrolls, so the editor never moves while you are typing in it. The Speakers tab on a recording shows an identified speaker's **title, company** and
 **internal/external** marker inline, so you can see who was in the meeting without leaving the transcript.
+
+Your own entry is reachable without any of that. **Preferences -> Profile** carries a read-only **You in
+transcripts** panel naming the person your account *is* and whether a voiceprint is held for you - the one
+thing the gated directory hid from an ordinary user, who could not otherwise find out whether Diariz would
+recognise their voice. It is read-only by design: the name follows your display name above it, and erasing a
+voiceprint or opting out already live in the people UI for your own record.
 A person carries a **job title, company, email address, phone number** and an **internal/external** marker
 alongside their name, and Diariz reports entries that look like **duplicates** of each other - by email, or
 by name once case and spacing are normalised - for a human to merge. It never merges on its own: a merge
@@ -425,7 +431,13 @@ any `dz_mcp_` token stop authenticating.
 Time/Speaker/Text table, your notes), **instructions to the model**, and horizontal
 rules - so it produces a properly laid-out document rather than whatever shape the model felt like. A
 substituted detail is stamped in deterministically and never enters a prompt, so a transcript appendix costs no
-tokens and is independent of what the formula lets the model read. The context
+tokens and is independent of what the formula lets the model read. One token works the other way round:
+**`$USERNAME`**, written anywhere in a formula, is replaced when the formula runs with the name the person
+running it appears under on their transcripts (their people-directory entry; for an automatic run, the
+recording's owner). It is substituted **before** the model is asked, which is the whole point - it is what
+makes "What role did $USERNAME play in this meeting?" a question one shared formula can answer correctly for
+everyone, rather than a copy per person with a name typed into each. A merge field could not do that, because
+a merge field never reaches the model. The context
 (any mix of transcript, notes, summary, minutes, and action items) is what the formula is allowed to see. Run it
 over a recording to generate a named **Markdown Result** — open it, edit it in the same rich editor as minutes,
 download it as `.md`, or email it to yourself. A formula that is simply one instruction is just a template with
