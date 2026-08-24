@@ -153,8 +153,9 @@ the audio.
 
 - A split alone marks nothing - the same audio is still attributed to the same speaker, only divided.
 - A reassignment marks **both** the label losing the segment and the label gaining it.
-- Marking a `Speaker` stale also marks stale any `VoiceSample` snapshotted from it, since the centroid
-  behind a person's voiceprint now averages a vector taken from audio that has been re-attributed.
+- A `VoiceSample` snapshotted from a stale `Speaker` reads as stale too, since the centroid now averages a
+  vector taken from audio that has been re-attributed. This is **derived by joining to the speaker**, not
+  stored - two columns saying the same thing would eventually disagree.
 
 ### Web
 
@@ -226,7 +227,7 @@ A third Redis stream, following the `audio-merge-jobs` precedent exactly - dispa
 | Callback | `POST internal/people/voiceprint-result`, header `X-Worker-Secret` |
 | Callback body | `{ VoiceSampleId, Embedding, UsedMs, SelectedMs }` |
 | Failure | `POST internal/people/voiceprint-failure`, `{ VoiceSampleId, Error }` |
-| API | writes `VoiceSample.Embedding`, clears `Speaker.EmbeddingStale`, calls `RecomputeVoiceprintAsync`, notifies over SignalR |
+| API | writes `VoiceSample.Embedding` and `UsedMs`, clears `Speaker.EmbeddingStale`, calls `RecomputeVoiceprintAsync` |
 
 The job needs only the ECAPA embedder, not Whisper or pyannote, so it is seconds of work - but it shares
 the worker process, so a re-embed can queue behind an in-flight transcription. The tab shows it as pending
@@ -254,6 +255,11 @@ duration.
 
 Ticking marks the sample dirty; a single **Recompute voiceprint** button queues the job, so a run of clicks
 is one job and not fifteen.
+
+**Progress is polled, not pushed.** The client wires only `RecordingStatusChanged` today, so a new hub event
+would mean changing `createHub`'s signature and every caller for one modal. Instead a queued sample is
+`spansJson != null && usedMs == null`, and the open tab refetches the person every 3s while any sample is in
+that state. Server-derived, so it survives a reload - which a client-only pending flag would not.
 
 `EditPersonModal` - opened from a speaker in a transcript, which is the moment you notice a voiceprint is
 wrong - gets the tab too, while erase and delete stay hidden there as they are now.
@@ -286,9 +292,19 @@ Strictly sequential, so the work can be cut into separate PRs if review asks.
 One migration, three nullable/defaulted additions - all forward-restore-safe, so **no `CurrentFormat`
 bump**:
 
-- `Segment.Words` - `jsonb`, nullable
-- `VoiceSample.Spans` - `jsonb`, nullable (null = the whole speaker)
+- `Segment.WordsJson` - `jsonb`, nullable
+- `VoiceSample.SpansJson` - `jsonb`, nullable (null = the whole speaker)
+- `VoiceSample.UsedMs` - `integer`, nullable - how much audio the last embed actually consumed. Also the
+  **pending marker**: the enqueue clears it, the callback sets it, so "recompute in flight" survives a page
+  reload instead of living only in component state.
 - `Speaker.EmbeddingStale` - `boolean`, not null, default false
+
+JSON columns follow the codebase's established convention - a `string` property with
+`HasColumnType("jsonb")` behind the `isNpgsql` guard, plain text under the in-memory provider - not an
+owned-type mapping.
+
+**A `VoiceSample` has no staleness column of its own.** It is derived by joining to its `Speaker`'s
+`EmbeddingStale`, so the two can never disagree.
 
 ## Release checklist for this PR
 
