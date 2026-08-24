@@ -535,6 +535,14 @@ public record RetranscribeRequest(string? Model, SpeakerHints? Speakers = null, 
 /// is preserved); null = reset to the model's original (clears the revision); "" = a deliberately blank
 /// revision.</summary>
 public record UpdateSegmentRequest(string? Text);
+
+/// <summary>Split one segment in two, before the word at <see cref="WordIndex"/> (so an index of 1 puts one
+/// word on the left). The cut snaps to the stored word timings, and the silence between the two words falls
+/// into neither half - which is what a voiceprint trained on the result needs.</summary>
+/// <param name="DiscardRevision">Required when the segment carries a manual edit. There is no principled
+/// way to divide edited prose at a word index the edit may not even contain, so both halves take their text
+/// from the model's original and the caller has to say explicitly that losing the edit is intended.</param>
+public record SplitSegmentRequest(int WordIndex, bool DiscardRevision = false);
 /// <summary>Delete a set of segments from the current transcription in one call (survivors are renumbered
 /// once). Ids not on the caller's recording are ignored.</summary>
 public record DeleteSegmentsRequest(IReadOnlyList<Guid> Ids);

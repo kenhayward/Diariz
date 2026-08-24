@@ -4266,6 +4266,26 @@
         ],
         "type": "object"
       },
+      "SplitSegmentRequest": {
+        "properties": {
+          "discardRevision": {
+            "default": false,
+            "type": "boolean"
+          },
+          "wordIndex": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "wordIndex"
+        ],
+        "type": "object"
+      },
       "StorageUsageDto": {
         "properties": {
           "quotaBytes": {
@@ -9580,6 +9600,60 @@
           }
         },
         "summary": "Edit a segment's text",
+        "tags": [
+          "Recordings"
+        ]
+      }
+    },
+    "/api/recordings/{id}/segments/{segmentId}/split": {
+      "post": {
+        "description": "Divides one segment in two before the word at `wordIndex`, so a block that contains a second voice can be separated and the interloper moved with the segment-speaker endpoint. The cut snaps to the stored word timings, and the silence between the two words falls into neither half - which is what a voiceprint trained on the result needs.\n\nBoth halves keep the original speaker; reassign one afterwards. **409** when the segment has no word timings (re-transcribe first), when the index would leave a half empty, or when the segment has a manual edit and `discardRevision` was not set - a split cannot divide edited prose, so both halves fall back to the model's original text.\n\n**Permanent for this transcription version.** Re-transcribe to regenerate the original segments.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "segmentId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SplitSegmentRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SplitSegmentRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SplitSegmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Split a segment at a word boundary",
         "tags": [
           "Recordings"
         ]

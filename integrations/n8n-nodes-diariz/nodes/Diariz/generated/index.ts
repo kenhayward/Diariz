@@ -1803,6 +1803,20 @@ const GENERATED: GeneratedResource[] = [
         "returnsArray": false
       },
       {
+        "value": "splitASegmentAtAWordBoundary",
+        "displayName": "Split a segment at a word boundary",
+        "description": "Divides one segment in two before the word at wordIndex, so a block that contains a second voice can be separated and the interloper moved with the segment-speaker endpoint. The cut snaps to the stored word timings, and the silence between the two words falls into neither half - which is what a voiceprint trained on the result needs.",
+        "method": "POST",
+        "path": "/api/recordings/{id}/segments/{segmentId}/split",
+        "pathParams": [
+          "id",
+          "segmentId"
+        ],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": false
+      },
+      {
         "value": "streamOrDownloadTheAudio",
         "displayName": "Stream or download the audio",
         "description": "Serves the original audio bytes, honouring HTTP Range requests so a player can seek without pulling the whole file (206 for a range, 200 for the lot). Pass download=true to get it as an attachment.",

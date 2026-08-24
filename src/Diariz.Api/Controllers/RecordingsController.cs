@@ -959,6 +959,69 @@ public class RecordingsController : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("{id:guid}/segments/{segmentId:guid}/split")]
+    [EndpointSummary("Split a segment at a word boundary")]
+    [EndpointDescription(
+        "Divides one segment in two before the word at `wordIndex`, so a block that contains a second voice " +
+        "can be separated and the interloper moved with the segment-speaker endpoint. The cut snaps to the " +
+        "stored word timings, and the silence between the two words falls into neither half - which is what " +
+        "a voiceprint trained on the result needs.\n\n" +
+        "Both halves keep the original speaker; reassign one afterwards. **409** when the segment has no " +
+        "word timings (re-transcribe first), when the index would leave a half empty, or when the segment " +
+        "has a manual edit and `discardRevision` was not set - a split cannot divide edited prose, so both " +
+        "halves fall back to the model's original text.\n\n" +
+        "**Permanent for this transcription version.** Re-transcribe to regenerate the original segments.")]
+    public async Task<IActionResult> SplitSegment(Guid id, Guid segmentId, SplitSegmentRequest req)
+    {
+        var owned = await _db.Recordings.AnyAsync(r => r.Id == id && r.UserId == UserId);
+        if (!owned) return NotFound();
+
+        var seg = await _db.Segments.Include(s => s.Transcription)
+            .FirstOrDefaultAsync(s => s.Id == segmentId);
+        if (seg?.Transcription is null || seg.Transcription.RecordingId != id) return NotFound();
+
+        var words = SegmentWords.Parse(seg.WordsJson);
+        if (words.Count == 0)
+            return Conflict("This segment has no word timings; re-transcribe the recording to split it.");
+        if (seg.Revised is not null && !req.DiscardRevision)
+            return Conflict("This segment has an edit. Splitting discards it; resend with discardRevision.");
+
+        var split = TranscriptSegmentSplit.Split(seg.StartMs, seg.EndMs, seg.Original, words, req.WordIndex);
+        if (split is null) return Conflict("That split point would leave one half empty.");
+
+        var transcriptionId = seg.Transcription.Id;
+        var label = seg.SpeakerLabel;
+        var ordinal = seg.Ordinal;
+
+        // Shift everything after this row along by one and drop the halves into the gap, rather than
+        // appending and re-sorting: two segments can share a start time, and a sort would then be free to
+        // put the halves either side of a neighbour.
+        var later = await _db.Segments
+            .Where(s => s.TranscriptionId == transcriptionId && s.Ordinal > ordinal)
+            .ToListAsync();
+        foreach (var s in later) s.Ordinal += 1;
+
+        _db.Segments.Remove(seg);
+        var offset = 0;
+        foreach (var half in new[] { split.Left, split.Right })
+            _db.Segments.Add(new Segment
+            {
+                Id = Guid.NewGuid(),
+                TranscriptionId = transcriptionId,
+                SpeakerLabel = label,
+                StartMs = half.StartMs,
+                EndMs = half.EndMs,
+                // The model's original, never the revision: the words describe the original, and a
+                // revision divided at a word index it may not contain would land anywhere.
+                Original = TranscriptText.Normalize(half.Text),
+                WordsJson = SegmentWords.Serialize(half.Words),
+                Ordinal = ordinal + offset++,
+            });
+
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
     /// <summary>Delete a single segment from the current transcription (e.g. a meaningless filler row).
     /// Permanent for this version — re-transcribe to regenerate the full set. Remaining segments are
     /// renumbered so their ordinals stay contiguous.</summary>

@@ -431,6 +431,12 @@ export const api = {
     return data;
   },
 
+  /// Split a segment in two before the given word. `discardRevision` is required when the segment carries
+  /// a manual edit: the server refuses rather than dropping it silently, so ask the user first.
+  async splitSegment(id: string, segmentId: string, wordIndex: number, discardRevision = false): Promise<void> {
+    await http.post(`/api/recordings/${id}/segments/${segmentId}/split`, { wordIndex, discardRevision });
+  },
+
   /// Delete a single segment from the current transcription (permanent for this version).
   async deleteSegment(id: string, segmentId: string): Promise<void> {
     await http.delete(`/api/recordings/${id}/segments/${segmentId}`);
