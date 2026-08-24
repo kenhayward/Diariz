@@ -67,7 +67,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.248.0",
     date: "2026-08-24",
-    pr: 601,
+    pr: 602,
     headline: "Drag a document into the chat box",
     summary:
       "You could already hand chat a screen capture by dragging its thumbnail into the prompt. Now you can do the same with a document you have already filed - a PDF, a spreadsheet, an email, a link - from a meeting's Attachments tab, from a folder's attachments, or from the list of everything attached across a folder. Grab the handle at the left of the row, drop it on the chat box, and its text joins the conversation. Click the pill it leaves behind to read exactly what the model was given, which for a long PDF is the difference between trusting an answer and checking it.\n\nUntil now the only way to put a filed document in front of the model was the Include attachments tick box, which pulls in every attachment on every meeting in scope - fine when that is what you want, wasteful when you had one document in mind. Dropping one is the narrow version of the same thing, and it says so when it cannot read something rather than leaving the composer unchanged.\n\nOne change to existing behaviour comes with it: attaching a file now adds to whatever is already attached instead of replacing it, which is how screen-capture text has always behaved. Two ways of adding the same kind of thing should not behave differently. If you attach the wrong file, remove the pill and start again.",
