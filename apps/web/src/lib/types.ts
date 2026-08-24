@@ -578,6 +578,10 @@ export interface BackupStatus {
   phase: "Database" | "Objects" | null;
   objectsArchived: number;
   startedAt: string | null;
+  /// How the last finished build ended. Null while one is running, before any has run, and on a server too
+  /// old to report it. The panel used to read running -> idle as success, which a build that threw does
+  /// exactly as a good one does - so only an explicit "Failed" means failure.
+  lastOutcome?: "Completed" | "Failed" | null;
 }
 
 /// A stored MCP personal access token (the secret is never returned — only a short display prefix).
