@@ -1,3 +1,4 @@
+using Diariz.Api.Contracts;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -45,9 +46,16 @@ public static class TranscriptSegmentMerge
         var breakBefore = TranscriptNoteAnchor.BreakBeforeIndices(
             segments.Select(s => s.StartMs).ToList(), noteTimes.Concat(shotTimes));
 
+        // A revised segment contributes no words. Merge writes EffectiveText into a fresh Original, so its
+        // merged text is the user's wording while the timings describe the model's - carrying them would
+        // let a later split cut at a boundary that is not present in the text being cut.
+        static IReadOnlyList<SegmentWord>? WordsOf(Segment s) =>
+            s.Revised is not null ? null : SegmentWords.Parse(s.WordsJson) is { Count: > 0 } w ? w : null;
+
         var merged = SegmentMerger.Merge(segments
             .Select((s, i) => new SegmentMerger.Part(
-                KeyFor(s.SpeakerLabel), s.SpeakerLabel, s.StartMs, s.EndMs, s.EffectiveText, breakBefore.Contains(i)))
+                KeyFor(s.SpeakerLabel), s.SpeakerLabel, s.StartMs, s.EndMs, s.EffectiveText,
+                breakBefore.Contains(i), WordsOf(s)))
             .ToList());
         if (merged.Count == segments.Count) return false; // nothing adjacent to merge
 
@@ -64,6 +72,7 @@ public static class TranscriptSegmentMerge
                 // Merge consolidates the displayed (effective) text; the per-segment original/revised split
                 // is intentionally collapsed into a fresh Original on the merged row.
                 Original = p.Text,
+                WordsJson = SegmentWords.Serialize(p.Words),
                 Ordinal = ordinal++
             });
         return true;
