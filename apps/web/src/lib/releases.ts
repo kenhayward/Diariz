@@ -65,6 +65,18 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.245.4",
+    date: "2026-08-24",
+    pr: 606,
+    headline: "A momentary hiccup from the AI endpoint no longer costs a meeting its summary",
+    summary:
+      "A meeting whose summary failed used to stay failed. One refusal from the AI endpoint was the last word: the recording was marked Failed and nothing tried again, so the only way to get a summary was to press Summarise yourself. The same went for tags, action items, minutes and the search index.\n\nMost of those refusals were momentary. The usage log shows the same request - same meeting, same model, same endpoint, unchanged in every respect - refused twice and then answered normally a little later, and it shows refusals coming back in as little as seven milliseconds, far too fast to be the model doing any work. That is an endpoint busy loading or switching models, not a request it will never accept.\n\nDiariz now tries again. A call that fails for a reason likely to clear waits two seconds, then eight, before giving up, so a brief refusal costs a few seconds rather than the summary. A failure that retrying cannot fix - a wrong API key, a wrong endpoint address - still fails straight away, so a genuine misconfiguration is reported as promptly as before. Each attempt is listed separately in the LLM usage log rather than hidden, so what the platform spent stays accurate. Run test in the model editor deliberately does not retry: it is there to report exactly what your endpoint did, once.\n\nThis covers a short refusal, not an outage. An endpoint that is down for minutes will still leave the meeting failed, and re-running it by hand is still the way back from that.",
+    fixed: [
+      "A single momentary refusal from the AI endpoint permanently failed a recording. Summaries, tags, action items, minutes and embeddings now retry a transient failure twice, waiting two seconds and then eight, before giving up.",
+      "A failure that no retry can fix - a rejected API key, an endpoint address that does not exist - is still reported immediately rather than being retried.",
+    ],
+  },
+  {
     version: "0.245.3",
     date: "2026-08-24",
     pr: 604,

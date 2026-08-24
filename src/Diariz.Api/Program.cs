@@ -305,12 +305,23 @@ builder.Services.AddSingleton<ChannelLlmUsageSink>();
 builder.Services.AddSingleton<ILlmUsageSink>(sp => sp.GetRequiredService<ChannelLlmUsageSink>());
 builder.Services.AddHostedService<LlmUsageWriter>();
 builder.Services.AddTransient<LlmTelemetryHandler>();
-IHttpClientBuilder AddLlmClient<TClient, TImplementation>(Action<HttpClient>? configure = null)
+builder.Services.AddTransient<LlmRetryHandler>();
+
+/// <param name="retry">Whether a refusal likely to clear on its own is tried again - see
+/// <see cref="LlmRetryHandler"/>. On for everything that runs unattended, where a one-second blip used to
+/// cost a recording its summary until somebody re-ran it by hand. Off for the administrator's connection
+/// test, which exists to report exactly what the endpoint did, once.</param>
+IHttpClientBuilder AddLlmClient<TClient, TImplementation>(
+    Action<HttpClient>? configure = null, bool retry = true)
     where TClient : class where TImplementation : class, TClient
 {
     var http = configure is null
         ? builder.Services.AddHttpClient<TClient, TImplementation>()
         : builder.Services.AddHttpClient<TClient, TImplementation>(configure);
+
+    // Retry OUTSIDE telemetry (added first = outermost), so each attempt is timed and recorded as its own
+    // row. A retry that hid its attempts would make the usage log understate what the platform spent.
+    if (retry) http = http.AddHttpMessageHandler<LlmRetryHandler>();
     return http.AddHttpMessageHandler<LlmTelemetryHandler>();
 }
 
@@ -321,8 +332,10 @@ AddLlmClient<ITranslationClient, TranslationClient>(NoHttpTimeout);
 AddLlmClient<IOcrClient, OcrClient>(NoHttpTimeout);
 // The administrator's connection test. Registered like every other LLM client so its calls are timed and
 // logged by LlmTelemetryHandler - a test that spent tokens invisibly would be the one call an admin could
-// not account for.
-AddLlmClient<ILlmTestProbe, LlmTestProbe>(NoHttpTimeout);
+// not account for. The one client with retry OFF: "Run test" answers the question "what does this endpoint
+// do with these settings", and quietly trying twice more would both hide an intermittent endpoint and
+// triple the cost of a button an admin presses while iterating on parameters.
+AddLlmClient<ILlmTestProbe, LlmTestProbe>(NoHttpTimeout, retry: false);
 // Model discovery: the one outbound call that takes an administrator-supplied URL. Auto-redirect OFF so a
 // cooperating host cannot 3xx its way to a different (possibly internal) address after the administrator
 // named a benign one - the same reasoning as the "webhooks" and "url-attachments" clients below. NOT an
