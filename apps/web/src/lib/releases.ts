@@ -26,7 +26,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Action items** | Auto-extracted with owner and deadline, tracked across every meeting with completion and a person filter, linking back to the transcript. |
 | **Tag cloud** | Tags are yours to add - a Tags pill on each meeting suggests topics automatically extracted from it, and adopting one builds the weighted cloud on the Tags tab, which shows the meetings behind each tag. |
 | **Chat over transcripts** | Stream answers over one meeting, a folder (its summary/minutes/actions), several selected, or all meetings - context inferred from what you're viewing - with attachments and saved conversations. Where more than one model is offered, pick which one answers - the list names each model, describes what it is for, and marks which can use tools or read images - and change it part-way through a conversation; the whole conversation goes across to the new model. Send in a meeting screenshot - from the capture's own viewer or by dragging its thumbnail - and a vision-capable model will read it. |
-| **Formulas** | Build a document from headings, literal text, substituted meeting details and instructions to the model; choose what it may see (transcript, notes, summary, minutes, actions) and run it over a recording - or a whole folder and its sub-folders - to generate a Markdown document you can edit, download, or email. Runs in the background (\"Generating...\" then fills in); re-running one replaces its previous document, and a document you edited by hand is left alone. Personal, platform-wide, or built-in; from the Formulas tab (on a recording or a folder), \`/formula\` in chat, or Claude via MCP; share a personal one so others can find and add it (a live link); admins manage the shared ones. |
+| **Formulas** | Build a document from headings, literal text, substituted meeting details and instructions to the model - with \`$USERNAME\` in a prompt becoming the name the person running it appears under on their transcripts; choose what it may see (transcript, notes, summary, minutes, actions) and run it over a recording - or a whole folder and its sub-folders - to generate a Markdown document you can edit, download, or email. Runs in the background (\"Generating...\" then fills in); re-running one replaces its previous document, and a document you edited by hand is left alone. Personal, platform-wide, or built-in; from the Formulas tab (on a recording or a folder), \`/formula\` in chat, or Claude via MCP; share a personal one so others can find and add it (a live link); admins manage the shared ones. |
 | **Search** | A search box above the meetings list, scoped by default to the folder you are browsing: typing takes the list over, each hit shows the matching words in context plus the folder it lives in, and clicking one opens the transcript at that moment. Matching folders show up too. **Search everywhere** widens it to every room you can see, grouping the results by folder with Folder / Date / Speaker chips to narrow them. Keyword search across your library, upgraded to semantic (meaning-based) search when an embeddings endpoint is configured. |
 | **Chat tools** | The assistant searches your library with built-in tools (who-said-what, attendees, talk time, summaries, email-to-self) and links to the exact segment. Turn the set on or off, and pick tool by tool, on the **Assistant** tab in Preferences. |
 | **Voice dictation** | Speak your chat questions - transcribed into the chat box in Chrome/Edge or via a server speech-to-text endpoint. |
@@ -64,6 +64,17 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.247.0",
+    date: "2026-08-24",
+    pr: 600,
+    headline: "Formulas can ask about you by name",
+    summary:
+      "A formula can now put your own name into what it asks the model. Write \"$USERNAME\" anywhere in a formula - inside a prompt, or in the ordinary text around it - and each time the formula runs it becomes the name you appear under on your transcripts. That makes a whole class of question possible that could not be written before, because the answer depends on who is asking: \"What role did $USERNAME play in this meeting?\", \"What was the attitude of speakers apart from $USERNAME?\" - one formula, correct for whoever runs it, rather than a copy per person with a name typed into each.\n\nThe name comes from your entry in the people directory, which follows the display name on your profile; when a formula runs automatically rather than because you asked for it, the name used is the owner of the recording. It is deliberately not a merge field like {{date}}: those are written into the finished document and the model never sees them, which is exactly why they could not be used to ask a question. This one is substituted before the model is asked.",
+    added: [
+      "Formulas: $USERNAME in a prompt or in literal text is replaced with your transcript name when the formula runs.",
+    ],
+  },
   {
     version: "0.246.0",
     date: "2026-08-24",
