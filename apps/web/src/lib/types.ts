@@ -223,6 +223,20 @@ export interface SegmentDto {
   revised: string | null;
   /** The text shown/exported: the revision when present, else the original. */
   text: string;
+  /**
+   * Whether this segment has word timings and can therefore be split. False for anything transcribed
+   * before they were kept, so the split control is disabled with an explanation rather than absent.
+   * The words themselves are fetched per segment via `api.getSegmentWords` - ~10k per recording would
+   * dominate this payload.
+   */
+  hasWords: boolean;
+}
+
+/** One aligned word inside a segment. Short keys because the server stores ~10k of these per recording. */
+export interface SegmentWord {
+  w: string;
+  s: number;
+  e: number;
 }
 
 export interface TranscriptionDto {

@@ -3938,6 +3938,10 @@
               "string"
             ]
           },
+          "hasWords": {
+            "default": false,
+            "type": "boolean"
+          },
           "id": {
             "format": "uuid",
             "type": "string"
@@ -9576,6 +9580,40 @@
           }
         },
         "summary": "Edit a segment's text",
+        "tags": [
+          "Recordings"
+        ]
+      }
+    },
+    "/api/recordings/{id}/segments/{segmentId}/words": {
+      "get": {
+        "description": "The aligned word timings for one segment, used to split it at an exact word boundary. Returned per segment rather than on the transcript, because a long meeting carries roughly 10k words and they would dominate the recording payload.\n\n**Empty** when the segment has none - a recording transcribed before word timings were kept, a language with no alignment model, or a merged block whose run contained an edited segment. Such a segment cannot be split; re-transcribe the recording first. The transcript's `hasWords` flag says which is which without fetching anything.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "segmentId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Get a segment's word timings",
         "tags": [
           "Recordings"
         ]

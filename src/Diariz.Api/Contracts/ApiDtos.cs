@@ -264,7 +264,16 @@ public record MergeRecordingsRequest(IReadOnlyList<Guid> Ids);
 
 public record SegmentDto(
     Guid Id, string Speaker, string SpeakerDisplay, long StartMs, long EndMs,
-    string Original, string? Revised = null)
+    string Original, string? Revised = null,
+    /// <summary>True when this segment has aligned word timings and can therefore be split. False for
+    /// anything transcribed before word timings were kept, for a language with no alignment model, and for
+    /// a merged block whose run contained an edited segment.
+    ///
+    /// <para>The words themselves are deliberately not here: roughly 10k per recording would dominate a
+    /// payload that also feeds exports, MCP, webhooks and the n8n node, so they are fetched one segment at
+    /// a time. Only the recording-detail endpoint sets this - the prompt builders and export formatters
+    /// that also project a <c>SegmentDto</c> offer no splitting, so false is correct for them.</para></summary>
+    bool HasWords = false)
 {
     /// <summary>The text shown/exported: the user's revision (or translation) when present, else the
     /// model's original. Server-side consumers (formatters, email, chat, summarisation) read this.</summary>

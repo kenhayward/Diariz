@@ -1587,6 +1587,20 @@ const GENERATED: GeneratedResource[] = [
         "returnsArray": false
       },
       {
+        "value": "getASegmentSWordTimings",
+        "displayName": "Get a segment's word timings",
+        "description": "The aligned word timings for one segment, used to split it at an exact word boundary. Returned per segment rather than on the transcript, because a long meeting carries roughly 10k words and they would dominate the recording payload.",
+        "method": "GET",
+        "path": "/api/recordings/{id}/segments/{segmentId}/words",
+        "pathParams": [
+          "id",
+          "segmentId"
+        ],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": false
+      },
+      {
         "value": "linkARecordingToACalendarEvent",
         "displayName": "Link a recording to a calendar event",
         "description": "Stores the link, whether you are accepting the suggested match or picking an event by hand (the times need not line up). Only a lightweight snapshot is kept - title, times, colour - and the richer invite details are fetched live when displayed.",

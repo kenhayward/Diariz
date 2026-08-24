@@ -222,7 +222,9 @@ public class RecordingsController : ControllerBase
                 s.Id,
                 s.SpeakerLabel,
                 names.TryGetValue(s.SpeakerLabel, out var dn) ? dn : s.SpeakerLabel,
-                s.StartMs, s.EndMs, s.Original, s.Revised)).ToList(),
+                s.StartMs, s.EndMs, s.Original, s.Revised,
+                // Whether the segment can be split, not the words themselves - see SegmentDto.HasWords.
+                s.WordsJson != null)).ToList(),
             current.ProcessingMs);
         SummaryDto? sDto = current?.Summary is null ? null
             : new(current.Summary.Model, current.Summary.Text, current.Summary.CreatedAt, current.Summary.IsUserEdited);
@@ -907,6 +909,30 @@ public class RecordingsController : ControllerBase
             await _db.SaveChangesAsync(ct);
         }
         return NoContent();
+    }
+
+    [HttpGet("{id:guid}/segments/{segmentId:guid}/words")]
+    [EndpointSummary("Get a segment's word timings")]
+    [EndpointDescription(
+        "The aligned word timings for one segment, used to split it at an exact word boundary. Returned per " +
+        "segment rather than on the transcript, because a long meeting carries roughly 10k words and they " +
+        "would dominate the recording payload.\n\n" +
+        "**Empty** when the segment has none - a recording transcribed before word timings were kept, a " +
+        "language with no alignment model, or a merged block whose run contained an edited segment. Such a " +
+        "segment cannot be split; re-transcribe the recording first. The transcript's `hasWords` flag says " +
+        "which is which without fetching anything.")]
+    public async Task<IActionResult> Words(Guid id, Guid segmentId)
+    {
+        var owned = await _db.Recordings.AnyAsync(r => r.Id == id && r.UserId == UserId);
+        if (!owned) return NotFound();
+
+        // The segment id is not scoped by the route on its own: without re-checking that it belongs to
+        // this recording, any segment's words could be read by pairing it with a recording you do own.
+        var seg = await _db.Segments.Include(s => s.Transcription)
+            .FirstOrDefaultAsync(s => s.Id == segmentId);
+        if (seg?.Transcription is null || seg.Transcription.RecordingId != id) return NotFound();
+
+        return Ok(SegmentWords.Parse(seg.WordsJson));
     }
 
     [HttpPut("{id:guid}/segments/{segmentId:guid}")]

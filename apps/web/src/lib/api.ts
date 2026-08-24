@@ -106,6 +106,7 @@ import type {
   LlmTestRecording,
   ScreenshotOcr,
   OcrStatus,
+  SegmentWord,
 } from "./types";
 
 const TOKEN_KEY = "diariz.token";
@@ -420,6 +421,14 @@ export const api = {
   /// `null` resets to the model's original (clears the revision).
   async updateSegment(id: string, segmentId: string, text: string | null): Promise<void> {
     await http.put(`/api/recordings/${id}/segments/${segmentId}`, { text });
+  },
+
+  /// Word timings for one segment, fetched only when the split editor opens. Not on the transcript
+  /// payload: roughly 10k words per recording would dominate a response that also feeds exports and MCP.
+  /// Empty for a segment with none - check `hasWords` on the segment first.
+  async getSegmentWords(id: string, segmentId: string): Promise<SegmentWord[]> {
+    const { data } = await http.get<SegmentWord[]>(`/api/recordings/${id}/segments/${segmentId}/words`);
+    return data;
   },
 
   /// Delete a single segment from the current transcription (permanent for this version).

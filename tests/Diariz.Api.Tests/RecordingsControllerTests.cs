@@ -2172,6 +2172,99 @@ public class RecordingsControllerTests
 
     // ---- Transcript download ----
 
+
+    // ---- Word timings: hasWords on the transcript, and the per-segment words endpoint ----
+
+    /// <summary>Give a seeded recording's first segment word timings, leaving the second without.</summary>
+    private static async Task<(Guid firstSegmentId, Guid secondSegmentId)> AddWordsToFirstSegment(
+        DiarizDbContext db, Recording rec)
+    {
+        var segs = await db.Segments.Include(s => s.Transcription)
+            .Where(s => s.Transcription!.RecordingId == rec.Id)
+            .OrderBy(s => s.Ordinal).ToListAsync();
+        segs[0].WordsJson = SegmentWords.Serialize(
+            [new SegmentWord("Hel", 0, 400), new SegmentWord("lo", 500, 1000)]);
+        await db.SaveChangesAsync();
+        return (segs[0].Id, segs[1].Id);
+    }
+
+    /// <summary>The transcript says which segments can be split, without carrying the words themselves -
+    /// roughly 10k per recording would dominate a payload that also feeds exports, MCP and the n8n node.</summary>
+    [Fact]
+    public async Task Get_ReportsHasWordsPerSegment()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId);
+        await AddWordsToFirstSegment(db, rec);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var dto = (await controller.Get(rec.Id)).Value!;
+
+        var segs = dto.Current!.Segments;
+        Assert.True(segs[0].HasWords);
+        Assert.False(segs[1].HasWords);
+    }
+
+    [Fact]
+    public async Task Words_ReturnsTheSegmentsWords()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId);
+        var (withWords, _) = await AddWordsToFirstSegment(db, rec);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = Assert.IsType<OkObjectResult>(await controller.Words(rec.Id, withWords));
+
+        var words = Assert.IsAssignableFrom<IReadOnlyList<SegmentWord>>(result.Value);
+        Assert.Equal([new SegmentWord("Hel", 0, 400), new SegmentWord("lo", 500, 1000)], words);
+    }
+
+    [Fact]
+    public async Task Words_ForASegmentWithNone_IsEmptyRatherThanAnError()
+    {
+        // Every recording transcribed before word timings existed is in this state. The editor asks first
+        // and disables itself; a 404 here would be indistinguishable from a bad segment id.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId);
+        var (_, withoutWords) = await AddWordsToFirstSegment(db, rec);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = Assert.IsType<OkObjectResult>(await controller.Words(rec.Id, withoutWords));
+
+        Assert.Empty(Assert.IsAssignableFrom<IReadOnlyList<SegmentWord>>(result.Value));
+    }
+
+    [Fact]
+    public async Task Words_ForAnotherUsersRecording_IsNotFound()
+    {
+        // Ownership on every recording endpoint, and a 404 rather than a 403 so it does not confirm that
+        // the id exists.
+        using var db = TestDb.Create();
+        var rec = await SeedTranscribedRecording(db, Guid.NewGuid());
+        var (withWords, _) = await AddWordsToFirstSegment(db, rec);
+        var controller = Build(db, Guid.NewGuid(), new FakeJobQueue());
+
+        Assert.IsType<NotFoundResult>(await controller.Words(rec.Id, withWords));
+    }
+
+    [Fact]
+    public async Task Words_ForASegmentOfADifferentRecording_IsNotFound()
+    {
+        // The segment id is not scoped by the route on its own; without this check a caller could read
+        // any segment's words by pairing it with a recording they do own.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var mine = await SeedTranscribedRecording(db, userId);
+        var theirs = await SeedTranscribedRecording(db, userId);
+        var (theirSegment, _) = await AddWordsToFirstSegment(db, theirs);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        Assert.IsType<NotFoundResult>(await controller.Words(mine.Id, theirSegment));
+    }
+
     private static async Task<Recording> SeedTranscribedRecording(
         DiarizDbContext db, Guid userId, string? name = null)
     {
