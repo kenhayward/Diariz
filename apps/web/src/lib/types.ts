@@ -718,6 +718,17 @@ export interface Group {
   memberIds: string[];
 }
 
+/// The person the signed-in account IS in the people directory - the name they appear under on transcripts,
+/// and the row that carries their voiceprint. Read-only: the name follows the account's display name, and the
+/// biometric controls live in the people UI.
+export interface SelfPerson {
+  id: string;
+  name: string;
+  hasVoiceprint: boolean;
+  sampleCount: number;
+  voiceprintOptOut: boolean;
+}
+
 /// The signed-in user's editable profile (display name + language preferences + free-text profile fields +
 /// colour theme). Email is read-only.
 export interface UserProfile {
@@ -744,6 +755,9 @@ export interface UserProfile {
   /// Drives the MCP card on Preferences -> Integrations. Optional because a server older than the flag
   /// omits it, and MCP defaults to on - a missing value must not switch the card off.
   mcpAccessEnabled?: boolean;
+  /// Who the user is in the people directory. Optional because a server older than this field omits it, in
+  /// which case the profile simply does not show the block.
+  person?: SelfPerson | null;
 }
 
 /// A stored personal REST-API token, listed in Preferences -> Developers. The secret is never returned -

@@ -25,7 +25,7 @@ import ProfileSection from "./ProfileSection";
 const PROFILE = {
   email: "a@b.test", fullName: "A B", nativeLanguage: null, uiLanguage: null, transcriptionLanguage: null,
   googleConnected: false, googleCalendar: false, jobTitle: null, companyName: null, jobDescription: null,
-  companyDescription: null, linkedIn: null, theme: "auto",
+  companyDescription: null, linkedIn: null, theme: "auto", person: null,
 };
 
 function renderSection() {
@@ -78,5 +78,42 @@ describe("ProfileSection transcription language", () => {
     await waitFor(() =>
       expect(api.updateProfile).toHaveBeenCalledWith(expect.objectContaining({ transcriptionLanguage: null })),
     );
+  });
+
+  describe("you in transcripts", () => {
+    const withPerson = (person: Record<string, unknown>) =>
+      (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ ...PROFILE, person });
+
+    it("shows the linked person and its sample count", async () => {
+      withPerson({ id: "p1", name: "Ken Hayward", hasVoiceprint: true, sampleCount: 8, voiceprintOptOut: false });
+      renderSection();
+
+      expect(await screen.findByText("Ken Hayward")).toBeTruthy();
+      expect(screen.getByText(/8 samples/i)).toBeTruthy();
+    });
+
+    it("tells a user with no voiceprint how to get one", async () => {
+      withPerson({ id: "p1", name: "Ken Hayward", hasVoiceprint: false, sampleCount: 0, voiceprintOptOut: false });
+      renderSection();
+
+      expect(await screen.findByText(/no voiceprint yet/i)).toBeTruthy();
+      expect(screen.queryByText(/samples/i)).toBeNull();
+    });
+
+    it("says so when the user has opted out of voice-printing", async () => {
+      withPerson({ id: "p1", name: "Ken Hayward", hasVoiceprint: false, sampleCount: 0, voiceprintOptOut: true });
+      renderSection();
+
+      expect(await screen.findByText(/opted out of voice-printing/i)).toBeTruthy();
+      expect(screen.queryByText(/no voiceprint yet/i)).toBeNull();
+    });
+
+    /// A server older than this field sends no person at all; the block simply does not render.
+    it("renders nothing when the server sends no person", async () => {
+      renderSection();
+      await waitFor(() => expect(picker()).toBeTruthy());
+
+      expect(screen.queryByText(/you in transcripts/i)).toBeNull();
+    });
   });
 });

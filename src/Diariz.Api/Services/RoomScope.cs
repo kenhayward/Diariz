@@ -59,6 +59,18 @@ public interface IRoomScope
     /// <summary>Rename/restyle a Shared room. False if it does not exist or is a Personal room (immutable).</summary>
     Task<bool> UpdateRoomAsync(Guid roomId, string name, string? description, string? icon, string? color, CancellationToken ct = default);
 
+    /// <summary>Point the user's Personal room name back at their display name. Call after any write that
+    /// changes a user's name, beside <c>IPeopleDirectory.SyncFromUserAsync</c>.
+    ///
+    /// A Personal room's name is purely derived: it is stamped from the display name at creation and the user
+    /// cannot change it (<see cref="UpdateRoomAsync"/> refuses Personal rooms), so this can never clobber
+    /// something hand-typed. It used to be stamped and then forgotten, which left a renamed account sitting
+    /// under whatever name it had the day the room was minted.
+    ///
+    /// A no-op when the user has no Personal room yet - creation names it correctly, and minting one here
+    /// would do it out of order.</summary>
+    Task SyncPersonalRoomNameAsync(Guid userId, CancellationToken ct = default);
+
     /// <summary>Delete a Shared room, unsharing (never destroying) its recordings. False for a Personal room.</summary>
     Task<bool> DeleteRoomAsync(Guid roomId, CancellationToken ct = default);
 
@@ -270,6 +282,22 @@ public class RoomScope(DiarizDbContext db) : IRoomScope
         room.Color = color;
         await db.SaveChangesAsync(ct);
         return true;
+    }
+
+    public async Task SyncPersonalRoomNameAsync(Guid userId, CancellationToken ct = default)
+    {
+        var room = await db.Rooms
+            .FirstOrDefaultAsync(r => r.OwnerUserId == userId && r.Kind == RoomKind.Personal, ct);
+        if (room is null) return; // no room yet - creation will name it correctly
+
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (user is null) return;
+
+        var name = Display(user);
+        if (room.Name == name) return;
+
+        room.Name = name;
+        await db.SaveChangesAsync(ct);
     }
 
     public async Task<bool> DeleteRoomAsync(Guid roomId, CancellationToken ct = default)

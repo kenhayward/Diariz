@@ -3956,6 +3956,39 @@
         ],
         "type": "object"
       },
+      "SelfPersonDto": {
+        "properties": {
+          "hasVoiceprint": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sampleCount": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "voiceprintOptOut": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "hasVoiceprint",
+          "sampleCount",
+          "voiceprintOptOut"
+        ],
+        "type": "object"
+      },
       "SeriesRecordingDto": {
         "properties": {
           "endsAt": {
@@ -4941,6 +4974,16 @@
               },
               {
                 "$ref": "#/components/schemas/PermissionsDto"
+              }
+            ]
+          },
+          "person": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SelfPersonDto"
               }
             ]
           },

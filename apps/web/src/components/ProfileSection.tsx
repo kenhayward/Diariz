@@ -113,6 +113,26 @@ export default function ProfileSection() {
         <input name="diariz-linkedin" autoComplete="off" value={linkedIn} onChange={(e) => setLinkedIn(e.target.value)} placeholder={t("linkedinPlaceholder")} className={field} />
       </label>
 
+      {/* Read-only on purpose. The name follows the display name field above (PeopleDirectory.SyncFromUserAsync
+          pushes it onto the linked person on every save), and erasing a voiceprint or opting out already
+          exist in the people UI for your own record - duplicating them here would be a second way to do the
+          same thing. This block exists because the directory that would otherwise show it is gated behind
+          the Manage people permission, so an ordinary user could not see their own entry at all. */}
+      {profile?.person && (
+        <div className="rounded border p-2 text-sm dark:border-gray-700">
+          <span className={labelSpan}>{t("youInTranscripts")}</span>
+          <p className="font-medium text-gray-800 dark:text-gray-100">{profile.person.name}</p>
+          <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+            {profile.person.voiceprintOptOut
+              ? t("voiceprintOptedOut")
+              : profile.person.hasVoiceprint
+                ? t("voiceprintSamples", { count: profile.person.sampleCount })
+                : t("voiceprintNone")}
+          </p>
+          <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{t("youInTranscriptsHint")}</p>
+        </div>
+      )}
+
       <label className="block text-sm">
         <span className={labelSpan}>{t("jobDescription")}</span>
         <textarea value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} rows={2} className={field} />

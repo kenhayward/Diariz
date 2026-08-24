@@ -298,6 +298,12 @@ whether a voiceprint is held - with a search box matching **name, email address 
 internal, external, and voiceprint. Selecting someone opens an editor beside the list; only the list
 scrolls, so the editor never moves while you are typing in it. The Speakers tab on a recording shows an identified speaker's **title, company** and
 **internal/external** marker inline, so you can see who was in the meeting without leaving the transcript.
+
+Your own entry is reachable without any of that. **Preferences -> Profile** carries a read-only **You in
+transcripts** panel naming the person your account *is* and whether a voiceprint is held for you - the one
+thing the gated directory hid from an ordinary user, who could not otherwise find out whether Diariz would
+recognise their voice. It is read-only by design: the name follows your display name above it, and erasing a
+voiceprint or opting out already live in the people UI for your own record.
 A person carries a **job title, company, email address, phone number** and an **internal/external** marker
 alongside their name, and Diariz reports entries that look like **duplicates** of each other - by email, or
 by name once case and spacing are normalised - for a human to merge. It never merges on its own: a merge

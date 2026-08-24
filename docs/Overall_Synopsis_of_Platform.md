@@ -1963,6 +1963,14 @@ into it with no URL or per-user setup at all.
     remembering to. The filtered unique index on `Rooms.OwnerUserId` makes the race safe. Pre-existing users were
     given rooms **once**, by the `AddRooms` migration (`PersonalRoomBackfill`) — never on boot, or a seeder would
     recreate a room the user had since changed.
+  - **A personal room's name is derived, and must stay derived.** It is stamped from the owner's display name
+    (`RoomScope.Display`, the same expression `PeopleDirectory` uses) and the user cannot change it -
+    `UpdateRoomAsync` refuses Personal rooms. It was stamped at creation and then never re-synced, so a renamed
+    account kept the name it had been created with indefinitely, with no way to correct it. Every site that
+    writes `ApplicationUser.FullName` now calls **`RoomScope.SyncPersonalRoomNameAsync`** beside the existing
+    `IPeopleDirectory.SyncFromUserAsync`: `UserProfileController.Update`, `AuthController.Setup`, and `Seeder`.
+    Rooms that had already drifted were corrected **once**, by the `SyncPersonalRoomNames` migration
+    (`PersonalRoomNameBackfill`) - a migration and not the seeder, for the same reason as above.
   - **Recording placement.** A recording's folder is a property of its **`RoomRecording`** placement, not of
     the recording: `Recording.SectionId` no longer exists. Each recording has exactly one **main** placement,
     always in its recorder's Personal room (`IsMainRoom`, a filtered-unique invariant), which is what stops a
