@@ -179,20 +179,42 @@ def _extract_speakers(audio, segments: list[dict]) -> list[dict]:
         return []
 
 
+def _shape_words(raw_words) -> list[dict]:
+    """Aligned word timings in the API's contract shape, seconds -> ms. Words whisperx could not align
+    (no start/end) are dropped rather than guessed: a guessed boundary would slice the wrong audio, which
+    is the whole reason a split snaps to a word. Keys are single letters because this is stored as jsonb on
+    every segment and a long meeting carries roughly 10k of them."""
+    words = []
+    for w in raw_words or []:
+        text = (w.get("word") or "").strip()
+        start, end = w.get("start"), w.get("end")
+        if not text or start is None or end is None:
+            continue
+        words.append({"W": text, "S": int(round(start * 1000)), "E": int(round(end * 1000))})
+    return words
+
+
 def _shape_segments(raw_segments: list[dict]) -> list[dict]:
     """Convert whisperx segments to the API's contract: PascalCase keys, seconds -> ms,
-    empty-text segments dropped, missing speaker defaulted to UNKNOWN."""
+    empty-text segments dropped, missing speaker defaulted to UNKNOWN, and aligned word
+    timings carried through under "Words" when there are any."""
     segments = []
     for seg in raw_segments:
         text = (seg.get("text") or "").strip()
         if not text:
             continue
-        segments.append({
+        shaped = {
             "Speaker": seg.get("speaker", "UNKNOWN"),
             "StartMs": int(round(seg["start"] * 1000)),
             "EndMs": int(round(seg["end"] * 1000)),
             "Text": text,
-        })
+        }
+        # Absent, never null, when there is nothing usable: the segment contract stays exactly what it
+        # was for every language with no alignment model.
+        words = _shape_words(seg.get("words"))
+        if words:
+            shaped["Words"] = words
+        segments.append(shaped)
     return segments
 
 
