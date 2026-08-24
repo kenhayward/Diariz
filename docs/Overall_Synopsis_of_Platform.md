@@ -2820,13 +2820,13 @@ the least likely to hold.
 
 ## Cross-boundary contracts (the non-obvious glue)
 
-- **Redis Streams, seven of them.** `transcription-jobs`/`workers` and `audio-merge-jobs` (both API → Python
-  worker, sharing the `workers` group — the worker `XREADGROUP`s both streams and dispatches by stream key) and
-  five API-internal streams with their own in-process consumers: `summarization-jobs`/`summarizers`,
+- **Redis Streams, eight of them.** `transcription-jobs`/`workers`, `audio-merge-jobs` and `voiceprint-jobs`
+  (all three API → Python worker, sharing the `workers` group — the worker `XREADGROUP`s all three streams and
+  dispatches by stream key) and five API-internal streams with their own in-process consumers: `summarization-jobs`/`summarizers`,
   `meeting-minutes-jobs`/`minute-takers`, `actions-jobs`/`actions-extractors`, `embedding-jobs`/`embedders`
   (the RAG index), and `tag-cloud-jobs`/`tag-extractors` (the tag cloud). Job payloads are **PascalCase JSON**
   so .NET produces and Python/.NET consume without renaming. Keep `TranscriptionJob` / `TranscriptionResult` /
-  `AudioMergeJob` / `Segment` shapes in sync across both languages.
+  `AudioMergeJob` / `VoiceprintJob` / `Segment` shapes in sync across both languages.
 - **Merge recordings.** `POST /api/recordings/merge` folds 2+ recordings into the earliest one: it builds a new
   transcription version on the survivor (`TranscriptMerger` lays the source transcripts end-to-end, offsetting
   timestamps and namespacing speakers) and **appends every source's action items** to the survivor. The summary
@@ -2837,8 +2837,28 @@ the least likely to hold.
   the audio onto the survivor and deletes the now-merged source recordings (rows + blobs). When **no** source has
   audio, the merge **finishes synchronously** (no job) — the merged transcript/actions are already on the
   survivor and the sources are deleted. `merge-failure` flags the survivor and keeps the sources.
-- **Worker → API callback** uses routes `internal/transcriptions/*` and `internal/recordings/merge-*`, both with
-  the **`X-Worker-Secret`** shared header (not JWT). Not user-facing.
+- **Word-level timings.** `pipeline._shape_segments` keeps WhisperX's aligned words on each segment
+  (`Words: [{W, S, E}]`, single-letter keys because a long meeting carries ~10k of them and they are stored as
+  jsonb per segment). The key is **absent, never null**, when there are none — a language with no alignment
+  model, or a recording transcribed before this existed. `Segment.WordsJson` is what a split snaps to; the
+  public segment DTO carries only `hasWords`, and the words themselves are fetched one segment at a time from
+  `GET /api/recordings/{id}/segments/{segmentId}/words`, because ~10k words per recording would dominate a
+  payload that also feeds exports, MCP, webhooks and the n8n node. `TranscriptSegmentMerge` concatenates word
+  lists through its rebuild — auto-merge deletes and recreates every segment, so without that a merge would
+  silently make a transcript unsplittable while reading identically.
+- **On-demand voiceprint re-embed.** `voiceprint-jobs` carries
+  `{ VoiceSampleId, RecordingId, BlobKey, Spans: [{ StartMs, EndMs }] }`. The worker downloads the blob, slices
+  exactly those spans (`voiceprint.embed_spans`, pure with respect to the model so it is testable without
+  torch), embeds with ECAPA, L2-normalises, and POSTs `internal/people/voiceprint-result`
+  (`{ VoiceSampleId, Embedding, UsedMs, SelectedMs }`) or `internal/people/voiceprint-failure`. The API stores
+  the vector, clears the contributing `Speaker.EmbeddingStale`, and calls `RecomputeVoiceprintAsync`. It needs
+  no Whisper or pyannote, so it is seconds of work — but it **shares the worker process**, so it can queue
+  behind a transcription. An **empty `Spans`** means the whole speaker, matching the column's null.
+  `EMBED_MAX_SECONDS` is **120 s** (raised from 30) for both this path and the transcription-time one — one cap,
+  so they cannot drift — and `UsedMs` may therefore be less than `SelectedMs`, which the UI states rather than
+  implying the whole selection was used.
+- **Worker → API callback** uses routes `internal/transcriptions/*`, `internal/recordings/merge-*` and
+  `internal/people/voiceprint-*`, all with the **`X-Worker-Secret`** shared header (not JWT). Not user-facing.
 - **SignalR** hub `/hubs/transcription` requires JWT; clients auto-join a per-user group (group name = user
   GUID) so `RecordingStatusChanged` events are scoped per user.
 - **pgvector is Postgres-only.** All vector matching sits behind `ISpeakerIdentifier`; unit tests fake it,

@@ -71,7 +71,15 @@ transcript, so you can always get back to what the model said. Re-transcribe wit
 (with optional **min/max speaker hints** for pyannote when voices are merged, and an optional **spoken
 language**), **merge** consecutive same-speaker rows (or set it to happen automatically for every
 recording, from Preferences - Recordings, so a transcript arrives already in speaker-sized blocks), and
-**email yourself** the formatted transcript. The transcript **embeds its audio** in a
+**email yourself** the formatted transcript. A segment that contains **two voices** - one dominant, someone
+else's few words inside it - can be **split at an exact word boundary**, and the new part handed to another
+speaker or to one the API mints for it. The cut snaps to the stored word timings and the silence between the
+two words falls into neither half, which is what a voiceprint trained on either side needs; an estimated cut
+would slice the wrong audio. Word timings are kept from the release that introduced splitting onward, so an
+older recording shows the Split control **disabled with an explanation** rather than missing, and
+re-transcribing is what unlocks it. Splitting a segment you have hand-edited discards that edit, because
+there is no principled way to divide edited prose at a word index it may not contain - you are asked
+first. The transcript **embeds its audio** in a
 **conversation-flow player**: the recording is laid out left to right as speaker-coloured blocks sized by how
 long each person talked, with silence left dark and a legend giving each speaker's share — so the shape of the
 meeting is legible at a glance — and the bar doubles as the scrubber (click or drag anywhere on it to seek).
@@ -278,11 +286,30 @@ which erases the voiceprint they have and stops them being matched from then on.
 recording's speaker and Diariz recognises that voice automatically in later recordings (SpeechBrain ECAPA
 voiceprints in pgvector, cosine matching), with manual reassignment. The **Voice Prints** tab (Preferences)
 renames, prunes training samples, merges duplicates, and erases voiceprints (GDPR — biometric data).
+
+Each person's card carries a **Voiceprint** tab beside their profile, answering what the biometric was
+actually built from - previously invisible, which is why a drifting voiceprint had no diagnosis. It lists
+every contributing recording, the speaker slot it came from, and how much of that audio is behind the
+voiceprint. Expanding one lists that speaker's segments with **tick boxes**: untick the places where someone
+else was talking over them and press **Recompute voiceprint**, and the worker re-embeds from exactly the
+audio left ticked. A run of ticks queues **one** job, not one per click. What is stored is a set of
+**time spans**, not segment ids - a re-transcription replaces every segment row, and ids would dangle where
+wall-clock times survive - and ticking everything stores nothing at all, which is the "whole speaker" state
+every voiceprint enrolled before this existed is already in. Pooled audio is capped at **120 seconds** per
+speaker; where the cap bites, the tab states what was used against what was selected rather than implying it
+used all of it. Moving a segment between speakers marks both of their voiceprints as **needing recomputing**,
+since the audio behind each one changed; nothing recomputes on its own, because that needs the worker and the
+original audio.
 **Browsing** the directory, and editing, deleting or merging anyone other than yourself, needs the
 **Manage people** permission; labelling a speaker does not, and **opting yourself out never does** - under
 GDPR, withdrawing consent to hold your own biometric is yours to exercise, not an administrator's to grant.
 The trade-off of a shared directory is deliberate and worth stating plainly: a voiceprint enrolled by one
 person will identify that human in **everyone's** recordings.
+
+Two people of the same name are told apart by **which Diariz account each one is**. The directory list, the
+possible-duplicates banner and the merge dialog all show it, mark your own record, and say plainly when there
+is no account behind a person - which is also the difference between a pair you may merge and a pair the
+server will refuse, since two accounts are two humans.
 On a recording's Speakers tab, hovering an identified speaker's **Internal**/**External** marker shows their
 full details, and selecting that speaker puts a **contact card** above their segments - the only place inside
 a transcript where their **email address and phone number** are reachable, both as links. With **Manage

@@ -91,7 +91,34 @@ Other things the transcript toolbar does:
   up doing it, turn on **Merge each speaker's turn into one block** in Preferences - Recordings, and
   every recording is merged for you as soon as it finishes transcribing. While that is on, transcribing
   a recording again produces a merged transcript too, so turn it off first if you want short rows back.
+- **Split** divides one row in two, for the block where a second person got a few words in - see below.
 - **Download or email** the formatted transcript, which carries the summary, minutes, and actions with it.
+
+## When one row has two people in it
+
+Diariz attributes a whole row to one speaker. Sometimes that is wrong in a specific way: the row is mostly
+one person, with someone else's few words inside it. Naming the dominant speaker then teaches their
+voiceprint from the other person's voice too.
+
+Select the row and press **Split**. The row is laid out word by word with a scissors between each pair of
+words; click one and Diariz shows you the two halves it will make. Choose who spoke the new part - any
+speaker already in the recording, or **New speaker** for a voice that has no row of its own - and press
+Split.
+
+The cut lands exactly on a word, using timings Diariz recorded while transcribing, and the silence between
+the two words goes to neither half. That is the whole point: a guessed cut would hand a slice of the wrong
+person's voice to whichever half gets used for recognition.
+
+Two limits:
+
+- **Older recordings cannot be split.** Diariz only started keeping word timings recently, so on a recording
+  made before then the Split button is disabled and says so. Re-transcribe it and splitting becomes
+  available.
+- **Splitting a row you have edited discards your edit.** Both halves come from the model's original words,
+  because there is no sensible way to divide your own wording at a word the model chose. Diariz asks before
+  doing it.
+
+Splitting is permanent for that transcript, like merging. Re-transcribing regenerates the original rows.
 
 ## The conversation-flow player
 

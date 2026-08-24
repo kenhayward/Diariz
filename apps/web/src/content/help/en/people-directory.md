@@ -20,6 +20,43 @@ guess at them.
 A voiceprint is added by enrolling someone from a recording's speaker, and can be removed again without
 removing the person.
 
+## Seeing what a voiceprint was trained on
+
+Selecting someone opens their record under two tabs: **Profile** for their details, and **Voiceprint** for
+the audio behind their biometric.
+
+The Voiceprint tab lists every recording that trains it - which speaker it came from and how much of that
+audio is being used. This is where to look when Diariz starts naming the wrong person: recognition drifts
+when a voiceprint has learned from a speaker who was misattributed, and that shows up here as a recording
+you would not expect.
+
+**Show segments** on any of them lists what that speaker said, with a tick box per line. Untick the lines
+where someone else was talking over them and press **Recompute voiceprint**; Diariz re-reads the audio you
+left ticked and rebuilds the voiceprint from it. Tick as many as you like before pressing it - the work
+happens once, not once per click.
+
+A few things worth knowing:
+
+- **Ticking everything means "the whole recording"**, not a snapshot of today's lines. That matters because
+  re-transcribing splits the transcript up differently, and a fixed selection would then point at the wrong
+  moments.
+- **You cannot untick everything.** An empty selection would mean the whole recording again, which is the
+  opposite of what it looks like it should do, so the button stays disabled until at least one line is
+  ticked.
+- **Recomputing takes a moment.** The row says "Recomputing..." while it runs. It shares the queue with
+  transcription, so if a recording is being transcribed it will wait its turn.
+- **Diariz uses up to two minutes of audio** per recording. Where you have selected more than that, the row
+  says how much it actually used against how much you picked, rather than implying it used all of it.
+- **"Needs recomputing"** on a recording means its audio was re-attributed - usually because a segment was
+  moved to another speaker - so the stored voiceprint no longer matches. Nothing is recalculated on its own;
+  press Recompute when you are ready.
+
+## Telling two people of the same name apart
+
+Under each name, the list shows **which Diariz account that person is** - the account's email address, with
+your own marked "your account" - or says plainly that there is no account behind them. Two colleagues called
+the same thing are otherwise identical rows, and this is what separates them.
+
 ## The directory is shared
 
 One person is one record for the whole platform, however many colleagues have recorded them. That is what

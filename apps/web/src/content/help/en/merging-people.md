@@ -38,11 +38,22 @@ will happen to these two records.
 The record you merged away is then deleted. **This cannot be undone**, and because the directory is shared,
 it changes what your colleagues see in their recordings too.
 
+## Telling two records of the same name apart
+
+Under each name - in the directory list, in the possible-duplicates banner, and in the merge dialog itself -
+Diariz shows **which account that record is**: the email address of the Diariz account behind it, with your
+own marked "your account". A record with no account behind it says so plainly rather than showing nothing,
+because a blank would read as "still loading".
+
+That line is what makes a merge decidable when both records carry the same name. It is also what tells you
+in advance whether the merge is allowed at all.
+
 ## Two accounts are never merged
 
-If both records have a Diariz account, Diariz refuses. Two accounts are two people, however alike the names
-look, and merging them would cut one of them off from their own record - including their ability to opt
-themselves out of voice-printing. Rename one of the records instead, or delete it.
+If both records have a Diariz account, Diariz refuses, and names the two accounts it will not fold together.
+Two accounts are two people, however alike the names look, and merging them would cut one of them off from
+their own record - including their ability to opt themselves out of voice-printing. Rename one of the records
+instead, or delete it.
 
 ## If the pair is not really a duplicate
 
