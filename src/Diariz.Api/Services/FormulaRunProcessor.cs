@@ -54,13 +54,17 @@ public static class FormulaRunProcessor
             recordingId: job.RecordingId, recordingTitle: job.RecordingId is not null ? targetName : null,
             sectionId: job.SectionId, sectionName: job.SectionId is not null ? targetName : null);
 
+        // Whose name $USERNAME resolves to: the job's user. For an automatic, meeting-type-triggered run
+        // that is the recording's owner, which is the right answer - nobody else asked for it.
+        var userName = await TranscriptNameAsync(db, job.UserId, ct);
+
         try
         {
             string text;
             if (job.RecordingId is { } recordingId)
-                text = await RunOverRecordingAsync(db, chat, cfg, formula, recordingId, ct);
+                text = await RunOverRecordingAsync(db, chat, cfg, formula, recordingId, userName, ct);
             else if (job.SectionId is { } sectionId)
-                text = await RunOverSectionAsync(db, chat, cfg, formula, sectionId, ct);
+                text = await RunOverSectionAsync(db, chat, cfg, formula, sectionId, userName, ct);
             else
                 throw new InvalidOperationException("A formula run must target a recording or a folder.");
 
@@ -130,6 +134,30 @@ public static class FormulaRunProcessor
 
     private static Task<string?> OwnerEmailAsync(DiarizDbContext db, Guid userId, CancellationToken ct) =>
         db.Users.Where(u => u.Id == userId).Select(u => u.Email).FirstOrDefaultAsync(ct);
+
+    /// <summary>The name <c>$USERNAME</c> resolves to: the name this account appears under in transcripts.
+    ///
+    /// That is the linked <see cref="Person"/>'s name (<c>Person.LinkedUserId</c>), which
+    /// <c>PeopleDirectory.SyncFromUserAsync</c> keeps equal to the display name - so the fallbacks only matter
+    /// for an account that predates the directory, or was provisioned by a path that skipped it.
+    ///
+    /// Deliberately a plain query and NOT <c>IPeopleDirectory.EnsureForUserAsync</c>: that mints a person as a
+    /// side effect, and running a formula is not a reason to write to the directory.</summary>
+    internal static async Task<string?> TranscriptNameAsync(DiarizDbContext db, Guid userId, CancellationToken ct)
+    {
+        var personName = await db.People
+            .Where(p => p.LinkedUserId == userId)
+            .Select(p => p.Name)
+            .FirstOrDefaultAsync(ct);
+        if (!string.IsNullOrWhiteSpace(personName)) return personName;
+
+        var user = await db.Users
+            .Where(u => u.Id == userId)
+            .Select(u => new { u.FullName, u.Email })
+            .FirstOrDefaultAsync(ct);
+        if (user is null) return null;
+        return string.IsNullOrWhiteSpace(user.FullName) ? user.Email : user.FullName;
+    }
 
     /// <summary>Settles a formula result whose job was dropped without ever running - the reclaimer
     /// abandoning a message past its delivery cap. Nothing else will move it: the job is gone, so the card
@@ -261,9 +289,11 @@ public static class FormulaRunProcessor
     /// the degenerate template *is* the old behaviour.</summary>
     internal static async Task<string> RunOverRecordingAsync(
         DiarizDbContext db, IChatStreamClient chat, LlmRequestConfig cfg,
-        Formula formula, Guid recordingId, CancellationToken ct)
+        Formula formula, Guid recordingId, string? userName, CancellationToken ct)
     {
-        var content = TemplateContent.Parse(formula.ContentJson);
+        // Substituted on the PARSED template, before composing, so prompt blocks and literal blocks agree
+        // without either path having to know about tokens.
+        var content = PromptTokens.Apply(TemplateContent.Parse(formula.ContentJson), userName);
         var context = await BuildRecordingContextAsync(db, recordingId, formula.Context, ct: ct);
         var fields = await BuildFieldResolverAsync(db, content, recordingId, ct);
         return await ComposeAsync(chat, cfg, content, fields, context, ct);
@@ -334,7 +364,7 @@ public static class FormulaRunProcessor
     /// meeting returns its map output directly (no reduce call); zero meetings throw so the run is marked Failed.</summary>
     internal static async Task<string> RunOverSectionAsync(
         DiarizDbContext db, IChatStreamClient chat, LlmRequestConfig cfg,
-        Formula formula, Guid sectionId, CancellationToken ct)
+        Formula formula, Guid sectionId, string? userName, CancellationToken ct)
     {
         var section = await db.Sections.FirstOrDefaultAsync(s => s.Id == sectionId, ct);
         if (section is null)
@@ -352,7 +382,7 @@ public static class FormulaRunProcessor
             orderby r.CreatedAt
             select new { r.Id, r.Name, r.Title }).ToListAsync(ct);
 
-        var content = TemplateContent.Parse(formula.ContentJson);
+        var content = PromptTokens.Apply(TemplateContent.Parse(formula.ContentJson), userName);
 
         // Map: run the formula per meeting, skipping any whose built context is empty (no transcript/artifacts).
         var items = new List<(string Name, string Output)>();

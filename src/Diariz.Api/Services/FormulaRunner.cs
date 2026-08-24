@@ -113,7 +113,9 @@ public class FormulaRunner : IFormulaRunner
         // filter) is safe. A TimeoutSeconds expiry surfaces as an OperationCanceledException with the OUTER `ct` still
         // uncancelled; the calling controller distinguishes a timeout from a client disconnect via
         // `!ct.IsCancellationRequested` (outer-ct-cancelled = client went away; otherwise = LLM timeout -> 504).
-        var text = await FormulaRunProcessor.RunOverRecordingAsync(_db, _chat, cfg, formula, recordingId, ct);
+        var userName = await FormulaRunProcessor.TranscriptNameAsync(_db, userId, ct);
+        var text = await FormulaRunProcessor.RunOverRecordingAsync(
+            _db, _chat, cfg, formula, recordingId, userName, ct);
 
         // Same rule as the async path: replace this recording's existing result for the formula.
         var result = (await FormulaResultUpsert.ForRecordingAsync(_db, recordingId, formula, userId, automatic: false, ct))!;
