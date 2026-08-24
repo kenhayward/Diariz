@@ -65,6 +65,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.245.2",
+    date: "2026-08-24",
+    pr: 599,
+    headline: "The capture bar's floating prompts no longer have the page showing through them",
+    summary:
+      "The capture bar floats a few panels below itself over whatever page you are on: the prompt asking whether to keep recording a meeting that has overrun, and the banners offering to recover a recording, set of notes, or set of screenshots that did not make it to the server. In dark mode all of these were nearly see-through, so whatever was on the page behind them read straight through the panel. On a calendar event, that page's own Join the Meeting and Link a recording buttons sat visibly on top of the prompt's Extend this meeting and Stop now buttons - two sets of controls in the same place, with no way to tell which one you were about to press.\n\nThey now paint on solid panels, like every other popover in the capture bar, and their outline-only buttons (Stop now, Discard) carry their own fill instead of letting the page show through the button itself. While one of these panels is up, the only controls you can see are the ones it is offering.",
+    fixed: [
+      "The prompt shown when a meeting overruns, and the unsaved-recording / notes / screenshots recovery banners, were all translucent in dark mode - the page's own controls showed through them and overlapped their buttons.",
+    ],
+  },
+  {
     version: "0.245.1",
     date: "2026-08-24",
     pr: 595,
