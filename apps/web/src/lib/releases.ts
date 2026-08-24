@@ -67,7 +67,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.247.0",
     date: "2026-08-24",
-    pr: 598,
+    pr: 600,
     headline: "Formulas can ask about you by name",
     summary:
       "A formula can now put your own name into what it asks the model. Write \"$USERNAME\" anywhere in a formula - inside a prompt, or in the ordinary text around it - and each time the formula runs it becomes the name you appear under on your transcripts. That makes a whole class of question possible that could not be written before, because the answer depends on who is asking: \"What role did $USERNAME play in this meeting?\", \"What was the attitude of speakers apart from $USERNAME?\" - one formula, correct for whoever runs it, rather than a copy per person with a name typed into each.\n\nThe name comes from your entry in the people directory, which follows the display name on your profile; when a formula runs automatically rather than because you asked for it, the name used is the owner of the recording. It is deliberately not a merge field like {{date}}: those are written into the finished document and the model never sees them, which is exactly why they could not be used to ask a question. This one is substituted before the model is asked.",
