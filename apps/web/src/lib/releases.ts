@@ -65,6 +65,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.245.2",
+    date: "2026-08-24",
+    pr: 599,
+    headline: "The overrunning-meeting prompt no longer has the page showing through it",
+    summary:
+      "When a recording runs past the end of its meeting slot and people are still talking, a prompt drops below the capture bar asking whether to keep going. In dark mode that prompt was nearly see-through, so whatever was on the page behind it read straight through the panel - on a calendar event, the page's own Join the Meeting and Link a recording buttons sat visibly on top of the prompt's Extend this meeting and Stop now buttons. With two sets of buttons overlapping in the same place it was genuinely unclear which one you were about to press.\n\nThe prompt now paints on a solid panel, like every other popover in the capture bar, and its Stop now button carries its own fill instead of being an empty outline. The page behind it is hidden while the prompt is up, so the only controls you can see are the ones the prompt is offering.",
+    fixed: [
+      "The prompt shown when a meeting overruns was translucent in dark mode, letting the page's controls show through and overlap its own Extend this meeting / Stop now buttons.",
+    ],
+  },
+  {
     version: "0.245.1",
     date: "2026-08-24",
     pr: 595,

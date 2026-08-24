@@ -1970,6 +1970,25 @@ describe("extending a meeting that overruns", () => {
     expect(prompt.textContent).not.toMatch(/Ending in/);
   });
 
+  it("floats the prompt on a solid panel, so page controls cannot read through it (#598)", async () => {
+    await joinUnderFakeTimers();
+
+    await tick(3 * 60_000 + 1_500);
+
+    // The panel is the positioning wrapper's only child. It floats over the routed page, so a
+    // translucent background lets the page's own buttons show through and tangle with Extend/Stop.
+    const panel = screen.getByTestId("extend-prompt").firstElementChild as HTMLElement;
+    const backgrounds = panel.className.split(/\s+/).filter((c) => /(^|:)bg-/.test(c));
+    expect(backgrounds.length).toBeGreaterThan(0);
+    for (const cls of backgrounds) expect(cls).not.toMatch(/\//);
+    // Both of the prompt's own buttons need a background too, or the page reads through the gaps
+    // in the outline-only one even once the panel behind it is solid.
+    for (const name of [/extend this meeting/i, /stop now/i]) {
+      const button = screen.getByRole("button", { name });
+      expect(button.className).toMatch(/(^|\s)(dark:)?bg-/);
+    }
+  });
+
   it("just ends the take when the room has already gone quiet - there is nobody to ask", async () => {
     silenceState = { heardSound: true, silentMs: 30_000 };
     await joinUnderFakeTimers();

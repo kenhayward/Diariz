@@ -1614,7 +1614,11 @@ export default function Recorder({
           data-testid="extend-prompt"
           className="absolute left-1/2 top-full z-40 mt-1 w-[28rem] max-w-[calc(100vw-2rem)] -translate-x-1/2"
         >
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm text-blue-900 shadow-xl dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-100">
+          {/* The panel must be fully opaque. It floats over the routed page, so an alpha tint (this was
+              `dark:bg-blue-900/30`) lets the page's own header buttons read straight through it and tangle
+              with Extend/Stop below - the same reason HubPopover paints on the solid `--hub-popover-bg`
+              rather than a tint (#598). */}
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm text-blue-900 shadow-xl dark:border-blue-700 dark:bg-blue-950 dark:text-blue-100">
             <span>{t("extendPromptText")}</span>
             {extendAsk.deadlineAt != null && (
               <span className="text-xs text-blue-700 dark:text-blue-300">
@@ -1635,7 +1639,9 @@ export default function Recorder({
                    Wrapped rather than passed bare: `stop` takes an optional StopReason, and the bare reference
                    would take the click's SyntheticEvent as that argument. */
                 onClick={() => stop()}
-                className="rounded border border-blue-400 px-2 py-1 text-xs dark:border-blue-700"
+                /* Carries its own background rather than being outline-only: a transparent fill would let
+                   the page behind the panel show through the button itself (#598). */
+                className="rounded border border-blue-400 bg-white px-2 py-1 text-xs hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:hover:bg-blue-800"
               >
                 {t("extendStopNow")}
               </button>
