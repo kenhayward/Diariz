@@ -37,10 +37,12 @@ public class PeopleController : ControllerBase
     private readonly IAudioClipper _clipper;
     private readonly IAudioStorage _storage;
     private readonly ILogger<PeopleController> _logger;
+    private readonly IPlatformSettingsService _settings;
 
     public PeopleController(
         DiarizDbContext db, IRoomScope rooms, IPeopleDirectory people, IUserPermissions permissions,
-        IJobQueue queue, IAudioClipper clipper, IAudioStorage storage, ILogger<PeopleController> logger)
+        IJobQueue queue, IAudioClipper clipper, IAudioStorage storage, ILogger<PeopleController> logger,
+        IPlatformSettingsService settings)
     {
         _db = db;
         _rooms = rooms;
@@ -50,6 +52,7 @@ public class PeopleController : ControllerBase
         _clipper = clipper;
         _storage = storage;
         _logger = logger;
+        _settings = settings;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -214,6 +217,84 @@ public class PeopleController : ControllerBase
         }).ToList();
 
         return new PersonDetailDto(ToDto(person, await CanManagePeopleAsync()), identifiedCount, samples);
+    }
+
+    [HttpGet("{id:guid}/diagnostics")]
+    [EndpointSummary("Check whether a person's samples resemble each other")]
+    [EndpointDescription(
+        "Scores every sample training this person's voiceprint against the others, to show which ones do " +
+        "not belong. Two distances per sample: to its **closest companion**, and to the centre of **the " +
+        "person's other samples** - the second is a true leave-one-out, and they disagree when a pair sits " +
+        "together but away from everything else.\n\n" +
+        "A verdict of `Alone` does not mean wrong. It means that sample resembles none of the others, which " +
+        "is either a recording condition nothing else covers - a phone, a car - or a **different person " +
+        "enrolled under this name**. Only listening tells you which, so the answer says where to look.\n\n" +
+        "Needs no re-transcription and no audio: it reads embeddings that already exist.")]
+    public async Task<ActionResult<VoiceprintDiagnosticsDto>> Diagnostics(Guid id)
+    {
+        if (!await CanManagePeopleAsync()) return Forbid();
+        if (!await _db.People.AnyAsync(p => p.Id == id)) return NotFound();
+
+        var samples = await _db.VoiceSamples
+            .Where(v => v.PersonId == id)
+            .OrderBy(v => v.CreatedAt)
+            .ToListAsync();
+
+        // Diagnosed against the training set only. An excluded sample is not teaching the voiceprint
+        // anything, so letting it define what the others are measured against would mean dropping an outlier
+        // made everything else look like one instead.
+        var training = samples.Where(v => v.ExcludedAt is null && v.Embedding is not null).ToList();
+
+        var thresholds = IdentificationThresholds.From(await _settings.GetAsync());
+        var diagnosed = VoiceprintDiagnosis
+            .Diagnose(training.Select(v => (v.Id, v.Embedding.ToArray())).ToList(), thresholds)
+            .ToDictionary(d => d.SampleId);
+
+        // Recording names and speaker labels, stitched in memory - VoiceSample deliberately has no FK to its
+        // recording, and a deleted one must not take the sample with it.
+        var recIds = samples.Select(v => v.RecordingId).Distinct().ToList();
+        var spIds = samples.Select(v => v.SpeakerId).Distinct().ToList();
+        var recMap = (await _db.Recordings.Where(r => recIds.Contains(r.Id))
+                .Select(r => new { r.Id, Display = r.Name ?? r.Title }).ToListAsync())
+            .ToDictionary(r => r.Id, r => r.Display);
+        var spMap = (await _db.Speakers.Where(sp => spIds.Contains(sp.Id))
+                .Select(sp => new { sp.Id, sp.Label }).ToListAsync())
+            .ToDictionary(sp => sp.Id, sp => sp.Label);
+
+        var rows = samples.Select(v =>
+        {
+            var d = diagnosed.GetValueOrDefault(v.Id);
+            return new SampleDiagnosisDto(
+                v.Id, v.SpeakerId, v.RecordingId,
+                recMap.TryGetValue(v.RecordingId, out var name) ? name : "(deleted recording)",
+                spMap.TryGetValue(v.SpeakerId, out var label) ? label : "",
+                d?.NearestSiblingDistance,
+                d?.DistanceToOthers,
+                // An excluded sample was not diagnosed, so it has no verdict of its own to report.
+                (d?.Verdict ?? SampleVerdict.Only).ToString(),
+                v.ExcludedAt is null);
+        }).ToList();
+
+        return Ok(new VoiceprintDiagnosticsDto(
+            rows,
+            diagnosed.Values.Count(d => d.Verdict == SampleVerdict.Alone),
+            WidestPair(training)));
+    }
+
+    /// <summary>The largest distance between any two of a person's training samples - one number for "how
+    /// scattered is this person", which is what the directory ranking sorts on. Null when there is no pair to
+    /// measure.</summary>
+    private static double? WidestPair(IReadOnlyList<VoiceSample> training)
+    {
+        double? widest = null;
+        for (var i = 0; i < training.Count; i++)
+        for (var j = i + 1; j < training.Count; j++)
+        {
+            var d = Voiceprints.CosineDistance(
+                training[i].Embedding.ToArray(), training[j].Embedding.ToArray());
+            if (widest is null || d > widest) widest = d;
+        }
+        return widest;
     }
 
     [HttpGet("{id:guid}/attributions")]

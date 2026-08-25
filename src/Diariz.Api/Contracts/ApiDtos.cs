@@ -555,6 +555,35 @@ public record PersonAttributionDto(
     long SpeechMs,
     bool CanAccessRecording);
 
+/// <summary>How well one enrolled sample resembles the rest of a person's training set.
+///
+/// <para>Two distances, because they answer different questions and disagree in the case that matters most: a
+/// sample can sit right next to one companion while that pair together sits well away from the person's
+/// centre of mass.</para></summary>
+public record SampleDiagnosisDto(
+    Guid VoiceSampleId,
+    Guid SpeakerId,
+    Guid RecordingId,
+    string RecordingName,
+    string SpeakerLabel,
+    /// <summary>Cosine distance to the closest other sample - "does this have company?" Null when there is
+    /// no other sample.</summary>
+    double? NearestSiblingDistance,
+    /// <summary>Cosine distance to the centroid of the person's <b>other</b> samples - "would the rest of
+    /// this voiceprint recognise it?" A true leave-one-out. Null when there is no other sample.</summary>
+    double? DistanceToOthers,
+    /// <summary>"Only", "Core", "Variant" or "Alone".</summary>
+    string Verdict,
+    bool IsTraining);
+
+/// <summary>A person's training set, and how coherent it is.
+///
+/// <para><paramref name="WidestPair"/> is the largest distance between any two of their samples - one number
+/// for "how scattered is this person", which is what the directory ranking sorts on. Null when there is
+/// nothing to compare.</para></summary>
+public record VoiceprintDiagnosticsDto(
+    IReadOnlyList<SampleDiagnosisDto> Samples, int AloneCount, double? WidestPair);
+
 /// <summary>Whether a speaker attributed to a person should train their voiceprint.</summary>
 public record SetTrainingRequest(bool Training);
 

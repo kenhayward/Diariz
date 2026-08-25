@@ -21,7 +21,7 @@ public class PeopleControllerTests
         Perms.Grant(db, userId, perms);
         return new(db, new RoomScope(db), new PeopleDirectory(db), new UserPermissions(db), new FakeJobQueue(),
             new FakeAudioClipper(), new FakeAudioStorage(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<PeopleController>.Instance)
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<PeopleController>.Instance, new PlatformSettingsService(db))
         {
             ControllerContext = Http.Context(userId),
         };
@@ -36,7 +36,7 @@ public class PeopleControllerTests
         if (perms != PlatformPermission.None) Perms.Grant(db, userId, perms);
         return new(db, new RoomScope(db), new PeopleDirectory(db), new UserPermissions(db), queue,
             new FakeAudioClipper(), new FakeAudioStorage(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<PeopleController>.Instance)
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<PeopleController>.Instance, new PlatformSettingsService(db))
         {
             ControllerContext = Http.Context(userId),
         };

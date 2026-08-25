@@ -64,12 +64,12 @@ public static class VoiceprintDiagnosis
 
             // The *closest* other sample, not the average: a pair inside an otherwise scattered set is still
             // a pair, and averaging would drown that and report every member as an outlier.
-            var nearest = others.Min(o => Cosine(embedding, o.Embedding));
+            var nearest = others.Min(o => Voiceprints.CosineDistance(embedding, o.Embedding));
 
             // Leave-one-out. Including the sample in its own centroid pulls the centre toward it, after which
             // everything resembles itself and the diagnosis says nothing.
             var centroid = Voiceprints.Centroid(others.Select(o => o.Embedding).ToList());
-            var toOthers = centroid is null ? (double?)null : Cosine(embedding, centroid.ToArray());
+            var toOthers = centroid is null ? (double?)null : Voiceprints.CosineDistance(embedding, centroid.ToArray());
 
             result.Add(new SampleDiagnosis(id, nearest, toOthers, Verdict(nearest, t)));
         }
@@ -81,20 +81,4 @@ public static class VoiceprintDiagnosis
         nearest <= t.Accept ? SampleVerdict.Core
         : nearest <= t.Suggest ? SampleVerdict.Variant
         : SampleVerdict.Alone;
-
-    /// <summary>Cosine distance, matching pgvector's <c>&lt;=&gt;</c> so a number shown in the UI means the
-    /// same thing as one the database produced.</summary>
-    private static double Cosine(float[] a, float[] b)
-    {
-        double dot = 0, na = 0, nb = 0;
-        var n = Math.Min(a.Length, b.Length);
-        for (var i = 0; i < n; i++)
-        {
-            dot += a[i] * (double)b[i];
-            na += a[i] * (double)a[i];
-            nb += b[i] * (double)b[i];
-        }
-        if (na <= 0 || nb <= 0) return 1; // a zero vector is not similar to anything
-        return 1 - (dot / (Math.Sqrt(na) * Math.Sqrt(nb)));
-    }
 }

@@ -23,7 +23,7 @@ public class PeopleBiometricGateTests
         return new(db, new Diariz.Api.Services.RoomScope(db), new Diariz.Api.Services.PeopleDirectory(db),
             new Diariz.Api.Services.UserPermissions(db), new FakeJobQueue(),
             new FakeAudioClipper(), new FakeAudioStorage(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<PeopleController>.Instance)
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<PeopleController>.Instance, new Diariz.Api.Services.PlatformSettingsService(db))
         {
             ControllerContext = Http.Context(userId),
         };
