@@ -25,8 +25,46 @@ bool usb_mode_allows_poweroff(void)
     return state == USB_MODE_CAPTURE;
 }
 
+static void push(usb_mode_actions_t *a, usb_mode_action_t action)
+{
+    if (a->count < USB_MODE_MAX_ACTIONS) {
+        a->actions[a->count++] = action;
+    }
+}
+
 usb_mode_actions_t usb_mode_handle(usb_mode_event_t event)
 {
-    (void)event;
-    return none();
+    usb_mode_actions_t a = none();
+
+    if (event == USB_MODE_EVENT_USB_CONNECTED) {
+        usb_connected = true;
+        return a;
+    }
+    if (event == USB_MODE_EVENT_USB_DISCONNECTED) {
+        usb_connected = false;
+        return a;
+    }
+
+    switch (state) {
+    case USB_MODE_CAPTURE:
+        if (event == USB_MODE_EVENT_DOUBLE_TAP && usb_connected) {
+            state = USB_MODE_ENTERING;
+            push(&a, USB_MODE_ACTION_STOP_CAPTURE);
+            push(&a, USB_MODE_ACTION_UNMOUNT_FS);
+        }
+        break;
+
+    case USB_MODE_ENTERING:
+        if (event == USB_MODE_EVENT_UNMOUNT_OK) {
+            state = USB_MODE_TRANSFER;
+            push(&a, USB_MODE_ACTION_START_MSC);
+            push(&a, USB_MODE_ACTION_LED_TRANSFER);
+        }
+        break;
+
+    default:
+        break;
+    }
+
+    return a;
 }
