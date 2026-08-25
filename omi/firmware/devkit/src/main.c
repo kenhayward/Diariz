@@ -145,10 +145,18 @@ void usb_mode_dispatch(usb_mode_event_t event)
             usb_msc_stop();
             break;
 
+        case USB_MODE_ACTION_LED_CARD_FAIL:
+            for (int b = 0; b < 6; b++) {
+                set_led_red(true);
+                k_msleep(150);
+                set_led_red(false);
+                k_msleep(150);
+            }
+            break;
+
         case USB_MODE_ACTION_LED_CAPTURE:
         case USB_MODE_ACTION_LED_TRANSFER:
-        case USB_MODE_ACTION_LED_CARD_FAIL:
-            /* Handled in Task 9. */
+            /* set_led_state() reads the mode on its next tick. */
             break;
         }
     }
@@ -156,6 +164,28 @@ void usb_mode_dispatch(usb_mode_event_t event)
 
 void set_led_state()
 {
+    /* The mode owns the LED whenever we are not capturing. Without this, the
+     * 500 ms tick overwrites the transfer pattern immediately. No colour is
+     * free at runtime - steady blue means BLE connected and steady red means
+     * recording-but-disconnected - so transfer mode is a blue BLINK, with red
+     * and green forced off. Forcing green off matters: transfer mode always
+     * implies a USB connection and would otherwise carry the charging blink.
+     * See docs/09-usb-transfer-mode-design.md section 9.4.
+     */
+    if (usb_mode_get_state() != USB_MODE_CAPTURE) {
+        static bool transfer_blink;
+
+        if (usb_mode_get_state() == USB_MODE_TRANSFER) {
+            transfer_blink = !transfer_blink;
+            set_led_blue(transfer_blink);
+        } else {
+            set_led_blue(false);
+        }
+        set_led_red(false);
+        set_led_green(false);
+        return;
+    }
+
     // Recording and connected state - BLUE
 
     if (usb_charge) {
