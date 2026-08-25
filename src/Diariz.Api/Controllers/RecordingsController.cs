@@ -28,7 +28,7 @@ public class RecordingsController : ControllerBase
     private readonly IHubContext<TranscriptionHub> _hub;
     private readonly ILlmSettingsResolver _summarization;
     private readonly IEmailSender _email;
-    private readonly ISpeakerIdentifier _identifier;
+    private readonly ISpeakerIdentification _identification;
     private readonly UploadOptions _uploads;
     private readonly IRoomScope _rooms;
     private readonly IPeopleDirectory _people;
@@ -41,7 +41,7 @@ public class RecordingsController : ControllerBase
     public RecordingsController(
         DiarizDbContext db, IAudioStorage storage, IJobQueue queue,
         IHubContext<TranscriptionHub> hub, IConfiguration config,
-        ILlmSettingsResolver summarization, IEmailSender email, ISpeakerIdentifier identifier,
+        ILlmSettingsResolver summarization, IEmailSender email, ISpeakerIdentification identification,
         IOptions<UploadOptions> uploads, IRoomScope rooms, IPeopleDirectory people,
         IWebhookPublisher webhooks,
         IOptions<AppPublicOptions> appOpts, IExportLocalizer? exportLocalizer = null,
@@ -53,7 +53,7 @@ public class RecordingsController : ControllerBase
         _hub = hub;
         _summarization = summarization;
         _email = email;
-        _identifier = identifier;
+        _identification = identification;
         _uploads = uploads.Value;
         _rooms = rooms;
         _people = people;
@@ -668,7 +668,7 @@ public class RecordingsController : ControllerBase
             .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
         if (rec is null) return NotFound();
 
-        await SpeakerLabeling.ApplyAsync(rec.Speakers, _identifier);
+        await _identification.ApplyAsync(rec.Speakers, await SpeakerSpeech.ForRecordingAsync(_db, rec.Id));
         await _db.SaveChangesAsync();
         return NoContent();
     }

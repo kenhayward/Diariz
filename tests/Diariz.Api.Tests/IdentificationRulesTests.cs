@@ -143,8 +143,8 @@ public class IdentificationRulesTests
     {
         var t = IdentificationThresholds.From(new PlatformSettings());
 
-        Assert.Equal(0.40, t.Accept, 3);
-        Assert.Equal(0.50, t.Suggest, 3);
+        Assert.Equal(0.30, t.Accept, 3);
+        Assert.Equal(0.40, t.Suggest, 3);
         Assert.Equal(0.05, t.Margin, 3);
         Assert.Equal(3000, t.MinSpeechMs);
     }

@@ -150,7 +150,7 @@ public class DatabaseIntegrationTests(ContainersFixture fx)
             db, Options.Create(new LlmDefaultsOptions()), Options.Create(new SummarizationOptions()),
             new FakeApiKeyProtector(), new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())));
         var controller = new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config,
-            resolver, new FakeEmailSender(), new FakeSpeakerIdentifier(), Options.Create(new UploadOptions()), new RoomScope(db),
+            resolver, new FakeEmailSender(), new FakeSpeakerIdentification(new FakeSpeakerIdentifier()), Options.Create(new UploadOptions()), new RoomScope(db),
             new PeopleDirectory(db), new CapturingWebhookPublisher(), Options.Create(new AppPublicOptions()))
         {
             ControllerContext = Http.Context(user.Id)

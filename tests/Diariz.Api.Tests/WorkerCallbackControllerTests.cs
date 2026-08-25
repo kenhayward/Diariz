@@ -25,7 +25,7 @@ public class WorkerCallbackControllerTests
     }
 
     private static (WorkerCallbackController controller, DiarizDbContext db, FakeHubContext hub, FakeJobQueue queue)
-        BuildEx(string presentedSecret, bool summarizationEnabled, FakeSpeakerIdentifier? identifier = null)
+        BuildEx(string presentedSecret, bool summarizationEnabled, FakeSpeakerIdentification? identifier = null)
     {
         var db = TestDb.Create();
         var hub = new FakeHubContext();
@@ -35,7 +35,7 @@ public class WorkerCallbackControllerTests
         // Embeddings fall back to the summarisation endpoint, so they follow the same enable/disable toggle here.
         var embedding = new EmbeddingSettingsResolver(db, Options.Create(new EmbeddingOptions()), resolver);
         var controller = new WorkerCallbackController(
-            db, hub, queue, resolver, embedding, identifier ?? new FakeSpeakerIdentifier(),
+            db, hub, queue, resolver, embedding, identifier ?? new FakeSpeakerIdentification(new FakeSpeakerIdentifier()),
             Options.Create(new WorkerOptions { CallbackSecret = Secret }),
             new CapturingWebhookPublisher(), Options.Create(new AppPublicOptions()),
             NullLogger<WorkerCallbackController>.Instance)
@@ -102,7 +102,7 @@ public class WorkerCallbackControllerTests
 
         var body = new TranscriptionResult(transcriptionId, "en",
         [
-            new SegmentResult("SPEAKER_00", 0, 1000, "Hello"),
+            new SegmentResult("SPEAKER_00", 0, 30000, "Hello"),
             new SegmentResult("SPEAKER_01", 1000, 2000, "Hi there"),
             new SegmentResult("SPEAKER_00", 2000, 3000, "How are you"),
         ]);
@@ -191,7 +191,7 @@ public class WorkerCallbackControllerTests
         await db.SaveChangesAsync();
 
         await controller.Result(new TranscriptionResult(transcriptionId, "en",
-            [new SegmentResult("SPEAKER_00", 0, 1000, "Hello")]));
+            [new SegmentResult("SPEAKER_00", 0, 30000, "Hello")]));
 
         var refreshed = await db.Recordings.FindAsync(recordingId);
         Assert.Equal(RecordingStatus.Transcribed, refreshed!.Status);
@@ -218,7 +218,7 @@ public class WorkerCallbackControllerTests
         var (recordingId, transcriptionId) = await SeedQueuedRecording(db, Guid.NewGuid());
 
         await controller.Result(new TranscriptionResult(transcriptionId, "en",
-            [new SegmentResult("SPEAKER_00", 0, 1000, "Hello")]));
+            [new SegmentResult("SPEAKER_00", 0, 30000, "Hello")]));
 
         // Transcript still persisted, but the pipeline auto-continues into summarisation.
         var rec = await db.Recordings.FindAsync(recordingId);
@@ -253,7 +253,7 @@ public class WorkerCallbackControllerTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => controller.Result(
             new TranscriptionResult(transcriptionId, "en",
-                [new SegmentResult("SPEAKER_00", 0, 1000, "Hello")])));
+                [new SegmentResult("SPEAKER_00", 0, 30000, "Hello")])));
 
         // The transcript itself is durable - the segments are the expensive part and must survive.
         var rec = await db.Recordings.FindAsync(recordingId);
@@ -268,7 +268,7 @@ public class WorkerCallbackControllerTests
         var (recordingId, transcriptionId) = await SeedQueuedRecording(db, Guid.NewGuid());
 
         await controller.Result(new TranscriptionResult(transcriptionId, "en",
-            [new SegmentResult("SPEAKER_00", 0, 1000, "Hello")]));
+            [new SegmentResult("SPEAKER_00", 0, 30000, "Hello")]));
 
         Assert.Equal(RecordingStatus.Transcribed, (await db.Recordings.FindAsync(recordingId))!.Status);
         Assert.Empty(queue.SummarizationEnqueued);
@@ -316,12 +316,14 @@ public class WorkerCallbackControllerTests
     public async Task Result_StoresSpeakerEmbedding_AndAutoIdentifies()
     {
         var profileId = Guid.NewGuid();
-        var identifier = new FakeSpeakerIdentifier { Match = new SpeakerMatch(profileId, "Alice", 0.1) };
+        var inner = new FakeSpeakerIdentifier();
+        inner.Nearest(profileId, "Alice", 0.1);
+        var identifier = new FakeSpeakerIdentification(inner);
         var (controller, db, _, _) = BuildEx(Secret, summarizationEnabled: false, identifier);
         var (recordingId, transcriptionId) = await SeedQueuedRecording(db, Guid.NewGuid());
 
         await controller.Result(new TranscriptionResult(transcriptionId, "en",
-            [new SegmentResult("SPEAKER_00", 0, 1000, "Hello")],
+            [new SegmentResult("SPEAKER_00", 0, 30000, "Hello")],
             Speakers: [new SpeakerEmbeddingResult("SPEAKER_00", [0.1f, 0.2f, 0.3f])]));
 
         var sp = await db.Speakers.SingleAsync(s => s.RecordingId == recordingId && s.Label == "SPEAKER_00");
@@ -334,12 +336,13 @@ public class WorkerCallbackControllerTests
     [Fact]
     public async Task Result_NoMatch_LeavesSpeakerAnonymous()
     {
-        var identifier = new FakeSpeakerIdentifier { Match = null };
+        // An empty ranking: nobody in the gallery at all.
+        var identifier = new FakeSpeakerIdentification(new FakeSpeakerIdentifier());
         var (controller, db, _, _) = BuildEx(Secret, summarizationEnabled: false, identifier);
         var (recordingId, transcriptionId) = await SeedQueuedRecording(db, Guid.NewGuid());
 
         await controller.Result(new TranscriptionResult(transcriptionId, "en",
-            [new SegmentResult("SPEAKER_00", 0, 1000, "Hello")],
+            [new SegmentResult("SPEAKER_00", 0, 30000, "Hello")],
             Speakers: [new SpeakerEmbeddingResult("SPEAKER_00", [0.1f, 0.2f])]));
 
         var sp = await db.Speakers.SingleAsync(s => s.RecordingId == recordingId);
@@ -352,7 +355,9 @@ public class WorkerCallbackControllerTests
     [Fact]
     public async Task Result_DoesNotOverrideManuallyNamedSpeaker()
     {
-        var identifier = new FakeSpeakerIdentifier { Match = new SpeakerMatch(Guid.NewGuid(), "Alice", 0.1) };
+        var inner = new FakeSpeakerIdentifier();
+        inner.Nearest(Guid.NewGuid(), "Alice", 0.1);
+        var identifier = new FakeSpeakerIdentification(inner);
         var (controller, db, _, _) = BuildEx(Secret, summarizationEnabled: false, identifier);
         var (recordingId, transcriptionId) = await SeedQueuedRecording(db, Guid.NewGuid());
         // Pre-existing manual rename.
@@ -360,7 +365,7 @@ public class WorkerCallbackControllerTests
         await db.SaveChangesAsync();
 
         await controller.Result(new TranscriptionResult(transcriptionId, "en",
-            [new SegmentResult("SPEAKER_00", 0, 1000, "Hello")],
+            [new SegmentResult("SPEAKER_00", 0, 30000, "Hello")],
             Speakers: [new SpeakerEmbeddingResult("SPEAKER_00", [0.1f])]));
 
         var sp = await db.Speakers.SingleAsync(s => s.RecordingId == recordingId);
@@ -397,7 +402,7 @@ public class WorkerCallbackControllerTests
 
         await controller.Result(new TranscriptionResult(transcriptionId, "en",
         [
-            new SegmentResult("SPEAKER_00", 0, 1000, "Hello"),
+            new SegmentResult("SPEAKER_00", 0, 30000, "Hello"),
             new SegmentResult("SPEAKER_00", 1000, 2000, "World"),
             new SegmentResult("SPEAKER_01", 2000, 3000, "Hi there"),
         ]));
@@ -422,7 +427,7 @@ public class WorkerCallbackControllerTests
 
         await controller.Result(new TranscriptionResult(transcriptionId, "en",
         [
-            new SegmentResult("SPEAKER_00", 0, 1000, "Hello"),
+            new SegmentResult("SPEAKER_00", 0, 30000, "Hello"),
             new SegmentResult("SPEAKER_00", 1000, 2000, "World"),
         ]));
 
@@ -438,7 +443,7 @@ public class WorkerCallbackControllerTests
 
         await controller.Result(new TranscriptionResult(transcriptionId, "en",
         [
-            new SegmentResult("SPEAKER_00", 0, 1000, "Hello"),
+            new SegmentResult("SPEAKER_00", 0, 30000, "Hello"),
             new SegmentResult("SPEAKER_00", 1000, 2000, "World"),
         ]));
 
@@ -451,11 +456,9 @@ public class WorkerCallbackControllerTests
     [Fact]
     public async Task Result_WithAutoMergeOn_MergesTwoLabelsIdentifiedAsTheSamePerson()
     {
-        var identifier = new FakeSpeakerIdentifier
-        {
-            // SpeakerMatch(Guid PersonId, string Name, double Distance) - the distance is unused here.
-            Match = new SpeakerMatch(Guid.NewGuid(), "Alice", 0.1),
-        };
+        var inner = new FakeSpeakerIdentifier();
+        inner.Nearest(Guid.NewGuid(), "Alice", 0.1);
+        var identifier = new FakeSpeakerIdentification(inner);
         var (controller, db, _, _) = BuildEx(Secret, summarizationEnabled: false, identifier);
         var userId = Guid.NewGuid();
         var (_, transcriptionId) = await SeedQueuedRecording(db, userId);
@@ -465,8 +468,8 @@ public class WorkerCallbackControllerTests
         var embedding = new float[192];
         await controller.Result(new TranscriptionResult(transcriptionId, "en",
             [
-                new SegmentResult("SPEAKER_00", 0, 1000, "Hello"),
-                new SegmentResult("SPEAKER_01", 1000, 2000, "World"),
+                new SegmentResult("SPEAKER_00", 0, 30000, "Hello"),
+                new SegmentResult("SPEAKER_01", 30000, 60000, "World"),
             ],
             Speakers:
             [

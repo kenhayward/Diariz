@@ -458,18 +458,43 @@ public sealed class FakeWebhookPublisher : IWebhookPublisher
     }
 }
 
-/// <summary>Stub <see cref="ISpeakerIdentifier"/> — returns a canned match (or none) and records the
-/// embeddings it was asked about, so the callback's auto-identification can be unit-tested without pgvector.</summary>
+/// <summary>Stub <see cref="ISpeakerIdentifier"/> — returns a canned ranking and counts the calls, so
+/// identification can be unit-tested without pgvector.
+///
+/// <para><see cref="Ranked"/> is the whole ranking, unfiltered by any threshold, exactly as the real one
+/// returns it: what happens to those distances is <c>IdentificationRules</c>' business, and a fake that
+/// pre-filtered would hide a rule that had stopped being applied.</para></summary>
 public sealed class FakeSpeakerIdentifier : ISpeakerIdentifier
 {
-    public SpeakerMatch? Match { get; set; }
+    public List<RankedCandidate> Ranked { get; set; } = [];
     public int Calls { get; private set; }
 
-    public Task<SpeakerMatch?> IdentifyAsync(Pgvector.Vector embedding, CancellationToken ct = default)
+    /// <summary>Convenience for the common "one candidate at this distance" case.</summary>
+    public void Nearest(Guid personId, string name, double distance) =>
+        Ranked = [new RankedCandidate(personId, name, distance)];
+
+    public Task<IReadOnlyList<RankedCandidate>> RankAsync(
+        Pgvector.Vector embedding, int take = 2, CancellationToken ct = default)
     {
         Calls++;
-        return Task.FromResult(Match);
+        return Task.FromResult<IReadOnlyList<RankedCandidate>>(Ranked.Take(Math.Max(1, take)).ToList());
     }
+}
+
+/// <summary>Stub <see cref="ISpeakerIdentification"/> that runs the real rules against a fake identifier and
+/// a chosen operating point, so a controller test can exercise identification without a settings row.</summary>
+public sealed class FakeSpeakerIdentification(
+    FakeSpeakerIdentifier identifier, IdentificationThresholds? thresholds = null) : ISpeakerIdentification
+{
+    public FakeSpeakerIdentifier Identifier { get; } = identifier;
+    public IdentificationThresholds Thresholds { get; set; } =
+        thresholds ?? new IdentificationThresholds(0.30, 0.40, 0.05, 3000);
+
+    public Task ApplyAsync(
+        IEnumerable<Diariz.Domain.Entities.Speaker> speakers,
+        IReadOnlyDictionary<string, long> speechByLabel,
+        CancellationToken ct = default) =>
+        SpeakerLabeling.ApplyAsync(speakers, Identifier, Thresholds, speechByLabel, ct);
 }
 
 /// <summary>Stub <see cref="IChatStreamClient"/> — yields a canned token sequence or throws. For the

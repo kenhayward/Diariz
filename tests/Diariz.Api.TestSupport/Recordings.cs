@@ -29,7 +29,7 @@ public static class Recordings
 
         return new RecordingsController(
             db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config,
-            resolver, new FakeEmailSender(), new FakeSpeakerIdentifier(),
+            resolver, new FakeEmailSender(), new FakeSpeakerIdentification(new FakeSpeakerIdentifier()),
             Options.Create(new UploadOptions()), new RoomScope(db), new PeopleDirectory(db),
             new CapturingWebhookPublisher(), Options.Create(new AppPublicOptions()), null,
             new CalendarAggregator(new NoGoogleCalendar(), new NoIcsFeeds(), new NoOutlookDevices(), db))

@@ -37,7 +37,7 @@ public class RecordingsControllerTests
                 new Dictionary<string, string?> { ["Transcription:DefaultModel"] = "whisperx-large-v3" }).Build(),
             new LlmSettingsResolver(db, Options.Create(new LlmDefaultsOptions()), Options.Create(new SummarizationOptions { ApiBase = "http://llm.test/v1" }),
                 new FakeApiKeyProtector(), new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions()))),
-            new FakeEmailSender(), new FakeSpeakerIdentifier(), Options.Create(new UploadOptions()),
+            new FakeEmailSender(), new FakeSpeakerIdentification(new FakeSpeakerIdentifier()), Options.Create(new UploadOptions()),
             new RoomScope(db), new PeopleDirectory(db), new CapturingWebhookPublisher(),
             Options.Create(new AppPublicOptions()), null,
             new CalendarAggregator(new NoGoogleCalendar(), new FeedWith(events), new NoOutlookDevices(), db))
@@ -48,7 +48,7 @@ public class RecordingsControllerTests
 
     private static RecordingsController Build(DiarizDbContext db, Guid userId, FakeJobQueue queue,
         FakeAudioStorage? storage = null, bool summarizationEnabled = true, FakeEmailSender? email = null,
-        FakeSpeakerIdentifier? identifier = null, UploadOptions? uploads = null, IExportLocalizer? exportLocalizer = null,
+        FakeSpeakerIdentification? identifier = null, UploadOptions? uploads = null, IExportLocalizer? exportLocalizer = null,
         IGoogleCalendarClient? calendar = null)
     {
         var config = new ConfigurationBuilder()
@@ -59,7 +59,7 @@ public class RecordingsControllerTests
             Options.Create(new LlmDefaultsOptions()), Options.Create(new SummarizationOptions { ApiBase = summarizationEnabled ? "http://llm.test/v1" : "" }),
             new FakeApiKeyProtector(), new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())));
         return new RecordingsController(db, storage ?? new FakeAudioStorage(), queue, new FakeHubContext(), config,
-            resolver, email ?? new FakeEmailSender(), identifier ?? new FakeSpeakerIdentifier(),
+            resolver, email ?? new FakeEmailSender(), identifier ?? new FakeSpeakerIdentification(new FakeSpeakerIdentifier()),
             Options.Create(uploads ?? new UploadOptions()), new RoomScope(db), new PeopleDirectory(db), new CapturingWebhookPublisher(),
             // A real aggregator over the Google fake, so these tests exercise the actual merge and the actual
             // "has any calendar" gate rather than a stand-in for them.

@@ -27,7 +27,7 @@ public class WorkerCallbackController : ControllerBase
     private readonly IJobQueue _queue;
     private readonly ILlmSettingsResolver _summarization;
     private readonly IEmbeddingSettingsResolver _embedding;
-    private readonly ISpeakerIdentifier _identifier;
+    private readonly ISpeakerIdentification _identification;
     private readonly WorkerOptions _opts;
     private readonly IWebhookPublisher _webhooks;
     private readonly IOptions<AppPublicOptions> _appOpts;
@@ -36,7 +36,7 @@ public class WorkerCallbackController : ControllerBase
     public WorkerCallbackController(
         DiarizDbContext db, IHubContext<TranscriptionHub> hub, IJobQueue queue,
         ILlmSettingsResolver summarization, IEmbeddingSettingsResolver embedding,
-        ISpeakerIdentifier identifier, IOptions<WorkerOptions> opts,
+        ISpeakerIdentification identification, IOptions<WorkerOptions> opts,
         IWebhookPublisher webhooks, IOptions<AppPublicOptions> appOpts,
         ILogger<WorkerCallbackController> logger)
     {
@@ -45,7 +45,7 @@ public class WorkerCallbackController : ControllerBase
         _queue = queue;
         _summarization = summarization;
         _embedding = embedding;
-        _identifier = identifier;
+        _identification = identification;
         _opts = opts.Value;
         _webhooks = webhooks;
         _appOpts = appOpts;
@@ -114,7 +114,12 @@ public class WorkerCallbackController : ControllerBase
             if (se.Embedding is not { Length: > 0 } || !byLabel.TryGetValue(se.Speaker, out var sp)) continue;
             sp.Embedding = new Vector(se.Embedding);
         }
-        await SpeakerLabeling.ApplyAsync(byLabel.Values, _identifier);
+        // Speech comes from the payload rather than the database: these segments are not saved yet, so a query
+        // here would measure the previous transcription instead of the one being written.
+        await _identification.ApplyAsync(
+            byLabel.Values,
+            SpeakerSpeech.FromSegments(
+                body.Segments.Select(sg => (sg.Speaker ?? "", sg.StartMs, sg.EndMs))));
 
         transcription.Recording.Error = null;  // clear any error from a prior failed attempt
 
