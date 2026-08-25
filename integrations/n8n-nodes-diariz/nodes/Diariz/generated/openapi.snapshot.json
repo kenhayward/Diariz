@@ -2662,6 +2662,50 @@
         ],
         "type": "object"
       },
+      "PersonDiagnosticsSummaryDto": {
+        "properties": {
+          "aloneCount": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "personId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "sampleCount": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "widestPair": {
+            "format": "double",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "personId",
+          "name",
+          "sampleCount",
+          "aloneCount",
+          "widestPair"
+        ],
+        "type": "object"
+      },
       "PersonDto": {
         "properties": {
           "canManageBiometrics": {
@@ -8492,6 +8536,46 @@
           }
         },
         "summary": "Add a person",
+        "tags": [
+          "People"
+        ]
+      }
+    },
+    "/api/people/diagnostics": {
+      "get": {
+        "description": "Everyone whose training set contains a sample resembling none of their others, worst first. A directory of any size makes the per-person view unusable on its own - knowing **which** people to look at is most of the work.\n\nPeople with one sample or none are omitted rather than ranked last: they have nothing wrong, only nothing to say.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PersonDiagnosticsSummaryDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PersonDiagnosticsSummaryDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PersonDiagnosticsSummaryDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Rank the directory by voiceprint health",
         "tags": [
           "People"
         ]

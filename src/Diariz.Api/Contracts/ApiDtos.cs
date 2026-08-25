@@ -584,6 +584,11 @@ public record SampleDiagnosisDto(
 public record VoiceprintDiagnosticsDto(
     IReadOnlyList<SampleDiagnosisDto> Samples, int AloneCount, double? WidestPair);
 
+/// <summary>One person's line in the voiceprint-health ranking: how many of their samples resemble nothing
+/// else, and how far apart their two most distant samples are.</summary>
+public record PersonDiagnosticsSummaryDto(
+    Guid PersonId, string Name, int SampleCount, int AloneCount, double? WidestPair);
+
 /// <summary>Whether a speaker attributed to a person should train their voiceprint.</summary>
 public record SetTrainingRequest(bool Training);
 

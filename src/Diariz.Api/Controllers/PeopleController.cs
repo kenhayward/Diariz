@@ -219,6 +219,72 @@ public class PeopleController : ControllerBase
         return new PersonDetailDto(ToDto(person, await CanManagePeopleAsync()), identifiedCount, samples);
     }
 
+    [HttpGet("diagnostics")]
+    [EndpointSummary("Rank the directory by voiceprint health")]
+    [EndpointDescription(
+        "Everyone whose training set contains a sample resembling none of their others, worst first. A " +
+        "directory of any size makes the per-person view unusable on its own - knowing **which** people to " +
+        "look at is most of the work.\n\n" +
+        "People with one sample or none are omitted rather than ranked last: they have nothing wrong, only " +
+        "nothing to say.")]
+    public async Task<ActionResult<IReadOnlyList<PersonDiagnosticsSummaryDto>>> DirectoryDiagnostics()
+    {
+        if (!await CanManagePeopleAsync()) return Forbid();
+
+        var thresholds = IdentificationThresholds.From(await _settings.GetAsync());
+
+        // Every training sample in one read. The whole directory is a few hundred 192-d vectors, and a query
+        // per person would be a query per person.
+        var samples = await _db.VoiceSamples
+            .Where(v => v.ExcludedAt == null && v.Embedding != null)
+            .Select(v => new { v.Id, v.PersonId, v.Embedding })
+            .ToListAsync();
+
+        var byPerson = samples
+            .GroupBy(v => v.PersonId)
+            .Where(g => g.Count() > 1)
+            .ToList();
+        if (byPerson.Count == 0) return Ok(Array.Empty<PersonDiagnosticsSummaryDto>());
+
+        var personIds = byPerson.Select(g => g.Key).ToList();
+        var names = await _db.People
+            .Where(p => personIds.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, p => p.Name);
+
+        var rows = byPerson.Select(g =>
+        {
+            var vectors = g.Select(v => (v.Id, v.Embedding!.ToArray())).ToList();
+            var diagnosed = VoiceprintDiagnosis.Diagnose(vectors, thresholds);
+            return new PersonDiagnosticsSummaryDto(
+                g.Key,
+                names.GetValueOrDefault(g.Key, ""),
+                vectors.Count,
+                diagnosed.Count(d => d.Verdict == SampleVerdict.Alone),
+                Widest(vectors.Select(v => v.Item2).ToList()));
+        })
+        // Worst first: most samples resembling nothing else, then most scattered. Anyone with no outlier at
+        // all is dropped - an empty problem list is noise, and a list that includes healthy people is worse
+        // than useless because the real ones stop standing out.
+        .Where(r => r.AloneCount > 0)
+        .OrderByDescending(r => r.AloneCount)
+        .ThenByDescending(r => r.WidestPair ?? 0)
+        .ToList();
+
+        return Ok(rows);
+    }
+
+    private static double? Widest(IReadOnlyList<float[]> vectors)
+    {
+        double? widest = null;
+        for (var i = 0; i < vectors.Count; i++)
+        for (var j = i + 1; j < vectors.Count; j++)
+        {
+            var d = Voiceprints.CosineDistance(vectors[i], vectors[j]);
+            if (widest is null || d > widest) widest = d;
+        }
+        return widest;
+    }
+
     [HttpGet("{id:guid}/diagnostics")]
     [EndpointSummary("Check whether a person's samples resemble each other")]
     [EndpointDescription(
@@ -284,18 +350,8 @@ public class PeopleController : ControllerBase
     /// <summary>The largest distance between any two of a person's training samples - one number for "how
     /// scattered is this person", which is what the directory ranking sorts on. Null when there is no pair to
     /// measure.</summary>
-    private static double? WidestPair(IReadOnlyList<VoiceSample> training)
-    {
-        double? widest = null;
-        for (var i = 0; i < training.Count; i++)
-        for (var j = i + 1; j < training.Count; j++)
-        {
-            var d = Voiceprints.CosineDistance(
-                training[i].Embedding.ToArray(), training[j].Embedding.ToArray());
-            if (widest is null || d > widest) widest = d;
-        }
-        return widest;
-    }
+    private static double? WidestPair(IReadOnlyList<VoiceSample> training) =>
+        Widest(training.Select(v => v.Embedding.ToArray()).ToList());
 
     [HttpGet("{id:guid}/attributions")]
     [EndpointSummary("List the speakers attributed to a person")]

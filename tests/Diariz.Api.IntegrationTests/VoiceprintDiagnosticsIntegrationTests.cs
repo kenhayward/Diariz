@@ -71,6 +71,41 @@ public class VoiceprintDiagnosticsIntegrationTests(ContainersFixture fx)
         return (person.Id, ids, user.Id);
     }
 
+    /// <summary>A person whose samples are mutually orthogonal - each in its own dimension, so every one is
+    /// distant from every other.
+    ///
+    /// <para>Distinct from <see cref="SeedAsync"/> on purpose. Samples placed at 0.9, 0.95 and 1.0 from one
+    /// reference vector all sit on the same arc and are therefore close to <em>each other</em>: they form a
+    /// cluster, not three outliers. Being far from a common point is not the same as being far apart.</para></summary>
+    private async Task<(Guid personId, Guid userId)> SeedOrthogonalAsync(int count)
+    {
+        await using var db = fx.CreateDbContext();
+        var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test" };
+        var person = new Person { Id = Guid.NewGuid(), Name = "Scattered", SampleCount = count };
+        db.AddRange(user, person);
+
+        for (var i = 0; i < count; i++)
+        {
+            var axis = new float[192];
+            axis[i] = 1f;
+            var rec = new Recording { Id = Guid.NewGuid(), UserId = user.Id, Title = $"M{i}", BlobKey = "k" };
+            var speaker = new Speaker
+            {
+                Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "Scattered",
+                PersonId = person.Id, Embedding = new Vector(axis),
+            };
+            db.AddRange(rec, speaker, new VoiceSample
+            {
+                Id = Guid.NewGuid(), PersonId = person.Id, SpeakerId = speaker.Id, RecordingId = rec.Id,
+                Embedding = new Vector(axis),
+            });
+        }
+
+        Perms.Grant(db, user.Id, PlatformPermission.ManagePeople);
+        await db.SaveChangesAsync();
+        return (person.Id, user.Id);
+    }
+
     private static VoiceprintDiagnosticsDto Body(ActionResult<VoiceprintDiagnosticsDto> r) =>
         Assert.IsType<VoiceprintDiagnosticsDto>(Assert.IsType<OkObjectResult>(r.Result).Value);
 
@@ -188,5 +223,102 @@ public class VoiceprintDiagnosticsIntegrationTests(ContainersFixture fx)
 
         await using var db = fx.CreateDbContext();
         Assert.IsType<NotFoundResult>((await Build(db, userId).Diagnostics(Guid.NewGuid())).Result);
+    }
+
+    // ---- The directory ranking ----
+
+    /// <summary>Clears the shared directory so a ranking assertion is about this test's people only - the
+    /// endpoint deliberately spans the whole platform, so anything another test seeded would show up in it.</summary>
+    private async Task ClearDirectoryAsync()
+    {
+        await using var db = fx.CreateDbContext();
+        db.People.RemoveRange(await db.People.ToListAsync());
+        await db.SaveChangesAsync();
+    }
+
+    private static IReadOnlyList<PersonDiagnosticsSummaryDto> Ranking(
+        ActionResult<IReadOnlyList<PersonDiagnosticsSummaryDto>> r) =>
+        Assert.IsAssignableFrom<IReadOnlyList<PersonDiagnosticsSummaryDto>>(
+            Assert.IsType<OkObjectResult>(r.Result).Value);
+
+    [Fact]
+    public async Task The_ranking_omits_a_healthy_person()
+    {
+        // A list that includes healthy people is worse than useless: the ones with a real problem stop
+        // standing out, which is the entire job of a ranking.
+        await ClearDirectoryAsync();
+        var (_, _, userId) = await SeedAsync(0, 0.05, 0.1);
+
+        await using var db = fx.CreateDbContext();
+        Assert.Empty(Ranking(await Build(db, userId).DirectoryDiagnostics()));
+    }
+
+    [Fact]
+    public async Task The_ranking_omits_a_person_with_a_single_sample()
+    {
+        // Nothing wrong, only nothing to say. Most of the directory is in this state.
+        await ClearDirectoryAsync();
+        var (_, _, userId) = await SeedAsync(0);
+
+        await using var db = fx.CreateDbContext();
+        Assert.Empty(Ranking(await Build(db, userId).DirectoryDiagnostics()));
+    }
+
+    [Fact]
+    public async Task The_ranking_lists_a_person_with_an_outlier()
+    {
+        await ClearDirectoryAsync();
+        var (personId, _, userId) = await SeedAsync(0, 0.05, 0.9);
+
+        await using var db = fx.CreateDbContext();
+        var row = Assert.Single(Ranking(await Build(db, userId).DirectoryDiagnostics()));
+
+        Assert.Equal(personId, row.PersonId);
+        Assert.Equal("Alice", row.Name);
+        Assert.Equal(1, row.AloneCount);
+        Assert.Equal(3, row.SampleCount);
+    }
+
+    [Fact]
+    public async Task The_ranking_puts_the_worst_first()
+    {
+        await ClearDirectoryAsync();
+        var (mild, _, userId) = await SeedAsync(0, 0.05, 0.9);
+        var (bad, _) = await SeedOrthogonalAsync(4);
+
+        await using var db = fx.CreateDbContext();
+        var rows = Ranking(await Build(db, userId).DirectoryDiagnostics());
+
+        Assert.Equal(2, rows.Count);
+        Assert.Equal(bad, rows[0].PersonId);
+        Assert.Equal(mild, rows[1].PersonId);
+        Assert.True(rows[0].AloneCount > rows[1].AloneCount);
+    }
+
+    [Fact]
+    public async Task The_ranking_ignores_an_excluded_sample()
+    {
+        // Dropping the outlier is the fix. If the ranking kept counting it, the list would never empty and
+        // acting on it would look like it had done nothing.
+        await ClearDirectoryAsync();
+        var (_, ids, userId) = await SeedAsync(0, 0.05, 0.9);
+        await using (var db = fx.CreateDbContext())
+        {
+            (await db.VoiceSamples.SingleAsync(v => v.Id == ids[2])).ExcludedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync();
+        }
+
+        await using var db2 = fx.CreateDbContext();
+        Assert.Empty(Ranking(await Build(db2, userId).DirectoryDiagnostics()));
+    }
+
+    [Fact]
+    public async Task The_ranking_without_ManagePeople_is_forbidden()
+    {
+        await ClearDirectoryAsync();
+        await SeedAsync(0, 0.9);
+
+        await using var db = fx.CreateDbContext();
+        Assert.IsType<ForbidResult>((await Build(db, Guid.NewGuid()).DirectoryDiagnostics()).Result);
     }
 }
