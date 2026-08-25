@@ -11,11 +11,11 @@ CV1 is different in almost every respect; see section 8.10.
 > `zephyr.uf2`, and this file has been corrected against what actually happened. Section 8.13
 > records the exact configuration that worked.
 >
-> The **build** half (8.2, 8.11, 8.12) is now observed fact. The **flashing and on-device** half
-> (8.4 onward) has not been exercised - no firmware has been put on a device, and no card has
-> been through the format/no-format behaviour. Points still marked **[unverified]** are the ones
-> nothing has tested; treat those the way this whole document used to be treated, and correct
-> them as you go.
+> The **build** half (8.2, 8.11, 8.12) and the **flash** half (8.5) are now observed fact: the
+> UF2 this produces has been flashed by the double-tap-and-copy route and the device runs it.
+> Points still marked **[unverified]** are the ones nothing has tested - the VS Code route, OTA
+> DFU, bootloader recovery, and re-enabling the console. Treat those the way this whole document
+> used to be treated, and correct them as you go.
 
 ---
 
@@ -222,8 +222,21 @@ no J-Link, no driver.
 If the drive does not appear, the double-tap was too slow or too fast - try again with a
 brisk double-click rhythm. A cable that is charge-only will also do this; try another.
 
-On macOS `devkit/flash.sh` automates step 3 (it copies to `/Volumes/XIAO-SENSE`). There is
-no Windows equivalent in the tree; drag-and-drop or `cp`.
+Confirmed working on 2026-08-25: a Docker-built `zephyr.uf2` flashed this way and the device
+booted into it.
+
+To find the drive from Git Bash - the UF2 bootloader volume is the one carrying `INFO_UF2.TXT`:
+
+```bash
+for d in /[a-z]; do [ -f "$d/INFO_UF2.TXT" ] && echo "bootloader drive: $d"; done
+cp omi/firmware/build/docker_build/zephyr.uf2 /e/    # substitute the letter it reports
+```
+
+On macOS `devkit/flash.sh` automates step 3, **but not for a Docker build**: it looks for
+`build/build_xiao_ble_sense_devkitv2-adafruit/zephyr/zephyr.uf2`, the nRF Connect for VS Code
+output path (8.3), and exits with "Firmware file not found" if you built with Docker. Point it at
+`build/docker_build/zephyr.uf2`, or just copy the file. There is no Windows equivalent in the
+tree; drag-and-drop or `cp`.
 
 ---
 
@@ -456,6 +469,12 @@ docker image rm ghcr.io/zephyrproject-rtos/ci:latest
 
 ### Still not exercised
 
-Everything from section 8.5 onward. Nothing has been flashed, no card has been formatted or
-deliberately corrupted, the six-blink failure signal has not been seen, and no audio has come
-off a device. The build is trustworthy; the device half of this runbook is not yet.
+Flashing (8.5) has since been done, and the device runs the firmware this build produces. What
+remains unconfirmed:
+
+* **The six-blink failure signal** (8.4, 8.9 step 5) - no card has been deliberately presented
+  unformatted or unreadable, so the no-format guard has not been seen refusing one.
+* **A full audio round trip** (8.9 step 4) - no `a01.txt` has been decoded through `omi-sync` and
+  listened to end to end.
+* Everything already marked **[unverified]**: the VS Code route (8.3), OTA DFU (8.6), bootloader
+  recovery (8.7), and re-enabling the console (8.8).
