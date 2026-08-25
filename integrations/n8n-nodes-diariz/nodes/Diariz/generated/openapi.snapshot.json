@@ -2532,6 +2532,9 @@
           },
           "manageUsers": {
             "type": "boolean"
+          },
+          "manageVoiceprints": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -2539,7 +2542,8 @@
           "manageUsers",
           "managePlatform",
           "manageFormulas",
-          "managePeople"
+          "managePeople",
+          "manageVoiceprints"
         ],
         "type": "object"
       },

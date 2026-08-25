@@ -86,7 +86,11 @@ public static class Seeder
     {
         await EnsureGroup(db, PlatformAdminsGroup, isSystem: true,
             PlatformPermission.ManageRooms | PlatformPermission.ManageUsers | PlatformPermission.ManagePlatform
-                | PlatformPermission.ManageFormulas | PlatformPermission.ManagePeople);
+                | PlatformPermission.ManageFormulas | PlatformPermission.ManagePeople
+                | PlatformPermission.ManageVoiceprints);
+        // Deliberately NOT ManageVoiceprints: that confers playback of audio from recordings the holder does
+        // not own, and this group has never carried whole-instance data access (it has no ManagePlatform
+        // either, for the same reason). Directory hygiene without the audio.
         await EnsureGroup(db, AdminsGroup, isSystem: false,
             PlatformPermission.ManageRooms | PlatformPermission.ManageUsers | PlatformPermission.ManageFormulas
                 | PlatformPermission.ManagePeople);

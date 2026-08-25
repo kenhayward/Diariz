@@ -625,7 +625,8 @@ public record UserProfileDto(
 
 /// <summary>A user's platform permissions, expanded into booleans so the client never does bit arithmetic.</summary>
 public record PermissionsDto(
-    bool ManageRooms, bool ManageUsers, bool ManagePlatform, bool ManageFormulas, bool ManagePeople);
+    bool ManageRooms, bool ManageUsers, bool ManagePlatform, bool ManageFormulas, bool ManagePeople,
+    bool ManageVoiceprints);
 
 /// <summary>A room the caller belongs to. <paramref name="Permissions"/> is the caller's effective
 /// <see cref="RoomPermission"/> grid as an <b>int</b> bitmask - a [Flags] enum would serialize as "A, B" under
