@@ -154,6 +154,22 @@ int mount_sd_card(void)
     return 0;
 }
 
+int unmount_sd_card(void)
+{
+    /* Deliberately does NOT call sd_off(): USB Mass Storage serves the same
+     * physical card and needs it powered. Only the filesystem is released, so
+     * the host can own the block device. See docs/09-usb-transfer-mode-design.md.
+     */
+    int res = fs_unmount(&mount_point);
+    if (res != 0) {
+        LOG_ERR("fs_unmount failed: %d", res);
+        return res;
+    }
+
+    LOG_INF("SD card unmounted for USB transfer");
+    return 0;
+}
+
 uint32_t get_file_size(uint8_t num)
 {
     char *ptr = generate_new_audio_header(num);
