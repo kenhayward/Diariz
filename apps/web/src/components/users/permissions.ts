@@ -18,6 +18,7 @@ export const PERMISSION_BITS = [
   { bit: 4, key: "permManagePlatform", hint: "permHintManagePlatform", grant: "grantManagePlatform" },
   { bit: 8, key: "permManageFormulas", hint: "permHintManageFormulas", grant: "grantManageFormulas" },
   { bit: 16, key: "permManagePeople", hint: "permManagePeopleHint", grant: "grantManagePeople" },
+  { bit: 32, key: "permManageVoiceprints", hint: "permManageVoiceprintsHint", grant: "grantManageVoiceprints" },
 ] as const;
 
 /// How many permissions a bitmask actually grants. Counted against the known bits rather than by popcount, so

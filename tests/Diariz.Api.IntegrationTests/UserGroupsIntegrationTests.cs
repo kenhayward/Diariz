@@ -88,7 +88,8 @@ public class UserGroupsIntegrationTests(ContainersFixture fx)
         Assert.True(platform.IsSystem);
         Assert.Equal(
             PlatformPermission.ManageRooms | PlatformPermission.ManageUsers | PlatformPermission.ManagePlatform
-                | PlatformPermission.ManageFormulas | PlatformPermission.ManagePeople,
+                | PlatformPermission.ManageFormulas | PlatformPermission.ManagePeople
+                | PlatformPermission.ManageVoiceprints,
             platform.Permissions);
 
         Assert.False(admins.IsSystem);
@@ -97,6 +98,9 @@ public class UserGroupsIntegrationTests(ContainersFixture fx)
                 | PlatformPermission.ManagePeople,
             admins.Permissions);
         Assert.False(admins.Permissions.HasFlag(PlatformPermission.ManagePlatform));
+        // ManageVoiceprints confers playback of audio from recordings the holder does not own, so it belongs
+        // with ManagePlatform on the same side of this boundary - an Administrator gets neither.
+        Assert.False(admins.Permissions.HasFlag(PlatformPermission.ManageVoiceprints));
     }
 
     /// <summary>The privilege boundary this whole phase must preserve: an Administrator lands in the

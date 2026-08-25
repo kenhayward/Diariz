@@ -2159,6 +2159,9 @@ namespace Diariz.Domain.Migrations
                         .IsRequired()
                         .HasColumnType("vector(192)");
 
+                    b.Property<DateTimeOffset?>("ExcludedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("PersonId")
                         .HasColumnType("uuid")
                         .HasColumnName("ProfileId");

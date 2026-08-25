@@ -9,7 +9,7 @@ import { PERMISSION_BITS, grantKeys, permissionCount } from "./permissions";
 describe("permission bits", () => {
   /// Update this when a permission is added, and add the bit above. Keeping the expected set here rather
   /// than deriving it is the point: the test should fail loudly when the enum grows.
-  const EXPECTED = [1, 2, 4, 8, 16];
+  const EXPECTED = [1, 2, 4, 8, 16, 32];
 
   it("covers every platform permission bit", () => {
     expect(PERMISSION_BITS.map((p) => p.bit)).toEqual(EXPECTED);
@@ -39,7 +39,7 @@ describe("permissionCount", () => {
     expect(permissionCount(0)).toBe(0);
     expect(permissionCount(1)).toBe(1);
     expect(permissionCount(1 | 2 | 16)).toBe(3);
-    expect(permissionCount(31)).toBe(5);
+    expect(permissionCount(63)).toBe(6);
   });
 
   /// A bitmask stored by a newer release, or left behind by a removed permission, must not be reported as a

@@ -505,6 +505,40 @@ public record SetVoiceSampleSpansRequest(IReadOnlyList<VoiceprintSpan> Spans);
 /// currently label.</summary>
 public record PersonDetailDto(PersonDto Person, int IdentifiedCount, IReadOnlyList<VoiceSampleDto> Samples);
 
+/// <summary>One speaker attributed to a person, whether or not it trains their voiceprint.
+///
+/// <para>Strictly larger a set than <see cref="PersonDetailDto.Samples"/>: automatic identification links a
+/// speaker without ever creating a voice sample, which is why a list built from samples alone read as
+/// arbitrary rather than as "the recordings this person appears in".</para>
+///
+/// <para><paramref name="IsTraining"/> and <paramref name="VoiceSampleId"/> are independent. An excluded
+/// sample is not training but still has an id, because re-including it is a toggle rather than a fresh
+/// enrolment.</para>
+///
+/// <para><paramref name="CanAccessRecording"/> is false when the caller neither owns the recording nor holds
+/// <c>ManageVoiceprints</c>. The row is still returned - it is part of what the voiceprint learned from -
+/// and the client renders it without a transcript or a play button.</para></summary>
+public record PersonAttributionDto(
+    Guid SpeakerId,
+    Guid RecordingId,
+    string RecordingName,
+    string SpeakerLabel,
+    string LinkedBy,
+    bool IsTraining,
+    Guid? VoiceSampleId,
+    long SpeechMs,
+    bool CanAccessRecording);
+
+/// <summary>Whether a speaker attributed to a person should train their voiceprint.</summary>
+public record SetTrainingRequest(bool Training);
+
+/// <summary>One segment spoken by an attributed speaker, for choosing which audio trains a voiceprint.
+///
+/// <para>Deliberately <b>only that speaker's</b> segments, never the recording's transcript. An assessor may
+/// be granted this person's speech in a recording they do not own; handing over everybody else's words in the
+/// same response would undo exactly the narrowing the clip endpoint enforces.</para></summary>
+public record AttributionSegmentDto(Guid Id, long StartMs, long EndMs, string Text);
+
 /// <summary>Create a person. Everything but the name is optional, and supplying
 /// <paramref name="RecordingId"/> + <paramref name="Label"/> enrols a voiceprint in the same call - which is
 /// what the "new person" affordance on a transcript does.</summary>
@@ -625,7 +659,8 @@ public record UserProfileDto(
 
 /// <summary>A user's platform permissions, expanded into booleans so the client never does bit arithmetic.</summary>
 public record PermissionsDto(
-    bool ManageRooms, bool ManageUsers, bool ManagePlatform, bool ManageFormulas, bool ManagePeople);
+    bool ManageRooms, bool ManageUsers, bool ManagePlatform, bool ManageFormulas, bool ManagePeople,
+    bool ManageVoiceprints);
 
 /// <summary>A room the caller belongs to. <paramref name="Permissions"/> is the caller's effective
 /// <see cref="RoomPermission"/> grid as an <b>int</b> bitmask - a [Flags] enum would serialize as "A, B" under

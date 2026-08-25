@@ -1235,6 +1235,20 @@ const GENERATED: GeneratedResource[] = [
         "returnsArray": false
       },
       {
+        "value": "includeOrExcludeASpeakerFromAPersonSVoiceprint",
+        "displayName": "Include or exclude a speaker from a person's voiceprint",
+        "description": "Adds a speaker already attributed to this person into their voiceprint training set, or removes it. Adding needs no re-transcription: the speaker's embedding was computed when the recording was transcribed.",
+        "method": "PUT",
+        "path": "/api/people/{id}/attributions/{speakerId}/training",
+        "pathParams": [
+          "id",
+          "speakerId"
+        ],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": false
+      },
+      {
         "value": "listThePeopleDirectory",
         "displayName": "List the people directory",
         "description": "Everyone in the directory, newest names first by name order, with optional filters. A person may have no voiceprint at all - hasVoiceprint is then false and Diariz will not recognise them by voice.",
@@ -1272,6 +1286,33 @@ const GENERATED: GeneratedResource[] = [
         "returnsArray": true
       },
       {
+        "value": "listTheSpeakersAttributedToAPerson",
+        "displayName": "List the speakers attributed to a person",
+        "description": "Every recording-speaker currently identified as this person, whether or not it trains their voiceprint. Automatic identification links a speaker without creating a voice sample, so this is a strictly larger set than the samples returned by GET /api/people/{id} - which is why a list built from samples alone looked arbitrary.",
+        "method": "GET",
+        "path": "/api/people/{id}/attributions",
+        "pathParams": [
+          "id"
+        ],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": true
+      },
+      {
+        "value": "listWhatAnAttributedSpeakerSaid",
+        "displayName": "List what an attributed speaker said",
+        "description": "The segments this speaker spoke in the recording's current transcription, for choosing which audio trains a voiceprint.",
+        "method": "GET",
+        "path": "/api/people/{id}/attributions/{speakerId}/segments",
+        "pathParams": [
+          "id",
+          "speakerId"
+        ],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": true
+      },
+      {
         "value": "mergeTwoPeople",
         "displayName": "Merge two people",
         "description": "Folds sourceId into the person in the path when the same human is in the directory twice - say once as \"Sam\" and once as \"Samantha\", or once per colleague who enrolled them. The source's voice samples move across, every recording labelled with it is relabelled, the voiceprint is recomputed from the combined samples, and the source person is deleted.",
@@ -1282,6 +1323,35 @@ const GENERATED: GeneratedResource[] = [
         ],
         "queryParams": [],
         "hasBody": true,
+        "returnsArray": false
+      },
+      {
+        "value": "playAClipOfAPersonSSpeech",
+        "displayName": "Play a clip of a person's speech",
+        "description": "Serves a short WAV clip of one span of audio, for judging by ear whether a voice really is this person.",
+        "method": "GET",
+        "path": "/api/people/{id}/clip",
+        "pathParams": [
+          "id"
+        ],
+        "queryParams": [
+          {
+            "name": "speakerId",
+            "required": false,
+            "description": "speakerId"
+          },
+          {
+            "name": "fromMs",
+            "required": false,
+            "description": "fromMs"
+          },
+          {
+            "name": "toMs",
+            "required": false,
+            "description": "toMs"
+          }
+        ],
+        "hasBody": false,
         "returnsArray": false
       },
       {

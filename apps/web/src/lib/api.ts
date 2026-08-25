@@ -71,6 +71,8 @@ import type {
   Person,
   PersonDetail,
   PersonDuplicateGroup,
+  PersonAttribution,
+  AttributionSegment,
   GoogleCalendarListItem,
   Group,
   UpdateUserProfile,
@@ -870,6 +872,39 @@ export const api = {
   async getPerson(id: string): Promise<PersonDetail> {
     const { data } = await http.get<PersonDetail>(`/api/people/${id}`);
     return data;
+  },
+
+  /// Every speaker attributed to this person, whether or not it trains their voiceprint. Strictly larger
+  /// than `getPerson().samples`, which only ever contained hand-enrolled speakers.
+  async getPersonAttributions(personId: string): Promise<PersonAttribution[]> {
+    const { data } = await http.get<PersonAttribution[]>(`/api/people/${personId}/attributions`);
+    return data;
+  },
+
+  async setAttributionTraining(personId: string, speakerId: string, training: boolean): Promise<void> {
+    await http.put(`/api/people/${personId}/attributions/${speakerId}/training`, { training });
+  },
+
+  /// What one attributed speaker said - only their segments, never the recording's transcript.
+  async getAttributionSegments(personId: string, speakerId: string): Promise<AttributionSegment[]> {
+    const { data } = await http.get<AttributionSegment[]>(
+      `/api/people/${personId}/attributions/${speakerId}/segments`,
+    );
+    return data;
+  },
+
+  /// A short WAV of one span, as a Blob.
+  ///
+  /// Deliberately fetched with the bearer through axios rather than handed to `<audio>` as a URL carrying an
+  /// `access_token` (the way whole-recording playback works). A clip URL would be a credential in a query
+  /// string for audio the caller may only be entitled to because of an assessment permission; an object URL
+  /// is same-document, revocable, and works in the Electron shell where the SPA is not same-origin.
+  async personClip(personId: string, speakerId: string, fromMs: number, toMs: number): Promise<Blob> {
+    const { data } = await http.get(`/api/people/${personId}/clip`, {
+      params: { speakerId, fromMs, toMs },
+      responseType: "blob",
+    });
+    return data as Blob;
   },
 
   async findPersonDuplicates(): Promise<PersonDuplicateGroup[]> {

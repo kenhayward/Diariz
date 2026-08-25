@@ -289,8 +289,27 @@ renames, prunes training samples, merges duplicates, and erases voiceprints (GDP
 
 Each person's card carries a **Voiceprint** tab beside their profile, answering what the biometric was
 actually built from - previously invisible, which is why a drifting voiceprint had no diagnosis. It lists
-every contributing recording, the speaker slot it came from, and how much of that audio is behind the
-voiceprint. Expanding one lists that speaker's segments with **tick boxes**: untick the places where someone
+**every recording the person appears in**, not only the ones enrolled by hand: automatic recognition links a
+speaker without creating a training sample, so a list built from samples showed a fraction of where the
+voiceprint is actually applied and read as an arbitrary subset. Each row states how that speaker came to be
+attributed (recognised automatically, or named by hand), how much they speak in it, and how much of that
+audio is behind the voiceprint, with a tick box to add the whole speaker to training or drop it. Adding needs
+no re-transcription - the voice was measured when the recording was transcribed - and dropping **excludes
+rather than deletes**, so the record that someone identified that speaker survives and re-including it is one
+tick.
+
+Every segment has a **play button**. Each one plays a short WAV cut on the server with ffmpeg, seeking into
+the stored object rather than pulling the whole recording, so judging whether a voice is really the right
+person does not mean opening the recording and hunting for the speaker. Because the directory is
+platform-wide while recordings are ownership-filtered, a person's voice can appear in recordings you do not
+own: hearing those needs the **Manage voiceprints** permission (platform administrators by default). That
+grant is deliberately narrow - the requested span must fall inside a segment that speaker actually spoke, the
+segment list returns only their own segments and never the rest of the transcript, and every cross-owner
+access is logged. Ordinary directory work stays on **Manage people**, which grants no audio at all. Without
+either, the row is still listed - it is part of what trained the voiceprint - but marked as being in a
+recording you cannot access.
+
+Expanding one lists that speaker's segments with **tick boxes**: untick the places where someone
 else was talking over them and press **Recompute voiceprint**, and the worker re-embeds from exactly the
 audio left ticked. A run of ticks queues **one** job, not one per click. What is stored is a set of
 **time spans**, not segment ids - a re-transcription replaces every segment row, and ids would dangle where

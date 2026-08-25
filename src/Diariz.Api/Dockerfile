@@ -12,9 +12,11 @@ RUN dotnet publish src/Diariz.Api/Diariz.Api.csproj -c Release -o /app /p:UseApp
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 # postgresql-client gives pg_dump/pg_restore for the platform backup/restore (MaintenanceController). The
 # client major must be >= the Postgres server major (PG16) — a newer client is fine, which the distro's
-# default package satisfies. curl is for the container HEALTHCHECK (hits GET /health).
+# default package satisfies. curl is for the container HEALTHCHECK (hits GET /health). ffmpeg cuts the short
+# assessment clips served by the people clip endpoint: webm/m4a/mp3 cannot be safely byte-sliced, so a real
+# decoder is needed, and it range-seeks the object store rather than downloading whole recordings.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends postgresql-client curl \
+    && apt-get install -y --no-install-recommends postgresql-client curl ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app ./

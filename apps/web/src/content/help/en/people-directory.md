@@ -25,10 +25,20 @@ removing the person.
 Selecting someone opens their record under two tabs: **Profile** for their details, and **Voiceprint** for
 the audio behind their biometric.
 
-The Voiceprint tab lists every recording that trains it - which speaker it came from and how much of that
-audio is being used. This is where to look when Diariz starts naming the wrong person: recognition drifts
-when a voiceprint has learned from a speaker who was misattributed, and that shows up here as a recording
-you would not expect.
+The Voiceprint tab lists every recording this person appears in - not only the ones you enrolled by hand.
+Each row says how they came to be attributed there (**Recognised automatically** or **Named by hand**), how
+much they speak in it, and whether that recording trains the voiceprint. This is where to look when Diariz
+starts naming the wrong person: recognition drifts when a voiceprint has learned from a speaker who was
+misattributed, and that shows up here as a recording you would not expect.
+
+**Trains the voiceprint** on any row adds or removes that whole recording. Adding is instant - the voice was
+measured when the recording was transcribed, so nothing needs re-transcribing. Removing does not throw the
+record away: Diariz remembers that you identified that speaker, so putting it back later is one tick.
+
+**Play segment** plays a short clip of just that line, so you can check by ear whether the voice really is
+this person before deciding. If the person appears in a recording belonging to someone else, you will only
+hear it if you have the **Manage voiceprints** permission - and even then you hear only what they said, never
+the rest of the meeting. Without it the row still appears, marked as being in a recording you cannot access.
 
 **Show segments** on any of them lists what that speaker said, with a tick box per line. Untick the lines
 where someone else was talking over them and press **Recompute voiceprint**; Diariz re-reads the audio you

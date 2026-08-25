@@ -34,16 +34,22 @@ public class PeopleController : ControllerBase
     private readonly IPeopleDirectory _people;
     private readonly IUserPermissions _permissions;
     private readonly IJobQueue _queue;
+    private readonly IAudioClipper _clipper;
+    private readonly IAudioStorage _storage;
+    private readonly ILogger<PeopleController> _logger;
 
     public PeopleController(
         DiarizDbContext db, IRoomScope rooms, IPeopleDirectory people, IUserPermissions permissions,
-        IJobQueue queue)
+        IJobQueue queue, IAudioClipper clipper, IAudioStorage storage, ILogger<PeopleController> logger)
     {
         _db = db;
         _rooms = rooms;
         _people = people;
         _permissions = permissions;
         _queue = queue;
+        _clipper = clipper;
+        _storage = storage;
+        _logger = logger;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -208,6 +214,238 @@ public class PeopleController : ControllerBase
         }).ToList();
 
         return new PersonDetailDto(ToDto(person, await CanManagePeopleAsync()), identifiedCount, samples);
+    }
+
+    [HttpGet("{id:guid}/attributions")]
+    [EndpointSummary("List the speakers attributed to a person")]
+    [EndpointDescription(
+        "Every recording-speaker currently identified as this person, whether or not it trains their " +
+        "voiceprint. Automatic identification links a speaker **without** creating a voice sample, so this " +
+        "is a strictly larger set than the samples returned by `GET /api/people/{id}` - which is why a list " +
+        "built from samples alone looked arbitrary.\n\n" +
+        "`canAccessRecording` is false when you neither own the recording nor hold **Manage voiceprints**. " +
+        "The row is still listed, because it is part of what the voiceprint learned from, but its " +
+        "transcript and audio are not available to you.")]
+    public async Task<ActionResult<IReadOnlyList<PersonAttributionDto>>> Attributions(Guid id)
+    {
+        if (!await CanManagePeopleAsync()) return Forbid();
+        if (!await _db.People.AnyAsync(p => p.Id == id)) return NotFound();
+
+        var speakers = await _db.Speakers
+            .Where(s => s.PersonId == id)
+            .Select(s => new { s.Id, s.RecordingId, s.Label, s.IdentifiedAuto, s.IsMultiSpeaker })
+            .ToListAsync();
+
+        var recIds = speakers.Select(s => s.RecordingId).Distinct().ToList();
+
+        var recordings = await _db.Recordings
+            .Where(r => recIds.Contains(r.Id))
+            .Select(r => new { r.Id, r.UserId, Display = r.Name ?? r.Title })
+            .ToListAsync();
+
+        // Cross-owner access is exactly what ManageVoiceprints grants. Without it the row is still listed -
+        // it is part of the training provenance - but inert.
+        var canAssess = await _permissions.HasAsync(UserId, PlatformPermission.ManageVoiceprints);
+        var accessible = recordings
+            .Where(r => canAssess || r.UserId == UserId)
+            .Select(r => r.Id)
+            .ToHashSet();
+
+        // Speech per speaker comes from the current transcription's segments, which the API already stores -
+        // no worker involvement, and the same figure a minimum-duration gate would read.
+        var currentTr = (await _db.Transcriptions
+                .Where(t => recIds.Contains(t.RecordingId))
+                .Select(t => new { t.Id, t.RecordingId, t.Version })
+                .ToListAsync())
+            .GroupBy(t => t.RecordingId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(t => t.Version).First().Id);
+
+        var trIds = currentTr.Values.ToList();
+        var speech = (await _db.Segments
+                .Where(s => trIds.Contains(s.TranscriptionId))
+                .Select(s => new { s.TranscriptionId, s.SpeakerLabel, s.StartMs, s.EndMs })
+                .ToListAsync())
+            .GroupBy(s => (s.TranscriptionId, s.SpeakerLabel))
+            .ToDictionary(g => g.Key, g => g.Sum(s => Math.Max(0, s.EndMs - s.StartMs)));
+
+        long SpeechFor(Guid recordingId, string label) =>
+            currentTr.TryGetValue(recordingId, out var trId) && speech.TryGetValue((trId, label), out var ms)
+                ? ms
+                : 0;
+
+        var samples = await _db.VoiceSamples.Where(v => v.PersonId == id).ToListAsync();
+
+        return Ok(PersonAttributions.Build(
+            speakers
+                .Select(s => new AttributionInput(
+                    s.Id, s.RecordingId, s.Label, s.IdentifiedAuto, s.IsMultiSpeaker,
+                    SpeechFor(s.RecordingId, s.Label)))
+                .ToList(),
+            samples,
+            recordings.ToDictionary(r => r.Id, r => r.Display),
+            accessible));
+    }
+
+    [HttpPut("{id:guid}/attributions/{speakerId:guid}/training")]
+    [EndpointSummary("Include or exclude a speaker from a person's voiceprint")]
+    [EndpointDescription(
+        "Adds a speaker already attributed to this person into their voiceprint training set, or removes " +
+        "it. Adding needs no re-transcription: the speaker's embedding was computed when the recording was " +
+        "transcribed.\n\n" +
+        "Removing **excludes rather than deletes** the sample, so the record that someone identified this " +
+        "speaker as this person survives and re-including it is a toggle. **409 when the person has opted " +
+        "out** of voice-printing, or when the speaker is marked as overlapping speech.")]
+    public async Task<IActionResult> SetTraining(Guid id, Guid speakerId, SetTrainingRequest req)
+    {
+        var person = await _db.People.FirstOrDefaultAsync(p => p.Id == id);
+        if (person is null) return NotFound();
+        if (!await CanManageBiometricsAsync(person)) return Forbid();
+
+        var speaker = await _db.Speakers.FirstOrDefaultAsync(s => s.Id == speakerId && s.PersonId == id);
+        if (speaker is null) return NotFound();
+
+        var sample = await _db.VoiceSamples
+            .FirstOrDefaultAsync(v => v.PersonId == id && v.SpeakerId == speakerId);
+
+        if (req.Training)
+        {
+            if (person.VoiceprintOptOut) return Conflict("This person has opted out of voice-printing.");
+            if (speaker.IsMultiSpeaker)
+                return Conflict("Overlapping speech cannot train a single person's voiceprint.");
+
+            if (sample is null)
+            {
+                if (speaker.Embedding is null)
+                    return BadRequest("This speaker has no voice embedding yet (re-transcribe to compute one).");
+                _db.VoiceSamples.Add(new VoiceSample
+                {
+                    Id = Guid.NewGuid(),
+                    PersonId = id,
+                    SpeakerId = speakerId,
+                    RecordingId = speaker.RecordingId,
+                    Embedding = speaker.Embedding,
+                });
+            }
+            else
+            {
+                sample.ExcludedAt = null;
+            }
+        }
+        else
+        {
+            if (sample is null) return NoContent(); // already not training; nothing to record
+            // UTC, or Npgsql rejects it for the timestamptz column at SaveChanges.
+            sample.ExcludedAt = DateTimeOffset.UtcNow;
+        }
+
+        await _db.SaveChangesAsync();
+        await _people.RecomputeVoiceprintAsync(id);
+        return NoContent();
+    }
+
+    /// <summary>A speaker whose audio the caller is allowed to assess, and the transcription that says which
+    /// audio is theirs.</summary>
+    private sealed record AssessmentTarget(Speaker Speaker, Recording Recording, Guid TranscriptionId);
+
+    /// <summary>The gate every assessment surface passes through, in one place because two endpoints
+    /// enforcing the same four rules separately is how they come to disagree.
+    ///
+    /// <list type="number">
+    /// <item>The caller may act on this person at all.</item>
+    /// <item>The speaker really is attributed to them.</item>
+    /// <item>The caller owns the recording, <b>or</b> holds ManageVoiceprints.</item>
+    /// <item>A current transcription exists to say which audio is this speaker's.</item>
+    /// </list>
+    ///
+    /// <para>Returns the failure result to return verbatim, or the resolved target.</para></summary>
+    private async Task<(ActionResult? Failure, AssessmentTarget? Target)> ResolveAssessmentTargetAsync(
+        Guid personId, Guid speakerId, bool requireAudio)
+    {
+        var person = await _db.People.FirstOrDefaultAsync(p => p.Id == personId);
+        if (person is null) return (NotFound(), null);
+        if (!await CanManageBiometricsAsync(person)) return (Forbid(), null);
+
+        var speaker = await _db.Speakers.FirstOrDefaultAsync(s => s.Id == speakerId && s.PersonId == personId);
+        if (speaker is null) return (NotFound(), null);
+
+        var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == speaker.RecordingId);
+        if (rec is null) return (NotFound(), null);
+        if (requireAudio && rec.AudioDeletedAt is not null) return (NotFound(), null);
+
+        if (rec.UserId != UserId
+            && !await _permissions.HasAsync(UserId, PlatformPermission.ManageVoiceprints))
+            return (Forbid(), null);
+
+        var trId = await _db.Transcriptions
+            .Where(t => t.RecordingId == rec.Id)
+            .OrderByDescending(t => t.Version)
+            .Select(t => (Guid?)t.Id)
+            .FirstOrDefaultAsync();
+        if (trId is null) return (NotFound(), null);
+
+        return (null, new AssessmentTarget(speaker, rec, trId.Value));
+    }
+
+    [HttpGet("{id:guid}/attributions/{speakerId:guid}/segments")]
+    [EndpointSummary("List what an attributed speaker said")]
+    [EndpointDescription(
+        "The segments this speaker spoke in the recording's current transcription, for choosing which audio " +
+        "trains a voiceprint.\n\n" +
+        "**Only that speaker's segments** - never the recording's transcript. Reading a recording you do not " +
+        "own requires **Manage voiceprints**, and that grant is deliberately limited to the person under " +
+        "assessment: everybody else's words in the same meeting stay out of reach.")]
+    public async Task<ActionResult<IReadOnlyList<AttributionSegmentDto>>> AttributionSegments(
+        Guid id, Guid speakerId)
+    {
+        // Audio may be gone while the transcript remains, and reading what someone said does not need it.
+        var (failure, target) = await ResolveAssessmentTargetAsync(id, speakerId, requireAudio: false);
+        if (failure is not null) return failure;
+
+        var rows = await _db.Segments
+            .Where(s => s.TranscriptionId == target!.TranscriptionId
+                        && s.SpeakerLabel == target.Speaker.Label)
+            .OrderBy(s => s.Ordinal)
+            .Select(s => new AttributionSegmentDto(s.Id, s.StartMs, s.EndMs, s.Revised ?? s.Original))
+            .ToListAsync();
+
+        return Ok(rows);
+    }
+
+    [HttpGet("{id:guid}/clip")]
+    [EndpointSummary("Play a clip of a person's speech")]
+    [EndpointDescription(
+        "Serves a short WAV clip of one span of audio, for judging by ear whether a voice really is this " +
+        "person.\n\n" +
+        "The span **must fall inside a segment this speaker spoke** in the recording's current " +
+        "transcription - arbitrary offsets are refused with 404. Clips from a recording you do not own " +
+        "additionally require **Manage voiceprints**, and every such access is logged. Clips are capped at " +
+        "two minutes.")]
+    [Produces("audio/wav")]
+    public async Task<IActionResult> Clip(
+        Guid id, [FromQuery] Guid speakerId, [FromQuery] long fromMs, [FromQuery] long toMs)
+    {
+        var (failure, target) = await ResolveAssessmentTargetAsync(id, speakerId, requireAudio: true);
+        if (failure is not null) return failure;
+        var (speaker, rec, currentTrId) = target!;
+
+        // The span must be audio this speaker actually produced. Without this, ManageVoiceprints would grant
+        // arbitrary offsets into someone else's meeting - which is precisely what it must not do. It applies
+        // to owners too: it costs nothing and keeps one rule rather than two.
+        var covered = await _db.Segments.AnyAsync(s =>
+            s.TranscriptionId == currentTrId
+            && s.SpeakerLabel == speaker.Label
+            && s.StartMs <= fromMs && s.EndMs >= toMs);
+        if (!covered) return NotFound();
+
+        if (rec.UserId != UserId)
+            _logger.LogInformation(
+                "Cross-owner assessment clip: user {UserId} played {FromMs}-{ToMs} of recording {RecordingId} as person {PersonId}",
+                UserId, fromMs, toMs, rec.Id, id);
+
+        // Presigned and internal: ffmpeg range-seeks the object store rather than the API pulling a whole
+        // recording to cut seconds out of it. The URL never leaves this process.
+        var url = await _storage.GetPresignedReadUrlAsync(rec.BlobKey, TimeSpan.FromMinutes(5));
+        return File(await _clipper.ClipAsync(url, fromMs, toMs), "audio/wav");
     }
 
     [HttpGet("duplicates")]

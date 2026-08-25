@@ -108,4 +108,42 @@ public class AudioStorageIntegrationTests(ContainersFixture fx)
 
         foreach (var k in keys) Assert.Contains(k, listed);
     }
+
+    /// <summary>The URL ffmpeg is handed to cut an assessment clip. It has to actually serve the object, and
+    /// it has to honour Range - the whole reason for presigning rather than downloading is that ffmpeg seeks
+    /// into a large recording and transfers only what it reads.</summary>
+    [Fact]
+    public async Task GetPresignedReadUrl_ServesTheObject()
+    {
+        var storage = CreateStorage(out _);
+        await storage.EnsureBucketAsync();
+        var key = $"{Guid.NewGuid()}/audio.webm";
+        var bytes = Encoding.UTF8.GetBytes("hello presigned world");
+        using (var input = new MemoryStream(bytes))
+            await storage.UploadAsync(key, input, "application/octet-stream");
+
+        var url = await storage.GetPresignedReadUrlAsync(key, TimeSpan.FromMinutes(5));
+
+        using var http = new HttpClient();
+        Assert.Equal(bytes, await http.GetByteArrayAsync(url));
+    }
+
+    [Fact]
+    public async Task GetPresignedReadUrl_HonoursRangeRequests()
+    {
+        // Without Range support ffmpeg would have to pull whole recordings to cut five seconds out of one.
+        var storage = CreateStorage(out _);
+        await storage.EnsureBucketAsync();
+        var key = $"{Guid.NewGuid()}/audio.webm";
+        using (var input = new MemoryStream(Encoding.UTF8.GetBytes("0123456789")))
+            await storage.UploadAsync(key, input, "application/octet-stream");
+
+        var url = await storage.GetPresignedReadUrlAsync(key, TimeSpan.FromMinutes(5));
+
+        using var http = new HttpClient();
+        using var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(2, 5);
+        var res = await http.SendAsync(req);
+        Assert.Equal("2345", await res.Content.ReadAsStringAsync());
+    }
 }

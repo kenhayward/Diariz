@@ -203,6 +203,7 @@ builder.Services.AddAuthorization(o =>
     o.AddPolicy("ManagePlatform", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManagePlatform)));
     o.AddPolicy("ManageFormulas", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManageFormulas)));
     o.AddPolicy("ManagePeople", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManagePeople)));
+    o.AddPolicy("ManageVoiceprints", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManageVoiceprints)));
     // Reading platform settings: the Manage Users modal shows the default quota, so an Administrator
     // (ManageUsers, no ManagePlatform) must still be able to GET them. Writes remain ManagePlatform.
     o.AddPolicy("ReadAdminSettings", p => p.AddRequirements(
@@ -229,6 +230,8 @@ builder.Services.AddSingleton<IAmazonS3>(_ =>
     return new AmazonS3Client(new BasicAWSCredentials(storage.AccessKey, storage.SecretKey), cfg);
 });
 builder.Services.AddSingleton<IAudioStorage, AudioStorage>();
+// Stateless process launcher; ffmpeg comes from the API image (see its Dockerfile).
+builder.Services.AddSingleton<IAudioClipper, FfmpegAudioClipper>();
 
 // ---- Platform backup/restore (shells out to pg_dump/pg_restore — installed in the API image) ----
 builder.Services.AddSingleton<IDatabaseBackup>(_ =>

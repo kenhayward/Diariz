@@ -20,6 +20,14 @@ public interface IAudioStorage
     Task<long?> GetSizeAsync(string key, CancellationToken ct = default);
     /// <summary>Removes the stored blob. Idempotent — succeeds even if the key is absent.</summary>
     Task DeleteAsync(string key, CancellationToken ct = default);
+
+    /// <summary>A time-limited URL the API's own subprocesses can read the blob from, so ffmpeg can
+    /// range-seek into a large recording rather than the API downloading all of it to cut a few seconds out.
+    ///
+    /// <para><b>Internal only.</b> It addresses the object store on its in-network endpoint and must never be
+    /// returned to a client — clients get audio through the API's own streaming endpoints, which is the whole
+    /// reason MinIO does not have to be reachable from a browser.</para></summary>
+    Task<string> GetPresignedReadUrlAsync(string key, TimeSpan lifetime, CancellationToken ct = default);
     /// <summary>Enumerate every object key in the bucket (paginated). Used by the platform backup.</summary>
     IAsyncEnumerable<string> ListKeysAsync(CancellationToken ct = default);
 }
@@ -100,6 +108,24 @@ public class AudioStorage : IAudioStorage
 
     public Task DeleteAsync(string key, CancellationToken ct = default) =>
         _s3.DeleteObjectAsync(_opts.Bucket, key, ct);
+
+    public Task<string> GetPresignedReadUrlAsync(
+        string key, TimeSpan lifetime, CancellationToken ct = default) =>
+        // A plain GET presign, deliberately nothing else. The payload-signing caveat on PutObject above is
+        // why request options in this class are left alone unless there is a reason to touch them.
+        _s3.GetPreSignedURLAsync(new GetPreSignedUrlRequest
+        {
+            BucketName = _opts.Bucket,
+            Key = key,
+            Verb = HttpVerb.GET,
+            Expires = DateTime.UtcNow.Add(lifetime),
+            // Presigning defaults to HTTPS regardless of ServiceURL, and MinIO is served over plain HTTP in
+            // the compose stack. Without this the URL is unusable and the failure is a TLS frame error from
+            // inside ffmpeg, which says nothing about the cause.
+            Protocol = _opts.Endpoint.StartsWith("https", StringComparison.OrdinalIgnoreCase)
+                ? Protocol.HTTPS
+                : Protocol.HTTP,
+        });
 
     public async IAsyncEnumerable<string> ListKeysAsync(
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)

@@ -120,6 +120,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddSegmentWords` | `Segments.WordsJson` (jsonb, nullable). WhisperX's aligned word timings, which a segment split snaps to. Additive and nullable, so an older backup restores cleanly - **no `CurrentFormat` bump** |
 | `AddSpeakerEmbeddingStale` | `Speakers.EmbeddingStale` (boolean, not-null, default false). Flags a speaker whose audio was re-attributed by a per-segment reassignment - **no `CurrentFormat` bump** |
 | `AddVoiceSampleSpans` | `ProfileContributions.SpansJson` (jsonb, nullable - null = the whole speaker) + `ProfileContributions.UsedMs` (integer, nullable). Which audio trains each voice sample, and how much of it the last embed used. No data backfill: null already means what every existing row did - **no `CurrentFormat` bump** |
+| `AddVoiceSampleExcludedAt` | `ProfileContributions.ExcludedAt` (timestamptz, nullable). Set when a user drops a sample from training; null means it still trains the voiceprint - the state every existing row is in, so nothing is backfilled. Excluded rather than deleted so the record that a human identified that speaker survives, and a later re-scan cannot silently re-add what someone removed - **no `CurrentFormat` bump** |
 
 ### Entity-relationship overview
 
@@ -728,6 +729,7 @@ for the same backup-compatibility reason as `SpeakerProfiles` above.
 | `Embedding` | **vector(192)** | snapshot of the contributing speaker's embedding (lets the centroid be recomputed without the worker) |
 | `SpansJson` | **jsonb** null | the spans of the recording's audio this sample trains on, `[{"startMs":1000,"endMs":3000}]`. **Null = the whole speaker** — what every sample enrolled before selection existed already did, which is why the migration backfills nothing. **Spans, not segment ids**: segment rows belong to a transcription *version* and a re-transcribe replaces every one of them, where wall-clock times survive. Read/written only through `VoiceprintSpans`. Postgres-only (plain text under the in-memory provider) |
 | `UsedMs` | int null | how much audio the last embedding actually consumed. Two jobs: the honest figure behind "using 1:20 of the 4:12 selected" (the worker caps pooled audio at `EMBED_MAX_SECONDS`), and the **pending marker** — the enqueue clears it and the callback sets it, so a recompute in flight survives a page reload instead of living only in component state. A *failed* re-embed sets it to **0**, so a dead job is not indistinguishable from a slow one |
+| `ExcludedAt` | timestamptz null | when a user dropped this sample from training; null while it still trains. `PeopleDirectory.RecomputeVoiceprintAsync` filters on it, so an excluded sample leaves both the centroid **and** `SpeakerProfiles.SampleCount` - otherwise the toggle would be cosmetic, the row reading "not training" while its vector stayed in the average. **Store UTC**: Npgsql rejects a non-zero-offset DateTimeOffset for timestamptz |
 | `CreatedAt` | timestamptz | |
 
 Index: `(ProfileId)`.

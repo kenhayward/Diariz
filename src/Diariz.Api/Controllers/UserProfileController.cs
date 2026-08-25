@@ -47,7 +47,8 @@ public class UserProfileController : ControllerBase
         p.HasFlag(PlatformPermission.ManageUsers),
         p.HasFlag(PlatformPermission.ManagePlatform),
         p.HasFlag(PlatformPermission.ManageFormulas),
-        p.HasFlag(PlatformPermission.ManagePeople));
+        p.HasFlag(PlatformPermission.ManagePeople),
+        p.HasFlag(PlatformPermission.ManageVoiceprints));
 
     [HttpGet]
     [EndpointSummary("Get your profile")]
