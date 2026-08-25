@@ -77,12 +77,40 @@ describe("dayItems", () => {
       .toEqual(["rec:r-linked", "ev:e-other"]);
   });
 
-  it("dedupes across days: a linked event on another day is still suppressed by its recording", () => {
-    // Manual link where the meeting and recording fall on different days: the event must not show as a
-    // standalone row anywhere (the recording carries it, on the recording's day).
+  it("keeps an event whose linked recording is on another day - nothing else would represent it", () => {
+    // Suppression is only ever safe when the recording that stands in for the event is drawn on the SAME
+    // day. Here the link crosses a day boundary, so dropping the event would remove the meeting from the
+    // calendar entirely: the event is not drawn on its own day, and the recording is drawn on a different
+    // one. It has to stay.
     const recordings = [rec("r", new Date(2026, 6, 5, 10, 0).toISOString(), "late")];
     const events = [ev("late", new Date(2026, 6, 2, 9, 0), new Date(2026, 6, 2, 9, 30))];
-    expect(dayItems(recordings, events, "2026-07-02")).toHaveLength(0); // event suppressed on its own day
+    expect(dayItems(recordings, events, "2026-07-02").map((i) => i.type === "event" && i.event.id))
+      .toEqual(["late"]);
+  });
+
+  it("draws a meeting rescheduled onto a later day, though yesterday's recording is still linked to it", () => {
+    // Outlook keeps one GlobalAppointmentID across a reschedule, so the event row moves days while the
+    // recording made under its old slot stays linked. Regression for #615: the meeting used to disappear
+    // from the day it had moved to.
+    const recordings = [rec("r", new Date(2026, 6, 1, 14, 0).toISOString(), "moved")];
+    const events = [ev("moved", new Date(2026, 6, 2, 14, 30), new Date(2026, 6, 2, 15, 30))];
+    expect(dayItems(recordings, events, "2026-07-02").map((i) => i.type === "event" && i.event.id))
+      .toEqual(["moved"]);
+    // ...and the recording still stands in for it on its own day, so the pair is never drawn twice over.
+    expect(dayItems(recordings, events, "2026-07-01").map((i) => i.type))
+      .toEqual(["recording"]);
+  });
+
+  it("agrees with dayEventCount on how many events a day has once every event is drawable", () => {
+    // The header counts events and the grid draws them from two independent functions. A meeting present
+    // in one and missing from the other is what made #615 visible: "10 events" over nine blocks.
+    const recordings = [rec("r", new Date(2026, 6, 1, 14, 0).toISOString(), "moved")];
+    const events = [
+      ev("moved", new Date(2026, 6, 2, 14, 30), new Date(2026, 6, 2, 15, 30)),
+      ev("other", new Date(2026, 6, 2, 9, 0), new Date(2026, 6, 2, 10, 0)),
+    ];
+    const drawn = dayItems(recordings, events, "2026-07-02").filter((i) => i.type === "event").length;
+    expect(drawn).toBe(dayEventCount(events, "2026-07-02"));
   });
 });
 
