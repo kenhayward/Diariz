@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
 import type { ClipRequest } from "../lib/clipPlayback";
 import PersonAttributionRow from "./PersonAttributionRow";
+import { rowVerdict, sortKey, worthChecking } from "../lib/voiceprintVerdict";
 import type { Person } from "../lib/types";
 
 /// Where this person's voice has been heard, and which of it trains their voiceprint.
@@ -33,6 +34,17 @@ export default function PersonVoiceprintTab({ person }: { person: Person }) {
     queryFn: () => api.getPersonAttributions(person.id),
     enabled: !person.voiceprintOptOut,
   });
+
+  // Joined here rather than shown on a tab of its own. Two lists of the same recordings - one with the
+  // verdicts, one with the controls - is what made a flagged recording impossible to act on: you had to
+  // remember its name, switch tabs and find it again.
+  const diagnostics = useQuery({
+    queryKey: ["personDiagnostics", person.id],
+    queryFn: () => api.getPersonDiagnostics(person.id),
+    enabled: !person.voiceprintOptOut,
+  });
+
+  const [onlyWorthChecking, setOnlyWorthChecking] = useState(false);
 
   const { play, stop, playingSegmentId } = useClipPlayer(person.id);
 
@@ -65,22 +77,62 @@ export default function PersonVoiceprintTab({ person }: { person: Person }) {
   const rows = attributions.data ?? [];
   const trainingCount = rows.filter((r) => r.isTraining).length;
 
+  // Keyed on the speaker, not the voice sample: `voiceSampleId` is null for an attribution that trains
+  // nothing, and those rows still belong in the list.
+  const bySpeaker = new Map((diagnostics.data?.samples ?? []).map((d) => [d.speakerId, d]));
+
+  const decorated = rows.map((r) => {
+    const diagnosis = bySpeaker.get(r.speakerId);
+    return { row: r, diagnosis, verdict: rowVerdict(diagnosis, r.stillLinked) };
+  });
+
+  // A stable sort, so the server's ordering by recording name survives underneath. Everything needing no
+  // attention shares one key - ranking Core against Variant would imply a difference to act on.
+  const sorted = decorated.slice().sort((a, b) => sortKey(a.verdict) - sortKey(b.verdict));
+  const checkable = decorated.filter((d) => worthChecking(d.verdict)).length;
+  const aloneCount = decorated.filter((d) => d.verdict === "alone").length;
+  const visible = onlyWorthChecking ? sorted.filter((d) => worthChecking(d.verdict)) : sorted;
+
+  // Describes the list beneath it. The old header counted only the outliers while the list showed every
+  // recording, so "5 resemble none of the others" sat above rows reading "Matches the others" - both true,
+  // and together unreadable.
+  const header =
+    trainingCount < 2 && aloneCount === 0
+      ? t("people:vpNothingToCompare")
+      : t("people:vpTrainedOn", { trained: trainingCount, total: rows.length }) +
+        (aloneCount > 0 ? ` ${t("people:vpSomeAlone", { count: aloneCount })}` : "");
+
   return (
     <div className="flex h-full flex-col gap-3 overflow-y-auto p-4">
-      <p className="text-xs text-gray-500 dark:text-gray-400">
-        {t("people:voiceprintTrainedFrom", { count: trainingCount })}
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-gray-500 dark:text-gray-400">{header}</p>
+        {/* Offered only when it could keep something. A control whose only possible effect is to empty
+            the list is worse than no control. */}
+        {checkable > 0 && (
+          <label className="flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-200">
+            <input
+              type="checkbox"
+              checked={onlyWorthChecking}
+              onChange={(e) => setOnlyWorthChecking(e.target.checked)}
+              aria-label={t("people:vpOnlyWorthChecking")}
+            />
+            {t("people:vpOnlyWorthChecking")}
+          </label>
+        )}
+      </div>
 
       {rows.length === 0 ? (
         <p className="text-sm text-gray-500 dark:text-gray-400">{t("people:voiceprintNoSamples")}</p>
       ) : (
         <ul className="space-y-2">
-          {rows.map((r) => (
+          {visible.map(({ row: r, diagnosis, verdict }) => (
             <li key={r.speakerId} className="rounded border p-3 text-sm dark:border-gray-700">
               <PersonAttributionRow
                 personId={person.id}
                 attribution={r}
                 sample={samples.find((s) => s.id === r.voiceSampleId) ?? null}
+                diagnosis={diagnosis}
+                verdict={verdict}
                 // The server's answer, never recomputed here, or the two drift the first time either side is
                 // edited. Someone may still SEE what a voiceprint learned from without it.
                 canManage={person.canManageBiometrics}

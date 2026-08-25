@@ -9,7 +9,9 @@ import MergePeopleDialog from "./MergePeopleDialog";
 import PersonIdentityLine from "./PersonIdentityLine";
 import type { PersonDuplicateGroup } from "../lib/types";
 
-type Filter = "all" | "internal" | "external" | "hasVoiceprint";
+/// The first four narrow the server query. `needsReview` cannot - the warnings come from two other
+/// endpoints - so it filters what came back instead.
+type Filter = "all" | "internal" | "external" | "hasVoiceprint" | "needsReview";
 
 /// The people directory, as a modal rather than a route.
 ///
@@ -29,9 +31,12 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [merging, setMerging] = useState<PersonDuplicateGroup | null>(null);
-  // This sitting only, deliberately: the pair really might be the same person, and hiding a suggestion
-  // forever is not a decision to take from a banner with one click and no undo. State lives in the modal,
-  // so closing and reopening brings everything back.
+  // This sitting only, deliberately: the pair really might be the same person, and the odd-sounding
+  // recording really might be them on a car phone. Hiding either forever is not a decision to take from
+  // one click with no undo. State lives in the modal, so closing and reopening brings everything back.
+  //
+  // Keyed on the person rather than the duplicate group: the row carries both kinds of warning, and one
+  // Dismiss covering both is what "stop nagging me about this person" means.
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -88,11 +93,20 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
 
   const selected = people.find((p) => p.id === selectedId) ?? null;
 
-  // Identity is the people in the group, not its position: a merge elsewhere reorders the list, and a
-  // dismissal keyed on the index would then hide the wrong pair.
-  const groupKey = (g: PersonDuplicateGroup) =>
-    `${g.reason}:${g.people.map((p) => p.id).sort().join(",")}`;
-  const visibleDuplicates = duplicates.filter((g) => !dismissed.has(groupKey(g)));
+  // What each row has to say about itself. Both used to be panels above the directory; with both showing
+  // they pushed the person card almost off screen, which is the thing they were asking you to look at.
+  const healthFor = new Map(unhealthy.map((h) => [h.personId, h]));
+  const duplicateFor = new Map<string, PersonDuplicateGroup>();
+  for (const g of duplicates) for (const p of g.people) duplicateFor.set(p.id, g);
+
+  const warned = (id: string) =>
+    !dismissed.has(id) && (healthFor.has(id) || duplicateFor.has(id));
+
+  const visiblePeople = filter === "needsReview" ? people.filter((p) => warned(p.id)) : people;
+
+  // The merge follows the person you opened, rather than sitting above the directory.
+  const selectedDuplicate =
+    selected && !dismissed.has(selected.id) ? duplicateFor.get(selected.id) : undefined;
 
   async function merge(targetId: string, sourceId: string) {
     setError(null);
@@ -151,89 +165,6 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
           <p className="p-6 text-sm text-gray-500 dark:text-gray-400">{t("people:optOutLockedHint")}</p>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
-            {unhealthy.length > 0 && (
-              <div className="shrink-0 rounded border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-700 dark:bg-amber-950">
-                <p className="font-medium text-amber-900 dark:text-amber-200">{t("people:healthHeading")}</p>
-                <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-300">{t("people:healthHint")}</p>
-                <ul className="mt-2 space-y-1">
-                  {unhealthy.slice(0, 5).map((h) => (
-                    <li key={h.personId} className="flex flex-wrap items-center gap-2 text-xs">
-                      <span className="min-w-0 flex-1 truncate text-gray-700 dark:text-gray-200">
-                        {h.name}
-                      </span>
-                      <span className="text-gray-600 dark:text-gray-300">
-                        {t("people:healthCount", { count: h.aloneCount, total: h.sampleCount })}
-                      </span>
-                      {/* Straight to that person's Diagnostics tab - the point of a ranking is to be a way
-                          in, not a report to read and act on somewhere else. */}
-                      <button
-                        type="button"
-                        onClick={() => setSelectedId(h.personId)}
-                        className="rounded border border-amber-400 px-2 py-0.5 text-amber-900 dark:border-amber-600 dark:text-amber-200"
-                      >
-                        {t("people:healthReview")}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                {unhealthy.length > 5 && (
-                  <p className="mt-1 text-xs text-amber-800 dark:text-amber-300">
-                    {t("people:healthMore", { count: unhealthy.length - 5 })}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {visibleDuplicates.length > 0 && (
-              <div className="shrink-0 rounded border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-700 dark:bg-amber-950">
-                <p className="font-medium text-amber-900 dark:text-amber-200">{t("people:duplicatesHeading")}</p>
-                <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-300">{t("people:duplicatesHint")}</p>
-                <ul className="mt-2 space-y-1">
-                  {visibleDuplicates.map((group, i) => (
-                    <li key={i} className="flex flex-wrap items-start gap-2 text-xs">
-                      {/* One line per person, each with its account identity. Joining the names produced
-                          "Same name: Ken Hayward, Ken Hayward", which cannot be decided on without
-                          opening the dialog - and the pair most worth reporting is the one where the
-                          names are identical. A div, not a span: it contains a list. */}
-                      <div className="min-w-0 flex-1 text-gray-600 dark:text-gray-300">
-                        {group.reason === "email"
-                          ? t("people:duplicatesReasonEmail")
-                          : t("people:duplicatesReasonName")}
-                        :
-                        <ul className="mt-0.5 space-y-0.5">
-                          {group.people.map((p) => (
-                            <li key={p.id} className="truncate">
-                              {p.name}{" "}
-                              <PersonIdentityLine person={p} className="text-gray-500 dark:text-gray-400" />
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                      {group.people.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => setMerging(group)}
-                          className="rounded border border-amber-400 px-2 py-0.5 text-amber-900 dark:border-amber-600 dark:text-amber-200"
-                        >
-                          {t("people:mergeReview")}
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setDismissed((cur) => new Set(cur).add(groupKey(group)))
-                        }
-                        title={t("people:dismissDuplicateHint")}
-                        className="text-amber-800 underline dark:text-amber-300"
-                      >
-                        {t("people:dismissDuplicate")}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               <input
                 type="search"
@@ -247,6 +178,7 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
               {chip("internal", t("people:filterInternal"))}
               {chip("external", t("people:filterExternal"))}
               {chip("hasVoiceprint", t("people:filterHasVoiceprint"))}
+              {chip("needsReview", t("people:filterNeedsReview"))}
             </div>
 
             {(error || isError) && (
@@ -258,49 +190,117 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
             <div className="flex min-h-0 flex-1 gap-4">
               {/* The only scrolling region. */}
               <ul className="w-80 shrink-0 overflow-y-auto rounded border dark:border-gray-700">
-                {people.length === 0 && (
+                {visiblePeople.length === 0 && (
                   <li className="p-3 text-sm text-gray-500 dark:text-gray-400">{t("people:empty")}</li>
                 )}
-                {people.map((p) => (
-                  <li key={p.id}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedId(p.id)}
-                      aria-pressed={p.id === selectedId}
-                      // Name over account identity, with the voiceprint marker keeping its place at the
-                      // end. The second line is what makes two people of the same name tellable apart;
-                      // both lines truncate so a long directory still stays scannable.
-                      className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800 ${
-                        p.id === selectedId ? "bg-gray-100 dark:bg-gray-800" : ""
-                      }`}
-                    >
-                      <span className="min-w-0 flex-1">
-                        {/* truncate needs a block: on an inline span it sets only white-space:nowrap,
-                            so the text would neither wrap nor ellipsise and would overflow the row. */}
-                        <span className="block truncate text-gray-800 dark:text-gray-100">{p.name}</span>
-                        <PersonIdentityLine
-                          person={p}
-                          className="block truncate text-xs text-gray-500 dark:text-gray-400"
-                        />
-                      </span>
-                      <span
-                        title={p.hasVoiceprint ? t("people:hasVoiceprint") : t("people:noVoiceprint")}
-                        aria-label={p.hasVoiceprint ? t("people:hasVoiceprint") : t("people:noVoiceprint")}
-                        className={`shrink-0 rounded px-1 text-[10px] font-medium ${
-                          p.hasVoiceprint
-                            ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
-                            : "text-gray-300 dark:text-gray-600"
+                {visiblePeople.map((p) => {
+                  const health = warned(p.id) ? healthFor.get(p.id) : undefined;
+                  const duplicate = warned(p.id) ? duplicateFor.get(p.id) : undefined;
+                  return (
+                    // A flex row rather than one big button, because Dismiss has to be a real button and a
+                    // button cannot be nested inside another one.
+                    <li key={p.id} className="flex items-start">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(p.id)}
+                        aria-pressed={p.id === selectedId}
+                        // Name over account identity, with the voiceprint marker keeping its place at the
+                        // end. The second line is what makes two people of the same name tellable apart;
+                        // both lines truncate so a long directory still stays scannable.
+                        className={`flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800 ${
+                          p.id === selectedId ? "bg-gray-100 dark:bg-gray-800" : ""
                         }`}
                       >
-                        {p.hasVoiceprint ? t("people:voiceprintShort") : "-"}
-                      </span>
-                    </button>
-                  </li>
-                ))}
+                        <span className="min-w-0 flex-1">
+                          {/* truncate needs a block: on an inline span it sets only white-space:nowrap,
+                              so the text would neither wrap nor ellipsise and would overflow the row. */}
+                          <span className="block truncate text-gray-800 dark:text-gray-100">{p.name}</span>
+                          <PersonIdentityLine
+                            person={p}
+                            className="block truncate text-xs text-gray-500 dark:text-gray-400"
+                          />
+                          {/* Only rendered when there is something to say, so an ordinary directory stays
+                              two lines a row and the amber means something when it appears. */}
+                          {(health || duplicate) && (
+                            <span className="block truncate text-xs text-amber-700 dark:text-amber-400">
+                              {health &&
+                                t("people:warnVoiceprint", {
+                                  count: health.aloneCount,
+                                  total: health.sampleCount,
+                                })}
+                              {health && duplicate ? " - " : ""}
+                              {duplicate && t("people:warnDuplicate")}
+                            </span>
+                          )}
+                        </span>
+                        <span
+                          title={p.hasVoiceprint ? t("people:hasVoiceprint") : t("people:noVoiceprint")}
+                          aria-label={p.hasVoiceprint ? t("people:hasVoiceprint") : t("people:noVoiceprint")}
+                          className={`shrink-0 rounded px-1 text-[10px] font-medium ${
+                            p.hasVoiceprint
+                              ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                              : "text-gray-300 dark:text-gray-600"
+                          }`}
+                        >
+                          {p.hasVoiceprint ? t("people:voiceprintShort") : "-"}
+                        </span>
+                      </button>
+                      {(health || duplicate) && (
+                        <button
+                          type="button"
+                          onClick={() => setDismissed((cur) => new Set(cur).add(p.id))}
+                          title={t("people:dismissWarningsHint")}
+                          className="shrink-0 px-2 py-1.5 text-xs text-amber-700 underline dark:text-amber-400"
+                        >
+                          {t("people:dismissWarnings")}
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
 
-              {/* Fixed: the form never moves while the list beside it scrolls. */}
-              <div className="min-w-0 flex-1 overflow-hidden rounded border dark:border-gray-700">
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                {/* Follows the person you opened. As a panel above the directory it covered the very card
+                    it was asking you to look at, which is what made it worth moving. */}
+                {selected && selectedDuplicate && (
+                  <div className="shrink-0 rounded border border-amber-300 bg-amber-50 p-2 text-xs dark:border-amber-700 dark:bg-amber-950">
+                    <div className="flex flex-wrap items-start gap-2">
+                      <div className="min-w-0 flex-1 text-amber-900 dark:text-amber-200">
+                        {selectedDuplicate.reason === "email"
+                          ? t("people:duplicatesReasonEmail")
+                          : t("people:duplicatesReasonName")}
+                        :
+                        {/* One line per person with its account identity. Joining bare names produced two
+                            identical names, which cannot be decided on - and the pair most worth reporting
+                            is exactly the one where the names match. */}
+                        <ul className="mt-0.5 space-y-0.5">
+                          {selectedDuplicate.people.map((dp) => (
+                            <li key={dp.id} className="truncate">
+                              {dp.name}{" "}
+                              <PersonIdentityLine
+                                person={dp}
+                                className="text-amber-800 dark:text-amber-300"
+                              />
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      {selectedDuplicate.people.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setMerging(selectedDuplicate)}
+                          className="rounded border border-amber-400 px-2 py-0.5 text-amber-900 dark:border-amber-600 dark:text-amber-200"
+                        >
+                          {t("people:mergeReview")}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Fixed: the form never moves while the list beside it scrolls. */}
+                <div className="min-w-0 flex-1 overflow-hidden rounded border dark:border-gray-700">
                 {selected ? (
                   <PersonEditor
                     key={selected.id}
@@ -311,6 +311,7 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
                 ) : (
                   <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("people:noneSelected")}</p>
                 )}
+                </div>
               </div>
             </div>
           </div>

@@ -2,11 +2,14 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import PersonProfileTab from "./PersonProfileTab";
 import PersonVoiceprintTab from "./PersonVoiceprintTab";
-import PersonDiagnosticsTab from "./PersonDiagnosticsTab";
 import type { Person } from "../lib/types";
 
-/// One person, under three tabs: who they are, what their voiceprint was trained on, and whether that
-/// training set actually hangs together.
+/// One person, under two tabs: who they are, and what their voiceprint was trained on.
+///
+/// There was briefly a third, scoring how well those recordings resemble each other. It listed the same
+/// recordings as the Voiceprint tab and none of its controls, so a recording it flagged could not be played
+/// or dropped without switching tabs and finding it again - and for one whose speaker had since been
+/// reassigned, there was no row on the other tab to find. The verdict belongs on the row.
 ///
 /// **Profile is the default** because the common task is fixing a job title while reading a transcript.
 /// Voiceprint is an audit surface - you go looking for it, usually because recognition has drifted.
@@ -32,16 +35,16 @@ export default function PersonEditor({
   showDestructiveActions?: boolean;
 }) {
   const { t } = useTranslation("people");
-  const [tab, setTab] = useState<"profile" | "voiceprint" | "diagnostics">("profile");
+  const [tab, setTab] = useState<"profile" | "voiceprint">("profile");
   // Which tabs have ever been opened, so the voiceprint's fetch is deferred until it is actually wanted.
-  const [opened, setOpened] = useState({ profile: true, voiceprint: false, diagnostics: false });
+  const [opened, setOpened] = useState({ profile: true, voiceprint: false });
 
-  function show(key: "profile" | "voiceprint" | "diagnostics") {
+  function show(key: "profile" | "voiceprint") {
     setTab(key);
     setOpened((o) => ({ ...o, [key]: true }));
   }
 
-  const tabButton = (key: "profile" | "voiceprint" | "diagnostics", label: string) => (
+  const tabButton = (key: "profile" | "voiceprint", label: string) => (
     <button
       key={key}
       type="button"
@@ -63,7 +66,6 @@ export default function PersonEditor({
       <div role="tablist" className="flex shrink-0 gap-1 border-b px-2 dark:border-gray-700">
         {tabButton("profile", t("tabProfile"))}
         {tabButton("voiceprint", t("tabVoiceprint"))}
-        {tabButton("diagnostics", t("tabDiagnostics"))}
       </div>
 
       {/* Hidden, not unmounted. The Profile tab holds a local draft, and losing a half-typed correction
@@ -96,20 +98,6 @@ export default function PersonEditor({
           className="min-h-0 flex-1"
         >
           <PersonVoiceprintTab person={person} />
-        </div>
-      )}
-
-      {/* Same deferral as the voiceprint tab: diagnosing a training set is a query per person, and the
-          directory is clicked through row by row. */}
-      {opened.diagnostics && (
-        <div
-          role="tabpanel"
-          data-testid="diagnostics-panel"
-          aria-label={t("tabDiagnostics")}
-          hidden={tab !== "diagnostics"}
-          className="min-h-0 flex-1"
-        >
-          <PersonDiagnosticsTab person={person} />
         </div>
       )}
     </div>
