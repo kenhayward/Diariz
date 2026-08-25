@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
   dayKey, isoToDayKey, buildMonthGrid, recordingDayKeys, recordingsForDay,
   eventDayKeys, visibleGridRange, dayItems, recordingSpan, dayItemSpan, dayEventCount,
@@ -19,6 +19,14 @@ const ev = (id: string, start: Date, end: Date): CalendarEvent => ({
   id, summary: id, start: start.toISOString(), end: end.toISOString(), htmlLink: null,
 });
 
+/// An all-day entry exactly as the API sends one: `allDay`, and midnight-to-exclusive-next-midnight
+/// instants. The offset is deliberately UTC and the dates are deliberately literal - the whole point of a
+/// date-only entry is that it names calendar dates, so nothing here may depend on the runner's zone.
+const allDayEv = (id: string, startDate: string, endDate: string): CalendarEvent => ({
+  id, summary: id, start: `${startDate}T00:00:00+00:00`, end: `${endDate}T00:00:00+00:00`,
+  htmlLink: null, allDay: true,
+});
+
 describe("eventDayKeys", () => {
   it("maps a single-day timed event to its day", () => {
     const keys = eventDayKeys([ev("a", new Date(2026, 6, 2, 9, 0), new Date(2026, 6, 2, 10, 0))]);
@@ -34,6 +42,43 @@ describe("eventDayKeys", () => {
   it("expands a multi-day event across every day it spans", () => {
     const keys = eventDayKeys([ev("a", new Date(2026, 6, 2, 22, 0), new Date(2026, 6, 4, 2, 0))]);
     expect([...keys].sort()).toEqual(["2026-07-02", "2026-07-03", "2026-07-04"]);
+  });
+
+  /// A date-only entry names calendar dates, not instants, so where the reader happens to be standing must
+  /// not change which day it falls on. Pinned to a zone ahead of UTC because that is the direction that
+  /// breaks: local midnight is BEFORE the instant, so converting it pushes the entry's end past midnight
+  /// into the following day and the entry is drawn twice. Regression for #616.
+  describe("all-day entries, read from a zone ahead of UTC", () => {
+    const realTz = process.env.TZ;
+    beforeAll(() => { process.env.TZ = "Europe/London"; });
+    afterAll(() => { process.env.TZ = realTz; });
+
+    it("keeps a one-day all-day entry on its own day", () => {
+      // 24 August 2026 is a Monday in BST (UTC+1). Outlook's "Chris Not In" is Monday only.
+      expect([...eventDayKeys([allDayEv("a", "2026-08-24", "2026-08-25")])]).toEqual(["2026-08-24"]);
+    });
+
+    it("covers exactly the days a multi-day all-day entry names", () => {
+      expect([...eventDayKeys([allDayEv("a", "2026-08-24", "2026-08-27")])].sort())
+        .toEqual(["2026-08-24", "2026-08-25", "2026-08-26"]);
+    });
+
+    it("still covers one day when a sender gives an inclusive rather than exclusive end", () => {
+      // Not every producer treats the end as exclusive; a same-date pair must not collapse to no days.
+      expect([...eventDayKeys([allDayEv("a", "2026-08-24", "2026-08-24")])]).toEqual(["2026-08-24"]);
+    });
+
+    it("counts an all-day entry only on the day it is on", () => {
+      const events = [allDayEv("a", "2026-08-24", "2026-08-25")];
+      expect(dayEventCount(events, "2026-08-24")).toBe(1);
+      expect(dayEventCount(events, "2026-08-25")).toBe(0);
+    });
+
+    it("does not offer an all-day entry to the following day's grid", () => {
+      const events = [allDayEv("a", "2026-08-24", "2026-08-25")];
+      expect(dayItems([], events, "2026-08-24")).toHaveLength(1);
+      expect(dayItems([], events, "2026-08-25")).toHaveLength(0);
+    });
   });
 });
 

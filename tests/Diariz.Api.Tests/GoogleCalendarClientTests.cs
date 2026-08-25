@@ -76,6 +76,42 @@ public class GoogleCalendarClientTests
         Assert.True(e.AllDay); // a `date` (not `dateTime`) start = all-day
     }
 
+    /// <summary>A date-only <c>date</c> carries no offset, so the one we put on the wire must be fixed rather
+    /// than inherited from <c>TimeZoneInfo.Local</c> - otherwise the API's deployment timezone becomes part of
+    /// its response, and a reader ahead of UTC sees the entry spill onto the following day. Midnight UTC, to
+    /// match what the <c>.ics</c> client already emits.</summary>
+    [Fact]
+    public void ParseEvents_AllDayEventsAreMidnightUtc_WhateverTheHostTimezone()
+    {
+        const string json = """
+        { "items": [
+          { "id": "allday", "start": { "date": "2026-07-02" }, "end": { "date": "2026-07-03" } }
+        ] }
+        """;
+
+        var e = Assert.Single(GoogleCalendarClient.ParseEvents(json));
+        Assert.Equal(new DateTimeOffset(2026, 7, 2, 0, 0, 0, TimeSpan.Zero), e.Start);
+        Assert.Equal(new DateTimeOffset(2026, 7, 3, 0, 0, 0, TimeSpan.Zero), e.End);
+        Assert.Equal(TimeSpan.Zero, e.Start.Offset);
+    }
+
+    /// <summary>The companion to the above: a timed event DOES carry an offset, and it must be honoured
+    /// rather than flattened, or every meeting shifts by the sender's UTC offset.</summary>
+    [Fact]
+    public void ParseEvents_TimedEventsKeepTheirOwnOffset()
+    {
+        const string json = """
+        { "items": [
+          { "id": "e1", "start": { "dateTime": "2026-07-02T09:00:00+02:00" },
+                        "end":   { "dateTime": "2026-07-02T09:30:00+02:00" } }
+        ] }
+        """;
+
+        var e = Assert.Single(GoogleCalendarClient.ParseEvents(json));
+        Assert.Equal(TimeSpan.FromHours(2), e.Start.Offset);
+        Assert.Equal(new DateTimeOffset(2026, 7, 2, 7, 0, 0, TimeSpan.Zero), e.Start.ToUniversalTime());
+    }
+
     [Fact]
     public void ParseEvents_TimedEventsAreNotAllDay()
     {
