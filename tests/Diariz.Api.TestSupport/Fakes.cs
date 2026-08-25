@@ -755,6 +755,12 @@ public sealed class FakeAudioStorage : IAudioStorage
         return Task.CompletedTask;
     }
 
+    /// <summary>A recognisable stand-in. Nothing under test fetches it - the clipper is faked too - so this
+    /// only has to be a stable, obviously-not-real string a test can assert was passed through.</summary>
+    public Task<string> GetPresignedReadUrlAsync(
+        string key, TimeSpan lifetime, CancellationToken ct = default) =>
+        Task.FromResult($"https://fake.invalid/{key}");
+
     /// <summary>Called as each key is handed to the consumer. Lets a test observe state mid-enumeration -
     /// e.g. sampling backup progress while the archive is still being assembled.</summary>
     public Action<string>? OnKeyListed { get; set; }
