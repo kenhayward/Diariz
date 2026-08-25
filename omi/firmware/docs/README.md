@@ -18,6 +18,7 @@ Nothing in this folder changes the firmware. It is analysis only.
 | [06-repurposing-for-diariz.md](06-repurposing-for-diariz.md) | Options for offline capture -> Diariz upload, ranked by effort |
 | [07-devkit2-target.md](07-devkit2-target.md) | **The device we actually built.** DevKit 2 specifics, and the plan as revised for it |
 | [08-build-and-flash-runbook.md](08-build-and-flash-runbook.md) | **How to build and flash it.** Prerequisites, Docker and VS Code routes, UF2 flashing, logging, troubleshooting |
+| [09-usb-transfer-mode-design.md](09-usb-transfer-mode-design.md) | **Designed, not built.** Getting recordings off over USB-C without opening the device, and formatting the card in place |
 
 ## Tools
 
