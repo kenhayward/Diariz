@@ -15,7 +15,7 @@
 - **TDD is mandatory.** Failing test first, watch it fail, minimal code to pass. No production code without a preceding red test.
 - **Mutation-verify every new assertion.** Break the production code, confirm the test goes red, restore. Restoring a `.cs` from a backup preserves its mtime and MSBuild will skip the rebuild - `touch` the file or edit in place.
 - **No em or en dashes in user-facing text.** Plain hyphen `-` only, in UI strings, i18n catalogs, release notes and help articles.
-- **All four locale catalogs** (`en`/`de`/`fr`/`es`) must stay at exact key parity; `locales.test.ts` enforces it. Non-English catalogs are **ASCII only**.
+- **All four locale catalogs** (`en`/`de`/`fr`/`es`) must stay at exact key parity and have no empty values; `src/locales.test.ts` enforces both. Translations use normal accented characters - **the ASCII-only rule applies to `apps/web/src/content/help/**`, not to the catalogs**, and writing unaccented German or French here would be worse than the surrounding text.
 - **Never `git add -A`** in this repository - it sweeps agent scratch files into the commit. Stage explicit paths.
 - **`--filter "Name=X"` does not work here.** Use `--filter "FullyQualifiedName~X"`.
 - **No `InternalsVisibleTo`.** Reach internals through public seams with TestSupport fakes; never widen visibility.
@@ -307,7 +307,7 @@ Expected: PASS.
   "permManageVoiceprintsHint": "Assess and tune voice identification. Includes listening to short clips of a person's speech in recordings you do not own, which is logged. Does not grant access to those recordings otherwise.",
 ```
 
-Add the same three keys to `de`, `fr` and `es` `admin.json`, translated, **ASCII only** (no accented characters - `locales.test.ts` and the ASCII rule both apply). Plain hyphens only.
+Add the same three keys to `de`, `fr` and `es` `admin.json`, properly translated with normal accented characters (the ASCII rule is for help articles, not catalogs). Plain hyphens, never em or en dashes.
 
 - [ ] **Step 6: Extend the web permission type and auth context**
 
@@ -1796,7 +1796,7 @@ Keep the existing `SampleRow` expand behaviour intact; it moves inside the new r
 
 - [ ] **Step 4: Add the locale keys to all four catalogs**
 
-New keys in `people.json` (en, then de/fr/es in ASCII):
+New keys in `people.json` (en, then de/fr/es properly translated with accents):
 
 ```json
   "attributionsTitle": "Recordings this person appears in",

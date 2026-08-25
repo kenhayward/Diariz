@@ -9,6 +9,7 @@ import { initialsFromName, initialsFromEmail } from "./lib/initials";
 /// No authority until the server says otherwise: the profile is fetched, not decoded from the token.
 const NO_PERMISSIONS: Permissions = {
   manageRooms: false, manageUsers: false, managePlatform: false, manageFormulas: false, managePeople: false,
+  manageVoiceprints: false,
 };
 
 interface AuthState {
@@ -24,6 +25,9 @@ interface AuthState {
   isPlatformAdmin: boolean;
   canManageFormulas: boolean;
   canManagePeople: boolean;
+  /// Assess and tune voice identification, including clipped playback of a person's speech in recordings the
+  /// caller does not own. Separate from canManagePeople on purpose - see the Permissions type.
+  canManageVoiceprints: boolean;
   initials: string;
   /// Profile picture URL from a linked Google account, or null (then the avatar shows initials).
   pictureUrl: string | null;
@@ -57,6 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isPlatformAdmin = permissions.managePlatform;
   const canManageFormulas = permissions.manageFormulas;
   const canManagePeople = permissions.managePeople;
+  const canManageVoiceprints = permissions.manageVoiceprints;
 
   function setSession(accessToken: string) {
     setToken(accessToken);
@@ -142,6 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isPlatformAdmin,
         canManageFormulas,
         canManagePeople,
+        canManageVoiceprints,
         initials,
         pictureUrl,
         login,

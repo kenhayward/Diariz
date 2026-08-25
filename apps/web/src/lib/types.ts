@@ -671,6 +671,10 @@ export interface Permissions {
   /// Browse the people directory, and edit, delete or merge people other than yourself. Does not gate your
   /// own biometric choices: opting out and erasing a voiceprint are always allowed on your own person.
   managePeople: boolean;
+  /// Assess and tune voice identification, including clipped playback of a person's speech in recordings you
+  /// do not own. Deliberately separate from `managePeople`, which is directory hygiene and grants no
+  /// cross-owner audio.
+  manageVoiceprints: boolean;
 }
 
 /// A room the signed-in user belongs to. `permissions` is the caller's effective RoomPermission grid as a
