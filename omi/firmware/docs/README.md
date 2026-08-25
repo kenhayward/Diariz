@@ -18,6 +18,12 @@ Nothing in this folder changes the firmware. It is analysis only.
 | [06-repurposing-for-diariz.md](06-repurposing-for-diariz.md) | Options for offline capture -> Diariz upload, ranked by effort |
 | [07-devkit2-target.md](07-devkit2-target.md) | **The device we actually built.** DevKit 2 specifics, and the plan as revised for it |
 
+## Tools
+
+[`omi/tools/omi-sync`](../../tools/omi-sync/README.md) implements Phase 1 of the plan in
+doc 07 section 7.6: decode a card file into sessions and upload them to Diariz, with no
+firmware change and no BLE.
+
 ## Which device this project targets
 
 **Omi DevKit 2** - a Seeed Studio XIAO nRF52840 Sense with a 128 GB microSD card.
