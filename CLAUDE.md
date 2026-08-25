@@ -229,6 +229,23 @@ is **Major.Minor.Build** (currently `0.x`).
   A pure bug-fix / cosmetic PR still does 1-2; it only touches 3-7 when the corresponding thing actually
   changed. A **docs/CI-only PR** skips 1-3 (no version bump) but keeps 4-7 accurate - say so in the PR.
 
+- **Exclusion: `omi/` is out of scope for the whole release checklist.** `omi/` is a vendored copy of the
+  open-source Omi wearable firmware + hardware (BasedHardware/omi, MIT), kept here as the base for an
+  **exploratory side project**: repurposing the device for offline ambient capture that is later uploaded to
+  Diariz. It is not built, tested, shipped, or referenced by any Diariz deployable. So a PR that **only**
+  touches `omi/**` (including `omi/firmware/docs/**`):
+  - does **not** bump `version.json` or any mirror, and adds **no** `RELEASES` entry;
+  - is **not** mentioned in `releases.ts` `CAPABILITIES`, `AboutModal.tsx`, `README.md`,
+    `docs/features.md`, `docs/Overall_Synopsis_of_Platform.md`, `docs/Data_Schema.md`, or
+    `apps/web/src/content/help/**`;
+  - documents itself inside **`omi/firmware/docs/`** only.
+
+  Say "omi/ only - excluded from the release checklist" in the PR body. This holds **until the side project
+  produces a working device-to-Diariz path that a user can actually use**; the PR that first ships a
+  user-facing capability (an upload/sync path, a settings surface, an API endpoint) is a normal Diariz PR and
+  does the full checklist, and should also delete this exclusion. A PR that touches `omi/**` *and* Diariz code
+  is a normal Diariz PR - the exclusion only covers the `omi/` half of the diff.
+
 The About box (account menu → About) and the `/release-notes` page render from this data.
 
 ## Commands

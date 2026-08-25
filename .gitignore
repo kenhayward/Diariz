@@ -469,3 +469,8 @@ apps/web/coverage/
 apps/desktop/native/publish/
 apps/desktop/native/**/bin/
 apps/desktop/native/**/obj/
+
+# The vendored Omi firmware (omi/) ships Opus sources with a legitimate `arm/`
+# directory (ARMv4/v5 assembly + headers). The Visual Studio `[Aa][Rr][Mm]/`
+# build-output rule above would otherwise swallow them and break the build.
+!omi/**/arm/
