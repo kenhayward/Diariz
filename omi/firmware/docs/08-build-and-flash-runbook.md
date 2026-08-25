@@ -71,22 +71,45 @@ omi/firmware/build/docker_build/
   zephyr.uf2   <- flash this (section 8.5)
   zephyr.hex   <- for a debugger / nrfjprog
   zephyr.bin   <- raw image
-  zephyr.zip   <- OTA package for the Adafruit bootloader (section 8.6)
+  zephyr.zip   <- OTA package (optional; absent if adafruit-nrfutil could not install)
 ```
+
+`zephyr.zip` is the only optional one. It needs `adafruit-nrfutil`, which the build installs
+on a best-effort basis - if it cannot, the build says so and carries on, because the UF2 does
+not need it. A missing `zephyr.zip` is not a failed build.
 
 All of it is gitignored, along with `omi/firmware/v2.7.0/`. Nothing from a build should
 ever appear in `git status`; if it does, the ignore rules need extending.
 
-### Windows gotchas **[unverified]**
+### The image is unpinned, and it has already bitten us
 
+`build-docker.sh` pulls `ghcr.io/zephyrproject-rtos/ci` with no tag, so it follows `latest`.
+That is not hypothetical: on 2026-08-25 the current image shipped a Debian Python marked
+**externally managed (PEP 668)**, and the script's `pip install --user adafruit-nrfutil`
+died with `error: externally-managed-environment` - taking the whole build with it, before a
+single line was compiled, because the install was chained to the build with `&&`.
+
+Fixed in this tree (see section 8.12), but the general hazard remains: if a build that
+worked last month stops working and nothing in the tree changed, **suspect the image
+first**. You can pin one without editing anything:
+
+```bash
+ZEPHYR_CI_IMAGE=ghcr.io/zephyrproject-rtos/ci:v0.26.4 \
+  MSYS_NO_PATHCONV=1 ./omi/firmware/scripts/build-docker.sh
+```
+
+Pick a tag from the [package listing](https://github.com/zephyrproject-rtos/docker-image/pkgs/container/ci).
+If you find one that works end to end, record it here - a known-good tag is worth more than
+the newest one.
+
+### Windows gotchas
+
+* **`MSYS_NO_PATHCONV=1`** - covered above. Confirmed necessary in practice.
 * **`the input device is not a TTY`** - the script runs `docker run --rm -it`. If your
-  terminal refuses, prefix with `winpty`, or edit the script to drop `-it`.
+  terminal refuses, prefix with `winpty`, or edit the script to drop `-it`. **[unverified]**
 * **Slow builds / file-permission oddities** - the bind mount crosses the Windows/WSL2
   boundary. If it is painful, clone the repo inside the WSL2 filesystem and build there.
-* **Unpinned image.** `build-docker.sh` pulls `ghcr.io/zephyrproject-rtos/ci` with no tag,
-  so it silently follows `latest`. A future image could ship a Zephyr SDK that no longer
-  matches NCS 2.7.0. If a build that worked last month stops working and nothing in the
-  tree changed, this is the first suspect - pin a tag in the script.
+  **[unverified]**
 
 ---
 
@@ -267,6 +290,9 @@ authoritative build, and `BUILD_AND_OTA_FLASH.md` covers OTA. Note that script r
 
 | Symptom | Likely cause |
 |---|---|
+| `error: externally-managed-environment` | An image whose Python enforces PEP 668. Fixed in this tree (8.12); if it returns, pin an older `ZEPHYR_CI_IMAGE` |
+| `west: command not found` / `cmake: not found` inside the container | The host PATH is being injected with `-e PATH=...`. Fixed in this tree (8.12) - check the script has not been reverted |
+| Build finishes but there is no `zephyr.zip` | Expected when `adafruit-nrfutil` could not install. The UF2 is what you flash |
 | `no such file or directory` from inside the container | Missing `MSYS_NO_PATHCONV=1` on Windows |
 | `the input device is not a TTY` | `docker run -it` under a non-TTY terminal; use `winpty` or drop `-it` |
 | `west update` fails or hangs | Network, or a half-initialised workspace: `--clean` and retry |
@@ -276,3 +302,33 @@ authoritative build, and `BUILD_AND_OTA_FLASH.md` covers OTA. Note that script r
 | Device boots, six red blinks | The card is unformatted or unreadable - format it on the PC (8.4) |
 | Device records nothing, no blinks | Something is holding a BLE connection open (finding D6), or the card is full |
 | `git status` full of build files | The ignore rules in `.gitignore` need extending |
+
+---
+
+## 8.12 Changes we made to the upstream build scripts
+
+Recorded here because they are edits to vendored code, and a future diff against upstream
+will show them.
+
+**`scripts/build-docker.sh`**
+
+* **Stopped passing the host `PATH` into the container.** The original had
+  `-e PATH="/root/.local/bin:$PATH"`, which *replaces* the image's PATH with the host's - on
+  Git Bash, a list of Windows paths that mean nothing inside a Linux container, so
+  `west`/`cmake`/`ninja` would stop being found. It now prepends inside the container
+  instead, in single quotes so the variable expands there.
+* **Moved the `adafruit-nrfutil` install out of the `&&` chain** into the inner script, so a
+  failure to install an optional packaging tool can no longer abort the build.
+* **Added `ZEPHYR_CI_IMAGE`** so the image can be pinned without editing the script.
+
+**`scripts/build-firmware-in-docker.sh`**
+
+* Installs `adafruit-nrfutil` with a `--break-system-packages` fallback and then a graceful
+  give-up - the same pattern `scripts/ci/build-cv1.sh` already uses for `ecdsa`.
+* Makes OTA packaging conditional on the tool actually being present, and omits `zephyr.zip`
+  from the summary when it was not produced.
+
+**[unverified]** - these were reasoned from the scripts and syntax-checked, not run: the
+sandbox this was written in cannot pull container images. The PEP 668 failure they address
+was real and reported from a live run; whether the PATH fix was also load-bearing will only
+be known once a build gets past the pip step.
