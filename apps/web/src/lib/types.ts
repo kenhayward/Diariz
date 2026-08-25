@@ -322,6 +322,36 @@ export interface VoiceSample {
   spans: { startMs: number; endMs: number }[];
 }
 
+/// One speaker attributed to a person, whether or not it trains their voiceprint.
+///
+/// Strictly larger a set than `PersonDetail.samples`: automatic identification links a speaker without ever
+/// creating a voice sample, which is why a list built from samples alone read as arbitrary rather than as
+/// "the recordings this person appears in".
+export interface PersonAttribution {
+  speakerId: string;
+  recordingId: string;
+  recordingName: string;
+  speakerLabel: string;
+  /// "manual" or "auto" today. Open on purpose, so a new provenance needs no contract change.
+  linkedBy: string;
+  isTraining: boolean;
+  /// Non-null even when `isTraining` is false - an excluded sample is not deleted, so re-including it is a
+  /// toggle rather than a fresh enrolment.
+  voiceSampleId: string | null;
+  speechMs: number;
+  /// False when the caller neither owns the recording nor holds Manage voiceprints. The row is still listed,
+  /// because it is part of what the voiceprint learned from, but it has no segments and no playback.
+  canAccessRecording: boolean;
+}
+
+/// One segment an attributed speaker spoke. Only ever that speaker's own segments.
+export interface AttributionSegment {
+  id: string;
+  startMs: number;
+  endMs: number;
+  text: string;
+}
+
 /// A group of people who look like the same human. `reason` is "email" or "name".
 export interface PersonDuplicateGroup {
   reason: string;
