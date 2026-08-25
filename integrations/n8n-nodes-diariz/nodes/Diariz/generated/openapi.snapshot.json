@@ -266,6 +266,40 @@
       "AttachmentKind": {
         "type": "integer"
       },
+      "AttributionSegmentDto": {
+        "properties": {
+          "endMs": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "startMs": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "startMs",
+          "endMs",
+          "text"
+        ],
+        "type": "object"
+      },
       "AuthResponse": {
         "properties": {
           "accessToken": {
@@ -8545,6 +8579,66 @@
           }
         },
         "summary": "List the speakers attributed to a person",
+        "tags": [
+          "People"
+        ]
+      }
+    },
+    "/api/people/{id}/attributions/{speakerId}/segments": {
+      "get": {
+        "description": "The segments this speaker spoke in the recording's current transcription, for choosing which audio trains a voiceprint.\n\n**Only that speaker's segments** - never the recording's transcript. Reading a recording you do not own requires **Manage voiceprints**, and that grant is deliberately limited to the person under assessment: everybody else's words in the same meeting stay out of reach.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "speakerId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AttributionSegmentDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AttributionSegmentDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AttributionSegmentDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List what an attributed speaker said",
         "tags": [
           "People"
         ]

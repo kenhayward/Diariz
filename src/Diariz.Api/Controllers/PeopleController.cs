@@ -343,6 +343,74 @@ public class PeopleController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>A speaker whose audio the caller is allowed to assess, and the transcription that says which
+    /// audio is theirs.</summary>
+    private sealed record AssessmentTarget(Speaker Speaker, Recording Recording, Guid TranscriptionId);
+
+    /// <summary>The gate every assessment surface passes through, in one place because two endpoints
+    /// enforcing the same four rules separately is how they come to disagree.
+    ///
+    /// <list type="number">
+    /// <item>The caller may act on this person at all.</item>
+    /// <item>The speaker really is attributed to them.</item>
+    /// <item>The caller owns the recording, <b>or</b> holds ManageVoiceprints.</item>
+    /// <item>A current transcription exists to say which audio is this speaker's.</item>
+    /// </list>
+    ///
+    /// <para>Returns the failure result to return verbatim, or the resolved target.</para></summary>
+    private async Task<(ActionResult? Failure, AssessmentTarget? Target)> ResolveAssessmentTargetAsync(
+        Guid personId, Guid speakerId, bool requireAudio)
+    {
+        var person = await _db.People.FirstOrDefaultAsync(p => p.Id == personId);
+        if (person is null) return (NotFound(), null);
+        if (!await CanManageBiometricsAsync(person)) return (Forbid(), null);
+
+        var speaker = await _db.Speakers.FirstOrDefaultAsync(s => s.Id == speakerId && s.PersonId == personId);
+        if (speaker is null) return (NotFound(), null);
+
+        var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == speaker.RecordingId);
+        if (rec is null) return (NotFound(), null);
+        if (requireAudio && rec.AudioDeletedAt is not null) return (NotFound(), null);
+
+        if (rec.UserId != UserId
+            && !await _permissions.HasAsync(UserId, PlatformPermission.ManageVoiceprints))
+            return (Forbid(), null);
+
+        var trId = await _db.Transcriptions
+            .Where(t => t.RecordingId == rec.Id)
+            .OrderByDescending(t => t.Version)
+            .Select(t => (Guid?)t.Id)
+            .FirstOrDefaultAsync();
+        if (trId is null) return (NotFound(), null);
+
+        return (null, new AssessmentTarget(speaker, rec, trId.Value));
+    }
+
+    [HttpGet("{id:guid}/attributions/{speakerId:guid}/segments")]
+    [EndpointSummary("List what an attributed speaker said")]
+    [EndpointDescription(
+        "The segments this speaker spoke in the recording's current transcription, for choosing which audio " +
+        "trains a voiceprint.\n\n" +
+        "**Only that speaker's segments** - never the recording's transcript. Reading a recording you do not " +
+        "own requires **Manage voiceprints**, and that grant is deliberately limited to the person under " +
+        "assessment: everybody else's words in the same meeting stay out of reach.")]
+    public async Task<ActionResult<IReadOnlyList<AttributionSegmentDto>>> AttributionSegments(
+        Guid id, Guid speakerId)
+    {
+        // Audio may be gone while the transcript remains, and reading what someone said does not need it.
+        var (failure, target) = await ResolveAssessmentTargetAsync(id, speakerId, requireAudio: false);
+        if (failure is not null) return failure;
+
+        var rows = await _db.Segments
+            .Where(s => s.TranscriptionId == target!.TranscriptionId
+                        && s.SpeakerLabel == target.Speaker.Label)
+            .OrderBy(s => s.Ordinal)
+            .Select(s => new AttributionSegmentDto(s.Id, s.StartMs, s.EndMs, s.Revised ?? s.Original))
+            .ToListAsync();
+
+        return Ok(rows);
+    }
+
     [HttpGet("{id:guid}/clip")]
     [EndpointSummary("Play a clip of a person's speech")]
     [EndpointDescription(
@@ -356,29 +424,13 @@ public class PeopleController : ControllerBase
     public async Task<IActionResult> Clip(
         Guid id, [FromQuery] Guid speakerId, [FromQuery] long fromMs, [FromQuery] long toMs)
     {
-        var person = await _db.People.FirstOrDefaultAsync(p => p.Id == id);
-        if (person is null) return NotFound();
-        if (!await CanManageBiometricsAsync(person)) return Forbid();
-
-        var speaker = await _db.Speakers.FirstOrDefaultAsync(s => s.Id == speakerId && s.PersonId == id);
-        if (speaker is null) return NotFound();
-
-        var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == speaker.RecordingId);
-        if (rec is null || rec.AudioDeletedAt is not null) return NotFound();
-
-        var canAssess = await _permissions.HasAsync(UserId, PlatformPermission.ManageVoiceprints);
-        if (rec.UserId != UserId && !canAssess) return Forbid();
+        var (failure, target) = await ResolveAssessmentTargetAsync(id, speakerId, requireAudio: true);
+        if (failure is not null) return failure;
+        var (speaker, rec, currentTrId) = target!;
 
         // The span must be audio this speaker actually produced. Without this, ManageVoiceprints would grant
         // arbitrary offsets into someone else's meeting - which is precisely what it must not do. It applies
         // to owners too: it costs nothing and keeps one rule rather than two.
-        var currentTrId = await _db.Transcriptions
-            .Where(t => t.RecordingId == rec.Id)
-            .OrderByDescending(t => t.Version)
-            .Select(t => (Guid?)t.Id)
-            .FirstOrDefaultAsync();
-        if (currentTrId is null) return NotFound();
-
         var covered = await _db.Segments.AnyAsync(s =>
             s.TranscriptionId == currentTrId
             && s.SpeakerLabel == speaker.Label

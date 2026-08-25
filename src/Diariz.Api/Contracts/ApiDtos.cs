@@ -532,6 +532,13 @@ public record PersonAttributionDto(
 /// <summary>Whether a speaker attributed to a person should train their voiceprint.</summary>
 public record SetTrainingRequest(bool Training);
 
+/// <summary>One segment spoken by an attributed speaker, for choosing which audio trains a voiceprint.
+///
+/// <para>Deliberately <b>only that speaker's</b> segments, never the recording's transcript. An assessor may
+/// be granted this person's speech in a recording they do not own; handing over everybody else's words in the
+/// same response would undo exactly the narrowing the clip endpoint enforces.</para></summary>
+public record AttributionSegmentDto(Guid Id, long StartMs, long EndMs, string Text);
+
 /// <summary>Create a person. Everything but the name is optional, and supplying
 /// <paramref name="RecordingId"/> + <paramref name="Label"/> enrols a voiceprint in the same call - which is
 /// what the "new person" affordance on a transcript does.</summary>
