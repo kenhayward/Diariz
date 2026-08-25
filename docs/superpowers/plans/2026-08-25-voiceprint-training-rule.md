@@ -392,8 +392,8 @@ git commit -m "fix: keep an unlinked speaker's sample out of the centroid"
 - Produces: nothing new. Both endpoints keep their routes and DTOs.
 
 `Diagnostics` measures outliers against the training set. An orphan left in that set distorts every
-other sample's verdict, which is how Kevin O'Leary's list came to show an outlier nobody could act
-on.
+other sample's verdict, which is how the worst-ranked person's list came to show an outlier nobody
+could act on.
 
 - [ ] **Step 1: Write the failing test**
 

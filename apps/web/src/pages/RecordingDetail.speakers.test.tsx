@@ -259,10 +259,10 @@ describe("SpeakerRow", () => {
   /// displayName alone, and this call site never passed it - so every identified speaker read
   /// "Unassigned" while the row's own auto badge and Internal/External chip said otherwise.
   it("shows the assigned person's name on the trigger, not Unassigned", () => {
-    row(speaker({ displayName: "Kevin O'Leary", personId: "p1", identifiedAuto: true, isInternal: false }));
+    row(speaker({ displayName: "Grace Hopper", personId: "p1", identifiedAuto: true, isInternal: false }));
 
     const trigger = screen.getByRole("button", { name: "Assign SPEAKER_00 to a person" });
-    expect(trigger.textContent).toContain("Kevin O'Leary");
+    expect(trigger.textContent).toContain("Grace Hopper");
     expect(trigger.textContent).not.toContain("Unassigned");
   });
 

@@ -25,23 +25,22 @@ is the reason the tab could not be acted on.
 touches the `VoiceSample` already recorded for the old person. The sample keeps training that
 person's voiceprint, forever, invisibly.
 
-Measured on the live instance: of 167 training samples, **six** are in this state.
+Measured on the live instance: of 167 training samples, **six** are in this state, spread across six
+different people.
 
-| trains the voiceprint of | transcript now says | recording |
-|---|---|---|
-| Kevin O'Leary | (unlinked) | BQM Sprint 8 Demo |
-| Garret Whitford | Ryan O'Sullivan | XDO Sprint 8 Demo |
-| Leo Bissoli | Denis McFadden | XDO Sprint 8 Demo |
-| Darcy Sheehan | (unlinked) | Altria Demo Prep |
-| Jim Yanks | (unlinked, multi-speaker) | Pfizer CCMS Workshop Debrief |
-| Emer Dwane | Flor McCarthy | XDO Sprint Demo 9 |
+| how the link was lost | samples |
+|---|---|
+| speaker reassigned to a different person | 3 |
+| speaker unassigned entirely | 2 |
+| speaker marked as overlapping speech | 1 |
 
-Three of them train person A on audio the user has since labelled as person B.
+The first row is the serious one: three voiceprints are being trained on audio the user has since
+labelled as somebody else, so two different people are taught the same voice.
 
 This is also the direct cause of report (2). The Voiceprint tab lists **linked speakers**; the
-Diagnostics tab lists **samples**. Kevin O'Leary's worst diagnostics row - `BQM Sprint 8 Demo /
-SPEAKER_00`, "resembles none of the others" - has no counterpart on the Voiceprint tab, because its
-speaker is no longer linked to him. It could not be played or removed because it was not there.
+Diagnostics tab lists **samples**. For the worst-ranked person in the directory, the top diagnostics
+row - "resembles none of the others" - is one of these six, so it has no counterpart on the
+Voiceprint tab. It could not be played or removed because it was not there.
 
 ## Design
 
@@ -120,8 +119,8 @@ attribution that trains nothing. No API change is needed for the join.
 - **Filter:** an "only ones worth checking" toggle, shown only when at least one qualifies.
 - **Numbers become similarity, not distance.** `1 - distance`, clamped at 0, labelled `closest
   match` and `match to the rest`. Today the worst row in the directory displays the largest and most
-  reassuring-looking number on the screen: Kevin's outlier reads `closest other: 82%` and becomes
-  `closest match 18%`.
+  reassuring-looking number on the screen: the worst observed outlier reads `closest other: 82%` and
+  becomes `closest match 18%`.
 - **Verdicts stay in words**, keyed to the same thresholds as before:
 
   | verdict | wording | tone |
