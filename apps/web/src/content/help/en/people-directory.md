@@ -22,8 +22,8 @@ removing the person.
 
 ## Seeing what a voiceprint was trained on
 
-Selecting someone opens their record under two tabs: **Profile** for their details, and **Voiceprint** for
-the audio behind their biometric.
+Selecting someone opens their record: **Profile** for their details, and **Voiceprint** for the audio behind
+their biometric.
 
 The Voiceprint tab lists every recording this person appears in - not only the ones you enrolled by hand.
 Each row says how they came to be attributed there (**Recognised automatically** or **Named by hand**), how
@@ -35,22 +35,32 @@ misattributed, and that shows up here as a recording you would not expect.
 measured when the recording was transcribed, so nothing needs re-transcribing. Removing does not throw the
 record away: Diariz remembers that you identified that speaker, so putting it back later is one tick.
 
+A row marked **No longer linked to this person** is one where the speaker has since been unassigned, or given
+to somebody else, on the transcript. It no longer trains the voiceprint - saying it was not them is enough -
+but it stays listed so you can see what it used to contribute.
+
 **Play segment** plays a short clip of just that line, so you can check by ear whether the voice really is
 this person before deciding. If the person appears in a recording belonging to someone else, you will only
 hear it if you have the **Manage voiceprints** permission - and even then you hear only what they said, never
 the rest of the meeting. Without it the row still appears, marked as being in a recording you cannot access.
 
-**The Diagnostics tab tells you which recordings to be suspicious of.** A voiceprint learns from several
-recordings, and they do not always sound like each other. Each one is marked as matching the others, as
-probably a different recording condition, or as resembling none of them.
+**Each row also says whether that recording sounds like the person's others.** A voiceprint learns from
+several recordings, and they do not always sound alike. A row is marked as matching the others, as a different
+recording condition, or as sounding unlike the rest - and the ones worth a listen are sorted to the top. Tick
+**Only show the ones worth checking** to hide the rest.
 
-That last one is not a verdict of wrong. A recording can sound unlike the rest for two opposite reasons: it is
+Sounding unlike the rest is not a verdict of wrong. A recording can do that for two opposite reasons: it is
 the same person on a phone, in a car, or on a meeting-room speaker - which is useful audio to have - or it is
 **somebody else** who was named as this person by mistake, which is why recognition starts drifting. Only
-listening tells you which. Play it from the Voiceprint tab, and if it is not them, untick it.
+listening tells you which, so play it, and if it is not them, untick it.
 
-The People list leads with the voiceprints worth checking, so you do not have to open everyone to find them.
-If nothing is listed there, nothing needs attention.
+The two figures beside each row are **similarity**, so a higher number means a closer match: how alike it is
+to its nearest other recording, and to the person's remaining recordings taken together. Those two disagree
+when a pair of recordings sit close to each other but away from everything else, which is worth seeing.
+
+In the People list, anyone with a shaky voiceprint or a likely duplicate carries a short warning under their
+name. **Needs review** narrows the list to just those. If nobody is marked, nothing needs attention. You can
+dismiss a warning while you are here; it comes back next time you open People.
 
 **Show segments** on any of them lists what that speaker said, with a tick box per line. Untick the lines
 where someone else was talking over them and press **Recompute voiceprint**; Diariz re-reads the audio you

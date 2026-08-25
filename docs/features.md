@@ -313,12 +313,23 @@ never between two voiceprints of the same person - and the minimum speech before
 That last one matters: a second and a half of audio produces a confident-looking number that is not worth
 trusting, and if accepted it would go on to train whatever it matched.
 
-**A voiceprint is only as good as the recordings behind it, and a **Diagnostics** tab says whether those
-recordings actually sound like each other.** Measured on a real platform, of the samples belonging to people
-enrolled more than once, a third resemble none of their others, and the widest pair inside a single person is
-almost completely dissimilar - which two recordings of one human cannot be. Two explanations need opposite
-responses: the same voice somewhere new (a phone, a car, a room speaker), which is exactly the audio a
-voiceprint benefits from; or **someone else enrolled under that name**, which is why recognition drifts.
+**A recording trains someone's voiceprint only while the transcript still says that speaker is them.**
+Unassigning a speaker, or handing them to a different person, used to move the label and leave the voiceprint
+alone: the recording carried on teaching the original person indefinitely, and did not appear on their
+Voiceprint tab, which lists the speakers currently linked to them. Six recordings on a real platform were in
+that state, three of them training one person on audio since labelled as somebody else - so both people were
+being taught the same voice. It was also why a recording flagged as sounding wrong could have no row anywhere
+to play or untick: the scoring read the samples while the list read the linked speakers, so the two disagreed
+about which recordings were even behind the voiceprint.
+Recordings the rule rejects stay listed, marked **No longer linked to this person**, and voiceprints built
+from them are rebuilt when the server next starts.
+
+**A voiceprint is only as good as the recordings behind it, so each one carries a verdict on whether it
+sounds like the rest.** Measured on a real platform, of the samples belonging to people enrolled more than
+once, a third resemble none of their others, and the widest pair inside a single person is almost completely
+dissimilar - which two recordings of one human cannot be. Two explanations need opposite responses: the same
+voice somewhere new (a phone, a car, a room speaker), which is exactly the audio a voiceprint benefits from;
+or **someone else enrolled under that name**, which is why recognition drifts.
 
 Each sample gets two distances, because they answer different questions and disagree in the case that matters
 most - a sample can sit right beside one companion while that pair together sits well away from everything
@@ -328,12 +339,26 @@ it?"). Including a sample in its own comparison would make everything resemble i
 false reassurance the tab exists to prevent.
 
 The verdict is given in words rather than a bare number, because a user cannot act on "0.62" but can act on
-being told which recording does not sound like the rest. `Resembles none of the others` deliberately does not
-say *wrong*: only listening settles whether it is a new microphone or a different person, and the existing
-play button and training tick box are how you settle it. The People directory leads with the voiceprints worth
-checking, worst first, each opening straight into that person's diagnostics - with a directory of any size,
-knowing **which** people to look at is most of the work. Healthy people are omitted entirely rather than
-ranked last, so the ones with a real problem stand out.
+being told which recording does not sound like the rest. `Sounds unlike their others` deliberately does not
+say *wrong*: only listening settles whether it is a new microphone or a different person, and the play button
+and training tick box on the same row are how you settle it.
+
+**The verdicts sit on the recordings themselves, in the one list that also holds the controls.** They were
+briefly on a tab of their own, which listed the same recordings and none of the controls - so acting on a
+flagged recording meant remembering its name, switching tabs and finding it again, and the header contradicted
+the rows beneath it (it counted only the outliers while the list showed everything). The ones worth a listen
+sort to the top, and a tick box narrows a long list to just those.
+
+**The figures are similarity, not distance.** They were printed as raw cosine distance under a label that
+reads as a match, so the worst recording in the directory displayed the largest and most reassuring number on
+the screen. `closest other: 82%` was an 18% match.
+
+In the People directory, a person with a shaky voiceprint or a likely duplicate carries a short warning line
+on their own row, and a **Needs review** filter narrows the list to them - scanning a long directory for a
+colour is not a way to find anything. Both warnings were full-width panels above the list until they were
+found, in use, to push the person card almost off screen: the very card they were asking you to look at.
+Either can be dismissed for the sitting, keyed on the person rather than the duplicate group, so a merge
+elsewhere reordering the list cannot land the dismissal on the wrong row.
 
 None of this needs audio, a re-transcription or the GPU worker: every sample already carries its embedding, so
 the whole diagnosis is arithmetic over data that exists.

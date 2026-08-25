@@ -5,7 +5,8 @@ import { api, apiErrorMessage } from "../lib/api";
 import { formatDuration } from "../lib/format";
 import { clipQueue, type ClipRequest } from "../lib/clipPlayback";
 import { isSelected, spansForSegments } from "../lib/voiceprintSelection";
-import type { AttributionSegment, PersonAttribution, VoiceSample } from "../lib/types";
+import { similarityPercent, type RowVerdict } from "../lib/voiceprintVerdict";
+import type { AttributionSegment, PersonAttribution, SampleDiagnosis, VoiceSample } from "../lib/types";
 
 /// One recording this person appears in: how they came to be attributed there, whether that speaker trains
 /// the voiceprint, and - once expanded - exactly which of their segments do.
@@ -17,6 +18,8 @@ export default function PersonAttributionRow({
   personId,
   attribution,
   sample,
+  diagnosis,
+  verdict,
   canManage,
   onPlay,
   onStop,
@@ -28,6 +31,11 @@ export default function PersonAttributionRow({
   /// The sample behind this speaker, when one exists. Null for a speaker that trains nothing, and also
   /// present-but-excluded for one that used to.
   sample: VoiceSample | null;
+  /// How this recording compares with the person's others, when it is one of the ones being compared.
+  /// Absent for a speaker that trains nothing - most rows, since automatic identification links a speaker
+  /// without ever creating a sample.
+  diagnosis?: SampleDiagnosis;
+  verdict: RowVerdict;
   canManage: boolean;
   onPlay: (speakerId: string, queue: ClipRequest[]) => void;
   onStop: () => void;
@@ -108,6 +116,13 @@ export default function PersonAttributionRow({
 
   const playing = playingSegmentId != null && segments.some((s) => s.id === playingSegmentId);
 
+  // Collapsing takes every control for this row off the screen, including Stop. Leaving the clip running
+  // would give the user audio they can no longer reach.
+  function collapseOrExpand() {
+    if (expanded && playing) onStop();
+    setExpanded((v) => !v);
+  }
+
   return (
     <div>
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -126,6 +141,25 @@ export default function PersonAttributionRow({
         {trainedOn && (
           <span className="text-xs text-gray-500 dark:text-gray-400">
             {t("people:attributionTrainedOn", { duration: trainedOn })}
+          </span>
+        )}
+        <VerdictChip verdict={verdict} />
+        {diagnosis?.nearestSiblingDistance != null && (
+          <span className="text-xs text-gray-500 dark:text-gray-400">
+            {t("people:vpClosestMatch", { value: similarityPercent(diagnosis.nearestSiblingDistance) })}
+          </span>
+        )}
+        {diagnosis?.distanceToOthers != null && (
+          <span className="text-xs text-gray-500 dark:text-gray-400">
+            {t("people:vpMatchToRest", { value: similarityPercent(diagnosis.distanceToOthers) })}
+          </span>
+        )}
+        {/* Said out loud rather than left as a row that is simply not ticked. Its sample was training the
+            voiceprint with nothing on screen accounting for it - a silent row would be the same defect in a
+            new place. */}
+        {!attribution.stillLinked && (
+          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
+            {t("people:attributionUnlinked")}
           </span>
         )}
         {sample?.stale && (
@@ -153,21 +187,25 @@ export default function PersonAttributionRow({
               {t("people:attributionTraining")}
             </label>
           )}
+          {/* Hidden rather than disabled. Playing the voice needs the segments, and they only arrive once
+              expanded - so before that the control cannot work, and a greyed-out button reads as broken
+              rather than as not yet applicable. */}
+          {expanded && segments.length > 0 && (
+            <button
+              type="button"
+              onClick={() =>
+                playing
+                  ? onStop()
+                  : onPlay(attribution.speakerId, clipQueue(segments, segments.map((s) => s.id)))
+              }
+              className="text-xs underline text-gray-600 dark:text-gray-300"
+            >
+              {playing ? t("people:attributionStop") : t("people:attributionPlayVoice")}
+            </button>
+          )}
           <button
             type="button"
-            onClick={() =>
-              playing ? onStop() : onPlay(attribution.speakerId, clipQueue(segments, segments.map((s) => s.id)))
-            }
-            // Playing the voice needs the segments, and they only arrive once expanded. Expanding first keeps
-            // one fetch path rather than a second lazy one that would race it.
-            disabled={!expanded || segments.length === 0}
-            className="text-xs underline text-gray-600 disabled:opacity-50 dark:text-gray-300"
-          >
-            {playing ? t("people:attributionStop") : t("people:attributionPlayVoice")}
-          </button>
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
+            onClick={collapseOrExpand}
             className="ml-auto text-xs underline text-gray-600 dark:text-gray-300"
           >
             {expanded ? t("people:voiceprintHideSegments") : t("people:voiceprintShowSegments")}
@@ -242,4 +280,28 @@ export default function PersonAttributionRow({
       {error && !expanded && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
     </div>
   );
+}
+
+/// The verdict in words, never a bare number. "0.62" tells a user nothing they can act on; "sounds unlike
+/// their others" tells them which recording to go and listen to.
+///
+/// `only` renders nothing: having no other recording to compare against is the state most of the directory
+/// is in, and it is not a finding. `unlinked` renders nothing here either - the row already carries its own
+/// badge, and saying it twice would read as two separate problems.
+function VerdictChip({ verdict }: { verdict: RowVerdict }) {
+  const { t } = useTranslation("people");
+
+  const tone: Partial<Record<RowVerdict, string>> = {
+    core: "text-green-700 dark:text-green-400",
+    variant: "text-blue-700 dark:text-blue-300",
+    alone: "text-amber-800 dark:text-amber-300",
+  };
+  const label: Partial<Record<RowVerdict, string>> = {
+    core: t("vpVerdictCore"),
+    variant: t("vpVerdictVariant"),
+    alone: t("vpVerdictAlone"),
+  };
+
+  if (!label[verdict]) return null;
+  return <span className={`text-xs font-medium ${tone[verdict]}`}>{label[verdict]}</span>;
 }

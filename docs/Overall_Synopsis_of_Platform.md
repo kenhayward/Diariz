@@ -2554,6 +2554,20 @@ demand and keeps its name and email following the account — including fanning 
 also owns `RecomputeVoiceprintAsync`, which rebuilds the centroid and sample count from the remaining voice
 samples and is called after a recording delete, since that cascade silently removes training data.
 
+**What counts as training data is one rule, not a stored flag** (`Services/VoiceprintTraining.cs`): a
+`VoiceSample` trains a person's voiceprint only while its `Speaker` still points at that person and is not
+marked as overlapping speech. Both assignment paths - `SpeakerAssignment.Unassign` and `AssignAsync` - move
+the speaker's link and leave any existing sample untouched, so a stored flag would have to be updated by every
+present and future assignment path. Measured live before the fix: six samples were training a person the
+transcript no longer named, three of them a specifically *different* person, and none appeared on that
+person's Voiceprint tab (which lists linked speakers) - so the sample sat inside a centroid with nothing on
+screen accounting for it. The rule is applied by `RecomputeVoiceprintAsync`, both diagnostics endpoints, and
+the attributions projection; a sample it rejects is still **listed**, flagged `stillLinked: false`, because
+hiding it is how those six survived. `Services/VoiceprintRebuild.cs` runs on boot and recomputes any person
+holding a rejected sample - idempotent in effect rather than in selection (the sample row is deliberately
+kept, so the same people are found each time and recomputing a converged centroid is a no-op), which is why it
+needs no run-once marker.
+
 > **The `Person`/`VoiceSample` types map to the `SpeakerProfiles`/`ProfileContributions` tables**, and
 > `Person.CreatedByUserId` to the `"UserId"` column. Renaming those would be a destructive rename, forcing a
 > `MaintenanceController.CurrentFormat` bump that hard-rejects every older backup archive. Beware in raw SQL:

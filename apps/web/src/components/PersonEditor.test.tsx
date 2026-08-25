@@ -203,24 +203,20 @@ describe("PersonEditor", () => {
     expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
   });
 
-  it("defers the diagnostics fetch until the tab is opened", async () => {
-    // The directory is clicked through row by row, and diagnosing a training set is a query per person.
+  it("offers two tabs, because the third listed the same recordings as the second", async () => {
+    // Diagnostics scored the samples and Voiceprint held the controls, so acting on a flagged recording
+    // meant remembering its name and switching tabs - and for a recording whose speaker had moved, there
+    // was no row on the other tab to switch to at all.
     setup(person());
-    expect(screen.queryByTestId("diagnostics-panel")).toBeNull();
-    expect(api.getPersonDiagnostics).not.toHaveBeenCalled();
 
-    await userEvent.click(screen.getByRole("tab", { name: "Diagnostics" }));
-
-    expect(screen.getByTestId("diagnostics-panel")).toBeTruthy();
+    expect(screen.getAllByRole("tab").map((el) => el.textContent)).toEqual(["Profile", "Voiceprint"]);
   });
 
-  it("keeps the diagnostics panel mounted once opened, like the others", async () => {
-    // Hidden rather than unmounted: switching back must not re-run the diagnosis, and the Profile tab holds
-    // a draft that a remount would discard.
+  it("makes no diagnostics request from the shell", async () => {
+    // The diagnosis belongs to the Voiceprint tab now, which is itself deferred until opened. The editor
+    // is rendered for every row clicked through in the directory.
     setup(person());
-    await userEvent.click(screen.getByRole("tab", { name: "Diagnostics" }));
-    await userEvent.click(screen.getByRole("tab", { name: "Profile" }));
 
-    expect(screen.getByTestId("diagnostics-panel").hasAttribute("hidden")).toBe(true);
+    expect(api.getPersonDiagnostics).not.toHaveBeenCalled();
   });
 });

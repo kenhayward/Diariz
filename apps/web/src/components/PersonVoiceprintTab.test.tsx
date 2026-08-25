@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import PersonVoiceprintTab from "./PersonVoiceprintTab";
 import { api } from "../lib/api";
-import type { Person, PersonAttribution, VoiceSample } from "../lib/types";
+import type { Person, PersonAttribution, SampleDiagnosis, VoiceSample } from "../lib/types";
 
 vi.mock("../lib/api", () => ({
   api: {
@@ -16,6 +16,7 @@ vi.mock("../lib/api", () => ({
     setVoiceSampleSpans: vi.fn(),
     removeVoiceSample: vi.fn(),
     personClip: vi.fn(),
+    getPersonDiagnostics: vi.fn(),
   },
   apiErrorMessage: (_e: unknown, fallback: string) => fallback,
 }));
@@ -51,7 +52,7 @@ function attribution(over: Partial<PersonAttribution> = {}): PersonAttribution {
   return {
     speakerId: "sp1", recordingId: "r1", recordingName: "Standup", speakerLabel: "SPEAKER_00",
     linkedBy: "manual", isTraining: true, voiceSampleId: "vs1", speechMs: 3000,
-    canAccessRecording: true, ...over,
+    canAccessRecording: true, stillLinked: true, canReassign: true, ...over,
   };
 }
 
@@ -61,6 +62,14 @@ const attributionSegments = [
   { id: "g2", startMs: 1000, endMs: 2000, text: "Two" },
   { id: "g3", startMs: 2000, endMs: 3000, text: "Three" },
 ];
+
+function diagnosis(over: Partial<SampleDiagnosis> = {}): SampleDiagnosis {
+  return {
+    voiceSampleId: "vs1", speakerId: "sp1", recordingId: "r1", recordingName: "Standup",
+    speakerLabel: "SPEAKER_00", nearestSiblingDistance: 0.1, distanceToOthers: 0.12,
+    verdict: "Core", isTraining: true, ...over,
+  };
+}
 
 function setup(p: Person = person()) {
   render(
@@ -85,6 +94,7 @@ beforeEach(() => {
   mock(api.setAttributionTraining).mockResolvedValue(undefined);
   mock(api.setVoiceSampleSpans).mockResolvedValue(undefined);
   mock(api.removeVoiceSample).mockResolvedValue(undefined);
+  mock(api.getPersonDiagnostics).mockResolvedValue({ samples: [], aloneCount: 0, widestPair: null });
 });
 
 describe("PersonVoiceprintTab", () => {
@@ -307,5 +317,154 @@ describe("PersonVoiceprintTab", () => {
     await userEvent.click(screen.getByRole("button", { name: /Recompute voiceprint/ }));
 
     await waitFor(() => expect(screen.getByText(/Could not queue the recompute/)).toBeTruthy());
+  });
+
+  it("says why a listed recording is not training the voiceprint", async () => {
+    // Six of these exist on the live instance: the speaker was unassigned or reassigned on the transcript
+    // and its sample kept training regardless. The row has to be here - invisible is how they survived -
+    // but a row that is simply not ticked, with no reason given, reads as a bug rather than a fact.
+    mock(api.getPersonAttributions).mockResolvedValue([
+      attribution({ isTraining: false, stillLinked: false, canReassign: true }),
+    ]);
+
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <PersonVoiceprintTab person={person()} />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText(/no longer linked to this person/i)).toBeTruthy();
+  });
+
+  // ---- The merged list. Two tabs describing the same recordings differently is what made the
+  // reported problem unactionable: the verdicts were on one and the controls on the other. ----
+
+  it("describes the list it sits above, rather than counting something else", async () => {
+    // The reported contradiction: a header reading "5 recordings resemble none of the others" over a
+    // list whose rows said "Matches the others". Both were true - the header counted only outliers
+    // while the list showed every sample - and together they read as a bug.
+    mock(api.getPersonAttributions).mockResolvedValue([
+      attribution({ speakerId: "sp1", isTraining: true }),
+      attribution({ speakerId: "sp2", recordingName: "Retro", voiceSampleId: null, isTraining: false }),
+    ]);
+    mock(api.getPersonDiagnostics).mockResolvedValue({
+      samples: [diagnosis({ speakerId: "sp1", verdict: "Alone", nearestSiblingDistance: 0.82 })],
+      aloneCount: 1,
+      widestPair: 0.82,
+    });
+    setup();
+
+    expect(await screen.findByText(/Trained on 1 of 2 recordings/)).toBeTruthy();
+    expect(screen.getByText(/1 sounds unlike the rest/)).toBeTruthy();
+  });
+
+  it("puts the recording worth listening to at the top", async () => {
+    // In the live report the row that mattered was third, under two healthy ones.
+    mock(api.getPersonAttributions).mockResolvedValue([
+      attribution({ speakerId: "sp1", recordingName: "Alpha" }),
+      attribution({ speakerId: "sp2", recordingName: "Bravo", voiceSampleId: "vs2" }),
+      attribution({ speakerId: "sp3", recordingName: "Charlie", voiceSampleId: "vs3" }),
+    ]);
+    mock(api.getPersonDiagnostics).mockResolvedValue({
+      samples: [
+        diagnosis({ speakerId: "sp1", verdict: "Core" }),
+        diagnosis({ speakerId: "sp2", voiceSampleId: "vs2", verdict: "Core" }),
+        diagnosis({ speakerId: "sp3", voiceSampleId: "vs3", verdict: "Alone", nearestSiblingDistance: 0.82 }),
+      ],
+      aloneCount: 1,
+      widestPair: 0.82,
+    });
+    setup();
+
+    await screen.findByText("Charlie");
+    const names = screen.getAllByText(/Alpha|Bravo|Charlie/).map((n) => n.textContent);
+    expect(names[0]).toBe("Charlie");
+  });
+
+  it("shows how alike two voices are, not how far apart", async () => {
+    // A 0.82 distance is an 18% match. Printed raw it was the biggest number on the screen, sitting on
+    // the worst row in the directory.
+    mock(api.getPersonDiagnostics).mockResolvedValue({
+      samples: [diagnosis({ verdict: "Alone", nearestSiblingDistance: 0.82, distanceToOthers: 0.86 })],
+      aloneCount: 1,
+      widestPair: 0.82,
+    });
+    setup();
+
+    expect(await screen.findByText(/closest match 18%/)).toBeTruthy();
+    expect(screen.getByText(/match to the rest 14%/)).toBeTruthy();
+  });
+
+  it("can narrow a long list to the ones worth checking", async () => {
+    mock(api.getPersonAttributions).mockResolvedValue([
+      attribution({ speakerId: "sp1", recordingName: "Alpha" }),
+      attribution({ speakerId: "sp2", recordingName: "Bravo", voiceSampleId: "vs2" }),
+    ]);
+    mock(api.getPersonDiagnostics).mockResolvedValue({
+      samples: [
+        diagnosis({ speakerId: "sp1", verdict: "Core" }),
+        diagnosis({ speakerId: "sp2", voiceSampleId: "vs2", verdict: "Alone", nearestSiblingDistance: 0.82 }),
+      ],
+      aloneCount: 1,
+      widestPair: 0.82,
+    });
+    setup();
+    await screen.findByText("Alpha");
+
+    await userEvent.click(screen.getByRole("checkbox", { name: /only show the ones worth checking/i }));
+
+    expect(screen.queryByText("Alpha")).toBeNull();
+    expect(screen.getByText("Bravo")).toBeTruthy();
+  });
+
+  it("offers no filter when there is nothing to filter to", async () => {
+    // A control that can only ever empty the list is worse than no control.
+    setup();
+    await screen.findByText("Standup");
+
+    expect(screen.queryByRole("checkbox", { name: /worth checking/i })).toBeNull();
+  });
+
+  it("says there is nothing to compare when only one recording trains the voiceprint", async () => {
+    // Most of the directory is in this state and it is not a problem. Showing a comparison it cannot
+    // make would be worse than saying so.
+    mock(api.getPersonDiagnostics).mockResolvedValue({
+      samples: [diagnosis({ verdict: "Only", nearestSiblingDistance: null, distanceToOthers: null })],
+      aloneCount: 0,
+      widestPair: null,
+    });
+    setup();
+
+    expect(await screen.findByText(/nothing to compare it with/i)).toBeTruthy();
+  });
+
+  // ---- Play voice. Reported directly: greyed out reads as broken rather than unavailable, and
+  // collapsing the list mid-clip left the button saying "Stop" while the audio carried on. ----
+
+  it("hides Play voice while it cannot work, rather than greying it out", async () => {
+    // Asserted as absent, not as disabled: a disabled-attribute assertion would pass against the very
+    // code being replaced.
+    setup();
+    await screen.findByText("Standup");
+
+    expect(screen.queryByRole("button", { name: "Play voice" })).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "Show segments" }));
+
+    expect(await screen.findByRole("button", { name: "Play voice" })).toBeTruthy();
+  });
+
+  it("stops the audio when the segment list is collapsed", async () => {
+    // The button vanishes with the list, so without this the clip plays on with nothing on screen able
+    // to stop it.
+    setup();
+    await screen.findByText("Standup");
+    await userEvent.click(screen.getByRole("button", { name: "Show segments" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Play voice" }));
+    await waitFor(() => expect(api.personClip).toHaveBeenCalled());
+
+    await userEvent.click(screen.getByRole("button", { name: "Hide segments" }));
+
+    expect(window.HTMLMediaElement.prototype.pause).toHaveBeenCalled();
   });
 });

@@ -15,7 +15,7 @@ public class PersonAttributionsTests
     private static readonly Dictionary<Guid, string> Names = new() { [Rec] = "Standup" };
 
     private static AttributionInput Speaker(Guid id, bool auto = false, long speechMs = 30000) =>
-        new(id, Rec, "SPEAKER_00", auto, IsMultiSpeaker: false, speechMs);
+        new(id, Rec, "SPEAKER_00", auto, IsMultiSpeaker: false, speechMs, StillLinked: true);
 
     [Fact]
     public void Build_includes_a_speaker_with_no_voice_sample()
@@ -24,7 +24,7 @@ public class PersonAttributionsTests
         // creating a contribution row, so it was invisible in the tab.
         var id = Guid.NewGuid();
 
-        var rows = PersonAttributions.Build([Speaker(id, auto: true)], [], Names, new HashSet<Guid> { Rec });
+        var rows = PersonAttributions.Build([Speaker(id, auto: true)], [], Names, new HashSet<Guid> { Rec }, new HashSet<Guid> { Rec });
 
         var row = Assert.Single(rows);
         Assert.Equal(id, row.SpeakerId);
@@ -41,7 +41,7 @@ public class PersonAttributionsTests
         List<VoiceSample> samples = [new() { Id = sampleId, SpeakerId = id, RecordingId = Rec }];
 
         var row = Assert.Single(
-            PersonAttributions.Build([Speaker(id)], samples, Names, new HashSet<Guid> { Rec }));
+            PersonAttributions.Build([Speaker(id)], samples, Names, new HashSet<Guid> { Rec }, new HashSet<Guid> { Rec }));
 
         Assert.True(row.IsTraining);
         Assert.Equal(sampleId, row.VoiceSampleId);
@@ -59,7 +59,7 @@ public class PersonAttributionsTests
             [new() { Id = sampleId, SpeakerId = id, RecordingId = Rec, ExcludedAt = DateTimeOffset.UtcNow }];
 
         var row = Assert.Single(
-            PersonAttributions.Build([Speaker(id)], samples, Names, new HashSet<Guid> { Rec }));
+            PersonAttributions.Build([Speaker(id)], samples, Names, new HashSet<Guid> { Rec }, new HashSet<Guid> { Rec }));
 
         Assert.False(row.IsTraining);
         Assert.Equal(sampleId, row.VoiceSampleId);
@@ -73,7 +73,7 @@ public class PersonAttributionsTests
         // the UI has to know not to offer a transcript or a play button.
         var id = Guid.NewGuid();
 
-        var row = Assert.Single(PersonAttributions.Build([Speaker(id)], [], Names, new HashSet<Guid>()));
+        var row = Assert.Single(PersonAttributions.Build([Speaker(id)], [], Names, new HashSet<Guid>(), new HashSet<Guid>()));
 
         Assert.False(row.CanAccessRecording);
     }
@@ -86,7 +86,7 @@ public class PersonAttributionsTests
         var id = Guid.NewGuid();
 
         var row = Assert.Single(
-            PersonAttributions.Build([Speaker(id)], [], new Dictionary<Guid, string>(), new HashSet<Guid>()));
+            PersonAttributions.Build([Speaker(id)], [], new Dictionary<Guid, string>(), new HashSet<Guid>(), new HashSet<Guid>()));
 
         Assert.Equal("(deleted recording)", row.RecordingName);
     }
@@ -97,9 +97,10 @@ public class PersonAttributionsTests
         // Overlapping audio is a mix of people. It can never train a single-person voiceprint, so offering it
         // as a candidate would be offering something the server will refuse.
         var id = Guid.NewGuid();
-        var multi = new AttributionInput(id, Rec, "SPEAKER_01", false, IsMultiSpeaker: true, 30000);
+        var multi = new AttributionInput(id, Rec, "SPEAKER_01", false, IsMultiSpeaker: true, 30000,
+            StillLinked: false);
 
-        Assert.Empty(PersonAttributions.Build([multi], [], Names, new HashSet<Guid> { Rec }));
+        Assert.Empty(PersonAttributions.Build([multi], [], Names, new HashSet<Guid> { Rec }, new HashSet<Guid> { Rec }));
     }
 
     [Fact]
@@ -108,7 +109,7 @@ public class PersonAttributionsTests
         var id = Guid.NewGuid();
 
         var row = Assert.Single(
-            PersonAttributions.Build([Speaker(id, speechMs: 4321)], [], Names, new HashSet<Guid> { Rec }));
+            PersonAttributions.Build([Speaker(id, speechMs: 4321)], [], Names, new HashSet<Guid> { Rec }, new HashSet<Guid> { Rec }));
 
         Assert.Equal(4321, row.SpeechMs);
     }
@@ -118,10 +119,10 @@ public class PersonAttributionsTests
     {
         var recB = Guid.NewGuid();
         var names = new Dictionary<Guid, string> { [Rec] = "Zulu", [recB] = "Alpha" };
-        var a = new AttributionInput(Guid.NewGuid(), recB, "SPEAKER_00", false, false, 1000);
-        var z = new AttributionInput(Guid.NewGuid(), Rec, "SPEAKER_00", false, false, 1000);
+        var a = new AttributionInput(Guid.NewGuid(), recB, "SPEAKER_00", false, false, 1000, true);
+        var z = new AttributionInput(Guid.NewGuid(), Rec, "SPEAKER_00", false, false, 1000, true);
 
-        var rows = PersonAttributions.Build([z, a], [], names, new HashSet<Guid> { Rec, recB });
+        var rows = PersonAttributions.Build([z, a], [], names, new HashSet<Guid> { Rec, recB }, new HashSet<Guid> { Rec, recB });
 
         Assert.Equal(["Alpha", "Zulu"], rows.Select(r => r.RecordingName));
     }
@@ -136,12 +137,62 @@ public class PersonAttributionsTests
         var recB = Guid.NewGuid();
         var names = new Dictionary<Guid, string> { [Rec] = "One", [recB] = "Two" };
         List<VoiceSample> samples = [new() { Id = Guid.NewGuid(), SpeakerId = trained, RecordingId = Rec }];
-        var other = new AttributionInput(untrained, recB, "SPEAKER_00", false, false, 1000);
+        var other = new AttributionInput(untrained, recB, "SPEAKER_00", false, false, 1000, true);
 
         var rows = PersonAttributions.Build(
-            [Speaker(trained), other], samples, names, new HashSet<Guid> { Rec, recB });
+            [Speaker(trained), other], samples, names, new HashSet<Guid> { Rec, recB }, new HashSet<Guid> { Rec, recB });
 
         Assert.True(rows.Single(r => r.SpeakerId == trained).IsTraining);
         Assert.False(rows.Single(r => r.SpeakerId == untrained).IsTraining);
+    }
+
+    [Fact]
+    public void A_sample_whose_speaker_moved_is_listed_but_not_training()
+    {
+        // Six of these were found live. Hiding them would repeat the original defect in a new place -
+        // invisible is exactly how they survived - so the row stays and says so.
+        var speakerId = Guid.NewGuid();
+        var orphan = new AttributionInput(speakerId, Rec, "SPEAKER_00", false, false, 30000,
+            StillLinked: false);
+        List<VoiceSample> samples = [new() { Id = Guid.NewGuid(), SpeakerId = speakerId, RecordingId = Rec }];
+
+        var row = Assert.Single(PersonAttributions.Build(
+            [orphan], samples, Names, new HashSet<Guid> { Rec }, new HashSet<Guid> { Rec }));
+
+        Assert.False(row.StillLinked);
+        Assert.False(row.IsTraining);
+    }
+
+    [Fact]
+    public void A_moved_speaker_with_nothing_left_to_show_is_not_listed()
+    {
+        // No sample means nothing of this person's voiceprint came from it, so there is nothing to see and
+        // nothing to undo. Listing it would fill the tab with every speaker anyone ever unassigned.
+        var orphan = new AttributionInput(Guid.NewGuid(), Rec, "SPEAKER_00", false, false, 30000,
+            StillLinked: false);
+
+        Assert.Empty(PersonAttributions.Build(
+            [orphan], [], Names, new HashSet<Guid> { Rec }, new HashSet<Guid> { Rec }));
+    }
+
+    [Fact]
+    public void A_speaker_can_be_reassigned_only_in_a_recording_you_own()
+    {
+        // Manage voiceprints grants listening to a segment for assessment. It does not grant editing someone
+        // else's transcript, and AssignSpeaker enforces ownership regardless - so offering the control on a
+        // recording you merely have access to would produce a button that always fails.
+        var recB = Guid.NewGuid();
+        var names = new Dictionary<Guid, string> { [Rec] = "Mine", [recB] = "Theirs" };
+        var mine = new AttributionInput(Guid.NewGuid(), Rec, "SPEAKER_00", false, false, 1000, true);
+        var theirs = new AttributionInput(Guid.NewGuid(), recB, "SPEAKER_00", false, false, 1000, true);
+
+        var rows = PersonAttributions.Build(
+            [mine, theirs], [], names,
+            accessibleRecordings: new HashSet<Guid> { Rec, recB },
+            ownedRecordings: new HashSet<Guid> { Rec });
+
+        Assert.True(rows.Single(r => r.RecordingId == Rec).CanReassign);
+        Assert.False(rows.Single(r => r.RecordingId == recB).CanReassign);
+        Assert.True(rows.Single(r => r.RecordingId == recB).CanAccessRecording);
     }
 }

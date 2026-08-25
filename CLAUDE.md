@@ -435,6 +435,15 @@ out the `deploy.resources` GPU block and set `WORKER_DEVICE=cpu WORKER_COMPUTE_T
 - **No em/en dashes in user-facing text.** Use a plain hyphen `-` (not `—` or `–`) in all UI strings,
   i18n catalogs (`apps/web/src/locales/**`, `src/Diariz.Api/locales/**`), release notes, and user-visible
   copy — user feedback on fancy dashes is negative. (Code, comments, and internal docs are unaffected.)
+- **Never put production data in the repo or anywhere public.** Real people's names, email addresses,
+  company names, recording titles, and transcript text from the running instance must not appear in code,
+  comments, **test fixtures**, docs, commit messages, GitHub issues, or pull requests. The repo is public,
+  and the people in those recordings did not consent to being named in it. This holds even when the data is
+  the evidence for the change - a live query is a perfectly good reason to make a fix, and the finding is
+  reported as **summary calculations**: counts, distances, percentages, how many rows fell into each
+  category ("six samples across six people, three of them reassigned"). Where a table genuinely helps, use
+  the *shape* (a column per category with counts) or invented placeholders, never the rows themselves.
+  Invent names for fixtures - `Ada`, `Grace`, `Alice` - and never copy one out of the database.
 - **Tests:** harnesses exist for all three stacks — .NET (`tests/Diariz.Api.Tests` + integration),
   web (`vitest`), and the Python worker (`pytest`, see the Worker section). No CI runs them on push yet.
 - **Ports:** API `8080`; web UI (Docker/nginx) `8081`; web dev server `5173`. Two infra ports are **remapped on
