@@ -38,11 +38,9 @@ usb_mode_actions_t usb_mode_handle(usb_mode_event_t event)
 
     if (event == USB_MODE_EVENT_USB_CONNECTED) {
         usb_connected = true;
-        return a;
     }
     if (event == USB_MODE_EVENT_USB_DISCONNECTED) {
         usb_connected = false;
-        return a;
     }
 
     switch (state) {
@@ -59,6 +57,23 @@ usb_mode_actions_t usb_mode_handle(usb_mode_event_t event)
             state = USB_MODE_TRANSFER;
             push(&a, USB_MODE_ACTION_START_MSC);
             push(&a, USB_MODE_ACTION_LED_TRANSFER);
+        }
+        break;
+
+    case USB_MODE_TRANSFER:
+        if (event == USB_MODE_EVENT_DOUBLE_TAP ||
+            event == USB_MODE_EVENT_USB_DISCONNECTED) {
+            state = USB_MODE_LEAVING;
+            push(&a, USB_MODE_ACTION_STOP_MSC);
+            push(&a, USB_MODE_ACTION_REMOUNT_FS);
+        }
+        break;
+
+    case USB_MODE_LEAVING:
+        if (event == USB_MODE_EVENT_REMOUNT_OK) {
+            state = USB_MODE_CAPTURE;
+            push(&a, USB_MODE_ACTION_RESUME_CAPTURE);
+            push(&a, USB_MODE_ACTION_LED_CAPTURE);
         }
         break;
 
