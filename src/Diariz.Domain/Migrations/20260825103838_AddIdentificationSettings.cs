@@ -15,7 +15,7 @@ namespace Diariz.Domain.Migrations
                 table: "PlatformSettings",
                 type: "double precision",
                 nullable: false,
-                defaultValue: 0.5);
+                defaultValue: 0.40000000000000002);
 
             migrationBuilder.AddColumn<double>(
                 name: "IdentificationMargin",
@@ -36,14 +36,14 @@ namespace Diariz.Domain.Migrations
                 table: "PlatformSettings",
                 type: "double precision",
                 nullable: false,
-                defaultValue: 0.40000000000000002);
+                defaultValue: 0.29999999999999999);
 
             migrationBuilder.UpdateData(
                 table: "PlatformSettings",
                 keyColumn: "Id",
                 keyValue: 1,
                 columns: new[] { "IdentificationConfirmBand", "IdentificationMargin", "IdentificationMinSpeechMs", "IdentificationThreshold" },
-                values: new object[] { 0.5, 0.050000000000000003, 3000, 0.40000000000000002 });
+                values: new object[] { 0.40000000000000002, 0.050000000000000003, 3000, 0.29999999999999999 });
         }
 
         /// <inheritdoc />

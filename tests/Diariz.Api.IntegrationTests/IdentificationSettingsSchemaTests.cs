@@ -34,11 +34,18 @@ public class IdentificationSettingsSchemaTests(ContainersFixture fx)
         }
 
         Assert.Equal(4, defaults.Count);
+
+        // Compared as numbers, not as text: Postgres stores the float64 representation, so the threshold
+        // reads back as "0.29999999999999999" and a string comparison would be asserting the representation
+        // rather than the value.
+        double Value(string column) => double.Parse(
+            defaults[column].Split("::")[0], System.Globalization.CultureInfo.InvariantCulture);
+
         // Read off the real schema the real migration produced, not off a config file - a threshold of 0
         // would be a silently disabled feature, and this is where that would show.
-        Assert.StartsWith("0.4", defaults["IdentificationThreshold"]);
-        Assert.StartsWith("0.5", defaults["IdentificationConfirmBand"]);
-        Assert.StartsWith("0.05", defaults["IdentificationMargin"]);
-        Assert.StartsWith("3000", defaults["IdentificationMinSpeechMs"]);
+        Assert.Equal(0.30, Value("IdentificationThreshold"), 3);
+        Assert.Equal(0.40, Value("IdentificationConfirmBand"), 3);
+        Assert.Equal(0.05, Value("IdentificationMargin"), 3);
+        Assert.Equal(3000, Value("IdentificationMinSpeechMs"), 3);
     }
 }

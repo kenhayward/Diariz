@@ -21,16 +21,23 @@ public class PlatformSettings
     /// 0 means keep forever.</summary>
     public const int DefaultLlmUsageRetentionDays = 90;
 
-    /// <summary>Default max cosine distance (0..2) at which a voice match is applied automatically. Measured
-    /// against the live distance distribution: true matches cluster around 0.2-0.3 and impostors around
-    /// 0.55-0.75, so the valley sits near 0.45 and this is the conservative side of it.</summary>
-    public const double DefaultIdentificationThreshold = 0.40;
+    /// <summary>Default max cosine distance (0..2) at which a voice match is applied automatically.
+    ///
+    /// <para>0.30, which is the operating point deployments were already running under the old
+    /// <c>Identification:Threshold</c> environment variable this replaces - so upgrading changes no
+    /// behaviour. It is deliberately strict: measured against the live distance distribution, true matches
+    /// cluster around 0.2-0.3 and impostors around 0.55-0.75, so the valley sits near 0.45 and there is
+    /// recall to be had by loosening. The <see cref="DefaultIdentificationConfirmBand">confirmation
+    /// band</see>, not a looser default, is the safe way to reach for it.</para></summary>
+    public const double DefaultIdentificationThreshold = 0.30;
 
     /// <summary>Default max distance at which a match is <em>suggested</em> rather than applied; between this
-    /// and <see cref="DefaultIdentificationThreshold"/> the user is asked. 0.50 rather than 0.55
-    /// deliberately - at 0.55 the day-one review queue is roughly 150 items and at 0.50 about 74, and a
-    /// backlog nobody works through produces worse evidence than a smaller one that gets read.</summary>
-    public const double DefaultIdentificationConfirmBand = 0.50;
+    /// and <see cref="DefaultIdentificationThreshold"/> the user is asked.
+    ///
+    /// <para>0.40 rather than 0.50: on the measured instance that is a first queue of roughly 90 items
+    /// instead of 163, and a backlog nobody works through produces worse evidence than a smaller one that
+    /// gets read. Widen it once the decision log shows where the real boundary sits.</para></summary>
+    public const double DefaultIdentificationConfirmBand = 0.40;
 
     /// <summary>Default gap by which the best-matching <b>person</b> must beat the next person before either
     /// is acted on. Guards confusable voices, where the nearest is close to a coin-flip.</summary>
