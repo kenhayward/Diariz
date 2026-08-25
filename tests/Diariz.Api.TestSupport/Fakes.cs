@@ -490,11 +490,14 @@ public sealed class FakeSpeakerIdentification(
     public IdentificationThresholds Thresholds { get; set; } =
         thresholds ?? new IdentificationThresholds(0.30, 0.40, 0.05, 3000);
 
+    /// <summary>Pairs a test can pre-decline, to exercise the rejected-pair guard without a database.</summary>
+    public HashSet<(Guid SpeakerId, Guid PersonId)> Rejected { get; } = [];
+
     public Task ApplyAsync(
         IEnumerable<Diariz.Domain.Entities.Speaker> speakers,
         IReadOnlyDictionary<string, long> speechByLabel,
         CancellationToken ct = default) =>
-        SpeakerLabeling.ApplyAsync(speakers, Identifier, Thresholds, speechByLabel, ct);
+        SpeakerLabeling.ApplyAsync(speakers, Identifier, Thresholds, speechByLabel, Rejected, ct);
 }
 
 /// <summary>Stub <see cref="IChatStreamClient"/> — yields a canned token sequence or throws. For the

@@ -1893,9 +1893,21 @@ namespace Diariz.Domain.Migrations
                     b.Property<Guid>("RecordingId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("SuggestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double?>("SuggestedDistance")
+                        .HasColumnType("double precision");
+
+                    b.Property<Guid?>("SuggestedPersonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("SuggestedProfileId");
+
                     b.HasKey("Id");
 
                     b.HasIndex("PersonId");
+
+                    b.HasIndex("SuggestedPersonId");
 
                     b.HasIndex("RecordingId", "Label")
                         .IsUnique();
@@ -3260,6 +3272,11 @@ namespace Diariz.Domain.Migrations
                         .HasForeignKey("RecordingId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("Diariz.Domain.Entities.Person", null)
+                        .WithMany()
+                        .HasForeignKey("SuggestedPersonId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Person");
 

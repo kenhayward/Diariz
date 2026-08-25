@@ -17,6 +17,7 @@ public static class SpeakerLabeling
         ISpeakerIdentifier identifier,
         IdentificationThresholds thresholds,
         IReadOnlyDictionary<string, long> speechByLabel,
+        IReadOnlySet<(Guid SpeakerId, Guid PersonId)>? rejected = null,
         CancellationToken ct = default)
     {
         foreach (var sp in speakers)
@@ -32,20 +33,57 @@ public static class SpeakerLabeling
             var verdict = IdentificationRules.Decide(
                 ranked, SpeakerSpeech.MsFor(speechByLabel, sp.Label), thresholds);
 
+            // A suggestion someone has already declined is not offered again - otherwise every re-scan hands
+            // back the same wrong guess and the review queue is unclearable by construction. Deliberately
+            // only blocks the *suggestion*: if the voiceprint later improves to an outright match, that is
+            // new evidence, and one dismissal should not withhold it forever.
+            if (verdict.Outcome == IdentificationOutcome.Suggest
+                && rejected is not null
+                && rejected.Contains((sp.Id, verdict.Match!.PersonId)))
+                verdict = new IdentificationVerdict(IdentificationOutcome.Ignore, null);
+
             if (verdict.Outcome == IdentificationOutcome.Accept)
             {
                 sp.PersonId = verdict.Match!.PersonId;
                 sp.DisplayName = verdict.Match.Name;
                 sp.IdentifiedAuto = true;
+                ClearSuggestion(sp); // it was applied; there is nothing left to ask about
             }
-            else if (sp.IdentifiedAuto)
+            else if (verdict.Outcome == IdentificationOutcome.Suggest)
             {
-                // Previously auto-identified but no longer accepted → revert to the anonymous label. A
-                // *suggestion* is not good enough to keep a name that was applied at full confidence.
-                sp.PersonId = null;
-                sp.DisplayName = sp.Label;
-                sp.IdentifiedAuto = false;
+                // A borderline distance is not enough to keep a name that was applied at full confidence, so
+                // an existing auto-label reverts first. The speaker then sits exactly where a fresh borderline
+                // match would leave it: anonymous, with a suggestion waiting to be judged.
+                RevertAutoLabel(sp);
+
+                sp.SuggestedPersonId = verdict.Match!.PersonId;
+                sp.SuggestedDistance = verdict.Match.Distance;
+                sp.SuggestedAt = DateTimeOffset.UtcNow;
+            }
+            else
+            {
+                // Nothing close enough. Any previous guess no longer holds, so stop asking about it.
+                ClearSuggestion(sp);
+                RevertAutoLabel(sp);
             }
         }
+    }
+
+    /// <summary>Undoes a name automatic identification applied. Never touches a name someone typed - the
+    /// eligibility check above has already excluded those.</summary>
+    private static void RevertAutoLabel(Speaker sp)
+    {
+        if (!sp.IdentifiedAuto) return;
+        sp.PersonId = null;
+        sp.DisplayName = sp.Label;
+        sp.IdentifiedAuto = false;
+    }
+
+    /// <summary>The three suggestion columns are always null together or set together.</summary>
+    private static void ClearSuggestion(Speaker sp)
+    {
+        sp.SuggestedPersonId = null;
+        sp.SuggestedDistance = null;
+        sp.SuggestedAt = null;
     }
 }

@@ -606,6 +606,13 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
                 e.Property(s => s.Embedding).HasColumnType("vector(192)"); // ECAPA-TDNN dimension
             else
                 e.Ignore(s => s.Embedding);
+            e.Property(s => s.SuggestedPersonId).HasColumnName("SuggestedProfileId");
+            // Deleting the person withdraws the suggestion rather than the speaker: the recording still has
+            // that voice in it, it just no longer has anyone to suggest.
+            e.HasOne<Person>()
+                .WithMany()
+                .HasForeignKey(s => s.SuggestedPersonId)
+                .OnDelete(DeleteBehavior.SetNull);
             // Identifying a speaker links it to a person; deleting the person just unlinks (SetNull).
             e.HasOne(s => s.Person)
                 .WithMany()

@@ -1,4 +1,6 @@
+using Diariz.Domain;
 using Diariz.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
 
 namespace Diariz.Api.Services;
 
@@ -20,7 +22,8 @@ public interface ISpeakerIdentification
         CancellationToken ct = default);
 }
 
-public class SpeakerIdentification(ISpeakerIdentifier identifier, IPlatformSettingsService settings)
+public class SpeakerIdentification(
+    DiarizDbContext db, ISpeakerIdentifier identifier, IPlatformSettingsService settings)
     : ISpeakerIdentification
 {
     public async Task ApplyAsync(
@@ -28,7 +31,23 @@ public class SpeakerIdentification(ISpeakerIdentifier identifier, IPlatformSetti
         IReadOnlyDictionary<string, long> speechByLabel,
         CancellationToken ct = default)
     {
+        var list = speakers as IReadOnlyCollection<Speaker> ?? speakers.ToList();
         var thresholds = IdentificationThresholds.From(await settings.GetAsync(ct));
-        await SpeakerLabeling.ApplyAsync(speakers, identifier, thresholds, speechByLabel, ct);
+        await SpeakerLabeling.ApplyAsync(
+            list, identifier, thresholds, speechByLabel, await RejectedPairsAsync(list, ct), ct);
+    }
+
+    /// <summary>The (speaker, person) pairs someone has already declined, so a re-scan does not hand the same
+    /// wrong guess back every time. Scoped to the speakers in hand rather than reading the whole log.</summary>
+    private async Task<IReadOnlySet<(Guid SpeakerId, Guid PersonId)>> RejectedPairsAsync(
+        IReadOnlyCollection<Speaker> speakers, CancellationToken ct)
+    {
+        var ids = speakers.Select(s => s.Id).ToList();
+        var rows = await db.SpeakerIdentityDecisions
+            .Where(d => ids.Contains(d.SpeakerId) && d.Decision == IdentityDecisionKind.Rejected)
+            .Select(d => new { d.SpeakerId, d.PersonId })
+            .ToListAsync(ct);
+
+        return rows.Select(r => (r.SpeakerId, r.PersonId)).ToHashSet();
     }
 }
