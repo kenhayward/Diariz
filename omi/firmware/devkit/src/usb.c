@@ -31,6 +31,9 @@ usb_dc_status_callback udc_status_cb(enum usb_dc_status_code status, const uint8
 
 int init_usb()
 {
+/* Left as-is deliberately. The console is not on CDC yet (see the plan for
+ * sub-project A, task 7), so this branch still behaves as it always has.
+ * Revisit when sub-project B enables the console. */
 #ifndef CONFIG_UART_CONSOLE
     usb_disable();
     int ret = usb_enable(udc_status_cb);
@@ -40,5 +43,30 @@ int init_usb()
     // as USB disabling messes up the UART logging
     usb_dc_set_status_callback(udc_status_cb);
 #endif
+    return 0;
+}
+
+static bool msc_active;
+
+int usb_msc_start(void)
+{
+    if (msc_active) {
+        return 0;
+    }
+    /* The mass storage class is bound at build time via
+     * CONFIG_MASS_STORAGE_DISK_NAME. The caller must already have unmounted the
+     * filesystem - see usb_mode.c, which enforces that ordering. */
+    msc_active = true;
+    LOG_INF("USB mass storage active");
+    return 0;
+}
+
+int usb_msc_stop(void)
+{
+    if (!msc_active) {
+        return 0;
+    }
+    msc_active = false;
+    LOG_INF("USB mass storage stopped");
     return 0;
 }
