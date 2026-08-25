@@ -47,5 +47,16 @@ public class VoiceSample
     /// state.</para></summary>
     public int? UsedMs { get; set; }
 
+    /// <summary>When a user dropped this sample from training, or null while it still trains the voiceprint.
+    ///
+    /// <para>Excluded rather than deleted on purpose. The row records that a human once asserted this
+    /// speaker was this person; deleting it loses that assertion, and a later re-scan would then be free to
+    /// silently re-add what someone deliberately removed. It also makes re-including a toggle rather than a
+    /// fresh enrolment.</para>
+    ///
+    /// <para><b>Store UTC.</b> Npgsql rejects a non-zero-offset DateTimeOffset for a timestamptz column and
+    /// throws at SaveChanges - the in-memory provider will not catch it.</para></summary>
+    public DateTimeOffset? ExcludedAt { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
