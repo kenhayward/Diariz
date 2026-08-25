@@ -65,6 +65,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.250.1",
+    date: "2026-08-25",
+    pr: 617,
+    headline: "A rescheduled meeting no longer disappears from the calendar",
+    summary:
+      "If you recorded a meeting and it was later moved to another day, that meeting stopped being drawn on the Calendar tab - not on the day it had moved to, and not on the day it left. The only trace was the recording sitting on the original day, and the day header, which kept counting the meeting it was not showing: \"10 events\" over nine blocks.\n\nThe cause was the rule that stops a meeting being drawn twice. When a recording is linked to a meeting, the recording's block stands in for both, so the separate meeting block is dropped. That was being decided from every recording you have rather than from the ones on the day being drawn - so a link that crossed a day boundary suppressed the meeting on one day while its recording stood in for it on another, and nothing was drawn anywhere. Outlook keeps the same identifier for a meeting when it is rescheduled, which is exactly how a link comes to cross days without anyone doing anything unusual; linking a recording to a meeting on another day by hand did it too.\n\nBoth are now drawn where they actually are: the meeting on its day, the recording on its own, still marked as linked.",
+    fixed: [
+      "A meeting moved to a different day after you recorded it is drawn on the day it moved to. Previously it vanished from the calendar entirely.",
+      "The same applies to a recording linked by hand to a meeting on another day - the meeting stays on its own day rather than being swallowed by the link.",
+      "The day header's event count and the blocks below it no longer disagree.",
+    ],
+  },
+  {
     version: "0.250.0",
     date: "2026-08-25",
     pr: 610,

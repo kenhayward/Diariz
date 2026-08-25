@@ -200,19 +200,30 @@ export type DayItem =
 /// The selected day's recordings and calendar events, merged and ordered by time of day. An event that
 /// began on an earlier day (a multi-day span) sorts to the top of this day (time 0).
 ///
-/// A linked event is **deduped**: if any recording is linked to it (`recording.calendarEventId === event.id`),
-/// the standalone event row is dropped - the recording row (which shows both the mic and calendar icons)
-/// represents the pair. Dedup is global (across all recordings, not just this day) so a manual link whose
-/// meeting and recording fall on different days doesn't leave a stray event row behind.
+/// A linked event is **deduped**: if a recording linked to it (`recording.calendarEventId === event.id`) is
+/// being drawn on *this* day, the standalone event row is dropped - the recording row (which shows both the
+/// mic and calendar icons) represents the pair.
+///
+/// The suppressing recording has to be one of this day's, which is why the id set is filled by the same loop
+/// that emits the recording rows rather than swept from every recording the caller holds. A link routinely
+/// crosses a day boundary - Outlook keeps one GlobalAppointmentID when a meeting is rescheduled, so the event
+/// moves to another day while the recording made under its old slot stays attached to it, and a manual link
+/// can pair the two freely. Suppressing on a cross-day link removed the meeting from the calendar altogether:
+/// nothing was drawn on the day it had moved to, and the recording that was meant to stand in for it sat on a
+/// different day entirely. Drawing both - the event on its day, the recording on its own - is the truth about
+/// where they are, and it keeps this in step with `dayEventCount`, which never dropped the event from the
+/// header count.
 export function dayItems(recordings: RecordingSummary[], events: CalendarEvent[], key: string): DayItem[] {
-  const linkedEventIds = new Set(recordings.map((r) => r.calendarEventId).filter((id): id is string => id != null));
+  const linkedEventIds = new Set<string>();
   const items: DayItem[] = [];
   for (const r of recordings) {
     const at = recordingTime(r);
-    if (isoToDayKey(at) === key) items.push({ type: "recording", time: new Date(at).getTime(), recording: r });
+    if (isoToDayKey(at) !== key) continue;
+    items.push({ type: "recording", time: new Date(at).getTime(), recording: r });
+    if (r.calendarEventId != null) linkedEventIds.add(r.calendarEventId);
   }
   for (const e of events) {
-    if (linkedEventIds.has(e.id)) continue; // represented by its recording row (both icons)
+    if (linkedEventIds.has(e.id)) continue; // represented by this day's recording row (both icons)
     if (!eventDayKeys([e]).has(key)) continue;
     // Starts this day → sort by its start; started earlier (spilled in) → sort at the top.
     const startsToday = eventStartDayKey(e) === key;
