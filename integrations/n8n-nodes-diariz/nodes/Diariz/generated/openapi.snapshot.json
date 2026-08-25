@@ -8604,6 +8604,66 @@
         ]
       }
     },
+    "/api/people/{id}/clip": {
+      "get": {
+        "description": "Serves a short WAV clip of one span of audio, for judging by ear whether a voice really is this person.\n\nThe span **must fall inside a segment this speaker spoke** in the recording's current transcription - arbitrary offsets are refused with 404. Clips from a recording you do not own additionally require **Manage voiceprints**, and every such access is logged. Clips are capped at two minutes.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "speakerId",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "fromMs",
+            "schema": {
+              "format": "int64",
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "toMs",
+            "schema": {
+              "format": "int64",
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "audio/wav": {}
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Play a clip of a person's speech",
+        "tags": [
+          "People"
+        ]
+      }
+    },
     "/api/people/{id}/merge": {
       "post": {
         "description": "Folds `sourceId` into the person in the path when the same human is in the directory twice - say once as \"Sam\" and once as \"Samantha\", or once per colleague who enrolled them. The source's voice samples move across, every recording labelled with it is relabelled, the voiceprint is recomputed from the combined samples, and the **source person is deleted**.\n\nThere is no un-merge, so check the direction: the person in the path survives - though it inherits the source's account link, and any contact detail it was missing. The directory is shared, so a wrong merge affects everyone's recordings - hence **Manage people**.\n\nTwo people who each have a Diariz account cannot be merged: they are two different humans, and one of them would be detached from their account.",

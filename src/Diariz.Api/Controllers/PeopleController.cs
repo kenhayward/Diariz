@@ -34,16 +34,22 @@ public class PeopleController : ControllerBase
     private readonly IPeopleDirectory _people;
     private readonly IUserPermissions _permissions;
     private readonly IJobQueue _queue;
+    private readonly IAudioClipper _clipper;
+    private readonly IAudioStorage _storage;
+    private readonly ILogger<PeopleController> _logger;
 
     public PeopleController(
         DiarizDbContext db, IRoomScope rooms, IPeopleDirectory people, IUserPermissions permissions,
-        IJobQueue queue)
+        IJobQueue queue, IAudioClipper clipper, IAudioStorage storage, ILogger<PeopleController> logger)
     {
         _db = db;
         _rooms = rooms;
         _people = people;
         _permissions = permissions;
         _queue = queue;
+        _clipper = clipper;
+        _storage = storage;
+        _logger = logger;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -335,6 +341,59 @@ public class PeopleController : ControllerBase
         await _db.SaveChangesAsync();
         await _people.RecomputeVoiceprintAsync(id);
         return NoContent();
+    }
+
+    [HttpGet("{id:guid}/clip")]
+    [EndpointSummary("Play a clip of a person's speech")]
+    [EndpointDescription(
+        "Serves a short WAV clip of one span of audio, for judging by ear whether a voice really is this " +
+        "person.\n\n" +
+        "The span **must fall inside a segment this speaker spoke** in the recording's current " +
+        "transcription - arbitrary offsets are refused with 404. Clips from a recording you do not own " +
+        "additionally require **Manage voiceprints**, and every such access is logged. Clips are capped at " +
+        "two minutes.")]
+    [Produces("audio/wav")]
+    public async Task<IActionResult> Clip(
+        Guid id, [FromQuery] Guid speakerId, [FromQuery] long fromMs, [FromQuery] long toMs)
+    {
+        var person = await _db.People.FirstOrDefaultAsync(p => p.Id == id);
+        if (person is null) return NotFound();
+        if (!await CanManageBiometricsAsync(person)) return Forbid();
+
+        var speaker = await _db.Speakers.FirstOrDefaultAsync(s => s.Id == speakerId && s.PersonId == id);
+        if (speaker is null) return NotFound();
+
+        var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == speaker.RecordingId);
+        if (rec is null || rec.AudioDeletedAt is not null) return NotFound();
+
+        var canAssess = await _permissions.HasAsync(UserId, PlatformPermission.ManageVoiceprints);
+        if (rec.UserId != UserId && !canAssess) return Forbid();
+
+        // The span must be audio this speaker actually produced. Without this, ManageVoiceprints would grant
+        // arbitrary offsets into someone else's meeting - which is precisely what it must not do. It applies
+        // to owners too: it costs nothing and keeps one rule rather than two.
+        var currentTrId = await _db.Transcriptions
+            .Where(t => t.RecordingId == rec.Id)
+            .OrderByDescending(t => t.Version)
+            .Select(t => (Guid?)t.Id)
+            .FirstOrDefaultAsync();
+        if (currentTrId is null) return NotFound();
+
+        var covered = await _db.Segments.AnyAsync(s =>
+            s.TranscriptionId == currentTrId
+            && s.SpeakerLabel == speaker.Label
+            && s.StartMs <= fromMs && s.EndMs >= toMs);
+        if (!covered) return NotFound();
+
+        if (rec.UserId != UserId)
+            _logger.LogInformation(
+                "Cross-owner assessment clip: user {UserId} played {FromMs}-{ToMs} of recording {RecordingId} as person {PersonId}",
+                UserId, fromMs, toMs, rec.Id, id);
+
+        // Presigned and internal: ffmpeg range-seeks the object store rather than the API pulling a whole
+        // recording to cut seconds out of it. The URL never leaves this process.
+        var url = await _storage.GetPresignedReadUrlAsync(rec.BlobKey, TimeSpan.FromMinutes(5));
+        return File(await _clipper.ClipAsync(url, fromMs, toMs), "audio/wav");
     }
 
     [HttpGet("duplicates")]

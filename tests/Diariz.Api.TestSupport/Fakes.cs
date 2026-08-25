@@ -1097,3 +1097,17 @@ public sealed class FakeOcrImageEncoder : IOcrImageEncoder
         return Task.FromResult("data:image/png;base64,AAAA");
     }
 }
+
+/// <summary>Records what the controller asked ffmpeg for, so a test can assert the span and the source URL
+/// without ffmpeg being installed. The bytes are a bare RIFF header - nothing under test decodes them.</summary>
+public sealed class FakeAudioClipper : IAudioClipper
+{
+    public List<(string Url, long FromMs, long ToMs)> Calls { get; } = [];
+    public byte[] Bytes { get; set; } = [0x52, 0x49, 0x46, 0x46]; // "RIFF"
+
+    public Task<byte[]> ClipAsync(string sourceUrl, long fromMs, long toMs, CancellationToken ct = default)
+    {
+        Calls.Add((sourceUrl, fromMs, toMs));
+        return Task.FromResult(Bytes);
+    }
+}

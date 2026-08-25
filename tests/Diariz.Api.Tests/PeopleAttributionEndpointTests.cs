@@ -24,7 +24,9 @@ public class PeopleAttributionEndpointTests
     }
 
     private static PeopleController Build(DiarizDbContext db, Guid userId) =>
-        new(db, new RoomScope(db), new PeopleDirectory(db), new UserPermissions(db), new FakeJobQueue())
+        new(db, new RoomScope(db), new PeopleDirectory(db), new UserPermissions(db), new FakeJobQueue(),
+            new FakeAudioClipper(), new FakeAudioStorage(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<PeopleController>.Instance)
         {
             ControllerContext = Http.Context(userId),
         };
