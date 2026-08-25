@@ -478,6 +478,18 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.Property(s => s.LlmUsageRetentionDays)
                 .HasDefaultValue(Entities.PlatformSettings.DefaultLlmUsageRetentionDays);
             e.Property(s => s.LlmStreamUsageEnabled).HasDefaultValue(true);
+            // Real column defaults, not the CLR zero EF would otherwise scaffold. A threshold of 0 matches
+            // nothing at all, so a row that picked up the zero would silently switch identification off - and
+            // restoring an older backup does exactly that, recreating the table from the dump and letting the
+            // migration re-add these columns with their column default.
+            e.Property(s => s.IdentificationThreshold)
+                .HasDefaultValue(Entities.PlatformSettings.DefaultIdentificationThreshold);
+            e.Property(s => s.IdentificationConfirmBand)
+                .HasDefaultValue(Entities.PlatformSettings.DefaultIdentificationConfirmBand);
+            e.Property(s => s.IdentificationMargin)
+                .HasDefaultValue(Entities.PlatformSettings.DefaultIdentificationMargin);
+            e.Property(s => s.IdentificationMinSpeechMs)
+                .HasDefaultValue(Entities.PlatformSettings.DefaultIdentificationMinSpeechMs);
             e.HasData(new PlatformSettings
             {
                 Id = Entities.PlatformSettings.SingletonId,

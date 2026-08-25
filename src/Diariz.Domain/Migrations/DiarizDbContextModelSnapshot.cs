@@ -1190,6 +1190,26 @@ namespace Diariz.Domain.Migrations
                     b.Property<Guid?>("DefaultLlmModelId")
                         .HasColumnType("uuid");
 
+                    b.Property<double>("IdentificationConfirmBand")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("double precision")
+                        .HasDefaultValue(0.5);
+
+                    b.Property<double>("IdentificationMargin")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("double precision")
+                        .HasDefaultValue(0.050000000000000003);
+
+                    b.Property<int>("IdentificationMinSpeechMs")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(3000);
+
+                    b.Property<double>("IdentificationThreshold")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("double precision")
+                        .HasDefaultValue(0.40000000000000002);
+
                     b.Property<bool>("LlmStreamUsageEnabled")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -1241,6 +1261,10 @@ namespace Diariz.Domain.Migrations
                             AudioDeletionTimeOfDay = new TimeOnly(3, 0, 0),
                             AudioRetentionDays = 30,
                             AutoDeleteAudioEnabled = false,
+                            IdentificationConfirmBand = 0.5,
+                            IdentificationMargin = 0.050000000000000003,
+                            IdentificationMinSpeechMs = 3000,
+                            IdentificationThreshold = 0.40000000000000002,
                             LlmStreamUsageEnabled = true,
                             LlmTimeoutSeconds = 120,
                             LlmUsageLoggingEnabled = true,
