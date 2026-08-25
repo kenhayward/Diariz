@@ -46,6 +46,7 @@
   "attributionLinkedAuto": "Reconnu automatiquement",
   "attributionLinkedManual": "Nommé manuellement",
   "attributionNoAccess": "Dans un enregistrement auquel vous n'avez pas accès.",
+  "attributionUnlinked": "N'est plus lié à cette personne",
   "attributionPlayVoice": "Écouter la voix",
   "attributionPlaySegment": "Écouter le segment",
   "attributionStop": "Arrêter",

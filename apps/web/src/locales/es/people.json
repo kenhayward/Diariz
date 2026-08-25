@@ -46,6 +46,7 @@
   "attributionLinkedAuto": "Reconocido automáticamente",
   "attributionLinkedManual": "Nombrado manualmente",
   "attributionNoAccess": "En una grabación a la que no tiene acceso.",
+  "attributionUnlinked": "Ya no está vinculado a esta persona",
   "attributionPlayVoice": "Reproducir voz",
   "attributionPlaySegment": "Reproducir segmento",
   "attributionStop": "Detener",

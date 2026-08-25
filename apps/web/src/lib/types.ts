@@ -349,6 +349,13 @@ export interface PersonAttribution {
   /// False when the caller neither owns the recording nor holds Manage voiceprints. The row is still listed,
   /// because it is part of what the voiceprint learned from, but it has no segments and no playback.
   canAccessRecording: boolean;
+  /// False when the speaker behind this row no longer names this person - unassigned, reassigned, or marked
+  /// as overlapping speech. The row is listed anyway: its sample was inside the centroid with nothing on
+  /// screen accounting for it, which is how six of them survived unnoticed.
+  stillLinked: boolean;
+  /// Narrower than `canAccessRecording`: only the recording's owner may relabel its speakers. Manage
+  /// voiceprints grants listening for assessment, not editing someone else's transcript.
+  canReassign: boolean;
 }
 
 /// How well one enrolled sample resembles the rest of a person's training set.
