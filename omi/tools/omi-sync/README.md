@@ -49,9 +49,13 @@ pip install pytest mutagen
 
 ## Use
 
-**Copy `a01.txt` off the card before you put the card back in the device.** The firmware
-has `CONFIG_FS_FATFS_MOUNT_MKFS=y` with no `FS_MOUNT_FLAG_NO_FORMAT`, so a card it fails
-to mount gets reformatted (docs 07 section 7.4).
+**Copy `a01.txt` off the card before you put the card back in the device** - unless you are
+running firmware built from this tree. Upstream firmware auto-formats a card it fails to
+mount (docs 07 section 7.4); our tree sets `FS_MOUNT_FLAG_NO_FORMAT` and disables
+`CONFIG_FS_FATFS_MOUNT_MKFS` so it never does. That fix only exists in a build you flash
+yourself - see [the build runbook](../../firmware/docs/08-build-and-flash-runbook.md).
+
+Either way the PC owns deletion: delete `a01.txt` yourself after a successful sync.
 
 Look before you upload:
 

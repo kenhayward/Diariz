@@ -15,9 +15,24 @@ LOG_MODULE_REGISTER(sdcard, CONFIG_LOG_DEFAULT_LEVEL);
 
 static FATFS fat_fs;
 
+/*
+ * FS_MOUNT_FLAG_NO_FORMAT is deliberate and load-bearing.
+ *
+ * Without it, and with CONFIG_FS_FATFS_MOUNT_MKFS enabled, Zephyr responds to
+ * FR_NO_FILESYSTEM by running f_mkfs() - so a card this firmware cannot parse gets
+ * reformatted the moment it is re-inserted, destroying every recording on it. FatFs is
+ * fussier than a PC about partition layouts, so "cannot parse" is not the same as
+ * "blank", and the failure was silent (this build has CONFIG_CONSOLE=n).
+ *
+ * The device is now strictly a reader/appender of a card the PC owns. Formatting and
+ * deleting are done on the PC, where they are deliberate acts with a filesystem the OS
+ * already understands. An unformatted or unreadable card fails the mount instead, which
+ * main.c signals on the LED.
+ */
 static struct fs_mount_t mount_point = {
     .type = FS_FATFS,
     .fs_data = &fat_fs,
+    .flags = FS_MOUNT_FLAG_NO_FORMAT,
 };
 
 struct gpio_dt_spec sd_en_gpio_pin = {.port = DEVICE_DT_GET(DT_NODELABEL(gpio0)),
@@ -71,7 +86,11 @@ int mount_sd_card(void)
     if (res == FR_OK) {
         LOG_INF("SD card mounted successfully");
     } else {
-        LOG_ERR("f_mount failed: %d", res);
+        /* We never format: see the FS_MOUNT_FLAG_NO_FORMAT note above. Format the card
+         * on a PC (exFAT or FAT32) and re-insert it. */
+        LOG_ERR("fs_mount failed: %d - card not formatted or not readable. "
+                "Format it on a PC; this firmware will not do it for you.",
+                res);
         return -1;
     }
 

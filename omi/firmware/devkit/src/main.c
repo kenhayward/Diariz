@@ -228,6 +228,17 @@ int main(void)
     err = mount_sd_card();
     if (err) {
         LOG_ERR("Failed to mount SD card (err %d)", err);
+        /* This build ships with CONFIG_CONSOLE=n, so the log above goes nowhere and the
+         * device would just appear dead. Since the firmware no longer formats a card it
+         * cannot read (see FS_MOUNT_FLAG_NO_FORMAT in sdcard.c), an unformatted card is
+         * now a realistic way to get here - so say so. Six slow red blinks = "the card
+         * is the problem"; format it on a PC as exFAT or FAT32 and re-insert it. */
+        for (int i = 0; i < 6; i++) {
+            set_led_red(true);
+            k_msleep(400);
+            set_led_red(false);
+            k_msleep(400);
+        }
         return err;
     }
     k_msleep(500);

@@ -131,15 +131,25 @@ file-size limits below, and your own patience long before you fill it.
    immediately overwritten with a hard-coded `1` (`devkit/src/sdcard.c:101`), and
    `generate_new_audio_header()` caps at `a99.txt` anyway. There is no rotation.
 
-**Data-loss hazard: the firmware can reformat your card.** `CONFIG_FS_FATFS_MOUNT_MKFS=y` is
-set and `mount_point.flags` is left at 0, so `FS_MOUNT_FLAG_NO_FORMAT` is *not* applied. If
-`fs_mount` fails because FatFs does not recognise the filesystem, Zephyr will **format the
-card**. A card that Windows wrote in a layout FatFs dislikes, or a card with a partition scheme
-it cannot parse, gets wiped on the next boot. Two mitigations, both cheap:
+**Data-loss hazard: the firmware could reformat your card. FIXED - rebuild required.**
+As shipped upstream, `CONFIG_FS_FATFS_MOUNT_MKFS=y` was set and `mount_point.flags` was left
+at 0, so `FS_MOUNT_FLAG_NO_FORMAT` was *not* applied. If `fs_mount` failed because FatFs did
+not recognise the filesystem, Zephyr ran `f_mkfs()` and **formatted the card**. A card that
+Windows wrote in a layout FatFs dislikes, or one with a partition scheme it cannot parse, was
+wiped on the next boot - silently, because this build has `CONFIG_CONSOLE=n`.
 
-- Always copy `a01.txt` off the card before putting it back in the device.
-- Set `mount_point.flags = FS_MOUNT_FLAG_NO_FORMAT;` in `mount_sd_card()` and rebuild. Then a
-  mount failure is a mount failure rather than a wipe.
+Our tree now sets `FS_MOUNT_FLAG_NO_FORMAT` in `mount_sd_card()` and
+`CONFIG_FS_FATFS_MOUNT_MKFS=n` in the DevKit configs. The PC owns formatting and deleting;
+the device only reads and appends. An unreadable card now fails the mount and `main.c` blinks
+red six times instead of wiping it.
+
+Two things follow:
+
+- **The fix only exists in firmware you build and flash yourself.** A device still running a
+  stock upstream image has the old behaviour, so keep copying `a01.txt` off the card before
+  reinserting it until you have flashed your own build.
+- **A blank card no longer self-provisions.** Format it on the PC as exFAT or FAT32 first -
+  see [08-build-and-flash-runbook.md](08-build-and-flash-runbook.md) section 8.4.
 
 ## 7.5 DevKit-specific findings
 
@@ -274,8 +284,9 @@ keeps the tool free of any native Opus dependency while still emitting a lossles
   the single highest-value change. Copy `omi/src/rtc.c` and the header write in
   `process_write_data_req`; the format is documented in
   [02-audio-formats.md](02-audio-formats.md) section 2.5.
-- **D-fix-2: `FS_MOUNT_FLAG_NO_FORMAT`.** One line. Stops the firmware wiping a card it cannot
-  read.
+- **D-fix-2: `FS_MOUNT_FLAG_NO_FORMAT`. DONE.** Stops the firmware wiping a card it cannot
+  read; `main.c` now blinks red six times instead. Needs a rebuild and reflash to take
+  effect - see [08-build-and-flash-runbook.md](08-build-and-flash-runbook.md).
 - **D-fix-3: rotate files.** Close `a01.txt` and start `a02.txt` on a size or time boundary.
   Gives natural session boundaries and keeps every file under the 2 GB signed-offset limit.
   Needs D2 and D4 fixed first so the file table is real.

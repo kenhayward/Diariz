@@ -17,6 +17,7 @@ Nothing in this folder changes the firmware. It is analysis only.
 | [05-findings.md](05-findings.md) | Bugs, hazards, dead code, config conflicts and security posture found during review |
 | [06-repurposing-for-diariz.md](06-repurposing-for-diariz.md) | Options for offline capture -> Diariz upload, ranked by effort |
 | [07-devkit2-target.md](07-devkit2-target.md) | **The device we actually built.** DevKit 2 specifics, and the plan as revised for it |
+| [08-build-and-flash-runbook.md](08-build-and-flash-runbook.md) | **How to build and flash it.** Prerequisites, Docker and VS Code routes, UF2 flashing, logging, troubleshooting |
 
 ## Tools
 
