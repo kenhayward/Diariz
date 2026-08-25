@@ -292,6 +292,7 @@ builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<ISpeakerIdentifier, SpeakerIdentifier>();
 builder.Services.AddScoped<ISpeakerIdentification, SpeakerIdentification>();
 builder.Services.AddScoped<ISpeakerAssignment, SpeakerAssignment>();
+builder.Services.AddScoped<IdentificationRescan>();
 
 // ---- Summarisation (OpenAI-compatible endpoint + background consumer) ----
 // Every LLM client disables HttpClient's own 100s timeout so the per-request timeout is the authority -

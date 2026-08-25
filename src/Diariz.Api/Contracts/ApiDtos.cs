@@ -42,7 +42,9 @@ public record PlatformSettingsDto(
     bool AutoDeleteAudioEnabled, int AudioRetentionDays, TimeOnly AudioDeletionTimeOfDay,
     bool ApiAccessEnabled, int LlmTimeoutSeconds,
     bool McpAccessEnabled, bool WebhooksEnabled,
-    bool LlmUsageLoggingEnabled, int LlmUsageRetentionDays, bool LlmStreamUsageEnabled);
+    bool LlmUsageLoggingEnabled, int LlmUsageRetentionDays, bool LlmStreamUsageEnabled,
+    double IdentificationThreshold, double IdentificationConfirmBand, double IdentificationMargin,
+    int IdentificationMinSpeechMs);
 public record UpdatePlatformSettingsRequest(
     long StarterQuotaBytes, long MaxQuotaBytes,
     MinutesGenerationMode MinutesGenerationMode = MinutesGenerationMode.SingleCall,
@@ -55,7 +57,14 @@ public record UpdatePlatformSettingsRequest(
     bool WebhooksEnabled = false,
     bool LlmUsageLoggingEnabled = true,
     int LlmUsageRetentionDays = PlatformSettings.DefaultLlmUsageRetentionDays,
-    bool LlmStreamUsageEnabled = true);
+    bool LlmStreamUsageEnabled = true,
+    double IdentificationThreshold = PlatformSettings.DefaultIdentificationThreshold,
+    double IdentificationConfirmBand = PlatformSettings.DefaultIdentificationConfirmBand,
+    double IdentificationMargin = PlatformSettings.DefaultIdentificationMargin,
+    int IdentificationMinSpeechMs = PlatformSettings.DefaultIdentificationMinSpeechMs);
+
+/// <summary>What a re-scan did, or would do in a dry run.</summary>
+public record RescanRunResult(int Scanned, int Applied, int Suggested);
 /// <summary>Result of a manual "run the audio-retention pass now" trigger: how many recordings had audio deleted.</summary>
 public record AudioRetentionRunResult(int Deleted);
 /// <summary>Result of a manual "backfill tags now" trigger: how many extraction jobs were ENQUEUED (the

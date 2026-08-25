@@ -147,10 +147,13 @@ public sealed class StalledHeadersHttpMessageHandler(TimeSpan? stall = null) : H
 /// <summary>Test double for <see cref="IPlatformSettingsService"/> that returns the seeded singleton
 /// <see cref="PlatformSettings"/> row from the given <see cref="DiarizDbContext"/>, rather than lazily
 /// creating one - lets a test control <c>ApiAccessEnabled</c> (and other flags) up front.</summary>
-public sealed class FixedPlatformSettings(Diariz.Domain.DiarizDbContext db) : IPlatformSettingsService
+public sealed class FixedPlatformSettings(
+    Diariz.Domain.DiarizDbContext db, PlatformSettings? overrides = null) : IPlatformSettingsService
 {
+    /// <summary>Supplied settings win over the seeded row, so a test can choose an operating point without
+    /// writing to a table other tests in the shared collection are reading.</summary>
     public Task<PlatformSettings> GetAsync(CancellationToken ct = default) =>
-        Task.FromResult(db.PlatformSettings.First());
+        Task.FromResult(overrides ?? db.PlatformSettings.First());
 }
 
 /// <summary>Returns a fixed LLM config and records the call kind it was asked for.</summary>
