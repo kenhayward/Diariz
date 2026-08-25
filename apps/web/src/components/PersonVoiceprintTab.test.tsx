@@ -437,4 +437,34 @@ describe("PersonVoiceprintTab", () => {
 
     expect(await screen.findByText(/nothing to compare it with/i)).toBeTruthy();
   });
+
+  // ---- Play voice. Reported directly: greyed out reads as broken rather than unavailable, and
+  // collapsing the list mid-clip left the button saying "Stop" while the audio carried on. ----
+
+  it("hides Play voice while it cannot work, rather than greying it out", async () => {
+    // Asserted as absent, not as disabled: a disabled-attribute assertion would pass against the very
+    // code being replaced.
+    setup();
+    await screen.findByText("Standup");
+
+    expect(screen.queryByRole("button", { name: "Play voice" })).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "Show segments" }));
+
+    expect(await screen.findByRole("button", { name: "Play voice" })).toBeTruthy();
+  });
+
+  it("stops the audio when the segment list is collapsed", async () => {
+    // The button vanishes with the list, so without this the clip plays on with nothing on screen able
+    // to stop it.
+    setup();
+    await screen.findByText("Standup");
+    await userEvent.click(screen.getByRole("button", { name: "Show segments" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Play voice" }));
+    await waitFor(() => expect(api.personClip).toHaveBeenCalled());
+
+    await userEvent.click(screen.getByRole("button", { name: "Hide segments" }));
+
+    expect(window.HTMLMediaElement.prototype.pause).toHaveBeenCalled();
+  });
 });

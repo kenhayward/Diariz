@@ -116,6 +116,13 @@ export default function PersonAttributionRow({
 
   const playing = playingSegmentId != null && segments.some((s) => s.id === playingSegmentId);
 
+  // Collapsing takes every control for this row off the screen, including Stop. Leaving the clip running
+  // would give the user audio they can no longer reach.
+  function collapseOrExpand() {
+    if (expanded && playing) onStop();
+    setExpanded((v) => !v);
+  }
+
   return (
     <div>
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -180,21 +187,25 @@ export default function PersonAttributionRow({
               {t("people:attributionTraining")}
             </label>
           )}
+          {/* Hidden rather than disabled. Playing the voice needs the segments, and they only arrive once
+              expanded - so before that the control cannot work, and a greyed-out button reads as broken
+              rather than as not yet applicable. */}
+          {expanded && segments.length > 0 && (
+            <button
+              type="button"
+              onClick={() =>
+                playing
+                  ? onStop()
+                  : onPlay(attribution.speakerId, clipQueue(segments, segments.map((s) => s.id)))
+              }
+              className="text-xs underline text-gray-600 dark:text-gray-300"
+            >
+              {playing ? t("people:attributionStop") : t("people:attributionPlayVoice")}
+            </button>
+          )}
           <button
             type="button"
-            onClick={() =>
-              playing ? onStop() : onPlay(attribution.speakerId, clipQueue(segments, segments.map((s) => s.id)))
-            }
-            // Playing the voice needs the segments, and they only arrive once expanded. Expanding first keeps
-            // one fetch path rather than a second lazy one that would race it.
-            disabled={!expanded || segments.length === 0}
-            className="text-xs underline text-gray-600 disabled:opacity-50 dark:text-gray-300"
-          >
-            {playing ? t("people:attributionStop") : t("people:attributionPlayVoice")}
-          </button>
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
+            onClick={collapseOrExpand}
             className="ml-auto text-xs underline text-gray-600 dark:text-gray-300"
           >
             {expanded ? t("people:voiceprintHideSegments") : t("people:voiceprintShowSegments")}
