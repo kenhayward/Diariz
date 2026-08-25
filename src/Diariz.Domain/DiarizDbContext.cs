@@ -64,6 +64,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     /// <c>OnModelCreating</c> for why the table name did not follow the rename.</summary>
     public DbSet<Person> People => Set<Person>();
     public DbSet<VoiceSample> VoiceSamples => Set<VoiceSample>();
+    public DbSet<SpeakerIdentityDecision> SpeakerIdentityDecisions => Set<SpeakerIdentityDecision>();
     public DbSet<RecordingAction> RecordingActions => Set<RecordingAction>();
     public DbSet<RecordingTag> RecordingTags => Set<RecordingTag>();
     public DbSet<MeetingNote> MeetingNotes => Set<MeetingNote>();
@@ -571,6 +572,28 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             {
                 e.Ignore(c => c.Embedding);
             }
+        });
+
+        builder.Entity<SpeakerIdentityDecision>(e =>
+        {
+            // Read once per speaker on every re-scan, to skip a pair someone has already declined. Without
+            // the index that is a sequential scan of the whole log inside a loop over every speaker.
+            e.HasIndex(d => new { d.SpeakerId, d.PersonId });
+            // Same column-naming exception as everywhere else that points at a person.
+            e.Property(d => d.PersonId).HasColumnName("ProfileId");
+            e.HasOne(d => d.Speaker)
+                .WithMany()
+                .HasForeignKey(d => d.SpeakerId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(d => d.Person)
+                .WithMany()
+                .HasForeignKey(d => d.PersonId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Who decided is provenance; losing the account must not throw away the labelled pair.
+            e.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(d => d.DecidedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<Speaker>(e =>

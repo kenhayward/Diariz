@@ -1903,6 +1903,42 @@ namespace Diariz.Domain.Migrations
                     b.ToTable("Speakers");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.SpeakerIdentityDecision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("DecidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DecidedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Decision")
+                        .HasColumnType("integer");
+
+                    b.Property<double>("Distance")
+                        .HasColumnType("double precision");
+
+                    b.Property<Guid>("PersonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ProfileId");
+
+                    b.Property<Guid>("SpeakerId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DecidedByUserId");
+
+                    b.HasIndex("PersonId");
+
+                    b.HasIndex("SpeakerId", "PersonId");
+
+                    b.ToTable("SpeakerIdentityDecisions");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.Summary", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3228,6 +3264,30 @@ namespace Diariz.Domain.Migrations
                     b.Navigation("Person");
 
                     b.Navigation("Recording");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.SpeakerIdentityDecision", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("DecidedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Diariz.Domain.Entities.Person", "Person")
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Diariz.Domain.Entities.Speaker", "Speaker")
+                        .WithMany()
+                        .HasForeignKey("SpeakerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Person");
+
+                    b.Navigation("Speaker");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.Summary", b =>
