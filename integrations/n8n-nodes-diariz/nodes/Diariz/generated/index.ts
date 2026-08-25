@@ -1134,6 +1134,19 @@ const GENERATED: GeneratedResource[] = [
         "returnsArray": false
       },
       {
+        "value": "checkWhetherAPersonSSamplesResembleEachOther",
+        "displayName": "Check whether a person's samples resemble each other",
+        "description": "Scores every sample training this person's voiceprint against the others, to show which ones do not belong. Two distances per sample: to its closest companion, and to the centre of the person's other samples - the second is a true leave-one-out, and they disagree when a pair sits together but away from everything else.",
+        "method": "GET",
+        "path": "/api/people/{id}/diagnostics",
+        "pathParams": [
+          "id"
+        ],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": false
+      },
+      {
         "value": "chooseWhichAudioTrainsOneVoiceSample",
         "displayName": "Choose which audio trains one voice sample",
         "description": "Replaces the spans of the contributing recording's audio that this sample is embedded from, and queues a re-embed. Send an empty list to go back to the whole speaker, which is what every sample does by default. Adjacent spans are merged, so you can send one per segment the user ticked.",
@@ -1353,6 +1366,17 @@ const GENERATED: GeneratedResource[] = [
         ],
         "hasBody": false,
         "returnsArray": false
+      },
+      {
+        "value": "rankTheDirectoryByVoiceprintHealth",
+        "displayName": "Rank the directory by voiceprint health",
+        "description": "Everyone whose training set contains a sample resembling none of their others, worst first. A directory of any size makes the per-person view unusable on its own - knowing which people to look at is most of the work.",
+        "method": "GET",
+        "path": "/api/people/diagnostics",
+        "pathParams": [],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "removeAVoiceSample",

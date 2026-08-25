@@ -87,7 +87,7 @@ public class PeopleClipEndpointTests
         var clipper = new FakeAudioClipper();
         var controller = new PeopleController(
             db, new RoomScope(db), new PeopleDirectory(db), new UserPermissions(db), new FakeJobQueue(),
-            clipper, new FakeAudioStorage(), NullLogger<PeopleController>.Instance)
+            clipper, new FakeAudioStorage(), NullLogger<PeopleController>.Instance, new PlatformSettingsService(db))
         {
             ControllerContext = Http.Context(userId),
         };
@@ -198,7 +198,7 @@ public class PeopleClipEndpointTests
         var f = Seed(db, Guid.NewGuid());
         var stranger = new PeopleController(
             db, new RoomScope(db), new PeopleDirectory(db), new UserPermissions(db), new FakeJobQueue(),
-            new FakeAudioClipper(), new FakeAudioStorage(), NullLogger<PeopleController>.Instance)
+            new FakeAudioClipper(), new FakeAudioStorage(), NullLogger<PeopleController>.Instance, new PlatformSettingsService(db))
         {
             ControllerContext = Http.Context(Guid.NewGuid()),
         };

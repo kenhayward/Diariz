@@ -547,17 +547,53 @@ inline prompts.
 and a queue that cannot be judged is a queue that gets rubber-stamped - which would poison the decision
 log, the ground truth everything downstream calibrates against, at the source.
 
-### Phase 3 - Multi-template voiceprints
+### Phase 3 - Voiceprint diagnostics (reordered, 2026-08-25)
+
+**This swapped places with multi-template voiceprints after Phase 2 shipped, because a measurement
+contradicted the assumption clustering rests on.**
+
+Distances between a person's *own* enrolled samples, measured on the live instance: of 108 samples belonging
+to people with more than one, 33 have a close sibling (<= 0.30), 38 are loosely related (0.30 - 0.45), and
+**37 sit alone (> 0.45)**. The widest same-person pair is **1.134** - essentially orthogonal, which two
+recordings of one human cannot be.
+
+The design assumed that spread was **device variation**. Some of it is. But the bulk of within-person pair
+distances (0.5 - 0.9) overlaps the impostor range measured in section 1.1 (0.55 - 0.75), which is the
+signature of **misattributed samples** - other people enrolled under one name.
+
+That inverts the value of clustering. Today a wrong sample is diluted into the centroid and mostly does
+nothing. Promote it to its own template and it becomes a sharp, confident false-accept: whoever that voice
+actually belongs to gets named as this person. Clustering a training set that has not been reviewed would
+turn a quiet averaging problem into a loud misidentification one.
+
+So the diagnostics come first, and they are far cheaper than section 6.2 assumed. Answering "which of my
+samples do not belong" needs **no segment embeddings and no GPU at all** - the samples already carry
+`vector(192)` embeddings, so it is pgvector arithmetic over data that exists:
+
+- **Per sample, leave-one-out:** distance to the nearest other sample of the same person, and distance to the
+  centroid of *the person's other samples* - "would the rest of this voiceprint recognise this?"
+- **Per sample, a verdict** read off the already-calibrated thresholds rather than new invented ones: inside
+  `IdentificationThreshold` of its siblings is **core**; inside `IdentificationConfirmBand` is a **variant**
+  (a different recording condition); beyond it **sits alone** and is worth listening to.
+- **Per person, cohesion**, and a directory-wide ranking - with 91 people, knowing *which* to look at first
+  is most of the work.
+
+Acting on a verdict needs nothing new: the training toggle and the clipped playback shipped in Phase 1.
+
+### Phase 4 - Multi-template voiceprints
+
+*(Was Phase 3. Unchanged in content; it now runs against a training set that has been reviewed.)*
 
 Clustering; `ProfileVoiceprints`; best-template matching with the person-level margin; template
 management UI; a re-scan against the improved gallery; the backup-restore template rebuild.
 
 *Fixes the dilution in section 1.3.*
 
-### Phase 4 - Segment scoring and the bench
+### Phase 5 - Segment scoring and the bench
 
-The `segment-embed-jobs` stream; `Segments.VoiceEmbedding`; per-person diagnostics; the admin bench with
-the leave-one-out sweep.
+The `segment-embed-jobs` stream; `Segments.VoiceEmbedding`; **segment-level** diagnostics (which lines
+*inside* a sample are crosstalk, as opposed to which whole samples do not belong - that is Phase 3); the admin
+bench with the leave-one-out threshold sweep.
 
 *Delivers the original question 3, plus the test bench.*
 

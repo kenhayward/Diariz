@@ -2662,6 +2662,50 @@
         ],
         "type": "object"
       },
+      "PersonDiagnosticsSummaryDto": {
+        "properties": {
+          "aloneCount": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "personId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "sampleCount": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "widestPair": {
+            "format": "double",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "personId",
+          "name",
+          "sampleCount",
+          "aloneCount",
+          "widestPair"
+        ],
+        "type": "object"
+      },
       "PersonDto": {
         "properties": {
           "canManageBiometrics": {
@@ -3520,6 +3564,64 @@
       },
       "RoomPrincipalType": {
         "type": "integer"
+      },
+      "SampleDiagnosisDto": {
+        "properties": {
+          "distanceToOthers": {
+            "format": "double",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ]
+          },
+          "isTraining": {
+            "type": "boolean"
+          },
+          "nearestSiblingDistance": {
+            "format": "double",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ]
+          },
+          "recordingId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "recordingName": {
+            "type": "string"
+          },
+          "speakerId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "speakerLabel": {
+            "type": "string"
+          },
+          "verdict": {
+            "type": "string"
+          },
+          "voiceSampleId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "voiceSampleId",
+          "speakerId",
+          "recordingId",
+          "recordingName",
+          "speakerLabel",
+          "nearestSiblingDistance",
+          "distanceToOthers",
+          "verdict",
+          "isTraining"
+        ],
+        "type": "object"
       },
       "SaveCalendarSelectionRequest": {
         "properties": {
@@ -5445,6 +5547,39 @@
           "speakerLabel",
           "startMs",
           "createdAt"
+        ],
+        "type": "object"
+      },
+      "VoiceprintDiagnosticsDto": {
+        "properties": {
+          "aloneCount": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "samples": {
+            "items": {
+              "$ref": "#/components/schemas/SampleDiagnosisDto"
+            },
+            "type": "array"
+          },
+          "widestPair": {
+            "format": "double",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "samples",
+          "aloneCount",
+          "widestPair"
         ],
         "type": "object"
       },
@@ -8406,6 +8541,46 @@
         ]
       }
     },
+    "/api/people/diagnostics": {
+      "get": {
+        "description": "Everyone whose training set contains a sample resembling none of their others, worst first. A directory of any size makes the per-person view unusable on its own - knowing **which** people to look at is most of the work.\n\nPeople with one sample or none are omitted rather than ranked last: they have nothing wrong, only nothing to say.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PersonDiagnosticsSummaryDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PersonDiagnosticsSummaryDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PersonDiagnosticsSummaryDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Rank the directory by voiceprint health",
+        "tags": [
+          "People"
+        ]
+      }
+    },
     "/api/people/duplicates": {
       "get": {
         "description": "Groups of people who look like the same human, matched by email address or by name once case and spacing are normalised. A shared directory surfaces these: two colleagues who each enrolled the same client privately now both appear.\n\nThis **only reports**. Merging is never automatic, because it deletes the source person, cannot be undone, and in a shared directory a wrong merge affects everyone's recordings.",
@@ -8837,6 +9012,48 @@
           }
         },
         "summary": "Play a clip of a person's speech",
+        "tags": [
+          "People"
+        ]
+      }
+    },
+    "/api/people/{id}/diagnostics": {
+      "get": {
+        "description": "Scores every sample training this person's voiceprint against the others, to show which ones do not belong. Two distances per sample: to its **closest companion**, and to the centre of **the person's other samples** - the second is a true leave-one-out, and they disagree when a pair sits together but away from everything else.\n\nA verdict of `Alone` does not mean wrong. It means that sample resembles none of the others, which is either a recording condition nothing else covers - a phone, a car - or a **different person enrolled under this name**. Only listening tells you which, so the answer says where to look.\n\nNeeds no re-transcription and no audio: it reads embeddings that already exist.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceprintDiagnosticsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceprintDiagnosticsDto"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceprintDiagnosticsDto"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Check whether a person's samples resemble each other",
         "tags": [
           "People"
         ]

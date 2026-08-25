@@ -40,6 +40,18 @@ this person before deciding. If the person appears in a recording belonging to s
 hear it if you have the **Manage voiceprints** permission - and even then you hear only what they said, never
 the rest of the meeting. Without it the row still appears, marked as being in a recording you cannot access.
 
+**The Diagnostics tab tells you which recordings to be suspicious of.** A voiceprint learns from several
+recordings, and they do not always sound like each other. Each one is marked as matching the others, as
+probably a different recording condition, or as resembling none of them.
+
+That last one is not a verdict of wrong. A recording can sound unlike the rest for two opposite reasons: it is
+the same person on a phone, in a car, or on a meeting-room speaker - which is useful audio to have - or it is
+**somebody else** who was named as this person by mistake, which is why recognition starts drifting. Only
+listening tells you which. Play it from the Voiceprint tab, and if it is not them, untick it.
+
+The People list leads with the voiceprints worth checking, so you do not have to open everyone to find them.
+If nothing is listed there, nothing needs attention.
+
 **Show segments** on any of them lists what that speaker said, with a tick box per line. Untick the lines
 where someone else was talking over them and press **Recompute voiceprint**; Diariz re-reads the audio you
 left ticked and rebuilds the voiceprint from it. Tick as many as you like before pressing it - the work

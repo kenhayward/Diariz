@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import PeopleModal from "./PeopleModal";
@@ -12,6 +13,7 @@ vi.mock("../lib/api", () => ({
   api: {
     listPeople: vi.fn(),
     findPersonDuplicates: vi.fn(),
+    getDirectoryDiagnostics: vi.fn(),
     mergePeople: vi.fn(),
     updatePerson: vi.fn(),
     deletePerson: vi.fn(),
@@ -52,6 +54,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mock(api.listPeople).mockResolvedValue(people);
   mock(api.findPersonDuplicates).mockResolvedValue([]);
+  mock(api.getDirectoryDiagnostics).mockResolvedValue([]);
   mock(api.mergePeople).mockResolvedValue(undefined);
 });
 
@@ -269,5 +272,37 @@ describe("PeopleModal", () => {
     render_();
 
     expect(await screen.findByRole("button", { name: "Review and merge" })).toBeTruthy();
+  });
+
+  it("says nothing when every voiceprint is consistent", async () => {
+    // The endpoint omits healthy people, so an empty list means "nothing to fix". An empty banner would be
+    // noise in the one place a real problem needs to stand out.
+    mock(api.getDirectoryDiagnostics).mockResolvedValue([]);
+    render_();
+
+    await screen.findByText("Ada Lovelace");
+    expect(screen.queryByText(/worth checking/i)).toBeNull();
+  });
+
+  it("lists the people whose voiceprints do not hang together", async () => {
+    mock(api.getDirectoryDiagnostics).mockResolvedValue([
+      { personId: "p1", name: "Ada Lovelace", sampleCount: 5, aloneCount: 2, widestPair: 0.9 },
+    ]);
+    render_();
+
+    expect(await screen.findByText(/worth checking/i)).toBeTruthy();
+    expect(screen.getByText(/2 of 5 recordings/)).toBeTruthy();
+  });
+
+  it("opens the person from the ranking, so it is a way in rather than a report", async () => {
+    mock(api.getDirectoryDiagnostics).mockResolvedValue([
+      { personId: "p1", name: "Ada Lovelace", sampleCount: 5, aloneCount: 2, widestPair: 0.9 },
+    ]);
+    render_();
+    await screen.findByText(/worth checking/i);
+
+    await userEvent.click(screen.getByRole("button", { name: "Check" }));
+
+    expect(screen.getByRole("tab", { name: "Diagnostics" })).toBeTruthy();
   });
 });

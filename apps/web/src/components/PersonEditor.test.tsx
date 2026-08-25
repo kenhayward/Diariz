@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import PersonEditor from "./PersonEditor";
@@ -14,6 +15,8 @@ vi.mock("../lib/api", () => ({
     // never fetched; that guarantee is now an explicit assertion below, since a missing mock method
     // would fail as a crash rather than as the thing it was protecting.
     getPerson: vi.fn(),
+    getPersonAttributions: vi.fn(),
+    getPersonDiagnostics: vi.fn(),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }));
@@ -43,6 +46,8 @@ beforeEach(() => {
   mock(api.deleteVoiceprint).mockResolvedValue(undefined);
   mock(api.deletePerson).mockResolvedValue(undefined);
   mock(api.getPerson).mockResolvedValue({ person: person(), identifiedCount: 0, samples: [] });
+  mock(api.getPersonAttributions).mockResolvedValue([]);
+  mock(api.getPersonDiagnostics).mockResolvedValue({ samples: [], aloneCount: 0, widestPair: null });
 });
 
 describe("PersonEditor", () => {
@@ -196,5 +201,26 @@ describe("PersonEditor", () => {
     setup(person(), false);
 
     expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+  });
+
+  it("defers the diagnostics fetch until the tab is opened", async () => {
+    // The directory is clicked through row by row, and diagnosing a training set is a query per person.
+    setup(person());
+    expect(screen.queryByTestId("diagnostics-panel")).toBeNull();
+    expect(api.getPersonDiagnostics).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("tab", { name: "Diagnostics" }));
+
+    expect(screen.getByTestId("diagnostics-panel")).toBeTruthy();
+  });
+
+  it("keeps the diagnostics panel mounted once opened, like the others", async () => {
+    // Hidden rather than unmounted: switching back must not re-run the diagnosis, and the Profile tab holds
+    // a draft that a remount would discard.
+    setup(person());
+    await userEvent.click(screen.getByRole("tab", { name: "Diagnostics" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Profile" }));
+
+    expect(screen.getByTestId("diagnostics-panel").hasAttribute("hidden")).toBe(true);
   });
 });
