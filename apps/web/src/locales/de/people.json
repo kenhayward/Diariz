@@ -84,5 +84,17 @@
   "mergeReview": "Prufen und zusammenfuhren",
   "dismissDuplicate": "Ausblenden",
   "dismissDuplicateHint": "Blendet diesen Vorschlag fur diesen Besuch aus. Beim nachsten Offnen von Personen ist er wieder da.",
-  "editPersonTitle": "Person bearbeiten"
+  "editPersonTitle": "Person bearbeiten",
+  "tabDiagnostics": "Diagnose",
+  "diagAllConsistent": "Diese Aufnahmen ähneln einander alle.",
+  "diagSomeAlone_one": "{{count}} Aufnahme ähnelt keiner anderen - Anhören lohnt sich.",
+  "diagSomeAlone_other": "{{count}} Aufnahmen ähneln keiner anderen - Anhören lohnt sich.",
+  "diagNothingToCompare": "Nur eine Aufnahme trainiert diesen Stimmabdruck, es gibt also nichts zum Vergleichen.",
+  "diagVerdictOnly": "Nichts zum Vergleichen",
+  "diagVerdictCore": "Passt zu den anderen",
+  "diagVerdictVariant": "Wahrscheinlich eine andere Aufnahmesituation",
+  "diagVerdictAlone": "Ähnelt keiner anderen",
+  "diagExcluded": "Trainiert nicht",
+  "diagNearest": "nächste andere: {{value}}%",
+  "diagToOthers": "gegenüber dem Rest: {{value}}%"
 }

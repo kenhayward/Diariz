@@ -84,5 +84,17 @@
   "mergeReview": "Revisar y combinar",
   "dismissDuplicate": "Descartar",
   "dismissDuplicateHint": "Oculta esta sugerencia mientras estas aqui. Volvera a aparecer la proxima vez que abras Personas.",
-  "editPersonTitle": "Editar persona"
+  "editPersonTitle": "Editar persona",
+  "tabDiagnostics": "Diagnóstico",
+  "diagAllConsistent": "Estas grabaciones se parecen entre sí.",
+  "diagSomeAlone_one": "{{count}} grabación no se parece a ninguna otra: conviene escucharla.",
+  "diagSomeAlone_other": "{{count}} grabaciones no se parecen a ninguna otra: conviene escucharlas.",
+  "diagNothingToCompare": "Solo una grabación entrena esta huella de voz, así que no hay con qué compararla.",
+  "diagVerdictOnly": "Nada que comparar",
+  "diagVerdictCore": "Coincide con las demás",
+  "diagVerdictVariant": "Probablemente otra situación de grabación",
+  "diagVerdictAlone": "No se parece a ninguna otra",
+  "diagExcluded": "No entrena",
+  "diagNearest": "la más cercana: {{value}} %",
+  "diagToOthers": "frente al resto: {{value}} %"
 }

@@ -351,6 +351,43 @@ export interface PersonAttribution {
   canAccessRecording: boolean;
 }
 
+/// How well one enrolled sample resembles the rest of a person's training set.
+///
+/// Two distances, because they answer different questions: `nearestSiblingDistance` asks whether the sample
+/// has company, `distanceToOthers` asks whether the rest of the voiceprint would recognise it. They disagree
+/// when a pair sits together but away from everything else.
+export interface SampleDiagnosis {
+  voiceSampleId: string;
+  speakerId: string;
+  recordingId: string;
+  recordingName: string;
+  speakerLabel: string;
+  /// Cosine distance to the closest other sample. Null when there is no other sample.
+  nearestSiblingDistance: number | null;
+  /// Cosine distance to the centroid of the person's *other* samples - a true leave-one-out.
+  distanceToOthers: number | null;
+  /// "Only", "Core", "Variant" or "Alone". `Alone` means "resembles none of the others", which is either a
+  /// recording condition nothing else covers or a different person - not a verdict of wrong.
+  verdict: string;
+  isTraining: boolean;
+}
+
+export interface VoiceprintDiagnostics {
+  samples: SampleDiagnosis[];
+  aloneCount: number;
+  /// The largest distance between any two training samples, or null when there is no pair to measure.
+  widestPair: number | null;
+}
+
+/// One person's line in the voiceprint-health ranking.
+export interface PersonDiagnosticsSummary {
+  personId: string;
+  name: string;
+  sampleCount: number;
+  aloneCount: number;
+  widestPair: number | null;
+}
+
 /// One segment an attributed speaker spoke. Only ever that speaker's own segments.
 export interface AttributionSegment {
   id: string;

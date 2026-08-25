@@ -73,6 +73,8 @@ import type {
   PersonDuplicateGroup,
   PersonAttribution,
   SpeakerSuggestion,
+  VoiceprintDiagnostics,
+  PersonDiagnosticsSummary,
   AttributionSegment,
   GoogleCalendarListItem,
   Group,
@@ -920,6 +922,20 @@ export const api = {
 
   async rejectSpeakerSuggestion(speakerId: string): Promise<void> {
     await http.post(`/api/speaker-suggestions/${speakerId}/reject`);
+  },
+
+  /// Which of a person's samples resemble each other. Reads embeddings that already exist - no audio, no
+  /// re-transcription, no worker.
+  async getPersonDiagnostics(personId: string): Promise<VoiceprintDiagnostics> {
+    const { data } = await http.get<VoiceprintDiagnostics>(`/api/people/${personId}/diagnostics`);
+    return data;
+  },
+
+  /// Everyone whose training set contains a sample resembling none of their others, worst first. Healthy
+  /// people are omitted, so an empty list means "nothing to fix" - say so rather than rendering nothing.
+  async getDirectoryDiagnostics(): Promise<PersonDiagnosticsSummary[]> {
+    const { data } = await http.get<PersonDiagnosticsSummary[]>("/api/people/diagnostics");
+    return data;
   },
 
   async findPersonDuplicates(): Promise<PersonDuplicateGroup[]> {
