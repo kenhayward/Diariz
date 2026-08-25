@@ -96,5 +96,10 @@
   "diagVerdictAlone": "No se parece a ninguna otra",
   "diagExcluded": "No entrena",
   "diagNearest": "la más cercana: {{value}} %",
-  "diagToOthers": "frente al resto: {{value}} %"
+  "diagToOthers": "frente al resto: {{value}} %",
+  "healthHeading": "Huellas de voz que conviene revisar",
+  "healthHint": "Estas personas tienen una grabación que no se parece a las demás: o bien otro micrófono, o bien otra persona registrada con su nombre.",
+  "healthCount": "{{count}} de {{total}} grabaciones",
+  "healthReview": "Revisar",
+  "healthMore": "y {{count}} más"
 }

@@ -96,5 +96,10 @@
   "diagVerdictAlone": "Resembles none of the others",
   "diagExcluded": "Not training",
   "diagNearest": "closest other: {{value}}%",
-  "diagToOthers": "vs the rest: {{value}}%"
+  "diagToOthers": "vs the rest: {{value}}%",
+  "healthHeading": "Voiceprints worth checking",
+  "healthHint": "These people have a recording that sounds nothing like their others - either a different microphone, or someone else enrolled under their name.",
+  "healthCount": "{{count}} of {{total}} recordings",
+  "healthReview": "Check",
+  "healthMore": "and {{count}} more"
 }

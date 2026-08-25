@@ -96,5 +96,10 @@
   "diagVerdictAlone": "Ähnelt keiner anderen",
   "diagExcluded": "Trainiert nicht",
   "diagNearest": "nächste andere: {{value}}%",
-  "diagToOthers": "gegenüber dem Rest: {{value}}%"
+  "diagToOthers": "gegenüber dem Rest: {{value}}%",
+  "healthHeading": "Stimmabdrücke, die eine Prüfung lohnen",
+  "healthHint": "Bei diesen Personen klingt eine Aufnahme ganz anders als die übrigen - entweder ein anderes Mikrofon oder jemand anderes unter ihrem Namen.",
+  "healthCount": "{{count}} von {{total}} Aufnahmen",
+  "healthReview": "Prüfen",
+  "healthMore": "und {{count}} weitere"
 }

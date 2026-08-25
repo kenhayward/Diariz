@@ -71,6 +71,15 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
     enabled: permissions.managePeople,
   });
 
+  // Whose training set contains a sample resembling none of their others. The endpoint omits healthy
+  // people, so an empty list means "nothing to fix" rather than "nothing loaded" - which is why the banner
+  // disappears entirely instead of rendering an empty one.
+  const { data: unhealthy = [] } = useQuery({
+    queryKey: ["people-diagnostics"],
+    queryFn: () => api.getDirectoryDiagnostics(),
+    enabled: permissions.managePeople,
+  });
+
   const { data: duplicates = [] } = useQuery({
     queryKey: ["people-duplicates"],
     queryFn: () => api.findPersonDuplicates(),
@@ -142,6 +151,39 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
           <p className="p-6 text-sm text-gray-500 dark:text-gray-400">{t("people:optOutLockedHint")}</p>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
+            {unhealthy.length > 0 && (
+              <div className="shrink-0 rounded border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-700 dark:bg-amber-950">
+                <p className="font-medium text-amber-900 dark:text-amber-200">{t("people:healthHeading")}</p>
+                <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-300">{t("people:healthHint")}</p>
+                <ul className="mt-2 space-y-1">
+                  {unhealthy.slice(0, 5).map((h) => (
+                    <li key={h.personId} className="flex flex-wrap items-center gap-2 text-xs">
+                      <span className="min-w-0 flex-1 truncate text-gray-700 dark:text-gray-200">
+                        {h.name}
+                      </span>
+                      <span className="text-gray-600 dark:text-gray-300">
+                        {t("people:healthCount", { count: h.aloneCount, total: h.sampleCount })}
+                      </span>
+                      {/* Straight to that person's Diagnostics tab - the point of a ranking is to be a way
+                          in, not a report to read and act on somewhere else. */}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(h.personId)}
+                        className="rounded border border-amber-400 px-2 py-0.5 text-amber-900 dark:border-amber-600 dark:text-amber-200"
+                      >
+                        {t("people:healthReview")}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {unhealthy.length > 5 && (
+                  <p className="mt-1 text-xs text-amber-800 dark:text-amber-300">
+                    {t("people:healthMore", { count: unhealthy.length - 5 })}
+                  </p>
+                )}
+              </div>
+            )}
+
             {visibleDuplicates.length > 0 && (
               <div className="shrink-0 rounded border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-700 dark:bg-amber-950">
                 <p className="font-medium text-amber-900 dark:text-amber-200">{t("people:duplicatesHeading")}</p>

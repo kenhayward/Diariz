@@ -96,5 +96,10 @@
   "diagVerdictAlone": "Ne ressemble à aucun autre",
   "diagExcluded": "N'entraîne pas",
   "diagNearest": "le plus proche : {{value}} %",
-  "diagToOthers": "face au reste : {{value}} %"
+  "diagToOthers": "face au reste : {{value}} %",
+  "healthHeading": "Empreintes vocales à vérifier",
+  "healthHint": "Ces personnes ont un enregistrement qui ne ressemble à aucun des autres : soit un autre microphone, soit quelqu'un d'autre enregistré sous leur nom.",
+  "healthCount": "{{count}} enregistrement(s) sur {{total}}",
+  "healthReview": "Vérifier",
+  "healthMore": "et {{count}} de plus"
 }
