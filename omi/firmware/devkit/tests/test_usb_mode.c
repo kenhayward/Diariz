@@ -207,6 +207,83 @@ static void test_poweroff_only_allowed_in_capture(void)
     CHECK(usb_mode_allows_poweroff()); /* back in CAPTURE */
 }
 
+/*
+ * The invariant from design section 9.3: FatFs and USB Mass Storage are never
+ * active at the same time. Drives a long event sequence and checks after every
+ * event. If this ever fails, the card can be corrupted on real hardware.
+ */
+static void test_never_both_mounted_and_msc(void)
+{
+    /* A fixed, deliberately awkward sequence: repeated taps, unplugs at every
+     * phase, failures interleaved with successes. */
+    static const usb_mode_event_t seq[] = {
+        USB_MODE_EVENT_DOUBLE_TAP,       USB_MODE_EVENT_USB_CONNECTED,
+        USB_MODE_EVENT_DOUBLE_TAP,       USB_MODE_EVENT_DOUBLE_TAP,
+        USB_MODE_EVENT_UNMOUNT_OK,       USB_MODE_EVENT_DOUBLE_TAP,
+        USB_MODE_EVENT_REMOUNT_OK,       USB_MODE_EVENT_DOUBLE_TAP,
+        USB_MODE_EVENT_UNMOUNT_FAIL,     USB_MODE_EVENT_DOUBLE_TAP,
+        USB_MODE_EVENT_UNMOUNT_OK,       USB_MODE_EVENT_USB_DISCONNECTED,
+        USB_MODE_EVENT_REMOUNT_FAIL,     USB_MODE_EVENT_DOUBLE_TAP,
+        USB_MODE_EVENT_USB_CONNECTED,    USB_MODE_EVENT_DOUBLE_TAP,
+        USB_MODE_EVENT_USB_DISCONNECTED, USB_MODE_EVENT_REMOUNT_OK,
+        USB_MODE_EVENT_DOUBLE_TAP,       USB_MODE_EVENT_USB_CONNECTED,
+        USB_MODE_EVENT_DOUBLE_TAP,       USB_MODE_EVENT_UNMOUNT_OK,
+        USB_MODE_EVENT_REMOUNT_OK,       USB_MODE_EVENT_DOUBLE_TAP,
+    };
+
+    /*
+     * Shadow model of the real world.
+     *
+     * The filesystem changes state on the RESULT event, not on the request
+     * action: emitting UNMOUNT_FS only asks for an unmount, and UNMOUNT_FAIL
+     * means it is still mounted. Modelling it on the action instead would
+     * quietly assume every unmount and remount succeeds, which is exactly the
+     * assumption the two-phase design exists to avoid.
+     *
+     * Result events are applied only when the machine was actually awaiting
+     * one. The sequence deliberately feeds some spurious results - a REMOUNT_OK
+     * while in TRANSFER, say - to prove the machine ignores them; the model has
+     * to ignore them too or it drifts out of step with reality.
+     */
+    bool fs_mounted = true;
+    bool msc_running = false;
+
+    usb_mode_init();
+
+    for (unsigned i = 0; i < sizeof(seq) / sizeof(seq[0]); i++) {
+        usb_mode_state_t before = usb_mode_get_state();
+        usb_mode_actions_t a = usb_mode_handle(seq[i]);
+
+        if (before == USB_MODE_ENTERING && seq[i] == USB_MODE_EVENT_UNMOUNT_OK) {
+            fs_mounted = false;
+        }
+        if (before == USB_MODE_LEAVING && seq[i] == USB_MODE_EVENT_REMOUNT_OK) {
+            fs_mounted = true;
+        }
+
+        for (uint8_t j = 0; j < a.count; j++) {
+            switch (a.actions[j]) {
+            case USB_MODE_ACTION_REMOUNT_FS:
+                /* Must never be asked to remount while the host has the card */
+                CHECK(!msc_running);
+                break;
+            case USB_MODE_ACTION_START_MSC:
+                /* The invariant. */
+                CHECK(!fs_mounted);
+                msc_running = true;
+                break;
+            case USB_MODE_ACTION_STOP_MSC:
+                msc_running = false;
+                break;
+            default:
+                break;
+            }
+        }
+
+        CHECK(!(fs_mounted && msc_running));
+    }
+}
+
 int main(void)
 {
     test_starts_in_capture();
@@ -225,6 +302,7 @@ int main(void)
     test_card_fail_without_usb_stays_put();
     test_unplug_during_entering_skips_msc();
     test_poweroff_only_allowed_in_capture();
+    test_never_both_mounted_and_msc();
 
     if (failures) {
         printf("%d check(s) failed\n", failures);
