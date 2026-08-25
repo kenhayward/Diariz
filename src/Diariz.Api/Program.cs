@@ -230,6 +230,8 @@ builder.Services.AddSingleton<IAmazonS3>(_ =>
     return new AmazonS3Client(new BasicAWSCredentials(storage.AccessKey, storage.SecretKey), cfg);
 });
 builder.Services.AddSingleton<IAudioStorage, AudioStorage>();
+// Stateless process launcher; ffmpeg comes from the API image (see its Dockerfile).
+builder.Services.AddSingleton<IAudioClipper, FfmpegAudioClipper>();
 
 // ---- Platform backup/restore (shells out to pg_dump/pg_restore — installed in the API image) ----
 builder.Services.AddSingleton<IDatabaseBackup>(_ =>
