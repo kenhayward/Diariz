@@ -2773,6 +2773,50 @@ const GENERATED: GeneratedResource[] = [
     ]
   },
   {
+    "tag": "SpeakerSuggestions",
+    "displayName": "Speaker Suggestion",
+    "value": "speakerSuggestions",
+    "operations": [
+      {
+        "value": "confirmASuggestedIdentity",
+        "displayName": "Confirm a suggested identity",
+        "description": "Names the speaker as the suggested person and adds that speaker's voice to their voiceprint, so the same voice in the same conditions is recognised outright next time.",
+        "method": "POST",
+        "path": "/api/speaker-suggestions/{speakerId}/accept",
+        "pathParams": [
+          "speakerId"
+        ],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": false
+      },
+      {
+        "value": "declineASuggestedIdentity",
+        "displayName": "Decline a suggested identity",
+        "description": "Leaves the speaker anonymous and records that this voice is not that person, so the same pair is never suggested again.",
+        "method": "POST",
+        "path": "/api/speaker-suggestions/{speakerId}/reject",
+        "pathParams": [
+          "speakerId"
+        ],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": false
+      },
+      {
+        "value": "listVoicesWaitingToBeConfirmed",
+        "displayName": "List voices waiting to be confirmed",
+        "description": "Speakers in your recordings that Diariz thinks it recognises, but not confidently enough to name on its own. Each carries the person it suspects, how far apart the two voiceprints are, and how much that speaker says - enough to judge without opening the recording.",
+        "method": "GET",
+        "path": "/api/speaker-suggestions",
+        "pathParams": [],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": true
+      }
+    ]
+  },
+  {
     "tag": "Storage",
     "displayName": "Storage",
     "value": "storage",

@@ -4357,6 +4357,10 @@
             "default": false,
             "type": "boolean"
           },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
           "identifiedAuto": {
             "type": "boolean"
           },
@@ -4386,6 +4390,28 @@
               "string"
             ]
           },
+          "suggestedDistance": {
+            "format": "double",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ]
+          },
+          "suggestedPersonId": {
+            "format": "uuid",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "suggestedPersonName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "title": {
             "type": [
               "null",
@@ -4394,10 +4420,68 @@
           }
         },
         "required": [
+          "id",
           "label",
           "displayName",
           "personId",
           "identifiedAuto"
+        ],
+        "type": "object"
+      },
+      "SpeakerSuggestionDto": {
+        "properties": {
+          "distance": {
+            "format": "double",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ]
+          },
+          "personId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "personName": {
+            "type": "string"
+          },
+          "recordingId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "recordingName": {
+            "type": "string"
+          },
+          "speakerId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "speakerLabel": {
+            "type": "string"
+          },
+          "speechMs": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "suggestedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "speakerId",
+          "recordingId",
+          "recordingName",
+          "speakerLabel",
+          "personId",
+          "personName",
+          "distance",
+          "speechMs",
+          "suggestedAt"
         ],
         "type": "object"
       },
@@ -14054,6 +14138,96 @@
         ]
       }
     },
+    "/api/speaker-suggestions": {
+      "get": {
+        "description": "Speakers in **your** recordings that Diariz thinks it recognises, but not confidently enough to name on its own. Each carries the person it suspects, how far apart the two voiceprints are, and how much that speaker says - enough to judge without opening the recording.\n\nOnly your own recordings appear, and no permission is needed: the person who can answer whether a voice belongs to someone is whoever was in the meeting.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SpeakerSuggestionDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SpeakerSuggestionDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SpeakerSuggestionDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List voices waiting to be confirmed",
+        "tags": [
+          "SpeakerSuggestions"
+        ]
+      }
+    },
+    "/api/speaker-suggestions/{speakerId}/accept": {
+      "post": {
+        "description": "Names the speaker as the suggested person and adds that speaker's voice to their voiceprint, so the same voice in the same conditions is recognised outright next time.\n\nThe result is a **manual** identification, not an automatic one - re-running identification will never take it away. Naming someone who has opted out of voice-printing is allowed; enrolling their voice is not, and does not happen.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "speakerId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Confirm a suggested identity",
+        "tags": [
+          "SpeakerSuggestions"
+        ]
+      }
+    },
+    "/api/speaker-suggestions/{speakerId}/reject": {
+      "post": {
+        "description": "Leaves the speaker anonymous and records that this voice is **not** that person, so the same pair is never suggested again.\n\nThe rejection is kept as evidence: it is the only kind of labelled negative Diariz has, and calibrating how confident identification should be depends on it. A later outright match is still allowed to apply - that is new evidence, not the same question asked twice.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "speakerId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Decline a suggested identity",
+        "tags": [
+          "SpeakerSuggestions"
+        ]
+      }
+    },
     "/api/tags": {
       "get": {
         "description": "Every topic tag across your meetings, each with how many recordings carry it, its summed weight, and the recording ids behind it - enough to render a weighted cloud and drill into any entry without a second call. Sorted by weight, heaviest first.\n\nTags are yours: topics are extracted automatically when a recording is summarised, but they are only **suggestions** until you accept one on the recording, and this cloud counts accepted tags only. Add or remove them with the tag endpoints on a recording. Matching is **case-insensitive** and the most common casing is used for display.\n\nWith no `roomId` this covers your own library; with one it covers the recordings placed in that room (404 if you are not a member).",
@@ -15101,6 +15275,10 @@
     {
       "description": "Your folder tree (sections) - create, rename, reorder, and delete folders.",
       "name": "Sections"
+    },
+    {
+      "description": "Voices Diariz thinks it recognises in your recordings but is not confident enough to name on its own - list them, and confirm or decline each. Confirming teaches the voiceprint; declining is remembered, so the same pair is never suggested again.",
+      "name": "SpeakerSuggestions"
     },
     {
       "description": "Your storage usage against your quota.",

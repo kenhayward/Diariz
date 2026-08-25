@@ -21,6 +21,32 @@ public class PlatformSettings
     /// 0 means keep forever.</summary>
     public const int DefaultLlmUsageRetentionDays = 90;
 
+    /// <summary>Default max cosine distance (0..2) at which a voice match is applied automatically.
+    ///
+    /// <para>0.30, which is the operating point deployments were already running under the old
+    /// <c>Identification:Threshold</c> environment variable this replaces - so upgrading changes no
+    /// behaviour. It is deliberately strict: measured against the live distance distribution, true matches
+    /// cluster around 0.2-0.3 and impostors around 0.55-0.75, so the valley sits near 0.45 and there is
+    /// recall to be had by loosening. The <see cref="DefaultIdentificationConfirmBand">confirmation
+    /// band</see>, not a looser default, is the safe way to reach for it.</para></summary>
+    public const double DefaultIdentificationThreshold = 0.30;
+
+    /// <summary>Default max distance at which a match is <em>suggested</em> rather than applied; between this
+    /// and <see cref="DefaultIdentificationThreshold"/> the user is asked.
+    ///
+    /// <para>0.40 rather than 0.50: on the measured instance that is a first queue of roughly 90 items
+    /// instead of 163, and a backlog nobody works through produces worse evidence than a smaller one that
+    /// gets read. Widen it once the decision log shows where the real boundary sits.</para></summary>
+    public const double DefaultIdentificationConfirmBand = 0.40;
+
+    /// <summary>Default gap by which the best-matching <b>person</b> must beat the next person before either
+    /// is acted on. Guards confusable voices, where the nearest is close to a coin-flip.</summary>
+    public const double DefaultIdentificationMargin = 0.05;
+
+    /// <summary>Default minimum speech (ms) before a speaker is matched at all. Accuracy climbs steeply up to
+    /// 10-20s and sub-2s utterances are unreliable, so scoring them lends false confidence to noise.</summary>
+    public const int DefaultIdentificationMinSpeechMs = 3000;
+
     public int Id { get; set; } = SingletonId;
 
     /// <summary>Storage quota (bytes of recorded audio) granted to each user at account creation.</summary>
@@ -85,4 +111,22 @@ public class PlatformSettings
     /// A toggle rather than a constant because an OpenAI-compatible endpoint that rejects the unknown
     /// field must be recoverable without a redeploy. Used from PR 2.</summary>
     public bool LlmStreamUsageEnabled { get; set; } = true;
+
+    /// <summary>Max cosine distance at which a voice match is applied automatically. Lower is stricter.
+    ///
+    /// <para>Replaces the compiled <c>Identification:Threshold</c>: calibrating an operating point needs it
+    /// changeable without a redeploy, and there must be exactly one copy of the number.</para></summary>
+    public double IdentificationThreshold { get; set; } = DefaultIdentificationThreshold;
+
+    /// <summary>Max distance at which a match is offered for confirmation instead of applied. Must be
+    /// <b>looser</b> (larger) than <see cref="IdentificationThreshold"/>; inverted, nothing would ever
+    /// auto-apply.</summary>
+    public double IdentificationConfirmBand { get; set; } = DefaultIdentificationConfirmBand;
+
+    /// <summary>How far the nearest person must beat the next <b>person</b> before either is acted on.
+    /// Measured between people, never between two templates of the same person.</summary>
+    public double IdentificationMargin { get; set; } = DefaultIdentificationMargin;
+
+    /// <summary>Below this much total speech, a speaker is not matched at all.</summary>
+    public int IdentificationMinSpeechMs { get; set; } = DefaultIdentificationMinSpeechMs;
 }

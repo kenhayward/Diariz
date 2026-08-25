@@ -42,7 +42,9 @@ public record PlatformSettingsDto(
     bool AutoDeleteAudioEnabled, int AudioRetentionDays, TimeOnly AudioDeletionTimeOfDay,
     bool ApiAccessEnabled, int LlmTimeoutSeconds,
     bool McpAccessEnabled, bool WebhooksEnabled,
-    bool LlmUsageLoggingEnabled, int LlmUsageRetentionDays, bool LlmStreamUsageEnabled);
+    bool LlmUsageLoggingEnabled, int LlmUsageRetentionDays, bool LlmStreamUsageEnabled,
+    double IdentificationThreshold, double IdentificationConfirmBand, double IdentificationMargin,
+    int IdentificationMinSpeechMs);
 public record UpdatePlatformSettingsRequest(
     long StarterQuotaBytes, long MaxQuotaBytes,
     MinutesGenerationMode MinutesGenerationMode = MinutesGenerationMode.SingleCall,
@@ -55,7 +57,31 @@ public record UpdatePlatformSettingsRequest(
     bool WebhooksEnabled = false,
     bool LlmUsageLoggingEnabled = true,
     int LlmUsageRetentionDays = PlatformSettings.DefaultLlmUsageRetentionDays,
-    bool LlmStreamUsageEnabled = true);
+    bool LlmStreamUsageEnabled = true,
+    double IdentificationThreshold = PlatformSettings.DefaultIdentificationThreshold,
+    double IdentificationConfirmBand = PlatformSettings.DefaultIdentificationConfirmBand,
+    double IdentificationMargin = PlatformSettings.DefaultIdentificationMargin,
+    int IdentificationMinSpeechMs = PlatformSettings.DefaultIdentificationMinSpeechMs);
+
+/// <summary>A voice Diariz thinks it recognises but is not confident enough to name unasked.
+///
+/// <para>Carries everything needed to judge it without opening the recording: who it suspects, how far apart
+/// the two voiceprints are, and how much that speaker actually says - a near match on four seconds of speech
+/// deserves more scepticism than the same distance on four minutes.</para></summary>
+public record SpeakerSuggestionDto(
+    Guid SpeakerId,
+    Guid RecordingId,
+    string RecordingName,
+    string SpeakerLabel,
+    Guid PersonId,
+    string PersonName,
+    /// <summary>Cosine distance, lower is closer.</summary>
+    double Distance,
+    long SpeechMs,
+    DateTimeOffset SuggestedAt);
+
+/// <summary>What a re-scan did, or would do in a dry run.</summary>
+public record RescanRunResult(int Scanned, int Applied, int Suggested);
 /// <summary>Result of a manual "run the audio-retention pass now" trigger: how many recordings had audio deleted.</summary>
 public record AudioRetentionRunResult(int Deleted);
 /// <summary>Result of a manual "backfill tags now" trigger: how many extraction jobs were ENQUEUED (the
@@ -571,13 +597,20 @@ public record SetVoiceprintOptOutRequest(bool OptOut);
 /// call per speaker. They are all null for an anonymous speaker, and for a "Multiple Speakers" slot, which
 /// is by definition not one person.</para></summary>
 public record SpeakerInfoDto(
+    Guid Id,
     string Label, string DisplayName, Guid? PersonId, bool IdentifiedAuto, bool IsMultiSpeaker = false,
     string? Title = null, string? CompanyName = null, string? Email = null, string? Phone = null,
     bool? IsInternal = null,
     /// <summary>A segment was moved into or out of this speaker, so its stored voiceprint no longer
     /// describes the audio it is attributed to. Nothing recomputes on its own - that needs the worker and
     /// the original audio - so this is what tells the user it is worth doing.</summary>
-    bool EmbeddingStale = false);
+    bool EmbeddingStale = false,
+    /// <summary>A person this speaker may be, close enough to ask about but not to apply. Null unless a
+    /// suggestion is pending; when set, the speaker is still anonymous.</summary>
+    Guid? SuggestedPersonId = null,
+    string? SuggestedPersonName = null,
+    /// <summary>Cosine distance to the suggested person, lower is closer.</summary>
+    double? SuggestedDistance = null);
 
 /// <summary>Move one segment to a different speaker. A null <see cref="Label"/> asks the API to mint a new
 /// speaker for this recording: the interrupting voice often has no diarization slot of its own, and the

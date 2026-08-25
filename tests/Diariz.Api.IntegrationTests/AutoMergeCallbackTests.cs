@@ -27,7 +27,7 @@ public class AutoMergeCallbackTests(ContainersFixture fx)
             Options.Create(new SummarizationOptions { ApiBase = "" }), new FakeApiKeyProtector(), new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())));
         var embedding = new EmbeddingSettingsResolver(db, Options.Create(new EmbeddingOptions()), resolver);
         return new WorkerCallbackController(
-            db, new FakeHubContext(), new FakeJobQueue(), resolver, embedding, new FakeSpeakerIdentifier(),
+            db, new FakeHubContext(), new FakeJobQueue(), resolver, embedding, new FakeSpeakerIdentification(new FakeSpeakerIdentifier()),
             Options.Create(new WorkerOptions { CallbackSecret = Secret }),
             new CapturingWebhookPublisher(), Options.Create(new AppPublicOptions()),
             NullLogger<WorkerCallbackController>.Instance)

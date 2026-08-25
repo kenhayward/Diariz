@@ -87,7 +87,7 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
     }
 
     [Fact]
-    public async Task Identify_ReturnsNearestProfile_WithinThreshold()
+    public async Task Rank_PutsTheNearestProfileFirst()
     {
         await ClearDirectoryAsync();
         var user = await SeedUser();
@@ -102,16 +102,19 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
 
         await using var db2 = fx.CreateDbContext();
         // Almost colinear with Alice's vector → tiny cosine distance.
-        var match = await Identifier(db2).IdentifyAsync(Vec((0, 1f), (1, 0.1f)));
+        var ranked = await Identifier(db2).RankAsync(Vec((0, 1f), (1, 0.1f)));
 
-        Assert.NotNull(match);
-        Assert.Equal(aliceId, match!.PersonId);
-        Assert.Equal("Alice", match.Name);
-        Assert.True(match.Distance < 0.4);
+        Assert.Equal(aliceId, ranked[0].PersonId);
+        Assert.Equal("Alice", ranked[0].Name);
+        Assert.True(ranked[0].Distance < 0.3);
+        Assert.True(ranked[1].Distance > ranked[0].Distance, "Bob ranks behind Alice rather than being filtered out");
     }
 
+    /// <summary>A distant voice is not labelled. The rejection now happens in <c>IdentificationRules</c>
+    /// rather than inside the identifier, so this asserts it end to end against real pgvector - the ranking
+    /// itself deliberately returns the far candidate, and something downstream has to decline it.</summary>
     [Fact]
-    public async Task Identify_ReturnsNull_WhenNearestExceedsThreshold()
+    public async Task Labelling_LeavesASpeakerAnonymous_WhenTheNearestVoiceIsTooFar()
     {
         await ClearDirectoryAsync();
         var user = await SeedUser();
@@ -122,10 +125,20 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
         }
 
         await using var db2 = fx.CreateDbContext();
-        // Orthogonal to Alice's vector → cosine distance ≈ 1, well above the 0.4 threshold.
-        var match = await Identifier(db2).IdentifyAsync(Vec((1, 1f)));
+        // Orthogonal to Alice's vector → cosine distance ≈ 1, far beyond even the confirmation band.
+        var speaker = new Speaker
+        {
+            Id = Guid.NewGuid(), RecordingId = Guid.NewGuid(), Label = "SPEAKER_00",
+            DisplayName = "SPEAKER_00", Embedding = Vec((1, 1f)),
+        };
 
-        Assert.Null(match);
+        await SpeakerLabeling.ApplyAsync(
+            [speaker], Identifier(db2), new IdentificationThresholds(0.30, 0.40, 0.05, 3000),
+            new Dictionary<string, long> { ["SPEAKER_00"] = 30_000 });
+
+        Assert.Null(speaker.PersonId);
+        Assert.Equal("SPEAKER_00", speaker.DisplayName);
+        Assert.False(speaker.IdentifiedAuto);
     }
 
     /// <summary>The directory is platform-wide, so a voiceprint enrolled by one person identifies that human
@@ -133,7 +146,7 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
     /// inverse of the assertion it replaced. It is also the privacy consequence of the design: enrolling
     /// someone is a platform-wide act, not a private one.</summary>
     [Fact]
-    public async Task Identify_MatchesAVoiceprintEnrolledByAnotherUser()
+    public async Task Rank_IncludesAVoiceprintEnrolledByAnotherUser()
     {
         await ClearDirectoryAsync();
         var other = await SeedUser();
@@ -145,16 +158,15 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
         }
 
         await using var db2 = fx.CreateDbContext();
-        var match = await Identifier(db2).IdentifyAsync(Vec((0, 1f)));
+        var ranked = await Identifier(db2).RankAsync(Vec((0, 1f)));
 
-        Assert.NotNull(match);
-        Assert.Equal(theirsId, match!.PersonId);
+        Assert.Equal(theirsId, Assert.Single(ranked).PersonId);
     }
 
     /// <summary>Someone who asked not to be voice-printed is never a candidate, even while a stale embedding
     /// is still on the row - the filter, not the erase, is what guarantees it.</summary>
     [Fact]
-    public async Task Identify_IgnoresAnOptedOutPerson()
+    public async Task Rank_IgnoresAnOptedOutPerson()
     {
         await ClearDirectoryAsync();
         var user = await SeedUser();
@@ -170,7 +182,7 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
 
         await using var db2 = fx.CreateDbContext();
 
-        Assert.Null(await Identifier(db2).IdentifyAsync(Vec((0, 1f))));
+        Assert.Empty(await Identifier(db2).RankAsync(Vec((0, 1f))));
     }
 
     [Fact]
@@ -364,7 +376,9 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
         await using (var db = fx.CreateDbContext())
         {
             var speakers = await db.Speakers.Where(s => s.RecordingId == recId).ToListAsync();
-            await SpeakerLabeling.ApplyAsync(speakers, Identifier(db));
+            await SpeakerLabeling.ApplyAsync(
+                speakers, Identifier(db), new IdentificationThresholds(0.30, 0.40, 0.05, 3000),
+                new Dictionary<string, long> { ["SPEAKER_00"] = 30_000 });
             await db.SaveChangesAsync();
         }
 
@@ -400,5 +414,83 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
 
         await using var db2 = fx.CreateDbContext();
         Assert.Empty(await db2.Speakers.Where(s => s.Id == speakerId).ToListAsync());
+    }
+
+    /// <summary>Ranking is evidence, not a decision. It applies no threshold at all - what to do with a
+    /// distance now belongs to <c>IdentificationRules</c>, so the two cannot each hold their own idea of what
+    /// "a match" means.</summary>
+    [Fact]
+    public async Task RankAsync_OrdersPeopleByDistance_AndAppliesNoThreshold()
+    {
+        await ClearDirectoryAsync();
+        var user = await SeedUser();
+
+        await using var db = fx.CreateDbContext();
+        var near = new Person { Id = Guid.NewGuid(), Name = "Near", Embedding = Vec((0, 1f)), SampleCount = 1 };
+        // Orthogonal: cosine distance 1.0, far beyond any acceptance band. It must still be ranked.
+        var far = new Person { Id = Guid.NewGuid(), Name = "Far", Embedding = Vec((1, 1f)), SampleCount = 1 };
+        db.People.AddRange(near, far);
+        await db.SaveChangesAsync();
+
+        var ranked = await Identifier(db).RankAsync(Vec((0, 1f)), take: 5);
+
+        Assert.Equal(2, ranked.Count);
+        Assert.Equal(near.Id, ranked[0].PersonId);
+        Assert.Equal(far.Id, ranked[1].PersonId);
+        Assert.True(ranked[0].Distance < ranked[1].Distance);
+        Assert.True(ranked[1].Distance > 0.9, "an orthogonal voice must still be ranked, not filtered out");
+    }
+
+    [Fact]
+    public async Task RankAsync_ExcludesOptedOutPeopleAndThoseWithNoVoiceprint()
+    {
+        // A CosineDistance over a NULL column does nothing useful, and someone who opted out must never be
+        // matched at all - that is the whole content of opting out.
+        await ClearDirectoryAsync();
+        await SeedUser();
+
+        await using var db = fx.CreateDbContext();
+        db.People.AddRange(
+            new Person { Id = Guid.NewGuid(), Name = "NoPrint", Embedding = null },
+            new Person
+            {
+                Id = Guid.NewGuid(), Name = "OptedOut", Embedding = Vec((0, 1f)),
+                SampleCount = 1, VoiceprintOptOut = true,
+            });
+        await db.SaveChangesAsync();
+
+        Assert.Empty(await Identifier(db).RankAsync(Vec((0, 1f)), take: 5));
+    }
+
+    [Fact]
+    public async Task RankAsync_TakeLimitsTheResult()
+    {
+        await ClearDirectoryAsync();
+        await SeedUser();
+
+        await using var db = fx.CreateDbContext();
+        for (var i = 0; i < 4; i++)
+            db.People.Add(new Person
+            {
+                Id = Guid.NewGuid(), Name = $"P{i}", Embedding = Vec((i, 1f)), SampleCount = 1,
+            });
+        await db.SaveChangesAsync();
+
+        Assert.Equal(2, (await Identifier(db).RankAsync(Vec((0, 1f)), take: 2)).Count);
+    }
+
+    [Fact]
+    public async Task RankAsync_ReturnsNothingWhenIdentificationIsDisabled()
+    {
+        await ClearDirectoryAsync();
+        await SeedUser();
+
+        await using var db = fx.CreateDbContext();
+        db.People.Add(new Person { Id = Guid.NewGuid(), Name = "Near", Embedding = Vec((0, 1f)), SampleCount = 1 });
+        await db.SaveChangesAsync();
+
+        var off = new SpeakerIdentifier(db, Options.Create(new IdentificationOptions { Enabled = false }));
+
+        Assert.Empty(await off.RankAsync(Vec((0, 1f))));
     }
 }

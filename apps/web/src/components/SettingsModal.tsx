@@ -8,6 +8,7 @@ import { bytesToGb, gbToBytes } from "../lib/format";
 import { platformWebhookEvents, SIGNAL_EXEMPT_EVENT_KEYS } from "../lib/webhookEvents";
 import PanelModal from "./PanelModal";
 import MaintenancePanel from "./MaintenancePanel";
+import IdentificationSettings from "./settings/IdentificationSettings";
 
 // Lazily loaded: both are large, and most visits to Settings never open either. They are the same
 // components the /admin/* routes render - `embedded` only drops the page chrome this modal provides.
@@ -51,6 +52,13 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const [llmUsageLoggingEnabled, setLlmUsageLoggingEnabled] = useState(true);
   const [llmUsageRetentionDays, setLlmUsageRetentionDays] = useState("90");
   const [llmStreamUsageEnabled, setLlmStreamUsageEnabled] = useState(true);
+  // Voice identification: how close a match must be to be applied, to be asked about, how far it must beat
+  // the runner-up, and how little speech is too little to judge. Held as strings like the other numeric
+  // fields so a half-typed value does not become NaN mid-edit.
+  const [identThreshold, setIdentThreshold] = useState("0.3");
+  const [identBand, setIdentBand] = useState("0.4");
+  const [identMargin, setIdentMargin] = useState("0.05");
+  const [identMinSpeechMs, setIdentMinSpeechMs] = useState("3000");
   // Audio retention: master switch, window in days, and server-local run time ("HH:mm").
   const [autoDeleteAudio, setAutoDeleteAudio] = useState(false);
   const [retentionDays, setRetentionDays] = useState("");
@@ -74,6 +82,10 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
       setMaxGb(String(bytesToGb(platform.maxQuotaBytes)));
       setMinutesMode(platform.minutesGenerationMode);
       setLlmTimeout(String(platform.llmTimeoutSeconds ?? 120));
+      setIdentThreshold(String(platform.identificationThreshold ?? 0.3));
+      setIdentBand(String(platform.identificationConfirmBand ?? 0.4));
+      setIdentMargin(String(platform.identificationMargin ?? 0.05));
+      setIdentMinSpeechMs(String(platform.identificationMinSpeechMs ?? 3000));
       setLlmUsageLoggingEnabled(platform.llmUsageLoggingEnabled ?? true);
       setLlmUsageRetentionDays(String(platform.llmUsageRetentionDays ?? 90));
       setLlmStreamUsageEnabled(platform.llmStreamUsageEnabled ?? true);
@@ -107,6 +119,12 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
       if (!Number.isInteger(timeout) || timeout < 5) throw new Error(t("llmTimeoutInvalid"));
       const usageRetentionDays = Number(llmUsageRetentionDays);
       if (!Number.isInteger(usageRetentionDays) || usageRetentionDays < 0) throw new Error(t("llmUsageRetentionInvalid"));
+      const identThresholdNum = Number(identThreshold);
+      const identBandNum = Number(identBand);
+      if (!(identThresholdNum > 0) || identThresholdNum > 2) throw new Error(t("identThresholdInvalid"));
+      // Inverted, nothing would ever be named automatically and every match would arrive as a question -
+      // a setting that looks perfectly reasonable in isolation.
+      if (identBandNum < identThresholdNum) throw new Error(t("identBandInvalid"));
       await api.updatePlatformSettings({
         starterQuotaBytes: starter,
         maxQuotaBytes: max,
@@ -122,6 +140,10 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         llmUsageLoggingEnabled,
         llmUsageRetentionDays: usageRetentionDays,
         llmStreamUsageEnabled,
+        identificationThreshold: identThresholdNum,
+        identificationConfirmBand: identBandNum,
+        identificationMargin: Number(identMargin),
+        identificationMinSpeechMs: Number(identMinSpeechMs),
       });
       qc.invalidateQueries({ queryKey: ["platform-settings"] });
       onClose();
@@ -210,6 +232,20 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                 />
                 <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">{t("llmTimeoutHint")}</span>
               </label>
+
+              {/* Its own component rather than four more fields inline: this modal was already 845 lines,
+                  and the panel carries a re-scan control with state of its own. Controlled, because the
+                  settings endpoint takes the whole object and a self-saving panel would clobber the rest. */}
+              <IdentificationSettings
+                threshold={identThreshold}
+                setThreshold={setIdentThreshold}
+                band={identBand}
+                setBand={setIdentBand}
+                margin={identMargin}
+                setMargin={setIdentMargin}
+                minSpeechMs={identMinSpeechMs}
+                setMinSpeechMs={setIdentMinSpeechMs}
+              />
 
               {/* LLM usage log: master switch, retention window (0 = keep forever), and whether streaming
                   calls ask for token counts (consumed since 0.217.0 to report real tokens/duration on

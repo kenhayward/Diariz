@@ -47,6 +47,28 @@ public class Speaker
     /// not a trigger.</para></summary>
     public bool EmbeddingStale { get; set; }
 
+    /// <summary>A person this speaker may be, offered for confirmation rather than applied.
+    ///
+    /// <para>Set when the nearest voiceprint lands between the acceptance threshold and the confirmation
+    /// band: close enough to be worth asking about, not close enough to name unasked. The speaker stays
+    /// <b>anonymous</b> while a suggestion is pending - <see cref="PersonId"/> is untouched - so nothing
+    /// downstream treats a maybe as a fact.</para>
+    ///
+    /// <para>The three suggestion columns are always null together or set together. Cleared by accepting or
+    /// rejecting, and a rejected pair is never suggested again (see
+    /// <see cref="SpeakerIdentityDecision"/>).</para>
+    ///
+    /// <para>Maps to the <c>"SuggestedProfileId"</c> column, following the same naming exception as
+    /// <see cref="PersonId"/>.</para></summary>
+    public Guid? SuggestedPersonId { get; set; }
+
+    /// <summary>Cosine distance to <see cref="SuggestedPersonId"/> when the suggestion was made. Shown to
+    /// whoever judges it, and copied onto the decision log so the sweep has the number that was actually on
+    /// offer rather than one recomputed against a gallery that has since moved.</summary>
+    public double? SuggestedDistance { get; set; }
+
+    public DateTimeOffset? SuggestedAt { get; set; }
+
     /// <summary>The display name applied when a speaker is flagged <see cref="IsMultiSpeaker"/>. Stored
     /// verbatim so server-side transcript surfaces (exports, email, chat) read it like any other name;
     /// the web localises the in-app affordance.</summary>

@@ -1190,6 +1190,26 @@ namespace Diariz.Domain.Migrations
                     b.Property<Guid?>("DefaultLlmModelId")
                         .HasColumnType("uuid");
 
+                    b.Property<double>("IdentificationConfirmBand")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("double precision")
+                        .HasDefaultValue(0.40000000000000002);
+
+                    b.Property<double>("IdentificationMargin")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("double precision")
+                        .HasDefaultValue(0.050000000000000003);
+
+                    b.Property<int>("IdentificationMinSpeechMs")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(3000);
+
+                    b.Property<double>("IdentificationThreshold")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("double precision")
+                        .HasDefaultValue(0.29999999999999999);
+
                     b.Property<bool>("LlmStreamUsageEnabled")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -1241,6 +1261,10 @@ namespace Diariz.Domain.Migrations
                             AudioDeletionTimeOfDay = new TimeOnly(3, 0, 0),
                             AudioRetentionDays = 30,
                             AutoDeleteAudioEnabled = false,
+                            IdentificationConfirmBand = 0.40000000000000002,
+                            IdentificationMargin = 0.050000000000000003,
+                            IdentificationMinSpeechMs = 3000,
+                            IdentificationThreshold = 0.29999999999999999,
                             LlmStreamUsageEnabled = true,
                             LlmTimeoutSeconds = 120,
                             LlmUsageLoggingEnabled = true,
@@ -1869,14 +1893,62 @@ namespace Diariz.Domain.Migrations
                     b.Property<Guid>("RecordingId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("SuggestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double?>("SuggestedDistance")
+                        .HasColumnType("double precision");
+
+                    b.Property<Guid?>("SuggestedPersonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("SuggestedProfileId");
+
                     b.HasKey("Id");
 
                     b.HasIndex("PersonId");
+
+                    b.HasIndex("SuggestedPersonId");
 
                     b.HasIndex("RecordingId", "Label")
                         .IsUnique();
 
                     b.ToTable("Speakers");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.SpeakerIdentityDecision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("DecidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DecidedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Decision")
+                        .HasColumnType("integer");
+
+                    b.Property<double>("Distance")
+                        .HasColumnType("double precision");
+
+                    b.Property<Guid>("PersonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ProfileId");
+
+                    b.Property<Guid>("SpeakerId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DecidedByUserId");
+
+                    b.HasIndex("PersonId");
+
+                    b.HasIndex("SpeakerId", "PersonId");
+
+                    b.ToTable("SpeakerIdentityDecisions");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.Summary", b =>
@@ -3201,9 +3273,38 @@ namespace Diariz.Domain.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Diariz.Domain.Entities.Person", null)
+                        .WithMany()
+                        .HasForeignKey("SuggestedPersonId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("Person");
 
                     b.Navigation("Recording");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.SpeakerIdentityDecision", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("DecidedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Diariz.Domain.Entities.Person", "Person")
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Diariz.Domain.Entities.Speaker", "Speaker")
+                        .WithMany()
+                        .HasForeignKey("SpeakerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Person");
+
+                    b.Navigation("Speaker");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.Summary", b =>

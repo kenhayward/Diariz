@@ -28,7 +28,8 @@ public class RecordingsController : ControllerBase
     private readonly IHubContext<TranscriptionHub> _hub;
     private readonly ILlmSettingsResolver _summarization;
     private readonly IEmailSender _email;
-    private readonly ISpeakerIdentifier _identifier;
+    private readonly ISpeakerIdentification _identification;
+    private readonly ISpeakerAssignment _assignment;
     private readonly UploadOptions _uploads;
     private readonly IRoomScope _rooms;
     private readonly IPeopleDirectory _people;
@@ -41,7 +42,8 @@ public class RecordingsController : ControllerBase
     public RecordingsController(
         DiarizDbContext db, IAudioStorage storage, IJobQueue queue,
         IHubContext<TranscriptionHub> hub, IConfiguration config,
-        ILlmSettingsResolver summarization, IEmailSender email, ISpeakerIdentifier identifier,
+        ILlmSettingsResolver summarization, IEmailSender email, ISpeakerIdentification identification,
+        ISpeakerAssignment assignment,
         IOptions<UploadOptions> uploads, IRoomScope rooms, IPeopleDirectory people,
         IWebhookPublisher webhooks,
         IOptions<AppPublicOptions> appOpts, IExportLocalizer? exportLocalizer = null,
@@ -53,7 +55,8 @@ public class RecordingsController : ControllerBase
         _hub = hub;
         _summarization = summarization;
         _email = email;
-        _identifier = identifier;
+        _identification = identification;
+        _assignment = assignment;
         _uploads = uploads.Value;
         _rooms = rooms;
         _people = people;
@@ -206,7 +209,15 @@ public class RecordingsController : ControllerBase
             .OrderBy(a => a.Ordinal)
             .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal, a.Completed, a.CompletedAt))
             .ToList();
-        var personIds = rec.Speakers.Where(s => s.PersonId is not null).Select(s => s.PersonId!.Value).Distinct().ToList();
+        // Both the people speakers are identified as and the people they are only suspected to be - the
+        // transcript renders a pending suggestion by name, and a second round trip per speaker to resolve it
+        // would be a query per row.
+        var personIds = rec.Speakers
+            .SelectMany(s => new[] { s.PersonId, s.SuggestedPersonId })
+            .Where(id => id is not null)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToList();
         var people = personIds.Count == 0
             ? new Dictionary<Guid, Person>()
             : await _db.People.Where(p => personIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id);
@@ -565,11 +576,7 @@ public class RecordingsController : ControllerBase
 
         if (req.PersonId is null)
         {
-            // Unassign → revert to the anonymous label (and exit "Multiple Speakers" mode).
-            speaker.PersonId = null;
-            speaker.DisplayName = speaker.Label;
-            speaker.IdentifiedAuto = false;
-            speaker.IsMultiSpeaker = false;
+            _assignment.Unassign(speaker);
             await _db.SaveChangesAsync();
             return NoContent();
         }
@@ -578,44 +585,7 @@ public class RecordingsController : ControllerBase
         var profile = await _db.People.FirstOrDefaultAsync(p => p.Id == req.PersonId);
         if (profile is null) return NotFound();
 
-        speaker.PersonId = profile.Id;
-        speaker.DisplayName = profile.Name;
-        speaker.IdentifiedAuto = false; // an explicit manual assignment
-        speaker.IsMultiSpeaker = false; // naming a single person exits "Multiple Speakers" mode
-
-        // Train "by whole speakers": record this speaker as a voice sample (once) and recompute the
-        // centroid from all of the person's snapshots. Requires the speaker embedding, which only exists
-        // once the worker has run — skip gracefully when it hasn't.
-        //
-        // Naming an opted-out person is fine and still happens above; what must not happen is building a
-        // voiceprint for them. Saying "that was Alice" is your assertion about the meeting; holding Alice's
-        // biometric after she asked you not to is the thing she opted out of.
-        if (speaker.Embedding is not null && !profile.VoiceprintOptOut)
-        {
-            var already = await _db.VoiceSamples
-                .AnyAsync(c => c.PersonId == profile.Id && c.SpeakerId == speaker.Id);
-            if (!already)
-            {
-                _db.VoiceSamples.Add(new VoiceSample
-                {
-                    Id = Guid.NewGuid(),
-                    PersonId = profile.Id,
-                    SpeakerId = speaker.Id,
-                    RecordingId = rec.Id,
-                    Embedding = speaker.Embedding,
-                });
-
-                var snapshots = await _db.VoiceSamples
-                    .Where(c => c.PersonId == profile.Id)
-                    .Select(c => c.Embedding)
-                    .ToListAsync();
-                snapshots.Add(speaker.Embedding); // the not-yet-saved contribution
-                var centroid = Voiceprints.Centroid(snapshots.Select(v => v.ToArray()).ToList());
-                if (centroid is not null) profile.Embedding = centroid;
-                profile.SampleCount = snapshots.Count;
-                profile.UpdatedAt = DateTimeOffset.UtcNow;
-            }
-        }
+        await _assignment.AssignAsync(speaker, profile);
 
         await _db.SaveChangesAsync();
         return NoContent();
@@ -668,7 +638,7 @@ public class RecordingsController : ControllerBase
             .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
         if (rec is null) return NotFound();
 
-        await SpeakerLabeling.ApplyAsync(rec.Speakers, _identifier);
+        await _identification.ApplyAsync(rec.Speakers, await SpeakerSpeech.ForRecordingAsync(_db, rec.Id));
         await _db.SaveChangesAsync();
         return NoContent();
     }
@@ -2201,12 +2171,22 @@ public class RecordingsController : ControllerBase
     /// overlapping audio, not one person, so attaching a job title to it would be a lie.</summary>
     private static SpeakerInfoDto Describe(Speaker s, IReadOnlyDictionary<Guid, Person> people)
     {
-        if (s.IsMultiSpeaker || s.PersonId is not { } personId || !people.TryGetValue(personId, out var person))
-            return new SpeakerInfoDto(s.Label, s.DisplayName, s.PersonId, s.IdentifiedAuto, s.IsMultiSpeaker,
-                EmbeddingStale: s.EmbeddingStale);
+        // A pending suggestion, if the suggested person is one we loaded. Carried on the speaker rather than
+        // fetched separately so the transcript can offer the question where the evidence is - the words and
+        // the audio are already on screen there.
+        var suggestedName = s.SuggestedPersonId is { } sid && people.TryGetValue(sid, out var suggested)
+            ? suggested.Name
+            : null;
 
+        if (s.IsMultiSpeaker || s.PersonId is not { } personId || !people.TryGetValue(personId, out var person))
+            return new SpeakerInfoDto(s.Id, s.Label, s.DisplayName, s.PersonId, s.IdentifiedAuto, s.IsMultiSpeaker,
+                EmbeddingStale: s.EmbeddingStale,
+                SuggestedPersonId: s.SuggestedPersonId, SuggestedPersonName: suggestedName,
+                SuggestedDistance: s.SuggestedDistance);
+
+        // An identified speaker has nothing pending: assigning clears the suggestion.
         return new SpeakerInfoDto(
-            s.Label, s.DisplayName, s.PersonId, s.IdentifiedAuto, s.IsMultiSpeaker,
+            s.Id, s.Label, s.DisplayName, s.PersonId, s.IdentifiedAuto, s.IsMultiSpeaker,
             person.Title, person.CompanyName, person.Email, person.Phone, person.IsInternal,
             s.EmbeddingStale);
     }

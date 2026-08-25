@@ -64,6 +64,7 @@ public static class OpenApiCuration
         ["Recordings"] = "Your recordings: upload, list, view, rename, re-transcribe, summarise, move between folders, edit segments and speakers, export the transcript, and delete.",
         ["Rooms"] = "The shared rooms you belong to, and (with the right permission) creating, editing, and deleting rooms and their membership. Your Personal room is immutable here.",
         ["Ocr"] = "Whether this platform can read text off a screen capture, and which model does it.",
+        ["SpeakerSuggestions"] = "Voices Diariz thinks it recognises in your recordings but is not confident enough to name on its own - list them, and confirm or decline each. Confirming teaches the voiceprint; declining is remembered, so the same pair is never suggested again.",
         ["Screenshots"] = "Screen captures taken during a recording from the desktop app - list them, fetch the full image or thumbnail, and read the text off one with an OCR model.",
         ["Search"] = "Search across your transcripts, returning structured hits with a snippet, the moment it occurs, and where the recording lives.",
         ["SectionAttachments"] = "Supporting documents attached directly to a folder (files, URLs, or Markdown) - list, add, rename, edit, and remove.",
