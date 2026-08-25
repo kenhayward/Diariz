@@ -37,7 +37,8 @@ public class RecordingsControllerTests
                 new Dictionary<string, string?> { ["Transcription:DefaultModel"] = "whisperx-large-v3" }).Build(),
             new LlmSettingsResolver(db, Options.Create(new LlmDefaultsOptions()), Options.Create(new SummarizationOptions { ApiBase = "http://llm.test/v1" }),
                 new FakeApiKeyProtector(), new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions()))),
-            new FakeEmailSender(), new FakeSpeakerIdentification(new FakeSpeakerIdentifier()), Options.Create(new UploadOptions()),
+            new FakeEmailSender(), new FakeSpeakerIdentification(new FakeSpeakerIdentifier()),
+            new SpeakerAssignment(db, new PeopleDirectory(db)), Options.Create(new UploadOptions()),
             new RoomScope(db), new PeopleDirectory(db), new CapturingWebhookPublisher(),
             Options.Create(new AppPublicOptions()), null,
             new CalendarAggregator(new NoGoogleCalendar(), new FeedWith(events), new NoOutlookDevices(), db))
@@ -60,6 +61,7 @@ public class RecordingsControllerTests
             new FakeApiKeyProtector(), new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())));
         return new RecordingsController(db, storage ?? new FakeAudioStorage(), queue, new FakeHubContext(), config,
             resolver, email ?? new FakeEmailSender(), identifier ?? new FakeSpeakerIdentification(new FakeSpeakerIdentifier()),
+            new SpeakerAssignment(db, new PeopleDirectory(db)),
             Options.Create(uploads ?? new UploadOptions()), new RoomScope(db), new PeopleDirectory(db), new CapturingWebhookPublisher(),
             // A real aggregator over the Google fake, so these tests exercise the actual merge and the actual
             // "has any calendar" gate rather than a stand-in for them.
@@ -974,6 +976,47 @@ public class RecordingsControllerTests
         Assert.Equal(profile.Id, sp.PersonId);
         Assert.Equal("Alice", sp.DisplayName);
         Assert.False(sp.IdentifiedAuto); // explicit manual assignment
+    }
+
+    /// <summary>A sample the user dropped from training stays dropped when an unrelated speaker is assigned
+    /// to the same person.
+    ///
+    /// <para>This path recomputed the centroid with its own inline arithmetic, which never learned about
+    /// exclusions - so assigning any speaker quietly pulled every excluded sample back in, undoing a
+    /// deliberate choice with no sign that it had happened.</para></summary>
+    [Fact]
+    public async Task AssignSpeaker_DoesNotResurrectAnExcludedVoiceSample()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var profile = new Person { Id = Guid.NewGuid(), CreatedByUserId = userId, Name = "Alice" };
+        var dropped = new Speaker
+        {
+            Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_01", DisplayName = "SPEAKER_01",
+            Embedding = new Pgvector.Vector(new float[192]),
+        };
+        db.Speakers.Add(dropped);
+        db.Speakers.Add(new Speaker
+        {
+            Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "SPEAKER_00",
+            Embedding = new Pgvector.Vector(new float[192]),
+        });
+        db.People.Add(profile);
+        db.VoiceSamples.Add(new VoiceSample
+        {
+            Id = Guid.NewGuid(), PersonId = profile.Id, SpeakerId = dropped.Id, RecordingId = rec.Id,
+            Embedding = new Pgvector.Vector(new float[192]),
+            ExcludedAt = DateTimeOffset.UtcNow,
+        });
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        await controller.AssignSpeaker(rec.Id, "SPEAKER_00", new AssignSpeakerRequest(profile.Id));
+
+        // One sample trains this voiceprint: the one just assigned. The excluded one stays excluded.
+        Assert.Equal(1, db.People.Single(p => p.Id == profile.Id).SampleCount);
+        Assert.NotNull(db.VoiceSamples.Single(v => v.SpeakerId == dropped.Id).ExcludedAt);
     }
 
     /// <summary>Naming an opted-out person is allowed and still happens - saying "that was Alice" is your

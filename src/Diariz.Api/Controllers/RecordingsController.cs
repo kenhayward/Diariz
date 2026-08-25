@@ -29,6 +29,7 @@ public class RecordingsController : ControllerBase
     private readonly ILlmSettingsResolver _summarization;
     private readonly IEmailSender _email;
     private readonly ISpeakerIdentification _identification;
+    private readonly ISpeakerAssignment _assignment;
     private readonly UploadOptions _uploads;
     private readonly IRoomScope _rooms;
     private readonly IPeopleDirectory _people;
@@ -42,6 +43,7 @@ public class RecordingsController : ControllerBase
         DiarizDbContext db, IAudioStorage storage, IJobQueue queue,
         IHubContext<TranscriptionHub> hub, IConfiguration config,
         ILlmSettingsResolver summarization, IEmailSender email, ISpeakerIdentification identification,
+        ISpeakerAssignment assignment,
         IOptions<UploadOptions> uploads, IRoomScope rooms, IPeopleDirectory people,
         IWebhookPublisher webhooks,
         IOptions<AppPublicOptions> appOpts, IExportLocalizer? exportLocalizer = null,
@@ -54,6 +56,7 @@ public class RecordingsController : ControllerBase
         _summarization = summarization;
         _email = email;
         _identification = identification;
+        _assignment = assignment;
         _uploads = uploads.Value;
         _rooms = rooms;
         _people = people;
@@ -565,11 +568,7 @@ public class RecordingsController : ControllerBase
 
         if (req.PersonId is null)
         {
-            // Unassign → revert to the anonymous label (and exit "Multiple Speakers" mode).
-            speaker.PersonId = null;
-            speaker.DisplayName = speaker.Label;
-            speaker.IdentifiedAuto = false;
-            speaker.IsMultiSpeaker = false;
+            _assignment.Unassign(speaker);
             await _db.SaveChangesAsync();
             return NoContent();
         }
@@ -578,44 +577,7 @@ public class RecordingsController : ControllerBase
         var profile = await _db.People.FirstOrDefaultAsync(p => p.Id == req.PersonId);
         if (profile is null) return NotFound();
 
-        speaker.PersonId = profile.Id;
-        speaker.DisplayName = profile.Name;
-        speaker.IdentifiedAuto = false; // an explicit manual assignment
-        speaker.IsMultiSpeaker = false; // naming a single person exits "Multiple Speakers" mode
-
-        // Train "by whole speakers": record this speaker as a voice sample (once) and recompute the
-        // centroid from all of the person's snapshots. Requires the speaker embedding, which only exists
-        // once the worker has run — skip gracefully when it hasn't.
-        //
-        // Naming an opted-out person is fine and still happens above; what must not happen is building a
-        // voiceprint for them. Saying "that was Alice" is your assertion about the meeting; holding Alice's
-        // biometric after she asked you not to is the thing she opted out of.
-        if (speaker.Embedding is not null && !profile.VoiceprintOptOut)
-        {
-            var already = await _db.VoiceSamples
-                .AnyAsync(c => c.PersonId == profile.Id && c.SpeakerId == speaker.Id);
-            if (!already)
-            {
-                _db.VoiceSamples.Add(new VoiceSample
-                {
-                    Id = Guid.NewGuid(),
-                    PersonId = profile.Id,
-                    SpeakerId = speaker.Id,
-                    RecordingId = rec.Id,
-                    Embedding = speaker.Embedding,
-                });
-
-                var snapshots = await _db.VoiceSamples
-                    .Where(c => c.PersonId == profile.Id)
-                    .Select(c => c.Embedding)
-                    .ToListAsync();
-                snapshots.Add(speaker.Embedding); // the not-yet-saved contribution
-                var centroid = Voiceprints.Centroid(snapshots.Select(v => v.ToArray()).ToList());
-                if (centroid is not null) profile.Embedding = centroid;
-                profile.SampleCount = snapshots.Count;
-                profile.UpdatedAt = DateTimeOffset.UtcNow;
-            }
-        }
+        await _assignment.AssignAsync(speaker, profile);
 
         await _db.SaveChangesAsync();
         return NoContent();

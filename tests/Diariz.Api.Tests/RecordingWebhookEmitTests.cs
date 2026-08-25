@@ -125,7 +125,7 @@ public class RecordingWebhookEmitTests
             db, Options.Create(new LlmDefaultsOptions()), Options.Create(new SummarizationOptions()), new FakeApiKeyProtector(), new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())));
         publisher = new CapturingWebhookPublisher();
         return new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config,
-            resolver, new FakeEmailSender(), new FakeSpeakerIdentification(new FakeSpeakerIdentifier()), Options.Create(new UploadOptions()),
+            resolver, new FakeEmailSender(), new FakeSpeakerIdentification(new FakeSpeakerIdentifier()), new SpeakerAssignment(db, new PeopleDirectory(db)), Options.Create(new UploadOptions()),
             new RoomScope(db), new PeopleDirectory(db), publisher, Options.Create(new AppPublicOptions()))
         {
             ControllerContext = Http.Context(userId)
