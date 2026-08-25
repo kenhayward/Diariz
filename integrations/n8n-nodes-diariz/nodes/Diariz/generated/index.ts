@@ -1368,6 +1368,17 @@ const GENERATED: GeneratedResource[] = [
         "returnsArray": false
       },
       {
+        "value": "rankTheDirectoryByVoiceprintHealth",
+        "displayName": "Rank the directory by voiceprint health",
+        "description": "Everyone whose training set contains a sample resembling none of their others, worst first. A directory of any size makes the per-person view unusable on its own - knowing which people to look at is most of the work.",
+        "method": "GET",
+        "path": "/api/people/diagnostics",
+        "pathParams": [],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": true
+      },
+      {
         "value": "removeAVoiceSample",
         "displayName": "Remove a voice sample",
         "description": "Drops one sample from a person's voiceprint and recomputes it from what remains - the fix when a misattributed speaker has been taught to the wrong person and recognition has started drifting.",

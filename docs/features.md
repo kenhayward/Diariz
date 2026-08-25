@@ -313,6 +313,31 @@ never between two voiceprints of the same person - and the minimum speech before
 That last one matters: a second and a half of audio produces a confident-looking number that is not worth
 trusting, and if accepted it would go on to train whatever it matched.
 
+**A voiceprint is only as good as the recordings behind it, and a **Diagnostics** tab says whether those
+recordings actually sound like each other.** Measured on a real platform, of the samples belonging to people
+enrolled more than once, a third resemble none of their others, and the widest pair inside a single person is
+almost completely dissimilar - which two recordings of one human cannot be. Two explanations need opposite
+responses: the same voice somewhere new (a phone, a car, a room speaker), which is exactly the audio a
+voiceprint benefits from; or **someone else enrolled under that name**, which is why recognition drifts.
+
+Each sample gets two distances, because they answer different questions and disagree in the case that matters
+most - a sample can sit right beside one companion while that pair together sits well away from everything
+else. The first is the distance to its **closest neighbour** ("does this have company?"); the second is to the
+centre of **the person's other samples**, a true leave-one-out ("would the rest of this voiceprint recognise
+it?"). Including a sample in its own comparison would make everything resemble itself, which is precisely the
+false reassurance the tab exists to prevent.
+
+The verdict is given in words rather than a bare number, because a user cannot act on "0.62" but can act on
+being told which recording does not sound like the rest. `Resembles none of the others` deliberately does not
+say *wrong*: only listening settles whether it is a new microphone or a different person, and the existing
+play button and training tick box are how you settle it. The People directory leads with the voiceprints worth
+checking, worst first, each opening straight into that person's diagnostics - with a directory of any size,
+knowing **which** people to look at is most of the work. Healthy people are omitted entirely rather than
+ranked last, so the ones with a real problem stand out.
+
+None of this needs audio, a re-transcription or the GPU worker: every sample already carries its embedding, so
+the whole diagnosis is arithmetic over data that exists.
+
 Each person's card carries a **Voiceprint** tab beside their profile, answering what the biometric was
 actually built from - previously invisible, which is why a drifting voiceprint had no diagnosis. It lists
 **every recording the person appears in**, not only the ones enrolled by hand: automatic recognition links a
