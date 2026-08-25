@@ -63,6 +63,23 @@ public record UpdatePlatformSettingsRequest(
     double IdentificationMargin = PlatformSettings.DefaultIdentificationMargin,
     int IdentificationMinSpeechMs = PlatformSettings.DefaultIdentificationMinSpeechMs);
 
+/// <summary>A voice Diariz thinks it recognises but is not confident enough to name unasked.
+///
+/// <para>Carries everything needed to judge it without opening the recording: who it suspects, how far apart
+/// the two voiceprints are, and how much that speaker actually says - a near match on four seconds of speech
+/// deserves more scepticism than the same distance on four minutes.</para></summary>
+public record SpeakerSuggestionDto(
+    Guid SpeakerId,
+    Guid RecordingId,
+    string RecordingName,
+    string SpeakerLabel,
+    Guid PersonId,
+    string PersonName,
+    /// <summary>Cosine distance, lower is closer.</summary>
+    double Distance,
+    long SpeechMs,
+    DateTimeOffset SuggestedAt);
+
 /// <summary>What a re-scan did, or would do in a dry run.</summary>
 public record RescanRunResult(int Scanned, int Applied, int Suggested);
 /// <summary>Result of a manual "run the audio-retention pass now" trigger: how many recordings had audio deleted.</summary>
