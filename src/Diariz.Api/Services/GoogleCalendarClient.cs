@@ -307,9 +307,14 @@ public class GoogleCalendarClient : IGoogleCalendarClient
         // Timed events carry `dateTime` (RFC-3339 with offset); all-day events carry a `date` (yyyy-MM-dd).
         if (node.TryGetProperty("dateTime", out var dt) && dt.GetString() is { } dts &&
             DateTimeOffset.TryParse(dts, out value)) return true;
-        if (node.TryGetProperty("date", out var d) && d.GetString() is { } ds &&
-            DateTimeOffset.TryParse(ds, out value))
+        // A `date` names a calendar date and carries no offset, so read it as midnight UTC rather than
+        // letting an unqualified parse stamp TimeZoneInfo.Local - that put the API host's zone in the
+        // response, and a reader ahead of UTC saw the entry spill onto the following day. Shared with the
+        // Outlook store so all three sources put a date-only entry on the wire the same way.
+        if (node.TryGetProperty("date", out var d) &&
+            OutlookCalendarStore.DateOnlyInstant(d.GetString()) is { } dateOnly)
         {
+            value = dateOnly;
             allDay = true;
             return true;
         }

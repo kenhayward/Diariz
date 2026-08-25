@@ -85,6 +85,19 @@ export const RELEASES: Release[] = [
     ],
   },
   {
+    version: "0.250.2",
+    date: "2026-08-25",
+    pr: 618,
+    headline: "All-day entries stay on the one day they are actually on",
+    summary:
+      "An all-day entry - a holiday, a birthday, someone's out-of-office day - was drawn on two days: the day it is on, and the day after. It also inflated the following day's event count in the day header. Anyone in the UK saw this from late March to late October and not at all in winter, which is the clue to what it was.\n\nA date-only entry names calendar dates. It has no time and no timezone, but it still has to travel to your browser as a moment in time, and each calendar source picked its own moment to send. Google and Outlook used whatever timezone the server happens to run in; subscribed .ics feeds used UTC. Your browser then turned that moment back into local time - and during British Summer Time midnight UTC is one o'clock in the morning here, so a Monday entry ran from 01:00 Monday to 01:00 Tuesday and was counted as touching both days.\n\nBoth ends are now fixed. The server sends every date-only entry the same way whatever machine it runs on, and the calendar places one by the dates it names rather than by converting a moment in time, so it cannot drift again.",
+    fixed: [
+      "An all-day entry from any calendar - Outlook, Google or a subscribed .ics feed - appears only on the day it is on, instead of also appearing on the day after throughout British Summer Time.",
+      "The day header no longer counts an all-day entry against the following day.",
+      "A multi-day all-day entry covers exactly the days it names, no more.",
+    ],
+  },
+  {
     version: "0.250.1",
     date: "2026-08-25",
     pr: 617,

@@ -117,12 +117,55 @@ export function recordingsForDay(recordings: RecordingSummary[], key: string): R
     .sort((a, b) => new Date(recordingTime(a)).getTime() - new Date(recordingTime(b)).getTime());
 }
 
+/// The leading `yyyy-MM-dd` of an ISO instant - the calendar date the sender named, before any conversion.
+const DATE_PART = /^(\d{4})-(\d{2})-(\d{2})/;
+
+/// The calendar dates a **date-only** entry covers, read from the date text of its instants rather than by
+/// converting them to the reader's local time.
+///
+/// A date-only entry (a holiday, a birthday, an out-of-office day) names dates, not moments. Every source
+/// still has to put it on the wire as an instant, and each picks a different offset to do it: Google and
+/// Outlook stamp whatever offset the API container happens to run in, `.ics` uses UTC. Converting that back
+/// to the reader's local time reintroduces exactly the offset the entry never had - and it fails in one
+/// direction in particular. Anywhere ahead of UTC, midnight-UTC is 01:00 local, so the exclusive end lands
+/// an hour PAST local midnight and the walk below counts the following day too. Every all-day entry then
+/// draws itself twice, on its own day and the day after, for the whole of British Summer Time.
+///
+/// The end is exclusive - the day after the last one covered - which is what Google, Outlook and iCalendar
+/// all send. An inclusive end from some other producer still yields its own day rather than none.
+function dateOnlyKeys(startIso: string, endIso: string): string[] {
+  const s = DATE_PART.exec(startIso);
+  if (!s) return [];
+  const at = (m: RegExpExecArray) => new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+
+  const first = at(s);
+  const e = DATE_PART.exec(endIso);
+  const last = e ? at(e) : new Date(first);
+  last.setDate(last.getDate() - 1); // exclusive end -> last covered day
+  const lastMs = Math.max(last.getTime(), first.getTime());
+
+  const keys: string[] = [];
+  for (const d = new Date(first); d.getTime() <= lastMs; d.setDate(d.getDate() + 1)) keys.push(dayKey(d));
+  return keys;
+}
+
+/// The day a calendar event is filed under for sorting - by its named date when it is date-only, by its
+/// local start otherwise. Same rule `eventDayKeys` places it by, so the two cannot put it on different days.
+function eventStartDayKey(e: CalendarEvent): string {
+  return e.allDay === true ? (dateOnlyKeys(e.start, e.end)[0] ?? isoToDayKey(e.start)) : isoToDayKey(e.start);
+}
+
 /// The set of local day-keys a set of calendar events covers — expands multi-day and all-day events
-/// across every day they touch. An all-day event's end is Google's exclusive next-midnight, so a span
-/// that ends exactly at local midnight does not count the end day.
+/// across every day they touch. An all-day event is placed by the calendar dates it names (see
+/// `dateOnlyKeys`); a timed one by its local start and end, where an end falling exactly on local midnight
+/// is exclusive and so does not count the end day.
 export function eventDayKeys(events: CalendarEvent[]): Set<string> {
   const keys = new Set<string>();
   for (const e of events) {
+    if (e.allDay === true) {
+      for (const k of dateOnlyKeys(e.start, e.end)) keys.add(k);
+      continue;
+    }
     const start = new Date(e.start);
     const end = new Date(e.end);
     // Walk local midnights from the start day up to (and including) the last covered day.
@@ -183,7 +226,7 @@ export function dayItems(recordings: RecordingSummary[], events: CalendarEvent[]
     if (linkedEventIds.has(e.id)) continue; // represented by this day's recording row (both icons)
     if (!eventDayKeys([e]).has(key)) continue;
     // Starts this day → sort by its start; started earlier (spilled in) → sort at the top.
-    const startsToday = isoToDayKey(e.start) === key;
+    const startsToday = eventStartDayKey(e) === key;
     items.push({ type: "event", time: startsToday ? new Date(e.start).getTime() : 0, event: e });
   }
   return items.sort((a, b) => a.time - b.time);
