@@ -71,11 +71,18 @@ public class OutlookCalendarStoreTests
         Assert.False(got.AllDay);
     }
 
-    /// <summary>All-day entries must project exactly as Google's do - Google parses its date-only <c>date</c>
-    /// field with a plain <c>DateTimeOffset.Parse</c>, so the web app's day-grouping is one shared code path
-    /// across all three sources rather than three subtly different ones.</summary>
+    /// <summary>All-day entries must project exactly as Google's and <c>.ics</c>'s do, so the web app's
+    /// day-grouping is one shared code path across all three sources rather than three subtly different ones.
+    ///
+    /// <para>That shared shape is <b>midnight UTC</b>. A date-only value names a calendar date and carries no
+    /// offset, so the one chosen to put it on the wire has to be fixed rather than inherited: a plain
+    /// <c>DateTimeOffset.Parse</c> stamps <c>TimeZoneInfo.Local</c>, which makes the API's own deployment
+    /// timezone part of its response. <c>.ics</c> already emits <c>TimeSpan.Zero</c>; this matches it.</para>
+    ///
+    /// <para>The assertion only bites on a host that is not already UTC - which is exactly the case the fix is
+    /// for, and why the fault survived a UTC-container CI run.</para></summary>
     [Fact]
-    public async Task ListEvents_ProjectsAllDayIdenticallyToGoogle()
+    public async Task ListEvents_ProjectsAllDayAtMidnightUtc_WhateverTheHostTimezone()
     {
         using var db = TestDb.Create();
         var (src, userId) = await SeedSource(db);
@@ -92,8 +99,11 @@ public class OutlookCalendarStoreTests
             userId, DateTimeOffset.Parse("2026-07-01T00:00:00Z"), DateTimeOffset.Parse("2026-07-04T00:00:00Z")));
 
         Assert.True(got.AllDay);
-        Assert.Equal(DateTimeOffset.Parse("2026-07-02"), got.Start);
-        Assert.Equal(DateTimeOffset.Parse("2026-07-03"), got.End);
+        Assert.Equal(new DateTimeOffset(2026, 7, 2, 0, 0, 0, TimeSpan.Zero), got.Start);
+        Assert.Equal(new DateTimeOffset(2026, 7, 3, 0, 0, 0, TimeSpan.Zero), got.End);
+        // Spelled out separately: the instants above could match while the offset carried the host's zone.
+        Assert.Equal(TimeSpan.Zero, got.Start.Offset);
+        Assert.Equal(TimeSpan.Zero, got.End.Offset);
     }
 
     /// <summary>The window is an overlap test, not a containment test - a meeting already under way when the

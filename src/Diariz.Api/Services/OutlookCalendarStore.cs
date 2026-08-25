@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Diariz.Domain;
@@ -118,17 +119,34 @@ public sealed class OutlookCalendarStore : IOutlookCalendarStore
     /// <summary>An all-day entry's display truth is its <b>local</b> date string, parsed exactly as the Google
     /// client parses its date-only <c>date</c> field, so day-grouping in the web app is one shared code path
     /// rather than three subtly different ones. Deriving the date from the stored UTC instant instead would
-    /// reintroduce the classic off-by-one for every zone east of UTC.</summary>
+    /// reintroduce the classic off-by-one for every zone east of UTC.
+    ///
+    /// <para>Read as <b>midnight UTC</b> - <see cref="DateOnlyInstant"/> - not with a bare
+    /// <c>DateTimeOffset.TryParse</c>, which stamps <c>TimeZoneInfo.Local</c> on a value that has no offset
+    /// and so makes the API's own deployment timezone part of its answer.</para></summary>
     private static (DateTimeOffset Start, DateTimeOffset End) Times(Domain.Entities.OutlookCalendarEvent e)
     {
         if (e.AllDay &&
-            DateTimeOffset.TryParse(e.StartDate, out var startDate) &&
-            DateTimeOffset.TryParse(e.EndDate, out var endDate))
+            DateOnlyInstant(e.StartDate) is { } startDate &&
+            DateOnlyInstant(e.EndDate) is { } endDate)
         {
             return (startDate, endDate);
         }
         return (e.StartsAt, e.EndsAt);
     }
+
+    /// <summary>A <c>yyyy-MM-dd</c> date-only value as midnight UTC, or null when it is absent or malformed.
+    ///
+    /// <para>A date-only value names a calendar date and carries no offset, so the offset used to put it on
+    /// the wire has to be <i>chosen</i> rather than inherited. Inheriting it - which is what an unqualified
+    /// parse does - shipped the API host's zone to the browser: on a UTC container an all-day Monday went out
+    /// as <c>2026-08-24T00:00:00+00:00</c>, which a reader in British Summer Time resolves to 01:00 on the
+    /// Monday through 01:00 on the <i>Tuesday</i>, so the entry was drawn on both days for the whole summer.
+    /// UTC is the choice because it is what the <c>.ics</c> client already emits.</para></summary>
+    internal static DateTimeOffset? DateOnlyInstant(string? date) =>
+        DateTime.TryParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed)
+            ? new DateTimeOffset(parsed, TimeSpan.Zero)
+            : null;
 
     private static IReadOnlyList<CalendarAttendee> ReadAttendees(string? json)
     {
