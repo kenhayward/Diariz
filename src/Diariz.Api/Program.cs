@@ -617,6 +617,9 @@ await using (var scope = app.Services.CreateAsyncScope())
     await Seeder.SeedFormulasAsync(db, BuiltInFormulaCatalog.LoadFrom(formulasDir, app.Logger));
     MeetingTypeSeeder.UseStandards(MeetingTypeCatalog.LoadFrom(meetingTypesDir, app.Logger));
     await MeetingTypeSeeder.SeedAsync(db);
+    // Reconciles voiceprints holding a sample whose speaker no longer names that person. Convergent in
+    // effect, so it is safe unconditionally and costs one query per boot once everything agrees.
+    await VoiceprintRebuild.RunAsync(db, sp.GetRequiredService<IPeopleDirectory>(), app.Logger);
 }
 
 // Must run before auth/cookie handling so the pipeline sees the real client scheme.

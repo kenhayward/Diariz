@@ -6,6 +6,7 @@ using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Pgvector;
 
@@ -235,5 +236,84 @@ public class VoiceprintTrainingIntegrationTests(ContainersFixture fx)
         // the same permission.
         Assert.All(theirs, r => Assert.True(r.CanAccessRecording));
         Assert.All(theirs, r => Assert.False(r.CanReassign));
+    }
+
+    /// <summary>The centroid a person's row actually held before the rule existed: the mean of both voices,
+    /// normalised. Set by hand because the only code that can produce it is the code being fixed.</summary>
+    private static Vector BothVoices()
+    {
+        var v = new float[192];
+        v[0] = 0.70710678f;
+        v[1] = 0.70710678f;
+        return new Vector(v);
+    }
+
+    [Fact]
+    public async Task The_startup_pass_rebuilds_a_centroid_built_from_a_sample_that_no_longer_counts()
+    {
+        // The rule fixes what is computed from now on. It does not touch the six centroids already stored,
+        // which stay wrong until something recomputes them - and nothing would, until the next time someone
+        // happened to edit that person.
+        var (personId, _) = await SeedAsync(_ => null);
+
+        await using (var stale = fx.CreateDbContext())
+        {
+            var p = await stale.People.FindAsync(personId);
+            p!.Embedding = BothVoices();
+            p.SampleCount = 2;
+            await stale.SaveChangesAsync();
+        }
+
+        await using var db = fx.CreateDbContext();
+        var rebuilt = await VoiceprintRebuild.RunAsync(db, new PeopleDirectory(db), NullLogger.Instance);
+
+        // Other tests in this shared-container collection seed orphans too, so the count is a lower bound.
+        // What is asserted exactly is this person's centroid.
+        Assert.True(rebuilt >= 1, $"expected at least this person to be rebuilt, got {rebuilt}");
+        AssertOnlyTheLinkedSampleCounted((await db.People.FindAsync(personId))!);
+    }
+
+    [Fact]
+    public async Task A_second_pass_changes_nothing()
+    {
+        // The property that lets it run on every boot. It is idempotent in effect rather than in selection:
+        // the orphan row still exists afterwards, so the person is still found - and recomputing a converged
+        // centroid from the one derivation that produced it must be a no-op.
+        var (personId, _) = await SeedAsync(_ => null);
+
+        await using var db = fx.CreateDbContext();
+        var people = new PeopleDirectory(db);
+
+        await VoiceprintRebuild.RunAsync(db, people, NullLogger.Instance);
+        var first = (await db.People.FindAsync(personId))!.Embedding!.ToArray();
+
+        await VoiceprintRebuild.RunAsync(db, people, NullLogger.Instance);
+        var second = (await db.People.FindAsync(personId))!.Embedding!.ToArray();
+
+        Assert.Equal(first, second);
+    }
+
+    [Fact]
+    public async Task The_startup_pass_leaves_a_healthy_voiceprint_alone()
+    {
+        // It must not become "recompute the whole directory on every boot". Only a person actually holding a
+        // sample the rule rejects is touched.
+        var (healthy, _) = await SeedAsync(self => self);
+
+        // A deliberately wrong centroid on a person the rule has no complaint about. If the pass recomputed
+        // everyone it would correct this, and the assertion below would fail - which is the whole point.
+        await using (var tamper = fx.CreateDbContext())
+        {
+            var p = await tamper.People.FindAsync(healthy);
+            p!.Embedding = Axis(7);
+            await tamper.SaveChangesAsync();
+        }
+
+        await using var db = fx.CreateDbContext();
+        await VoiceprintRebuild.RunAsync(db, new PeopleDirectory(db), NullLogger.Instance);
+
+        await using var read = fx.CreateDbContext();
+        var after = (await read.People.FindAsync(healthy))!.Embedding!.ToArray();
+        Assert.Equal(Axis(7).ToArray(), after);
     }
 }
