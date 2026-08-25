@@ -100,9 +100,18 @@ public class PeopleDirectory(DiarizDbContext db) : IPeopleDirectory
         // otherwise dropping one from training is cosmetic: the row reads "not training" while the vector it
         // contributed is still inside the centroid. SampleCount is derived from the same list, so the figure
         // the UI shows and the audio actually behind the voiceprint cannot disagree.
-        var samples = await db.VoiceSamples
-            .Where(v => v.PersonId == personId && v.ExcludedAt == null)
+        // The speaker comes with it because exclusion is not the only way a sample stops counting: both
+        // assignment paths move a speaker's link and leave the sample behind, so the link is read here rather
+        // than trusted to have been mirrored onto the sample.
+        var candidates = await db.VoiceSamples
+            .Where(v => v.PersonId == personId)
+            .Join(db.Speakers, v => v.SpeakerId, s => s.Id, (v, s) => new { Sample = v, Speaker = s })
             .ToListAsync(ct);
+
+        var samples = candidates
+            .Where(x => VoiceprintTraining.Trains(x.Sample, x.Speaker))
+            .Select(x => x.Sample)
+            .ToList();
 
         // Embedding is Ignore'd under the in-memory provider, so a sample's vector can be null there even
         // though the column is NOT NULL on Postgres. Centroid returns null for an empty set either way.

@@ -313,6 +313,16 @@ never between two voiceprints of the same person - and the minimum speech before
 That last one matters: a second and a half of audio produces a confident-looking number that is not worth
 trusting, and if accepted it would go on to train whatever it matched.
 
+**A recording trains someone's voiceprint only while the transcript still says that speaker is them.**
+Unassigning a speaker, or handing them to a different person, used to move the label and leave the voiceprint
+alone: the recording carried on teaching the original person indefinitely, and did not appear on their
+Voiceprint tab, which lists the speakers currently linked to them. Six recordings on a real platform were in
+that state, three of them training one person on audio since labelled as somebody else - so both people were
+being taught the same voice. It also meant the Diagnostics tab scored samples the Voiceprint tab could not
+list, which is why a recording flagged as sounding wrong could have no row anywhere to play or untick.
+Recordings the rule rejects stay listed, marked **No longer linked to this person**, and voiceprints built
+from them are rebuilt when the server next starts.
+
 **A voiceprint is only as good as the recordings behind it, and a **Diagnostics** tab says whether those
 recordings actually sound like each other.** Measured on a real platform, of the samples belonging to people
 enrolled more than once, a third resemble none of their others, and the widest pair inside a single person is

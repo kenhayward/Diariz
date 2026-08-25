@@ -543,7 +543,17 @@ public record PersonDetailDto(PersonDto Person, int IdentifiedCount, IReadOnlyLi
 ///
 /// <para><paramref name="CanAccessRecording"/> is false when the caller neither owns the recording nor holds
 /// <c>ManageVoiceprints</c>. The row is still returned - it is part of what the voiceprint learned from -
-/// and the client renders it without a transcript or a play button.</para></summary>
+/// and the client renders it without a transcript or a play button.</para>
+///
+/// <para><paramref name="StillLinked"/> is false when the speaker behind this sample no longer names this
+/// person: unassigned, reassigned to someone else, or marked as overlapping speech. The row is listed anyway,
+/// because hiding it is exactly how six of them survived unnoticed on a live instance while still inside a
+/// centroid. <paramref name="IsTraining"/> is false for all of them.</para>
+///
+/// <para><paramref name="CanReassign"/> is narrower than <paramref name="CanAccessRecording"/> on purpose.
+/// <c>ManageVoiceprints</c> grants listening to a segment for assessment, not editing someone else's
+/// transcript, and <c>AssignSpeaker</c> requires ownership regardless - so offering the control without it
+/// would produce a button that always fails.</para></summary>
 public record PersonAttributionDto(
     Guid SpeakerId,
     Guid RecordingId,
@@ -553,7 +563,9 @@ public record PersonAttributionDto(
     bool IsTraining,
     Guid? VoiceSampleId,
     long SpeechMs,
-    bool CanAccessRecording);
+    bool CanAccessRecording,
+    bool StillLinked,
+    bool CanReassign);
 
 /// <summary>How well one enrolled sample resembles the rest of a person's training set.
 ///

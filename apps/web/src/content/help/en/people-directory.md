@@ -22,8 +22,8 @@ removing the person.
 
 ## Seeing what a voiceprint was trained on
 
-Selecting someone opens their record under two tabs: **Profile** for their details, and **Voiceprint** for
-the audio behind their biometric.
+Selecting someone opens their record: **Profile** for their details, and **Voiceprint** for the audio behind
+their biometric.
 
 The Voiceprint tab lists every recording this person appears in - not only the ones you enrolled by hand.
 Each row says how they came to be attributed there (**Recognised automatically** or **Named by hand**), how
@@ -34,6 +34,10 @@ misattributed, and that shows up here as a recording you would not expect.
 **Trains the voiceprint** on any row adds or removes that whole recording. Adding is instant - the voice was
 measured when the recording was transcribed, so nothing needs re-transcribing. Removing does not throw the
 record away: Diariz remembers that you identified that speaker, so putting it back later is one tick.
+
+A row marked **No longer linked to this person** is one where the speaker has since been unassigned, or given
+to somebody else, on the transcript. It no longer trains the voiceprint - saying it was not them is enough -
+but it stays listed so you can see what it used to contribute.
 
 **Play segment** plays a short clip of just that line, so you can check by ear whether the voice really is
 this person before deciding. If the person appears in a recording belonging to someone else, you will only

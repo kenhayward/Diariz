@@ -51,7 +51,7 @@ function attribution(over: Partial<PersonAttribution> = {}): PersonAttribution {
   return {
     speakerId: "sp1", recordingId: "r1", recordingName: "Standup", speakerLabel: "SPEAKER_00",
     linkedBy: "manual", isTraining: true, voiceSampleId: "vs1", speechMs: 3000,
-    canAccessRecording: true, ...over,
+    canAccessRecording: true, stillLinked: true, canReassign: true, ...over,
   };
 }
 
@@ -307,5 +307,22 @@ describe("PersonVoiceprintTab", () => {
     await userEvent.click(screen.getByRole("button", { name: /Recompute voiceprint/ }));
 
     await waitFor(() => expect(screen.getByText(/Could not queue the recompute/)).toBeTruthy());
+  });
+
+  it("says why a listed recording is not training the voiceprint", async () => {
+    // Six of these exist on the live instance: the speaker was unassigned or reassigned on the transcript
+    // and its sample kept training regardless. The row has to be here - invisible is how they survived -
+    // but a row that is simply not ticked, with no reason given, reads as a bug rather than a fact.
+    mock(api.getPersonAttributions).mockResolvedValue([
+      attribution({ isTraining: false, stillLinked: false, canReassign: true }),
+    ]);
+
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <PersonVoiceprintTab person={person()} />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText(/no longer linked to this person/i)).toBeTruthy();
   });
 });

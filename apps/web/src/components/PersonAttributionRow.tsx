@@ -128,6 +128,14 @@ export default function PersonAttributionRow({
             {t("people:attributionTrainedOn", { duration: trainedOn })}
           </span>
         )}
+        {/* Said out loud rather than left as a row that is simply not ticked. Its sample was training the
+            voiceprint with nothing on screen accounting for it - a silent row would be the same defect in a
+            new place. */}
+        {!attribution.stillLinked && (
+          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
+            {t("people:attributionUnlinked")}
+          </span>
+        )}
         {sample?.stale && (
           <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
             {t("people:voiceprintNeedsRecompute")}

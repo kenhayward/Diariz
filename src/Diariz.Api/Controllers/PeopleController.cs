@@ -235,10 +235,16 @@ public class PeopleController : ControllerBase
 
         // Every training sample in one read. The whole directory is a few hundred 192-d vectors, and a query
         // per person would be a query per person.
-        var samples = await _db.VoiceSamples
-            .Where(v => v.ExcludedAt == null && v.Embedding != null)
-            .Select(v => new { v.Id, v.PersonId, v.Embedding })
-            .ToListAsync();
+        // Joined to the speaker because exclusion is not the only way a sample stops counting: both
+        // assignment paths move a speaker's link and leave the sample behind. Ranking a person on samples
+        // the centroid ignores would send someone to review a problem that does not exist.
+        var samples = (await _db.VoiceSamples
+                .Where(v => v.ExcludedAt == null && v.Embedding != null)
+                .Join(_db.Speakers, v => v.SpeakerId, s => s.Id, (v, s) => new { Sample = v, Speaker = s })
+                .ToListAsync())
+            .Where(x => VoiceprintTraining.Trains(x.Sample, x.Speaker))
+            .Select(x => new { x.Sample.Id, x.Sample.PersonId, x.Sample.Embedding })
+            .ToList();
 
         var byPerson = samples
             .GroupBy(v => v.PersonId)
@@ -306,10 +312,26 @@ public class PeopleController : ControllerBase
             .OrderBy(v => v.CreatedAt)
             .ToListAsync();
 
+        // The speakers are read here rather than further down, because "training" is the shared rule and
+        // not just ExcludedAt: a sample whose speaker has been unlinked or reassigned is not this person's
+        // voice any more.
+        var spIds = samples.Select(v => v.SpeakerId).Distinct().ToList();
+        var speakers = await _db.Speakers
+            .Where(sp => spIds.Contains(sp.Id))
+            .Select(sp => new { sp.Id, sp.Label, sp.PersonId, sp.IsMultiSpeaker })
+            .ToListAsync();
+        var speakerById = speakers.ToDictionary(sp => sp.Id);
+
+        bool Trains(VoiceSample v) =>
+            v.ExcludedAt is null
+            && v.Embedding is not null
+            && speakerById.TryGetValue(v.SpeakerId, out var sp)
+            && VoiceprintTraining.StillLinked(v.PersonId, sp.PersonId, sp.IsMultiSpeaker);
+
         // Diagnosed against the training set only. An excluded sample is not teaching the voiceprint
         // anything, so letting it define what the others are measured against would mean dropping an outlier
         // made everything else look like one instead.
-        var training = samples.Where(v => v.ExcludedAt is null && v.Embedding is not null).ToList();
+        var training = samples.Where(Trains).ToList();
 
         var thresholds = IdentificationThresholds.From(await _settings.GetAsync());
         var diagnosed = VoiceprintDiagnosis
@@ -319,13 +341,10 @@ public class PeopleController : ControllerBase
         // Recording names and speaker labels, stitched in memory - VoiceSample deliberately has no FK to its
         // recording, and a deleted one must not take the sample with it.
         var recIds = samples.Select(v => v.RecordingId).Distinct().ToList();
-        var spIds = samples.Select(v => v.SpeakerId).Distinct().ToList();
         var recMap = (await _db.Recordings.Where(r => recIds.Contains(r.Id))
                 .Select(r => new { r.Id, Display = r.Name ?? r.Title }).ToListAsync())
             .ToDictionary(r => r.Id, r => r.Display);
-        var spMap = (await _db.Speakers.Where(sp => spIds.Contains(sp.Id))
-                .Select(sp => new { sp.Id, sp.Label }).ToListAsync())
-            .ToDictionary(sp => sp.Id, sp => sp.Label);
+        var spMap = speakers.ToDictionary(sp => sp.Id, sp => sp.Label);
 
         var rows = samples.Select(v =>
         {
@@ -336,9 +355,9 @@ public class PeopleController : ControllerBase
                 spMap.TryGetValue(v.SpeakerId, out var label) ? label : "",
                 d?.NearestSiblingDistance,
                 d?.DistanceToOthers,
-                // An excluded sample was not diagnosed, so it has no verdict of its own to report.
+                // A sample that is not training was not diagnosed, so it has no verdict of its own.
                 (d?.Verdict ?? SampleVerdict.Only).ToString(),
-                v.ExcludedAt is null);
+                Trains(v));
         }).ToList();
 
         return Ok(new VoiceprintDiagnosticsDto(
@@ -368,9 +387,18 @@ public class PeopleController : ControllerBase
         if (!await CanManagePeopleAsync()) return Forbid();
         if (!await _db.People.AnyAsync(p => p.Id == id)) return NotFound();
 
+        var samples = await _db.VoiceSamples.Where(v => v.PersonId == id).ToListAsync();
+        var sampleSpeakerIds = samples.Select(v => v.SpeakerId).Distinct().ToList();
+
+        // Linked speakers, plus any speaker still holding a sample for this person. The second set is how a
+        // speaker that has been unassigned or reassigned stops being invisible: its sample was inside the
+        // centroid with nothing on screen accounting for it.
         var speakers = await _db.Speakers
-            .Where(s => s.PersonId == id)
-            .Select(s => new { s.Id, s.RecordingId, s.Label, s.IdentifiedAuto, s.IsMultiSpeaker })
+            .Where(s => s.PersonId == id || sampleSpeakerIds.Contains(s.Id))
+            .Select(s => new
+            {
+                s.Id, s.RecordingId, s.Label, s.IdentifiedAuto, s.IsMultiSpeaker, s.PersonId,
+            })
             .ToListAsync();
 
         var recIds = speakers.Select(s => s.RecordingId).Distinct().ToList();
@@ -387,6 +415,10 @@ public class PeopleController : ControllerBase
             .Where(r => canAssess || r.UserId == UserId)
             .Select(r => r.Id)
             .ToHashSet();
+
+        // Narrower than access on purpose: AssignSpeaker requires ownership, so a reassign control on a
+        // recording you merely have assessment access to would be a button that always fails.
+        var owned = recordings.Where(r => r.UserId == UserId).Select(r => r.Id).ToHashSet();
 
         // Speech per speaker comes from the current transcription's segments, which the API already stores -
         // no worker involvement, and the same figure a minimum-duration gate would read.
@@ -410,17 +442,17 @@ public class PeopleController : ControllerBase
                 ? ms
                 : 0;
 
-        var samples = await _db.VoiceSamples.Where(v => v.PersonId == id).ToListAsync();
-
         return Ok(PersonAttributions.Build(
             speakers
                 .Select(s => new AttributionInput(
                     s.Id, s.RecordingId, s.Label, s.IdentifiedAuto, s.IsMultiSpeaker,
-                    SpeechFor(s.RecordingId, s.Label)))
+                    SpeechFor(s.RecordingId, s.Label),
+                    VoiceprintTraining.StillLinked(id, s.PersonId, s.IsMultiSpeaker)))
                 .ToList(),
             samples,
             recordings.ToDictionary(r => r.Id, r => r.Display),
-            accessible));
+            accessible,
+            owned));
     }
 
     [HttpPut("{id:guid}/attributions/{speakerId:guid}/training")]

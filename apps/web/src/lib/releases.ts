@@ -65,6 +65,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.252.1",
+    date: "2026-08-25",
+    pr: 625,
+    headline: "A voice stops training someone's voiceprint once you say it was not them",
+    summary:
+      "Unassigning a speaker, or handing them to a different person, moved the label on the transcript and left the voiceprint alone. The recording carried on teaching the original person's voice indefinitely - and it did not appear on their Voiceprint tab, because that tab lists the speakers currently linked to them. There was no way to see it and no way to remove it.\n\nOn this platform six recordings were in that state. Three of them were training one person's voiceprint using audio that had since been labelled as somebody else, so both people were being taught the same voice.\n\nThis was also why the Diagnostics tab could not be acted on. It scores samples, the Voiceprint tab lists linked speakers, and the two were reading different sets - so the worst-scoring recording on the most-flagged person had no row anywhere to play, untick or reassign. It was not a missing button.\n\nThe rule is now a single one, applied everywhere a voiceprint is worked out: a recording trains someone only while the transcript still says that speaker is them. The affected voiceprints are rebuilt when the server next starts, and the recordings behind them stay listed, marked **No longer linked to this person**, so nothing disappears without saying so.",
+    fixed: [
+      "A recording stops training someone's voiceprint as soon as its speaker is unassigned or handed to a different person. Previously it kept contributing forever, invisibly - six recordings on this platform were doing so, three of them teaching one person a voice already labelled as someone else.",
+      "The Diagnostics tab and the Voiceprint tab now describe the same set of recordings. They did not, which is why a recording flagged as sounding wrong could have no row to play, untick or reassign.",
+      "Voiceprints built from those recordings are rebuilt automatically when the server starts, so a stored voice that was averaged with the wrong person's corrects itself.",
+      "The health ranking no longer flags someone as scattered on the strength of recordings that are not training them, which sent you to review a problem that did not exist.",
+    ],
+  },
+  {
     version: "0.252.0",
     date: "2026-08-25",
     pr: 620,

@@ -46,6 +46,7 @@
   "attributionLinkedAuto": "Recognised automatically",
   "attributionLinkedManual": "Named by hand",
   "attributionNoAccess": "In a recording you cannot access.",
+  "attributionUnlinked": "No longer linked to this person",
   "attributionPlayVoice": "Play voice",
   "attributionPlaySegment": "Play segment",
   "attributionStop": "Stop",

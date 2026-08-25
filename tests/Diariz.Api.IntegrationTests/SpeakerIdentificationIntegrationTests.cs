@@ -277,12 +277,14 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
 
         await using (var db = fx.CreateDbContext())
         {
-            // Centroid starts as the (normalised) mean of e0 and e1.
+            // Centroid starts as the (normalised) mean of e0 and e1. Both speakers are linked to the
+            // profile because that is what AssignAsync does before it records a sample - an unlinked
+            // speaker no longer counts as training data, so leaving it out made this seed unreachable.
             db.People.Add(new Person { Id = profileId, CreatedByUserId = user.Id, RoomId = await RoomOf(db, user.Id), Name = "Alice", SampleCount = 2, Embedding = Vec((0, 1f)) });
             db.Recordings.Add(new Recording { Id = recId, UserId = user.Id, BlobKey = "k" });
             db.Speakers.AddRange(
-                new Speaker { Id = s1, RecordingId = recId, Label = "SPEAKER_00", DisplayName = "Alice", Embedding = Vec((0, 1f)) },
-                new Speaker { Id = s2, RecordingId = recId, Label = "SPEAKER_01", DisplayName = "Alice", Embedding = Vec((1, 1f)) });
+                new Speaker { Id = s1, RecordingId = recId, Label = "SPEAKER_00", DisplayName = "Alice", PersonId = profileId, Embedding = Vec((0, 1f)) },
+                new Speaker { Id = s2, RecordingId = recId, Label = "SPEAKER_01", DisplayName = "Alice", PersonId = profileId, Embedding = Vec((1, 1f)) });
             db.VoiceSamples.AddRange(
                 new VoiceSample { Id = Guid.NewGuid(), PersonId = profileId, SpeakerId = s1, RecordingId = recId, Embedding = Vec((0, 1f)) },
                 new VoiceSample { Id = dropId, PersonId = profileId, SpeakerId = s2, RecordingId = recId, Embedding = Vec((1, 1f)) });
