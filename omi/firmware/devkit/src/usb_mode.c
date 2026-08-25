@@ -54,9 +54,19 @@ usb_mode_actions_t usb_mode_handle(usb_mode_event_t event)
 
     case USB_MODE_ENTERING:
         if (event == USB_MODE_EVENT_UNMOUNT_OK) {
-            state = USB_MODE_TRANSFER;
-            push(&a, USB_MODE_ACTION_START_MSC);
-            push(&a, USB_MODE_ACTION_LED_TRANSFER);
+            if (usb_connected) {
+                state = USB_MODE_TRANSFER;
+                push(&a, USB_MODE_ACTION_START_MSC);
+                push(&a, USB_MODE_ACTION_LED_TRANSFER);
+            } else {
+                /* Host went away mid-unmount. Nothing to present. */
+                state = USB_MODE_LEAVING;
+                push(&a, USB_MODE_ACTION_REMOUNT_FS);
+            }
+        } else if (event == USB_MODE_EVENT_UNMOUNT_FAIL) {
+            state = USB_MODE_CAPTURE;
+            push(&a, USB_MODE_ACTION_RESUME_CAPTURE);
+            push(&a, USB_MODE_ACTION_LED_CARD_FAIL);
         }
         break;
 
@@ -74,10 +84,20 @@ usb_mode_actions_t usb_mode_handle(usb_mode_event_t event)
             state = USB_MODE_CAPTURE;
             push(&a, USB_MODE_ACTION_RESUME_CAPTURE);
             push(&a, USB_MODE_ACTION_LED_CAPTURE);
+        } else if (event == USB_MODE_EVENT_REMOUNT_FAIL) {
+            state = USB_MODE_CARD_FAIL;
+            push(&a, USB_MODE_ACTION_LED_CARD_FAIL);
         }
         break;
 
-    default:
+    case USB_MODE_CARD_FAIL:
+        /* Nothing is mounted, so entry needs no unmount step. This is the
+         * recovery path: present the card so the host can reformat it. */
+        if (event == USB_MODE_EVENT_DOUBLE_TAP && usb_connected) {
+            state = USB_MODE_TRANSFER;
+            push(&a, USB_MODE_ACTION_START_MSC);
+            push(&a, USB_MODE_ACTION_LED_TRANSFER);
+        }
         break;
     }
 

@@ -116,6 +116,97 @@ static void test_double_tap_while_leaving_is_ignored(void)
     CHECK(a.count == 0);
 }
 
+static void test_unmount_fail_returns_to_capture(void)
+{
+    usb_mode_init();
+    usb_mode_handle(USB_MODE_EVENT_USB_CONNECTED);
+    usb_mode_handle(USB_MODE_EVENT_DOUBLE_TAP);
+    usb_mode_actions_t a = usb_mode_handle(USB_MODE_EVENT_UNMOUNT_FAIL);
+    CHECK(usb_mode_get_state() == USB_MODE_CAPTURE);
+    CHECK(a.count == 2);
+    CHECK(a.actions[0] == USB_MODE_ACTION_RESUME_CAPTURE);
+    CHECK(a.actions[1] == USB_MODE_ACTION_LED_CARD_FAIL);
+}
+
+static void test_remount_fail_enters_card_fail(void)
+{
+    enter_transfer();
+    usb_mode_handle(USB_MODE_EVENT_DOUBLE_TAP);
+    usb_mode_actions_t a = usb_mode_handle(USB_MODE_EVENT_REMOUNT_FAIL);
+    CHECK(usb_mode_get_state() == USB_MODE_CARD_FAIL);
+    CHECK(a.count == 1);
+    CHECK(a.actions[0] == USB_MODE_ACTION_LED_CARD_FAIL);
+}
+
+/* Design 9.6: a card the firmware cannot mount must still be presentable to
+ * the host, so it can be reformatted without opening the device. Nothing is
+ * mounted in CARD_FAIL, so there is no unmount step. */
+static void test_card_fail_can_still_enter_transfer(void)
+{
+    enter_transfer();
+    usb_mode_handle(USB_MODE_EVENT_DOUBLE_TAP);
+    usb_mode_handle(USB_MODE_EVENT_REMOUNT_FAIL);
+    usb_mode_handle(USB_MODE_EVENT_USB_CONNECTED);
+    usb_mode_actions_t a = usb_mode_handle(USB_MODE_EVENT_DOUBLE_TAP);
+    CHECK(usb_mode_get_state() == USB_MODE_TRANSFER);
+    CHECK(a.count == 2);
+    CHECK(a.actions[0] == USB_MODE_ACTION_START_MSC);
+    CHECK(a.actions[1] == USB_MODE_ACTION_LED_TRANSFER);
+}
+
+static void test_card_fail_without_usb_stays_put(void)
+{
+    enter_transfer();
+    usb_mode_handle(USB_MODE_EVENT_DOUBLE_TAP);
+    usb_mode_handle(USB_MODE_EVENT_REMOUNT_FAIL);
+    usb_mode_handle(USB_MODE_EVENT_USB_DISCONNECTED);
+    usb_mode_actions_t a = usb_mode_handle(USB_MODE_EVENT_DOUBLE_TAP);
+    CHECK(usb_mode_get_state() == USB_MODE_CARD_FAIL);
+    CHECK(a.count == 0);
+}
+
+/* Unplugged while the unmount was still in flight: the host is gone, so there
+ * is nothing to present. Remount and go back to capturing rather than starting
+ * MSC for an absent host. */
+static void test_unplug_during_entering_skips_msc(void)
+{
+    usb_mode_init();
+    usb_mode_handle(USB_MODE_EVENT_USB_CONNECTED);
+    usb_mode_handle(USB_MODE_EVENT_DOUBLE_TAP);
+    usb_mode_handle(USB_MODE_EVENT_USB_DISCONNECTED);
+    usb_mode_actions_t a = usb_mode_handle(USB_MODE_EVENT_UNMOUNT_OK);
+    CHECK(usb_mode_get_state() == USB_MODE_LEAVING);
+    CHECK(a.count == 1);
+    CHECK(a.actions[0] == USB_MODE_ACTION_REMOUNT_FS);
+}
+
+static void test_poweroff_only_allowed_in_capture(void)
+{
+    usb_mode_init();
+    CHECK(usb_mode_allows_poweroff());
+
+    usb_mode_handle(USB_MODE_EVENT_USB_CONNECTED);
+    usb_mode_handle(USB_MODE_EVENT_DOUBLE_TAP);
+    CHECK(!usb_mode_allows_poweroff()); /* ENTERING */
+
+    usb_mode_handle(USB_MODE_EVENT_UNMOUNT_OK);
+    CHECK(!usb_mode_allows_poweroff()); /* TRANSFER */
+
+    usb_mode_handle(USB_MODE_EVENT_DOUBLE_TAP);
+    CHECK(!usb_mode_allows_poweroff()); /* LEAVING */
+
+    usb_mode_handle(USB_MODE_EVENT_REMOUNT_FAIL);
+    CHECK(!usb_mode_allows_poweroff()); /* CARD_FAIL */
+
+    usb_mode_init();
+    usb_mode_handle(USB_MODE_EVENT_USB_CONNECTED);
+    usb_mode_handle(USB_MODE_EVENT_DOUBLE_TAP);
+    usb_mode_handle(USB_MODE_EVENT_UNMOUNT_OK);
+    usb_mode_handle(USB_MODE_EVENT_DOUBLE_TAP);
+    usb_mode_handle(USB_MODE_EVENT_REMOUNT_OK);
+    CHECK(usb_mode_allows_poweroff()); /* back in CAPTURE */
+}
+
 int main(void)
 {
     test_starts_in_capture();
@@ -128,6 +219,12 @@ int main(void)
     test_unplug_leaves_transfer();
     test_remount_ok_resumes_capture();
     test_double_tap_while_leaving_is_ignored();
+    test_unmount_fail_returns_to_capture();
+    test_remount_fail_enters_card_fail();
+    test_card_fail_can_still_enter_transfer();
+    test_card_fail_without_usb_stays_put();
+    test_unplug_during_entering_skips_msc();
+    test_poweroff_only_allowed_in_capture();
 
     if (failures) {
         printf("%d check(s) failed\n", failures);
