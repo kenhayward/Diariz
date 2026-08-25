@@ -129,6 +129,7 @@ export default function PersonVoiceprintTab({ person }: { person: Person }) {
             <li key={r.speakerId} className="rounded border p-3 text-sm dark:border-gray-700">
               <PersonAttributionRow
                 personId={person.id}
+                personName={person.name}
                 attribution={r}
                 sample={samples.find((s) => s.id === r.voiceSampleId) ?? null}
                 diagnosis={diagnosis}

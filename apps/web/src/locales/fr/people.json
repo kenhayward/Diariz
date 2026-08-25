@@ -60,6 +60,8 @@
   "attributionLinkedManual": "Nommé manuellement",
   "attributionNoAccess": "Dans un enregistrement auquel vous n'avez pas accès.",
   "attributionUnlinked": "N'est plus lié à cette personne",
+  "attributionReassignAria": "Changer qui est {{label}} dans {{recording}}",
+  "errReassignFailed": "Impossible de changer qui est ce locuteur.",
   "attributionPlayVoice": "Écouter la voix",
   "attributionPlaySegment": "Écouter le segment",
   "attributionStop": "Arrêter",

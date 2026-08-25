@@ -19,6 +19,7 @@ import { api } from "../lib/api";
 export default function SpeakerAssign({
   label,
   isMulti,
+  ariaLabel,
   displayName,
   width = "w-64",
   subtle = false,
@@ -28,6 +29,10 @@ export default function SpeakerAssign({
 }: {
   label: string;
   isMulti: boolean;
+  /// Overrides the default "Assign {label} to a person". The Voiceprint tab needs it: one person can
+  /// have a SPEAKER_00 in several recordings, so the label alone names more than one control on the
+  /// same screen - ambiguous to a screen reader and to any query that goes looking for one of them.
+  ariaLabel?: string;
   /// Shown on the trigger when no profile is assigned. Defaults to "Unassigned"; the transcript passes the
   /// segment's speaker name so a row keeps reading as it did before the dropdown replaced the plain label.
   displayName?: string;
@@ -62,6 +67,7 @@ export default function SpeakerAssign({
   }, [open, busy]);
 
   const current = isMulti ? t("multipleSpeakers") : (displayName ?? t("unassigned"));
+  const describedAs = ariaLabel ?? t("assignAria", { label });
 
   const q = query.trim();
   // Two characters before querying, so the first keystroke does not fetch most of the directory. The
@@ -95,7 +101,7 @@ export default function SpeakerAssign({
     <div className={`relative ${width}`} ref={ref}>
       <button
         type="button"
-        aria-label={t("assignAria", { label })}
+        aria-label={describedAs}
         aria-haspopup="listbox"
         aria-expanded={open}
         disabled={busy}
@@ -128,7 +134,7 @@ export default function SpeakerAssign({
             autoFocus
             role="combobox"
             aria-expanded
-            aria-label={t("assignAria", { label })}
+            aria-label={describedAs}
             value={query}
             placeholder={t("assignTypeaheadPlaceholder")}
             onChange={(e) => setQuery(e.target.value)}
