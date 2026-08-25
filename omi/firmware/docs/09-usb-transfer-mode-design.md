@@ -64,20 +64,27 @@ the host's operating system away from the card unless you deliberately asked for
 particular writes `System Volume Information` and indexing data to every volume it mounts.
 
 **Double-tap enters transfer mode.** Recording stops, the filesystem is unmounted, and the card
-appears on the host as a removable drive, signalled by a **steady blue** LED.
+appears on the host as a removable drive, signalled by a **blinking blue** LED.
 
-Blue is chosen because it is the only colour free during normal operation:
+No colour is free. `main.c` drives the LEDs from a 500 ms ticker in the main loop
+(`set_led_state()`), and every colour already carries a steady-state meaning:
 
 | Signal | Meaning | Status |
 |---|---|---|
 | Red, green, blue, white in sequence | Boot | Existing |
-| Green, steady | Charging | Existing |
+| Blue, steady | Recording, BLE connected | Existing |
+| Red, steady | Recording, BLE disconnected | Existing |
+| Green, blinking | Charging (toggled on the 500 ms tick) | Existing |
 | Red, six blinks | Card unmountable | Existing |
-| **Blue, steady** | **Transfer mode** | **New** |
+| **Blue, blinking, with red and green forced off** | **Transfer mode** | **New** |
 
-Note that transfer mode implies a USB connection, so the charging green will usually be lit at
-the same time - the device will read as cyan rather than pure blue. That is acceptable, since no
-other state combines the two, but it is worth knowing before someone reports it as a bug.
+Blinking blue is unambiguous because nothing else blinks blue, and forcing green off
+distinguishes it from every charging state - which matters, because transfer mode always implies
+a USB connection and so would otherwise always show the charging blink too.
+
+This carries an implementation constraint: **`set_led_state()` must be suppressed while in
+transfer mode.** It runs every 500 ms from the main loop and would otherwise overwrite the
+pattern on the next tick. The mode is the authority on the LED whenever it is not `CAPTURE`.
 
 **Double-tap again, or unplug, returns to capture.** The toggle means you can leave transfer
 mode without unplugging.
