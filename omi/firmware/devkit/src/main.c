@@ -12,6 +12,7 @@
 #include "storage.h"
 #include "transport.h"
 #include "usb.h"
+#include "usb_mode.h"
 #include "utils.h"
 #include "wdog_facade.h"
 #define BOOT_BLINK_DURATION_MS 600
@@ -95,6 +96,62 @@ static void boot_led_sequence(void)
     set_led_red(false);
     set_led_green(false);
     set_led_blue(false);
+}
+
+/*
+ * Performs the actions the state machine asks for, and feeds back the results
+ * of the ones that can fail. Ordering is the state machine's business, not
+ * ours - do exactly what it says, in the order it says.
+ *
+ * The recursion is bounded: UNMOUNT_FS and REMOUNT_FS are only ever emitted
+ * from states that cannot emit them again in response to the result event, so
+ * it never nests more than two deep.
+ */
+void usb_mode_dispatch(usb_mode_event_t event)
+{
+    usb_mode_actions_t a = usb_mode_handle(event);
+
+    for (uint8_t i = 0; i < a.count; i++) {
+        switch (a.actions[i]) {
+        case USB_MODE_ACTION_STOP_CAPTURE:
+            mic_off();
+            break;
+
+        case USB_MODE_ACTION_RESUME_CAPTURE:
+            mic_on();
+            break;
+
+        case USB_MODE_ACTION_UNMOUNT_FS:
+            if (unmount_sd_card() == 0) {
+                usb_mode_dispatch(USB_MODE_EVENT_UNMOUNT_OK);
+            } else {
+                usb_mode_dispatch(USB_MODE_EVENT_UNMOUNT_FAIL);
+            }
+            break;
+
+        case USB_MODE_ACTION_REMOUNT_FS:
+            if (mount_sd_card() == 0) {
+                usb_mode_dispatch(USB_MODE_EVENT_REMOUNT_OK);
+            } else {
+                usb_mode_dispatch(USB_MODE_EVENT_REMOUNT_FAIL);
+            }
+            break;
+
+        case USB_MODE_ACTION_START_MSC:
+            usb_msc_start();
+            break;
+
+        case USB_MODE_ACTION_STOP_MSC:
+            usb_msc_stop();
+            break;
+
+        case USB_MODE_ACTION_LED_CAPTURE:
+        case USB_MODE_ACTION_LED_TRANSFER:
+        case USB_MODE_ACTION_LED_CARD_FAIL:
+            /* Handled in Task 9. */
+            break;
+        }
+    }
 }
 
 void set_led_state()
@@ -360,6 +417,8 @@ int main(void)
     set_led_blue(true);
     k_msleep(1000);
     set_led_blue(false);
+
+    usb_mode_init();
 
     // Main loop
     LOG_PRINTK("\n");

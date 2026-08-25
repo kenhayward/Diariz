@@ -15,6 +15,10 @@
 #include "sdcard.h"
 #include "speaker.h"
 #include "transport.h"
+#include "usb_mode.h"
+
+/* Defined in main.c, which owns performing the actions. */
+extern void usb_mode_dispatch(usb_mode_event_t event);
 #include "wdog_facade.h"
 LOG_MODULE_REGISTER(button, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -234,6 +238,7 @@ void check_button_level(struct k_work *work_item)
         LOG_PRINTK("double tap detected\n");
         btn_last_event = event;
         notify_double_tap();
+        usb_mode_dispatch(USB_MODE_EVENT_DOUBLE_TAP);
     }
 
     // Long press, one time event
@@ -241,10 +246,15 @@ void check_button_level(struct k_work *work_item)
         LOG_PRINTK("long press detected\n");
         btn_last_event = event;
 
-        // Enter the low power mode
-        is_off = true;
-        bt_off();
-        turnoff_all();
+        if (!usb_mode_allows_poweroff()) {
+            /* Powering down now would pull storage out from under the host. */
+            LOG_WRN("power off ignored: USB transfer in progress");
+        } else {
+            // Enter the low power mode
+            is_off = true;
+            bt_off();
+            turnoff_all();
+        }
     }
 
     // Releases, one time event

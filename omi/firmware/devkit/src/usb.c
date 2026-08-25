@@ -8,19 +8,25 @@
 #include "speaker.h"
 #include "transport.h"
 #include "usb.h"
+#include "usb_mode.h"
 LOG_MODULE_REGISTER(usb, CONFIG_LOG_DEFAULT_LEVEL);
 
 // add all device drivers here?
 bool usb_charge = false;
+
+/* Defined in main.c, which owns performing the actions. */
+extern void usb_mode_dispatch(usb_mode_event_t event);
 
 usb_dc_status_callback udc_status_cb(enum usb_dc_status_code status, const uint8_t *param)
 {
     switch (status) {
     case USB_DC_CONNECTED:
         usb_charge = true;
+        usb_mode_dispatch(USB_MODE_EVENT_USB_CONNECTED);
         break;
     case USB_DC_DISCONNECTED:
         usb_charge = false;
+        usb_mode_dispatch(USB_MODE_EVENT_USB_DISCONNECTED);
         break;
     default:
         usb_charge = true;
