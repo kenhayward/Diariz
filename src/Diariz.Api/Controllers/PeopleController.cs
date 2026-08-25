@@ -210,6 +210,133 @@ public class PeopleController : ControllerBase
         return new PersonDetailDto(ToDto(person, await CanManagePeopleAsync()), identifiedCount, samples);
     }
 
+    [HttpGet("{id:guid}/attributions")]
+    [EndpointSummary("List the speakers attributed to a person")]
+    [EndpointDescription(
+        "Every recording-speaker currently identified as this person, whether or not it trains their " +
+        "voiceprint. Automatic identification links a speaker **without** creating a voice sample, so this " +
+        "is a strictly larger set than the samples returned by `GET /api/people/{id}` - which is why a list " +
+        "built from samples alone looked arbitrary.\n\n" +
+        "`canAccessRecording` is false when you neither own the recording nor hold **Manage voiceprints**. " +
+        "The row is still listed, because it is part of what the voiceprint learned from, but its " +
+        "transcript and audio are not available to you.")]
+    public async Task<ActionResult<IReadOnlyList<PersonAttributionDto>>> Attributions(Guid id)
+    {
+        if (!await CanManagePeopleAsync()) return Forbid();
+        if (!await _db.People.AnyAsync(p => p.Id == id)) return NotFound();
+
+        var speakers = await _db.Speakers
+            .Where(s => s.PersonId == id)
+            .Select(s => new { s.Id, s.RecordingId, s.Label, s.IdentifiedAuto, s.IsMultiSpeaker })
+            .ToListAsync();
+
+        var recIds = speakers.Select(s => s.RecordingId).Distinct().ToList();
+
+        var recordings = await _db.Recordings
+            .Where(r => recIds.Contains(r.Id))
+            .Select(r => new { r.Id, r.UserId, Display = r.Name ?? r.Title })
+            .ToListAsync();
+
+        // Cross-owner access is exactly what ManageVoiceprints grants. Without it the row is still listed -
+        // it is part of the training provenance - but inert.
+        var canAssess = await _permissions.HasAsync(UserId, PlatformPermission.ManageVoiceprints);
+        var accessible = recordings
+            .Where(r => canAssess || r.UserId == UserId)
+            .Select(r => r.Id)
+            .ToHashSet();
+
+        // Speech per speaker comes from the current transcription's segments, which the API already stores -
+        // no worker involvement, and the same figure a minimum-duration gate would read.
+        var currentTr = (await _db.Transcriptions
+                .Where(t => recIds.Contains(t.RecordingId))
+                .Select(t => new { t.Id, t.RecordingId, t.Version })
+                .ToListAsync())
+            .GroupBy(t => t.RecordingId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(t => t.Version).First().Id);
+
+        var trIds = currentTr.Values.ToList();
+        var speech = (await _db.Segments
+                .Where(s => trIds.Contains(s.TranscriptionId))
+                .Select(s => new { s.TranscriptionId, s.SpeakerLabel, s.StartMs, s.EndMs })
+                .ToListAsync())
+            .GroupBy(s => (s.TranscriptionId, s.SpeakerLabel))
+            .ToDictionary(g => g.Key, g => g.Sum(s => Math.Max(0, s.EndMs - s.StartMs)));
+
+        long SpeechFor(Guid recordingId, string label) =>
+            currentTr.TryGetValue(recordingId, out var trId) && speech.TryGetValue((trId, label), out var ms)
+                ? ms
+                : 0;
+
+        var samples = await _db.VoiceSamples.Where(v => v.PersonId == id).ToListAsync();
+
+        return Ok(PersonAttributions.Build(
+            speakers
+                .Select(s => new AttributionInput(
+                    s.Id, s.RecordingId, s.Label, s.IdentifiedAuto, s.IsMultiSpeaker,
+                    SpeechFor(s.RecordingId, s.Label)))
+                .ToList(),
+            samples,
+            recordings.ToDictionary(r => r.Id, r => r.Display),
+            accessible));
+    }
+
+    [HttpPut("{id:guid}/attributions/{speakerId:guid}/training")]
+    [EndpointSummary("Include or exclude a speaker from a person's voiceprint")]
+    [EndpointDescription(
+        "Adds a speaker already attributed to this person into their voiceprint training set, or removes " +
+        "it. Adding needs no re-transcription: the speaker's embedding was computed when the recording was " +
+        "transcribed.\n\n" +
+        "Removing **excludes rather than deletes** the sample, so the record that someone identified this " +
+        "speaker as this person survives and re-including it is a toggle. **409 when the person has opted " +
+        "out** of voice-printing, or when the speaker is marked as overlapping speech.")]
+    public async Task<IActionResult> SetTraining(Guid id, Guid speakerId, SetTrainingRequest req)
+    {
+        var person = await _db.People.FirstOrDefaultAsync(p => p.Id == id);
+        if (person is null) return NotFound();
+        if (!await CanManageBiometricsAsync(person)) return Forbid();
+
+        var speaker = await _db.Speakers.FirstOrDefaultAsync(s => s.Id == speakerId && s.PersonId == id);
+        if (speaker is null) return NotFound();
+
+        var sample = await _db.VoiceSamples
+            .FirstOrDefaultAsync(v => v.PersonId == id && v.SpeakerId == speakerId);
+
+        if (req.Training)
+        {
+            if (person.VoiceprintOptOut) return Conflict("This person has opted out of voice-printing.");
+            if (speaker.IsMultiSpeaker)
+                return Conflict("Overlapping speech cannot train a single person's voiceprint.");
+
+            if (sample is null)
+            {
+                if (speaker.Embedding is null)
+                    return BadRequest("This speaker has no voice embedding yet (re-transcribe to compute one).");
+                _db.VoiceSamples.Add(new VoiceSample
+                {
+                    Id = Guid.NewGuid(),
+                    PersonId = id,
+                    SpeakerId = speakerId,
+                    RecordingId = speaker.RecordingId,
+                    Embedding = speaker.Embedding,
+                });
+            }
+            else
+            {
+                sample.ExcludedAt = null;
+            }
+        }
+        else
+        {
+            if (sample is null) return NoContent(); // already not training; nothing to record
+            // UTC, or Npgsql rejects it for the timestamptz column at SaveChanges.
+            sample.ExcludedAt = DateTimeOffset.UtcNow;
+        }
+
+        await _db.SaveChangesAsync();
+        await _people.RecomputeVoiceprintAsync(id);
+        return NoContent();
+    }
+
     [HttpGet("duplicates")]
     [EndpointSummary("Find likely duplicate people")]
     [EndpointDescription(

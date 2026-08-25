@@ -96,7 +96,13 @@ public class PeopleDirectory(DiarizDbContext db) : IPeopleDirectory
         var person = await db.People.FirstOrDefaultAsync(p => p.Id == personId, ct);
         if (person is null) return;
 
-        var samples = await db.VoiceSamples.Where(v => v.PersonId == personId).ToListAsync(ct);
+        // Excluded samples are kept as a record of who asserted what, but must not reach the average -
+        // otherwise dropping one from training is cosmetic: the row reads "not training" while the vector it
+        // contributed is still inside the centroid. SampleCount is derived from the same list, so the figure
+        // the UI shows and the audio actually behind the voiceprint cannot disagree.
+        var samples = await db.VoiceSamples
+            .Where(v => v.PersonId == personId && v.ExcludedAt == null)
+            .ToListAsync(ct);
 
         // Embedding is Ignore'd under the in-memory provider, so a sample's vector can be null there even
         // though the column is NOT NULL on Postgres. Centroid returns null for an empty set either way.

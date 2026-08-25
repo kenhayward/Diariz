@@ -2547,6 +2547,60 @@
         ],
         "type": "object"
       },
+      "PersonAttributionDto": {
+        "properties": {
+          "canAccessRecording": {
+            "type": "boolean"
+          },
+          "isTraining": {
+            "type": "boolean"
+          },
+          "linkedBy": {
+            "type": "string"
+          },
+          "recordingId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "recordingName": {
+            "type": "string"
+          },
+          "speakerId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "speakerLabel": {
+            "type": "string"
+          },
+          "speechMs": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "voiceSampleId": {
+            "format": "uuid",
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "speakerId",
+          "recordingId",
+          "recordingName",
+          "speakerLabel",
+          "linkedBy",
+          "isTraining",
+          "voiceSampleId",
+          "speechMs",
+          "canAccessRecording"
+        ],
+        "type": "object"
+      },
       "PersonDetailDto": {
         "properties": {
           "identifiedCount": {
@@ -4100,6 +4154,17 @@
         },
         "required": [
           "tag"
+        ],
+        "type": "object"
+      },
+      "SetTrainingRequest": {
+        "properties": {
+          "training": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "training"
         ],
         "type": "object"
       },
@@ -8429,6 +8494,111 @@
           }
         },
         "summary": "Edit a person",
+        "tags": [
+          "People"
+        ]
+      }
+    },
+    "/api/people/{id}/attributions": {
+      "get": {
+        "description": "Every recording-speaker currently identified as this person, whether or not it trains their voiceprint. Automatic identification links a speaker **without** creating a voice sample, so this is a strictly larger set than the samples returned by `GET /api/people/{id}` - which is why a list built from samples alone looked arbitrary.\n\n`canAccessRecording` is false when you neither own the recording nor hold **Manage voiceprints**. The row is still listed, because it is part of what the voiceprint learned from, but its transcript and audio are not available to you.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PersonAttributionDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PersonAttributionDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PersonAttributionDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List the speakers attributed to a person",
+        "tags": [
+          "People"
+        ]
+      }
+    },
+    "/api/people/{id}/attributions/{speakerId}/training": {
+      "put": {
+        "description": "Adds a speaker already attributed to this person into their voiceprint training set, or removes it. Adding needs no re-transcription: the speaker's embedding was computed when the recording was transcribed.\n\nRemoving **excludes rather than deletes** the sample, so the record that someone identified this speaker as this person survives and re-including it is a toggle. **409 when the person has opted out** of voice-printing, or when the speaker is marked as overlapping speech.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "speakerId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetTrainingRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetTrainingRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetTrainingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Include or exclude a speaker from a person's voiceprint",
         "tags": [
           "People"
         ]
