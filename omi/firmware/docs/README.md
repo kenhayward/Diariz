@@ -16,6 +16,22 @@ Nothing in this folder changes the firmware. It is analysis only.
 | [04-offline-storage.md](04-offline-storage.md) | The raw SD ring buffer, capacity and timing maths, sync behaviour |
 | [05-findings.md](05-findings.md) | Bugs, hazards, dead code, config conflicts and security posture found during review |
 | [06-repurposing-for-diariz.md](06-repurposing-for-diariz.md) | Options for offline capture -> Diariz upload, ranked by effort |
+| [07-devkit2-target.md](07-devkit2-target.md) | **The device we actually built.** DevKit 2 specifics, and the plan as revised for it |
+
+## Which device this project targets
+
+**Omi DevKit 2** - a Seeed Studio XIAO nRF52840 Sense with a 128 GB microSD card.
+
+Docs 01-06 were written before that was confirmed and describe the **consumer CV1** (nRF5340)
+unless they say otherwise. They remain accurate for the CV1 and are worth reading for
+background - the audio pipeline, Opus settings, 440-byte block packing and BLE audio service
+are shared - but where the two devices differ,
+**[07-devkit2-target.md](07-devkit2-target.md) is authoritative**.
+
+The headline differences: the DevKit stores to a **removable, FAT/exFAT-formatted card you can
+read directly on a PC** rather than a raw block-level ring buffer, which removes the need for a
+BLE sync client entirely. In exchange it has **no clock of any kind** and **no silence gating**,
+so it produces one endless untimestamped file that has to be split host-side.
 
 ## One paragraph summary
 

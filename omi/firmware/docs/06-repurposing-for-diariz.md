@@ -1,5 +1,15 @@
 # 6. Repurposing the device for offline ambient capture into Diariz
 
+> **Superseded for our hardware.** This document was written before the target device was
+> confirmed. We built an **Omi DevKit 2** (XIAO nRF52840 Sense, 128 GB microSD), for which
+> **[07-devkit2-target.md](07-devkit2-target.md) is the authoritative plan**. On that device
+> the removable card can be read directly on a PC, so Option A below (the BLE sync client) is
+> **not needed** and Option C (Wi-Fi) is **not possible** - there is no nRF7002 on a XIAO.
+>
+> Keep this file for the consumer CV1 analysis and for the parts that carry over: the Ogg Opus
+> remux argument in 6.3, the Diariz upload mechanics, and the security changes in 6.4 (B4/B5),
+> which apply to any Omi-derived firmware.
+
 The goal: wear the device, let it record ambiently with no phone involved, then later pull the
 audio off and get it into Diariz as a recording that goes through the normal
 transcribe -> diarize -> summarise pipeline.
@@ -146,28 +156,37 @@ week; Option C is a project.
 
 ## 6.6 If your hardware is a DevKit rather than the consumer device
 
-Check what you actually built. If it is a **Seeed XIAO nRF52840 Sense** based DevKit1/DevKit2
-rather than the nRF5340 consumer board, everything changes for the better:
+**This is our case - confirmed DevKit 2. See [07-devkit2-target.md](07-devkit2-target.md) for
+the full treatment; the sketch below is what prompted it.**
 
-- Storage is a **FAT filesystem on a removable microSD**, at `/SD:/audio/aNN.txt`.
+If it is a **Seeed XIAO nRF52840 Sense** based DevKit1/DevKit2 rather than the nRF5340 consumer
+board, everything changes for the better:
+
+- Storage is a **FAT/exFAT filesystem on a removable microSD**, at `/SD:/audio/aNN.txt`.
 - You can eject the card, read it on a PC, and skip BLE entirely.
-- The frame layout is the DevKit's 3-byte prefix + 80-byte padded Opus entry, and
-  `scripts/devkit/decode_audio.py` is a (crude but working) starting point for decoding it.
 
 In that case Option A collapses to "copy files off the card, decode, upload", and none of F1,
-F2, F4 or the ring protocol applies. Confirm which board you have before writing any client:
-the consumer app advertises as `Omi` and reports DIS model `Omi CV 1`; the DevKit build
-advertises as `Omi DevKit 2`.
+F2, F4 or the ring protocol applies. To tell the boards apart over BLE: the consumer app
+advertises as `Omi` and reports DIS model `Omi CV 1`; the DevKit build advertises as
+`Omi DevKit 2`.
+
+One correction to an earlier assumption: `scripts/devkit/decode_audio.py` is **not** a working
+starting point even for the DevKit. It parses a fixed 83-byte stride (3-byte prefix plus an
+80-byte padded frame), which is the *older* DevKit layout, still visible commented out at
+`devkit/src/transport.c:619-635`. The live DevKit code writes the same 440-byte packed blocks
+as the CV1. Use the decoder in [07-devkit2-target.md](07-devkit2-target.md) section 7.2.
 
 ## 6.7 Suggested order of work
 
-1. Confirm which hardware you built (`Omi` vs `Omi DevKit 2` over BLE, or by the SoC).
-2. Consumer device: **B5 + B4** first if it will be worn outside your home, so you are not
+Superseded by [07-devkit2-target.md](07-devkit2-target.md) section 7.6 now that the target is
+known to be a DevKit 2. Retained for the CV1:
+
+1. Consumer device: **B5 + B4** first if it will be worn outside your home, so you are not
    running an open microphone.
-3. Write the Option A sync client. Prove the decode against a short known recording before
+2. Write the Option A sync client. Prove the decode against a short known recording before
    trusting a long one - the F13 block-boundary guard is the thing most likely to be wrong.
-4. Add **B1** and **B3** to the firmware once you have a build environment working; they are
+3. Add **B1** and **B3** to the firmware once you have a build environment working; they are
    small and they remove the two silent-data-loss paths.
-5. Wire the client's output into `POST /api/recordings` with proper `startedAt`/`endedAt` so
+4. Wire the client's output into `POST /api/recordings` with proper `startedAt`/`endedAt` so
    Diariz timelines line up with reality.
-6. Only then consider Option C.
+5. Only then consider Option C.

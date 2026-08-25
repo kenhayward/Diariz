@@ -193,9 +193,11 @@ commands 0/1/2/3) against the **same** storage service UUIDs the consumer device
 ring protocol (commands 0x10-0x13). A CV1 device will answer every one of those writes with
 `ACK status 6` (invalid command).
 
-`decode_audio.py` parses a fixed 83-byte stride, which is the DevKit's 3-byte prefix plus
-80-byte padded Opus entry - not the consumer device's 444-byte ring packet.
-`get_audio_file.py` also has a hard-coded macOS device UUID.
+`decode_audio.py` parses a fixed 83-byte stride, which matches neither device: it is an
+*older* DevKit layout (3-byte prefix plus 80-byte padded entry), still visible commented out at
+`devkit/src/transport.c:619-635`. The current DevKit writes 440-byte packed blocks and the
+consumer device writes 444-byte ring packets. `get_audio_file.py` also has a hard-coded macOS
+device UUID.
 
 *Implication:* there is **no working reference client for offline retrieval from the consumer
 device in this tree.** One has to be written. The recipe is in
