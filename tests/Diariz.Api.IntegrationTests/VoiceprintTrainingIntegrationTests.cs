@@ -1,8 +1,12 @@
+using Diariz.Api.Contracts;
+using Diariz.Api.Controllers;
 using Diariz.Api.IntegrationTests.Infrastructure;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging.Abstractions;
 using Pgvector;
 
 namespace Diariz.Api.IntegrationTests;
@@ -28,6 +32,14 @@ public class VoiceprintTrainingIntegrationTests(ContainersFixture fx)
         v[i] = 1f;
         return new Vector(v);
     }
+
+    private static PeopleController Controller(DiarizDbContext db, Guid userId) =>
+        new(db, new RoomScope(db), new PeopleDirectory(db), new UserPermissions(db), new FakeJobQueue(),
+            new FakeAudioClipper(), new FakeAudioStorage(), NullLogger<PeopleController>.Instance,
+            new PlatformSettingsService(db))
+        {
+            ControllerContext = Http.Context(userId),
+        };
 
     /// <summary>A person with two orthogonal samples in one recording. The second speaker's link is decided
     /// by the caller from the person's own id, so each test varies exactly one clause of the rule: unlinked,
@@ -127,5 +139,47 @@ public class VoiceprintTrainingIntegrationTests(ContainersFixture fx)
         await new PeopleDirectory(db).RecomputeVoiceprintAsync(personId);
 
         AssertOnlyTheLinkedSampleCounted((await db.People.FindAsync(personId))!);
+    }
+
+    [Fact]
+    public async Task Diagnostics_measure_against_the_same_set_the_centroid_uses()
+    {
+        // The bug that made the Diagnostics tab unusable. It listed samples; the Voiceprint tab listed
+        // linked speakers. A sample whose speaker had been unlinked was therefore diagnosed on a screen
+        // that offered no way to reach it - which is exactly what the live instance showed for the
+        // top-ranked person.
+        var (personId, userId) = await SeedAsync(_ => null);
+
+        await using var db = fx.CreateDbContext();
+        var result = await Controller(db, userId).Diagnostics(personId);
+        var body = Assert.IsType<VoiceprintDiagnosticsDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+
+        // Both samples are still listed - hiding one is how it survived unnoticed - but only the linked
+        // one trains, so there is no pair and therefore nothing that can be an outlier.
+        Assert.Equal(2, body.Samples.Count);
+        Assert.Equal(1, body.Samples.Count(x => x.IsTraining));
+        Assert.Equal(0, body.AloneCount);
+        Assert.Null(body.WidestPair);
+    }
+
+    [Fact]
+    public async Task The_health_ranking_measures_against_the_same_set_too()
+    {
+        // One training sample is not a training set. Ranking this person as scattered would send someone to
+        // review a problem that does not exist, which is the failure mode a ranking cannot afford.
+        var (moved, userId) = await SeedAsync(_ => null);
+
+        // A genuinely scattered control, seeded identically except that both speakers stay linked. Without
+        // it an empty ranking would satisfy the assertion below for entirely the wrong reason - the endpoint
+        // returns early when nobody qualifies.
+        var (scattered, _) = await SeedAsync(self => self);
+
+        await using var db = fx.CreateDbContext();
+        var result = await Controller(db, userId).DirectoryDiagnostics();
+        var rows = Assert.IsAssignableFrom<IReadOnlyList<PersonDiagnosticsSummaryDto>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+
+        Assert.Contains(rows, r => r.PersonId == scattered);
+        Assert.DoesNotContain(rows, r => r.PersonId == moved);
     }
 }
