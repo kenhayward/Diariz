@@ -3,6 +3,7 @@ import SpeakerAssign from "../SpeakerAssign";
 import ToolbarButton from "../ToolbarButton";
 import { PencilIcon, PlayIcon, PauseIcon, TrashIcon } from "./icons";
 import { contactSummary } from "../SpeakerContactCard";
+import SpeakerSuggestionPrompt from "./SpeakerSuggestionPrompt";
 import { formatDuration } from "../../lib/format";
 import type { SpeakerInfo } from "../../lib/types";
 
@@ -23,6 +24,7 @@ export default function SpeakerRow({
   onMulti,
   canManagePeople,
   onEditPerson,
+  onSuggestionDecided,
 }: {
   label: string;
   info: SpeakerInfo | undefined;
@@ -40,6 +42,8 @@ export default function SpeakerRow({
   onMulti: () => void;
   canManagePeople: boolean;
   onEditPerson: () => void;
+  /// Refetch the recording: the speaker is now named, or the question is gone.
+  onSuggestionDecided: () => void;
 }) {
   const { t } = useTranslation("workspace");
   // The display name for the per-speaker action labels (the assignment typeahead owns the editing UI).
@@ -149,6 +153,14 @@ export default function SpeakerRow({
         )}
         <ToolbarButton label={t("deleteSpeaker", { label: name })} icon={TrashIcon} onClick={() => onDelete(name)} />
       </div>
+      {/* A borderline voice match, asked where the words and the audio already are. `basis-full` drops it
+          onto its own line of the wrapping row rather than competing with the toolbar for width. It stops
+          click propagation like the other controls, so answering does not also toggle the row. */}
+      {info?.suggestedPersonId && (
+        <div className="basis-full" onClick={stop} onKeyDown={stop}>
+          <SpeakerSuggestionPrompt speakerId={info.id} info={info} onDecided={onSuggestionDecided} />
+        </div>
+      )}
     </div>
   );
 }

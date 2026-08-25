@@ -4357,6 +4357,10 @@
             "default": false,
             "type": "boolean"
           },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
           "identifiedAuto": {
             "type": "boolean"
           },
@@ -4386,6 +4390,28 @@
               "string"
             ]
           },
+          "suggestedDistance": {
+            "format": "double",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ]
+          },
+          "suggestedPersonId": {
+            "format": "uuid",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "suggestedPersonName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "title": {
             "type": [
               "null",
@@ -4394,6 +4420,7 @@
           }
         },
         "required": [
+          "id",
           "label",
           "displayName",
           "personId",

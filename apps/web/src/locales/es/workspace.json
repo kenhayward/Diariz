@@ -729,5 +729,14 @@
   "spokenLanguage": "Idioma hablado",
   "spokenLanguageAuto": "- Detectar automaticamente -",
   "spokenLanguageHint": "Definalo cuando la transcripcion salga en el idioma equivocado. La deteccion lee el inicio de la grabacion, por lo que un comienzo silencioso puede interpretarse mal.",
-  "screenshotsDragHint": "Arrastre una captura al cuadro del chat para analizar la imagen"
+  "screenshotsDragHint": "Arrastre una captura al cuadro del chat para analizar la imagen",
+  "suggestionAsk": "Podría ser {{name}} - ¿es así?",
+  "suggestionYes": "Sí",
+  "suggestionNo": "No",
+  "suggestionFailed": "No se pudo guardar esa respuesta.",
+  "suggestionsTitle": "Voces por confirmar",
+  "suggestionsIntro": "Diariz reconoció estas voces pero no con suficiente seguridad para nombrarlas. Confirmar entrena la huella de voz; un rechazo se recuerda, así que la misma voz no se vuelve a proponer.",
+  "suggestionsNone": "No hay nada por confirmar.",
+  "suggestionsFailed": "No se pudo cargar la lista.",
+  "voicesToConfirm": "Voces por confirmar"
 }

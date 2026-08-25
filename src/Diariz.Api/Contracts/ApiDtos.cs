@@ -597,13 +597,20 @@ public record SetVoiceprintOptOutRequest(bool OptOut);
 /// call per speaker. They are all null for an anonymous speaker, and for a "Multiple Speakers" slot, which
 /// is by definition not one person.</para></summary>
 public record SpeakerInfoDto(
+    Guid Id,
     string Label, string DisplayName, Guid? PersonId, bool IdentifiedAuto, bool IsMultiSpeaker = false,
     string? Title = null, string? CompanyName = null, string? Email = null, string? Phone = null,
     bool? IsInternal = null,
     /// <summary>A segment was moved into or out of this speaker, so its stored voiceprint no longer
     /// describes the audio it is attributed to. Nothing recomputes on its own - that needs the worker and
     /// the original audio - so this is what tells the user it is worth doing.</summary>
-    bool EmbeddingStale = false);
+    bool EmbeddingStale = false,
+    /// <summary>A person this speaker may be, close enough to ask about but not to apply. Null unless a
+    /// suggestion is pending; when set, the speaker is still anonymous.</summary>
+    Guid? SuggestedPersonId = null,
+    string? SuggestedPersonName = null,
+    /// <summary>Cosine distance to the suggested person, lower is closer.</summary>
+    double? SuggestedDistance = null);
 
 /// <summary>Move one segment to a different speaker. A null <see cref="Label"/> asks the API to mint a new
 /// speaker for this recording: the interrupting voice often has no diarization slot of its own, and the

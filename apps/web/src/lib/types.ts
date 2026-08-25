@@ -259,6 +259,7 @@ export interface TranscriptionDto {
 /// A diarized speaker in a recording: its label, shown name, the enrolled voiceprint it's
 /// linked to (if any), and whether the name was applied automatically by identification.
 export interface SpeakerInfo {
+  id: string;
   label: string;
   displayName: string;
   personId: string | null;
@@ -276,6 +277,12 @@ export interface SpeakerInfo {
   /// A segment was moved into or out of this speaker, so its stored voiceprint no longer describes the
   /// audio attributed to it. Nothing recomputes on its own - this is what prompts the user to.
   embeddingStale: boolean;
+  /// A person this speaker may be - close enough to ask about, not close enough to apply. Null unless a
+  /// suggestion is pending; while one is, the speaker is still anonymous.
+  suggestedPersonId: string | null;
+  suggestedPersonName: string | null;
+  /// Cosine distance to the suggested person, lower is closer.
+  suggestedDistance: number | null;
 }
 
 /// Someone who appears in meetings. Platform-wide, and the voiceprint is optional: `hasVoiceprint` is false
@@ -350,6 +357,20 @@ export interface AttributionSegment {
   startMs: number;
   endMs: number;
   text: string;
+}
+
+/// A voice Diariz thinks it recognises but is not confident enough to name unasked.
+export interface SpeakerSuggestion {
+  speakerId: string;
+  recordingId: string;
+  recordingName: string;
+  speakerLabel: string;
+  personId: string;
+  personName: string;
+  /// Cosine distance, lower is closer.
+  distance: number;
+  speechMs: number;
+  suggestedAt: string;
 }
 
 /// A group of people who look like the same human. `reason` is "email" or "name".

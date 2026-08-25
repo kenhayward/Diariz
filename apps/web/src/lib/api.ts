@@ -72,6 +72,7 @@ import type {
   PersonDetail,
   PersonDuplicateGroup,
   PersonAttribution,
+  SpeakerSuggestion,
   AttributionSegment,
   GoogleCalendarListItem,
   Group,
@@ -905,6 +906,20 @@ export const api = {
       responseType: "blob",
     });
     return data as Blob;
+  },
+
+  /// Voices awaiting confirmation, in your own recordings only.
+  async getSpeakerSuggestions(): Promise<SpeakerSuggestion[]> {
+    const { data } = await http.get<SpeakerSuggestion[]>("/api/speaker-suggestions");
+    return data;
+  },
+
+  async acceptSpeakerSuggestion(speakerId: string): Promise<void> {
+    await http.post(`/api/speaker-suggestions/${speakerId}/accept`);
+  },
+
+  async rejectSpeakerSuggestion(speakerId: string): Promise<void> {
+    await http.post(`/api/speaker-suggestions/${speakerId}/reject`);
   },
 
   async findPersonDuplicates(): Promise<PersonDuplicateGroup[]> {

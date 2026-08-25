@@ -729,5 +729,14 @@
   "spokenLanguage": "Spoken language",
   "spokenLanguageAuto": "- Detect automatically -",
   "spokenLanguageHint": "Set this when the transcript came back in the wrong language. Detection reads the start of the recording, so a quiet opening can be misread.",
-  "screenshotsDragHint": "Drag and drop a screenshot to the chat prompt for image analysis"
+  "screenshotsDragHint": "Drag and drop a screenshot to the chat prompt for image analysis",
+  "suggestionAsk": "Might be {{name}} - is it?",
+  "suggestionYes": "Yes",
+  "suggestionNo": "No",
+  "suggestionFailed": "Could not save that answer.",
+  "suggestionsTitle": "Voices to confirm",
+  "suggestionsIntro": "Diariz recognised these voices but was not confident enough to name them. Confirming one teaches the voiceprint; declining is remembered, so the same voice is not offered again.",
+  "suggestionsNone": "Nothing waiting to be confirmed.",
+  "suggestionsFailed": "Could not load the list.",
+  "voicesToConfirm": "Voices to confirm"
 }
