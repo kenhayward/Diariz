@@ -55,13 +55,27 @@ echo -e "${YELLOW}This might take a while the first time.${NC}"
 
 # Run the Docker container with the repository mounted correctly
 # Rely on the environment variables set within the ghcr.io/zephyrproject-rtos/ci image
+# Overridable so a broken `latest` can be worked around without editing this script.
+# The tag is unpinned by default, which means upstream image changes can break the build
+# - see the runbook, section 8.2.
+ZEPHYR_CI_IMAGE="${ZEPHYR_CI_IMAGE:-ghcr.io/zephyrproject-rtos/ci:latest}"
+echo -e "${YELLOW}Image: ${ZEPHYR_CI_IMAGE}${NC}"
+
+# Two things here are deliberate:
+#
+# 1. PATH is NOT passed with -e. Doing that replaces the image's own PATH with the HOST's,
+#    which on Git Bash is a list of Windows paths that mean nothing inside the container -
+#    so west/cmake/ninja stop being found. Prepend inside the container instead, in single
+#    quotes so $PATH expands there and not here.
+# 2. adafruit-nrfutil is installed by the inner script, not chained onto it with &&. It is
+#    only needed for the optional OTA package, and newer CI images ship a PEP 668
+#    "externally managed" Python that refuses a plain pip install - which used to abort the
+#    whole build before a single line was compiled.
 docker run --rm -it $PLATFORM_FLAG \
     -v "$REPO_ROOT:/omi" \
     -e CMAKE_PREFIX_PATH=/opt/toolchains \
-    -e PATH="/root/.local/bin:$PATH" \
-    ghcr.io/zephyrproject-rtos/ci \
-    bash -c "pip install --user adafruit-nrfutil && \
-             /omi/firmware/scripts/build-firmware-in-docker.sh"
+    "$ZEPHYR_CI_IMAGE" \
+    bash -c 'export PATH="/root/.local/bin:$PATH"; /omi/firmware/scripts/build-firmware-in-docker.sh'
 
 # Check if the build was successful
 if [ -d "$REPO_ROOT/firmware/build/docker_build" ] && [ "$(ls -A "$REPO_ROOT/firmware/build/docker_build")" ]; then
