@@ -1348,6 +1348,19 @@ export const api = {
     return data;
   },
 
+  /// Re-run speaker identification over everything already transcribed (Platform Administrator).
+  ///
+  /// `dryRun` returns the same counts without writing anything, which is what the preview shows before
+  /// anyone commits to naming people across a whole library.
+  async rescanIdentification(dryRun: boolean): Promise<{ scanned: number; applied: number; suggested: number }> {
+    const { data } = await http.post<{ scanned: number; applied: number; suggested: number }>(
+      "/api/platform/settings/rescan-identification",
+      null,
+      { params: { dryRun } },
+    );
+    return data;
+  },
+
   /// Run the audio-retention deletion pass immediately (Platform Administrator). Returns how many
   /// recordings had their audio deleted.
   async runAudioRetention(): Promise<{ deleted: number }> {

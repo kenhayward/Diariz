@@ -596,6 +596,15 @@ export interface PlatformSettings {
   /// Whether streaming requests ask for token counts (stream_options.include_usage). Not yet consumed by
   /// this release - wired for the next one. On by default.
   llmStreamUsageEnabled: boolean;
+  /// Cosine distance at or below which a voice match is applied automatically. Lower is stricter.
+  identificationThreshold: number;
+  /// Distance up to which a match is offered for confirmation instead of applied. Must not be stricter
+  /// than the threshold; equal means no confirmation step at all.
+  identificationConfirmBand: number;
+  /// How far the best-matching person must beat the next person before either is used.
+  identificationMargin: number;
+  /// Below this much speech, a speaker is not matched at all.
+  identificationMinSpeechMs: number;
 }
 
 export interface GrantResult {

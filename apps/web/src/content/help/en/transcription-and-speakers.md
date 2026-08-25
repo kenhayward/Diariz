@@ -39,6 +39,21 @@ Once you enrol a person, Diariz recognises their voice in later recordings autom
 stored voiceprints, including merging duplicates and erasing them, from the **Voice Prints** tab in
 Preferences.
 
+**When Diariz is nearly sure, it asks.** If a voice is close to someone it knows but not close enough to be
+certain, the speaker stays unnamed and a short question appears beside it: "Might be Ada Lovelace - is it?"
+Answer **Yes** and the speaker is named and that voice is added to their voiceprint, so the same voice is
+recognised outright next time. Answer **No** and the speaker stays anonymous; Diariz remembers, and will not
+ask you about that pairing again.
+
+The same questions are gathered under **Voices to confirm** in the account menu, which is the easier place to
+work through several at once. You only ever see suggestions for your own recordings. Nothing is named until
+you say so - a pending question changes nothing about the transcript, the summary or a search.
+
+**Recordings made before someone was enrolled are not checked automatically.** Diariz matches voices while a
+recording is being transcribed, so a person you add today was not known when last month's meeting was
+processed. A Platform Administrator can run a re-scan from Settings to go back over everything with the
+current settings; it shows what it would do before doing it, and it only adds names - it never removes one.
+
 Once a speaker is identified, the Speakers tab shows who they are - their job title, their company, and
 whether they are internal or external - so you can read the room without leaving the transcript. Hovering the
 **Internal** or **External** marker shows the rest of their details, and clicking a speaker to read their

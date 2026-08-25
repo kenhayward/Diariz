@@ -121,6 +121,9 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddSpeakerEmbeddingStale` | `Speakers.EmbeddingStale` (boolean, not-null, default false). Flags a speaker whose audio was re-attributed by a per-segment reassignment - **no `CurrentFormat` bump** |
 | `AddVoiceSampleSpans` | `ProfileContributions.SpansJson` (jsonb, nullable - null = the whole speaker) + `ProfileContributions.UsedMs` (integer, nullable). Which audio trains each voice sample, and how much of it the last embed used. No data backfill: null already means what every existing row did - **no `CurrentFormat` bump** |
 | `AddVoiceSampleExcludedAt` | `ProfileContributions.ExcludedAt` (timestamptz, nullable). Set when a user drops a sample from training; null means it still trains the voiceprint - the state every existing row is in, so nothing is backfilled. Excluded rather than deleted so the record that a human identified that speaker survives, and a later re-scan cannot silently re-add what someone removed - **no `CurrentFormat` bump** |
+| `AddIdentificationSettings` | `PlatformSettings.IdentificationThreshold` / `ConfirmBand` / `Margin` / `MinSpeechMs`. The operating point moves out of the compiled `Identification:Threshold` so it can be calibrated without a redeploy. **Column defaults are the real values, not the CLR zero EF scaffolds** - a threshold of 0 matches nothing, and restoring an older backup recreates the table from the dump and re-adds these columns using their column default - **no `CurrentFormat` bump** |
+| `AddSpeakerIdentityDecisions` | New table: every accept/reject of a suggested identity, with the distance that was on offer. Additive - **no `CurrentFormat` bump** |
+| `AddSpeakerSuggestion` | `Speakers.SuggestedProfileId` (FK, set null) / `SuggestedDistance` / `SuggestedAt`, all nullable and always null-together. Additive - **no `CurrentFormat` bump** |
 
 ### Entity-relationship overview
 
@@ -670,6 +673,9 @@ Per-recording diarization label → display name, plus its voiceprint and any id
 | `IdentifiedAuto` | bool | true when name/profile were set by auto-ID (vs a manual rename) |
 | `IsMultiSpeaker` | bool | user marked this slot as overlapping speech ("Multiple Speakers"); never auto-identified or enrolled into a voiceprint |
 | `EmbeddingStale` | bool | not-null, default false. A segment was moved **into or out of** this speaker, so `Embedding` no longer describes the audio attributed to it. Set by `PUT /api/recordings/{id}/segments/{segmentId}/speaker` on **both** the losing and the gaining label; cleared when a re-embed job reports back. A *split* sets nothing — the same audio is still that speaker's, only divided |
+| `SuggestedProfileId` | uuid null FK → SpeakerProfiles | **set null** — deleting the person withdraws the suggestion; the recording still has that voice in it. A person Diariz suspects this speaker is, close enough to ask about but not to apply. **The speaker stays anonymous while one is pending** — `ProfileId` is untouched — so nothing downstream treats a maybe as a fact |
+| `SuggestedDistance` | double null | Cosine distance when the suggestion was made; copied onto the decision log so the sweep has the number that was actually on offer |
+| `SuggestedAt` | timestamptz null | The three suggestion columns are always null together or set together |
 
 Unique index: `(RecordingId, Label)`.
 
@@ -733,6 +739,24 @@ for the same backup-compatibility reason as `SpeakerProfiles` above.
 | `CreatedAt` | timestamptz | |
 
 Index: `(ProfileId)`.
+
+#### `SpeakerIdentityDecisions` — the labelled decision log
+
+Every human answer to a suggested identity. This is what makes a calibrated threshold possible: automatic
+identification's own output cannot grade it (that is the system marking its own homework), and **rejections
+are the only labelled negatives the platform has** — every manual link is a positive.
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid PK | |
+| `SpeakerId` | uuid FK → Speakers | cascade — once the recording is gone the pair means nothing |
+| `ProfileId` | uuid FK → SpeakerProfiles | = CLR `PersonId`; cascade |
+| `Decision` | int | 0 = Rejected, 1 = Accepted. **Append only, never renumber** — the sweep reads these back |
+| `Distance` | double | Cosine distance **at the moment of the decision**, never recomputed: the gallery moves as people are enrolled, so a later number would describe a different question than the one that was answered |
+| `DecidedAt` | timestamptz | |
+| `DecidedByUserId` | uuid null FK → AspNetUsers | **set null** — provenance, not the point; the labelled pair stays valid evidence whether or not that account still exists |
+
+Index: `(SpeakerId, ProfileId)` — the rejected-pair guard reads it once per speaker on every re-scan.
 
 **A voice sample has no staleness column of its own.** It is derived by joining to its `Speaker`'s
 `EmbeddingStale` — two columns saying the same thing would eventually disagree.
