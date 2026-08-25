@@ -4,14 +4,18 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import PersonVoiceprintTab from "./PersonVoiceprintTab";
 import { api } from "../lib/api";
-import type { Person, VoiceSample } from "../lib/types";
+import type { Person, PersonAttribution, VoiceSample } from "../lib/types";
 
 vi.mock("../lib/api", () => ({
   api: {
     getPerson: vi.fn(),
     getRecording: vi.fn(),
+    getPersonAttributions: vi.fn(),
+    getAttributionSegments: vi.fn(),
+    setAttributionTraining: vi.fn(),
     setVoiceSampleSpans: vi.fn(),
     removeVoiceSample: vi.fn(),
+    personClip: vi.fn(),
   },
   apiErrorMessage: (_e: unknown, fallback: string) => fallback,
 }));
@@ -43,6 +47,21 @@ const segments = [
   { id: "g4", speaker: "SPEAKER_01", speakerDisplay: "Bob", startMs: 3000, endMs: 4000, original: "Other", revised: null, text: "Other", hasWords: true },
 ];
 
+function attribution(over: Partial<PersonAttribution> = {}): PersonAttribution {
+  return {
+    speakerId: "sp1", recordingId: "r1", recordingName: "Standup", speakerLabel: "SPEAKER_00",
+    linkedBy: "manual", isTraining: true, voiceSampleId: "vs1", speechMs: 3000,
+    canAccessRecording: true, ...over,
+  };
+}
+
+/// Only that speaker's segments - the endpoint never returns the rest of the transcript.
+const attributionSegments = [
+  { id: "g1", startMs: 0, endMs: 1000, text: "One" },
+  { id: "g2", startMs: 1000, endMs: 2000, text: "Two" },
+  { id: "g3", startMs: 2000, endMs: 3000, text: "Three" },
+];
+
 function setup(p: Person = person()) {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
@@ -53,8 +72,17 @@ function setup(p: Person = person()) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // jsdom implements neither media playback nor object URLs, and the component legitimately uses both.
+  window.HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
+  window.HTMLMediaElement.prototype.pause = vi.fn();
+  URL.createObjectURL = vi.fn(() => "blob:clip");
+  URL.revokeObjectURL = vi.fn();
+  mock(api.personClip).mockResolvedValue(new Blob(["RIFF"]));
   mock(api.getPerson).mockResolvedValue({ person: person(), identifiedCount: 1, samples: [sample()] });
   mock(api.getRecording).mockResolvedValue({ current: { segments } });
+  mock(api.getPersonAttributions).mockResolvedValue([attribution()]);
+  mock(api.getAttributionSegments).mockResolvedValue(attributionSegments);
+  mock(api.setAttributionTraining).mockResolvedValue(undefined);
   mock(api.setVoiceSampleSpans).mockResolvedValue(undefined);
   mock(api.removeVoiceSample).mockResolvedValue(undefined);
 });
@@ -95,13 +123,15 @@ describe("PersonVoiceprintTab", () => {
     expect(await screen.findByText(/Needs recomputing/)).toBeTruthy();
   });
 
-  it("lists only that speaker's segments when expanded", async () => {
+  it("renders the segments the endpoint returns", async () => {
     setup();
     await userEvent.click(await screen.findByRole("button", { name: /Show segments/ }));
 
     expect(await screen.findByRole("checkbox", { name: /One/ })).toBeTruthy();
-    // A segment belonging to a different speaker is not this sample's audio.
-    expect(screen.queryByRole("checkbox", { name: /Other/ })).toBeNull();
+    // This used to also assert that another speaker's segment was absent, back when the client filtered a
+    // whole transcript by speaker label. The endpoint now returns only this speaker's segments, so that
+    // assertion could no longer fail here whatever the client did - the guarantee is asserted server-side
+    // instead, by PeopleClipEndpointTests.Segments_returns_only_that_speakers_segments.
   });
 
   it("ticks every segment when nothing is selected", async () => {
@@ -190,6 +220,83 @@ describe("PersonVoiceprintTab", () => {
 
     expect(await screen.findByText("Standup")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Recompute voiceprint/ })).toBeNull();
+  });
+
+
+  it("lists a speaker that was recognised automatically and trains nothing", async () => {
+    // The case the old sample-only list could not show at all: auto-identification links a speaker without
+    // ever creating a voice sample, which is why the list read as arbitrary.
+    mock(api.getPersonAttributions).mockResolvedValue([
+      attribution({ linkedBy: "auto", isTraining: false, voiceSampleId: null }),
+    ]);
+    mock(api.getPerson).mockResolvedValue({ person: person(), identifiedCount: 1, samples: [] });
+    setup();
+
+    expect(await screen.findByText("Standup")).toBeTruthy();
+    expect(screen.getByText(/Recognised automatically/)).toBeTruthy();
+    const box = screen.getByRole("checkbox", { name: /Trains the voiceprint/ }) as HTMLInputElement;
+    expect(box.checked).toBe(false);
+  });
+
+  it("adds a speaker to training when its box is ticked", async () => {
+    mock(api.getPersonAttributions).mockResolvedValue([
+      attribution({ linkedBy: "auto", isTraining: false, voiceSampleId: null }),
+    ]);
+    mock(api.getPerson).mockResolvedValue({ person: person(), identifiedCount: 1, samples: [] });
+    setup();
+
+    await userEvent.click(await screen.findByRole("checkbox", { name: /Trains the voiceprint/ }));
+
+    await waitFor(() =>
+      expect(api.setAttributionTraining).toHaveBeenCalledWith("p1", "sp1", true));
+  });
+
+  it("removes a speaker from training when its box is unticked", async () => {
+    setup();
+
+    await userEvent.click(await screen.findByRole("checkbox", { name: /Trains the voiceprint/ }));
+
+    await waitFor(() =>
+      expect(api.setAttributionTraining).toHaveBeenCalledWith("p1", "sp1", false));
+  });
+
+  it("offers no training toggle without permission to manage biometrics", async () => {
+    setup(person({ canManageBiometrics: false }));
+
+    expect(await screen.findByText("Standup")).toBeTruthy();
+    expect(screen.queryByRole("checkbox", { name: /Trains the voiceprint/ })).toBeNull();
+  });
+
+  it("still lists a recording the caller cannot access, but offers nothing on it", async () => {
+    // The directory is platform-wide while recordings are ownership-filtered. The row belongs in the list -
+    // it is part of what trained the voiceprint - but there is no transcript or audio behind it.
+    mock(api.getPersonAttributions).mockResolvedValue([attribution({ canAccessRecording: false })]);
+    setup();
+
+    expect(await screen.findByText("Standup")).toBeTruthy();
+    expect(screen.getByText(/recording you cannot access/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Show segments/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Play/ })).toBeNull();
+  });
+
+  it("reads segments from the attribution endpoint, never the recording", async () => {
+    // getRecording is ownership-filtered, so it 404s for exactly the cross-owner rows this tab must show -
+    // and it would hand over every other speaker's words along with this one's.
+    setup();
+    await userEvent.click(await screen.findByRole("button", { name: /Show segments/ }));
+
+    await waitFor(() => expect(api.getAttributionSegments).toHaveBeenCalledWith("p1", "sp1"));
+    expect(api.getRecording).not.toHaveBeenCalled();
+  });
+
+  it("plays one segment as a clip of exactly that span", async () => {
+    setup();
+    await userEvent.click(await screen.findByRole("button", { name: /Show segments/ }));
+    await screen.findByText("Two");
+
+    await userEvent.click(screen.getAllByRole("button", { name: /Play segment/ })[1]);
+
+    await waitFor(() => expect(api.personClip).toHaveBeenCalledWith("p1", "sp1", 1000, 2000));
   });
 
   it("reports a failure instead of pretending the job was queued", async () => {
