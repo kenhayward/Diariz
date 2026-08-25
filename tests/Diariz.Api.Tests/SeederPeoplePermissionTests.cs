@@ -64,8 +64,9 @@ public class SeederPeoplePermissionTests
     /// or by being tickable in Settings, Groups. A future flag that is neither is a feature nobody can turn
     /// on - which is exactly what happened here.
     ///
-    /// <para>The web list is mirrored by hand in <c>GroupsTab.tsx</c> (PERMISSION_BITS), so this asserts the
-    /// server side and <c>groupsPermissionBits.test.ts</c> asserts the client keeps up.</para></summary>
+    /// <para>The web list is mirrored by hand in <c>components/users/permissions.ts</c> (PERMISSION_BITS), so
+    /// this asserts the server side and <c>components/users/permissions.test.ts</c> asserts the client keeps
+    /// up.</para></summary>
     [Fact]
     public async Task Every_platform_permission_is_granted_to_a_seeded_group()
     {

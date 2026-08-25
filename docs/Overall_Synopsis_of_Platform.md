@@ -1962,7 +1962,7 @@ into it with no URL or per-user setup at all.
   browsable in the in-app reference — no new endpoints were added for this.
 - **RBAC (user groups + platform permissions).** Authority comes from **group membership**, not from a role.
   A `UserGroup` carries a `[Flags] PlatformPermission` (`ManageRooms = 1`, `ManageUsers = 2`,
-  `ManagePlatform = 4`, `ManageFormulas = 8`, `ManagePeople = 16`; append-only), users join via `UserGroupMember`, and a caller's effective permissions
+  `ManagePlatform = 4`, `ManageFormulas = 8`, `ManagePeople = 16`, `ManageVoiceprints = 32`; append-only), users join via `UserGroupMember`, and a caller's effective permissions
   are the **union** of the flags on every group they belong to. `IUserPermissions` resolves that **from the
   database on each request** — never from a token claim, which would keep granting authority until it expired,
   long after the user left the group. `PermissionAuthorizationHandler` backs the policies `ManageRooms`,
@@ -1983,12 +1983,13 @@ into it with no URL or per-user setup at all.
     **Manage Users → Groups** tab. The web reads the caller's permissions from `GET /api/user/profile`.
 - **A new permission has two obligations, and missing either makes it ungrantable.** It must be added to
   `Seeder.SeedGroupsAsync` (which ORs the flags onto the existing rows, so a deployed platform picks it up on
-  its next boot with no migration) **and** to `PERMISSION_BITS` in `apps/web/src/components/GroupsTab.tsx`,
-  which is the only UI that can set one. `ManagePeople` shipped with neither in 0.164.0 and left the People
+  its next boot with no migration) **and** to `PERMISSION_BITS` in
+  `apps/web/src/components/users/permissions.ts`, which is what the only UI that can set one renders from. `ManagePeople` shipped with neither in 0.164.0 and left the People
   page unreachable for everyone including platform administrators, because every test granted it explicitly
   through `Perms.Grant` and so exercised the mechanism while saying nothing about whether it was obtainable.
   Two guards now exist: `SeederPeoplePermissionTests.Every_platform_permission_is_granted_to_a_seeded_group`
-  and `groupsPermissionBits.test.ts`.
+  (which enumerates the enum, so a new flag is caught without anyone remembering to list it) and
+  `components/users/permissions.test.ts`.
 - **Rooms (foundation; not yet wired into any controller).** A **room** is a workspace: folders, recordings,
   voiceprints, chats and meeting types live in one. Every user has exactly one **Personal room** — immutable and
   private, named after them, rendering their avatar rather than a stored icon. A recording's **main room is
@@ -2582,6 +2583,32 @@ Gates (`SpeakerProfilesController`):
 | Rename, delete, merge | `ManagePeople` |
 | **Set `VoiceprintOptOut`, erase a voiceprint** | `ManagePeople` **or the person is you** |
 | Erase every voiceprint | `ManagePlatform` |
+| List a person's attributed speakers; toggle one in or out of training | `ManagePeople` (list) / `ManagePeople` **or the person is you** (toggle) |
+| **Play a clip, or read a speaker's segments, in a recording you do not own** | `ManageVoiceprints` |
+
+**`ManageVoiceprints` (32) is deliberately separate from `ManagePeople`.** Merging two duplicate contacts is
+routine directory hygiene that should stay widely delegable; listening to another user's meeting audio is not.
+It is seeded to **`Platform Administrators` only** - `Administrators` keeps directory access with no
+cross-owner audio, which is the same side of the line it already sits on for `ManagePlatform`. Granting it is
+narrower than what `ManagePlatform` already permits, since platform backup exports every audio blob in the
+instance in one click.
+
+The grant is bounded by the data, not just by the permission. `PeopleController.ResolveAssessmentTargetAsync`
+is the single gate both assessment endpoints pass through (one place, because two endpoints enforcing the same
+rules separately is how they come to disagree): the caller may act on the person, the speaker really is
+attributed to them, they own the recording **or** hold `ManageVoiceprints`, and a current transcription exists.
+On top of that, `GET /api/people/{id}/clip` refuses any span that does not fall **inside a segment that
+speaker spoke** - so the permission never reaches arbitrary offsets - and
+`GET /api/people/{id}/attributions/{speakerId}/segments` returns only that speaker's segments, never the rest
+of the transcript. Every cross-owner clip is logged. The span check applies to owners too, so there is one rule
+rather than two.
+
+Clips are cut by **ffmpeg, which is a runtime dependency of the API image** (`src/Diariz.Api/Dockerfile`),
+because webm/m4a/mp3 cannot be safely byte-sliced. It is driven against a **presigned internal object-store
+URL** (`IAudioStorage.GetPresignedReadUrlAsync`) so ffmpeg range-seeks the blob instead of the API downloading
+a whole recording to cut seconds out of it; that URL never leaves the API process. Presigning defaults to
+HTTPS regardless of `ServiceURL`, so the protocol is derived from the configured endpoint - MinIO is plain
+HTTP in compose, and getting this wrong surfaces as a TLS frame error from inside ffmpeg.
 
 That self exception is `CanManageBiometricsAsync`, kept as a **single predicate** used by both endpoints (and,
 from PR 3, projected onto the DTO the UI renders from) so the two cannot drift. Under GDPR, withdrawing
