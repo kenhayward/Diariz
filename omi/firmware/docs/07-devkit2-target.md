@@ -238,21 +238,34 @@ The DevKit changes the plan substantially, and mostly for the better. **Option A
 longer needed.** Neither is F1 (no clock gate on writes), F4 (no destructive sync), or the ring
 protocol.
 
-**Phase 1 - card-swap workflow, no firmware change at all.**
+**Phase 1 - card-swap workflow, no firmware change at all. BUILT: see
+[`omi/tools/omi-sync`](../../tools/omi-sync/README.md).**
 
 1. Record. Eject the card. Note the wall-clock time you ejected it.
 2. Copy `a01.txt` off the card **before** reinserting it (protects against the auto-format
    hazard in 7.4).
-3. Decode with the snippet in 7.2 to 16 kHz mono PCM.
-4. Split into sessions with silence detection, and derive each session's `startedAt` by working
-   backwards from the ejection time.
-5. Encode each session as **Ogg Opus** (remux the existing frames, no re-encode - about
-   15 MB/hour) or WAV, and `POST /api/recordings` with `source=Upload`, `startedAt`, `endedAt`
-   and a title. Diariz transcribes, diarizes and summarises from there.
+3. Parse the blocks into Opus frames (7.2), including the F13 boundary guard.
+4. Split into sessions on long silences, and derive each `startedAt` by working backwards
+   from the ejection time.
+5. Remux each session into **Ogg Opus** - the original frames rewrapped, no decode and no
+   re-encode, about 15 MB/hour - and `POST /api/recordings` with `source=Upload`,
+   `startedAt`, `endedAt` and a title. Diariz transcribes, diarizes and summarises from there.
 6. Delete `a01.txt` from the card so the next cycle starts clean.
 
-That is a host-side script and nothing else. It is the fastest route to real transcripts and it
-is where I would start.
+`omi-sync` implements steps 3-5:
+
+```bash
+cd omi/tools/omi-sync
+python -m omi_sync /path/to/a01.txt --scan-only              # look first
+python -m omi_sync /path/to/a01.txt --dry-run --out ./out    # decode locally
+python -m omi_sync /path/to/a01.txt --url https://diariz.example.com --token dz_api_...
+```
+
+Its only runtime dependency is `requests`, and only for the upload - the framing, silence
+detection and Ogg muxing are pure Python. Notably, **silence detection needs no audio
+decoding**: at 32 kbps VBR an Opus frame's byte length tracks how much signal is in it, so
+the threshold is picked with Otsu's method over the frame-length histogram. That is what
+keeps the tool free of any native Opus dependency while still emitting a lossless remux.
 
 **Phase 2 - the firmware changes worth making, in order.**
 
