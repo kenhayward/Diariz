@@ -196,16 +196,18 @@ for i in range(0, len(stream) - 443, 444):
 
 ## 2.7 The DevKit format is completely different
 
-`devkit/src/storage.c` and `devkit/src/sdcard.c` use a **FAT filesystem** on a removable
+`devkit/src/storage.c` and `devkit/src/sdcard.c` use a **FAT/exFAT filesystem** on a removable
 microSD, with files at `/SD:/audio/aNN.txt` and a file-oriented BLE command set
-(`READ_COMMAND 0`, `DELETE_COMMAND 1`, `NUKE 2`, `STOP_COMMAND 3`). Its on-file frame layout
-is a 3-byte prefix plus an 80-byte padded Opus entry (`FRAME_PREFIX_LENGTH 3`,
-`OPUS_ENTRY_LENGTH 80`), which is what the stale `scripts/devkit/decode_audio.py` parses with
-its hard-coded 83-byte stride.
+(`READ_COMMAND 0`, `DELETE_COMMAND 1`, `NUKE 2`, `STOP_COMMAND 3`).
 
-**None of that applies to the consumer device.** If your hardware is a DevKit, the microSD is
-directly readable on a PC and the retrieval problem is far easier. If it is the consumer CV1,
-it is not.
+Its on-file layout is the **same 440-byte packed block as layer A above, with no timestamp
+header**, and its Opus frames are **10 ms** (160 samples) rather than 20 ms. The 3-byte prefix
+plus 80-byte padded entry that `scripts/devkit/decode_audio.py` assumes is an *older* layout,
+still visible commented out at `devkit/src/transport.c:619-635`; that script is stale for both
+devices.
+
+**None of that applies to the consumer device.** Full DevKit treatment - which is the hardware
+this project actually targets - is in [07-devkit2-target.md](07-devkit2-target.md).
 
 ## 2.8 Data rates and volumes (consumer device)
 
