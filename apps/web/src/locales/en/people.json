@@ -84,5 +84,22 @@
   "mergeReview": "Review and merge",
   "dismissDuplicate": "Dismiss",
   "dismissDuplicateHint": "Hide this suggestion while you are here. It comes back next time you open People.",
-  "editPersonTitle": "Edit person"
+  "editPersonTitle": "Edit person",
+  "tabDiagnostics": "Diagnostics",
+  "diagAllConsistent": "These recordings all resemble each other.",
+  "diagSomeAlone_one": "{{count}} recording resembles none of the others - worth a listen.",
+  "diagSomeAlone_other": "{{count}} recordings resemble none of the others - worth a listen.",
+  "diagNothingToCompare": "Only one recording trains this voiceprint, so there is nothing to compare it against.",
+  "diagVerdictOnly": "Nothing to compare",
+  "diagVerdictCore": "Matches the others",
+  "diagVerdictVariant": "Probably a different recording condition",
+  "diagVerdictAlone": "Resembles none of the others",
+  "diagExcluded": "Not training",
+  "diagNearest": "closest other: {{value}}%",
+  "diagToOthers": "vs the rest: {{value}}%",
+  "healthHeading": "Voiceprints worth checking",
+  "healthHint": "These people have a recording that sounds nothing like their others - either a different microphone, or someone else enrolled under their name.",
+  "healthCount": "{{count}} of {{total}} recordings",
+  "healthReview": "Check",
+  "healthMore": "and {{count}} more"
 }

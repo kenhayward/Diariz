@@ -729,5 +729,14 @@
   "spokenLanguage": "Gesprochene Sprache",
   "spokenLanguageAuto": "- Automatisch erkennen -",
   "spokenLanguageHint": "Stellen Sie dies ein, wenn das Transkript in der falschen Sprache erstellt wurde. Die Erkennung liest den Anfang der Aufnahme, ein leiser Beginn kann also falsch gedeutet werden.",
-  "screenshotsDragHint": "Ziehen Sie einen Screenshot auf die Chat-Eingabe, um ihn analysieren zu lassen"
+  "screenshotsDragHint": "Ziehen Sie einen Screenshot auf die Chat-Eingabe, um ihn analysieren zu lassen",
+  "suggestionAsk": "Könnte {{name}} sein - stimmt das?",
+  "suggestionYes": "Ja",
+  "suggestionNo": "Nein",
+  "suggestionFailed": "Diese Antwort konnte nicht gespeichert werden.",
+  "suggestionsTitle": "Zu bestätigende Stimmen",
+  "suggestionsIntro": "Diariz hat diese Stimmen erkannt, war sich aber nicht sicher genug, um sie zu benennen. Eine Bestätigung trainiert den Stimmabdruck; eine Ablehnung wird gemerkt, sodass dieselbe Stimme nicht erneut vorgeschlagen wird.",
+  "suggestionsNone": "Nichts zu bestätigen.",
+  "suggestionsFailed": "Die Liste konnte nicht geladen werden.",
+  "voicesToConfirm": "Zu bestätigende Stimmen"
 }

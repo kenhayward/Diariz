@@ -72,6 +72,9 @@ import type {
   PersonDetail,
   PersonDuplicateGroup,
   PersonAttribution,
+  SpeakerSuggestion,
+  VoiceprintDiagnostics,
+  PersonDiagnosticsSummary,
   AttributionSegment,
   GoogleCalendarListItem,
   Group,
@@ -907,6 +910,34 @@ export const api = {
     return data as Blob;
   },
 
+  /// Voices awaiting confirmation, in your own recordings only.
+  async getSpeakerSuggestions(): Promise<SpeakerSuggestion[]> {
+    const { data } = await http.get<SpeakerSuggestion[]>("/api/speaker-suggestions");
+    return data;
+  },
+
+  async acceptSpeakerSuggestion(speakerId: string): Promise<void> {
+    await http.post(`/api/speaker-suggestions/${speakerId}/accept`);
+  },
+
+  async rejectSpeakerSuggestion(speakerId: string): Promise<void> {
+    await http.post(`/api/speaker-suggestions/${speakerId}/reject`);
+  },
+
+  /// Which of a person's samples resemble each other. Reads embeddings that already exist - no audio, no
+  /// re-transcription, no worker.
+  async getPersonDiagnostics(personId: string): Promise<VoiceprintDiagnostics> {
+    const { data } = await http.get<VoiceprintDiagnostics>(`/api/people/${personId}/diagnostics`);
+    return data;
+  },
+
+  /// Everyone whose training set contains a sample resembling none of their others, worst first. Healthy
+  /// people are omitted, so an empty list means "nothing to fix" - say so rather than rendering nothing.
+  async getDirectoryDiagnostics(): Promise<PersonDiagnosticsSummary[]> {
+    const { data } = await http.get<PersonDiagnosticsSummary[]>("/api/people/diagnostics");
+    return data;
+  },
+
   async findPersonDuplicates(): Promise<PersonDuplicateGroup[]> {
     const { data } = await http.get<PersonDuplicateGroup[]>("/api/people/duplicates");
     return data;
@@ -1330,6 +1361,19 @@ export const api = {
 
   async updatePlatformSettings(body: PlatformSettings): Promise<PlatformSettings> {
     const { data } = await http.put<PlatformSettings>("/api/platform/settings", body);
+    return data;
+  },
+
+  /// Re-run speaker identification over everything already transcribed (Platform Administrator).
+  ///
+  /// `dryRun` returns the same counts without writing anything, which is what the preview shows before
+  /// anyone commits to naming people across a whole library.
+  async rescanIdentification(dryRun: boolean): Promise<{ scanned: number; applied: number; suggested: number }> {
+    const { data } = await http.post<{ scanned: number; applied: number; suggested: number }>(
+      "/api/platform/settings/rescan-identification",
+      null,
+      { params: { dryRun } },
+    );
     return data;
   },
 

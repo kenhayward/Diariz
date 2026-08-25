@@ -15,8 +15,69 @@ public class PlatformSettingsControllerTests
     private static PlatformSettingsController Build(
         DiarizDbContext db, FakeAudioStorage? storage = null, FakeJobQueue? queue = null) =>
         new(new PlatformSettingsService(db), db, storage ?? new FakeAudioStorage(), queue ?? new FakeJobQueue(),
-            NullLogger<PlatformSettingsController>.Instance)
+            NullLogger<PlatformSettingsController>.Instance,
+            // The vector column is Ignore'd under the in-memory provider, so a re-scan cannot do anything
+            // meaningful here; IdentificationRescanIntegrationTests covers it against real pgvector.
+            new IdentificationRescan(
+                db,
+                new SpeakerIdentifier(db, Microsoft.Extensions.Options.Options.Create(
+                    new Diariz.Api.Configuration.IdentificationOptions { Enabled = false })),
+                new PlatformSettingsService(db)))
         { ControllerContext = Http.Context(Guid.NewGuid()) };
+
+    private static UpdatePlatformSettingsRequest Valid(
+        double threshold = 0.30, double band = 0.40, double margin = 0.05, int minSpeechMs = 3000) =>
+        new(1024, 2048,
+            IdentificationThreshold: threshold, IdentificationConfirmBand: band,
+            IdentificationMargin: margin, IdentificationMinSpeechMs: minSpeechMs);
+
+    [Fact]
+    public async Task Update_PersistsTheIdentificationKnobs()
+    {
+        using var db = TestDb.Create();
+        var controller = Build(db);
+
+        var result = await controller.Update(Valid(threshold: 0.25, band: 0.55, margin: 0.08, minSpeechMs: 5000));
+
+        var dto = Assert.IsType<PlatformSettingsDto>(
+            (result.Result as OkObjectResult)?.Value ?? result.Value);
+        Assert.Equal(0.25, dto.IdentificationThreshold, 3);
+        Assert.Equal(0.55, dto.IdentificationConfirmBand, 3);
+        Assert.Equal(0.08, dto.IdentificationMargin, 3);
+        Assert.Equal(5000, dto.IdentificationMinSpeechMs);
+    }
+
+    [Fact]
+    public async Task Update_RejectsAConfirmBandStricterThanTheThreshold()
+    {
+        // Inverted, nothing would ever be applied automatically - every match would arrive as a question,
+        // and the setting that caused it looks perfectly reasonable in isolation.
+        using var db = TestDb.Create();
+        var controller = Build(db);
+
+        Assert.IsType<BadRequestObjectResult>(
+            (await controller.Update(Valid(threshold: 0.40, band: 0.30))).Result);
+    }
+
+    [Fact]
+    public async Task Update_AllowsAnEqualBand_MeaningNoConfirmationStep()
+    {
+        // Accept or ignore, nothing in between. A legitimate choice for someone who does not want a queue.
+        using var db = TestDb.Create();
+        var controller = Build(db);
+
+        Assert.Null((await controller.Update(Valid(threshold: 0.30, band: 0.30))).Result as BadRequestObjectResult);
+    }
+
+    [Fact]
+    public async Task Update_RejectsAThresholdOutsideTheCosineRange()
+    {
+        using var db = TestDb.Create();
+        var controller = Build(db);
+
+        Assert.IsType<BadRequestObjectResult>((await controller.Update(Valid(threshold: 0))).Result);
+        Assert.IsType<BadRequestObjectResult>((await controller.Update(Valid(threshold: 2.5, band: 2.5))).Result);
+    }
 
     [Fact]
     public async Task Get_ReturnsDefaults_WhenUnset()

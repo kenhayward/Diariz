@@ -729,5 +729,14 @@
   "spokenLanguage": "Langue parlee",
   "spokenLanguageAuto": "- Detecter automatiquement -",
   "spokenLanguageHint": "Definissez-la quand la transcription revient dans la mauvaise langue. La detection lit le debut de l'enregistrement, un demarrage silencieux peut donc etre mal interprete.",
-  "screenshotsDragHint": "Faites glisser une capture vers la zone de saisie du chat pour l'analyser"
+  "screenshotsDragHint": "Faites glisser une capture vers la zone de saisie du chat pour l'analyser",
+  "suggestionAsk": "Il pourrait s'agir de {{name}} - est-ce le cas ?",
+  "suggestionYes": "Oui",
+  "suggestionNo": "Non",
+  "suggestionFailed": "Impossible d'enregistrer cette réponse.",
+  "suggestionsTitle": "Voix à confirmer",
+  "suggestionsIntro": "Diariz a reconnu ces voix sans être assez sûr pour les nommer. Confirmer entraîne l'empreinte vocale ; un refus est mémorisé, de sorte que la même voix n'est plus proposée.",
+  "suggestionsNone": "Rien à confirmer.",
+  "suggestionsFailed": "Impossible de charger la liste.",
+  "voicesToConfirm": "Voix à confirmer"
 }

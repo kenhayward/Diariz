@@ -259,6 +259,7 @@ export interface TranscriptionDto {
 /// A diarized speaker in a recording: its label, shown name, the enrolled voiceprint it's
 /// linked to (if any), and whether the name was applied automatically by identification.
 export interface SpeakerInfo {
+  id: string;
   label: string;
   displayName: string;
   personId: string | null;
@@ -276,6 +277,12 @@ export interface SpeakerInfo {
   /// A segment was moved into or out of this speaker, so its stored voiceprint no longer describes the
   /// audio attributed to it. Nothing recomputes on its own - this is what prompts the user to.
   embeddingStale: boolean;
+  /// A person this speaker may be - close enough to ask about, not close enough to apply. Null unless a
+  /// suggestion is pending; while one is, the speaker is still anonymous.
+  suggestedPersonId: string | null;
+  suggestedPersonName: string | null;
+  /// Cosine distance to the suggested person, lower is closer.
+  suggestedDistance: number | null;
 }
 
 /// Someone who appears in meetings. Platform-wide, and the voiceprint is optional: `hasVoiceprint` is false
@@ -344,12 +351,63 @@ export interface PersonAttribution {
   canAccessRecording: boolean;
 }
 
+/// How well one enrolled sample resembles the rest of a person's training set.
+///
+/// Two distances, because they answer different questions: `nearestSiblingDistance` asks whether the sample
+/// has company, `distanceToOthers` asks whether the rest of the voiceprint would recognise it. They disagree
+/// when a pair sits together but away from everything else.
+export interface SampleDiagnosis {
+  voiceSampleId: string;
+  speakerId: string;
+  recordingId: string;
+  recordingName: string;
+  speakerLabel: string;
+  /// Cosine distance to the closest other sample. Null when there is no other sample.
+  nearestSiblingDistance: number | null;
+  /// Cosine distance to the centroid of the person's *other* samples - a true leave-one-out.
+  distanceToOthers: number | null;
+  /// "Only", "Core", "Variant" or "Alone". `Alone` means "resembles none of the others", which is either a
+  /// recording condition nothing else covers or a different person - not a verdict of wrong.
+  verdict: string;
+  isTraining: boolean;
+}
+
+export interface VoiceprintDiagnostics {
+  samples: SampleDiagnosis[];
+  aloneCount: number;
+  /// The largest distance between any two training samples, or null when there is no pair to measure.
+  widestPair: number | null;
+}
+
+/// One person's line in the voiceprint-health ranking.
+export interface PersonDiagnosticsSummary {
+  personId: string;
+  name: string;
+  sampleCount: number;
+  aloneCount: number;
+  widestPair: number | null;
+}
+
 /// One segment an attributed speaker spoke. Only ever that speaker's own segments.
 export interface AttributionSegment {
   id: string;
   startMs: number;
   endMs: number;
   text: string;
+}
+
+/// A voice Diariz thinks it recognises but is not confident enough to name unasked.
+export interface SpeakerSuggestion {
+  speakerId: string;
+  recordingId: string;
+  recordingName: string;
+  speakerLabel: string;
+  personId: string;
+  personName: string;
+  /// Cosine distance, lower is closer.
+  distance: number;
+  speechMs: number;
+  suggestedAt: string;
 }
 
 /// A group of people who look like the same human. `reason` is "email" or "name".
@@ -575,6 +633,15 @@ export interface PlatformSettings {
   /// Whether streaming requests ask for token counts (stream_options.include_usage). Not yet consumed by
   /// this release - wired for the next one. On by default.
   llmStreamUsageEnabled: boolean;
+  /// Cosine distance at or below which a voice match is applied automatically. Lower is stricter.
+  identificationThreshold: number;
+  /// Distance up to which a match is offered for confirmation instead of applied. Must not be stricter
+  /// than the threshold; equal means no confirmation step at all.
+  identificationConfirmBand: number;
+  /// How far the best-matching person must beat the next person before either is used.
+  identificationMargin: number;
+  /// Below this much speech, a speaker is not matched at all.
+  identificationMinSpeechMs: number;
 }
 
 export interface GrantResult {

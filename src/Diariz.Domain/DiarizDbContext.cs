@@ -64,6 +64,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     /// <c>OnModelCreating</c> for why the table name did not follow the rename.</summary>
     public DbSet<Person> People => Set<Person>();
     public DbSet<VoiceSample> VoiceSamples => Set<VoiceSample>();
+    public DbSet<SpeakerIdentityDecision> SpeakerIdentityDecisions => Set<SpeakerIdentityDecision>();
     public DbSet<RecordingAction> RecordingActions => Set<RecordingAction>();
     public DbSet<RecordingTag> RecordingTags => Set<RecordingTag>();
     public DbSet<MeetingNote> MeetingNotes => Set<MeetingNote>();
@@ -478,6 +479,18 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.Property(s => s.LlmUsageRetentionDays)
                 .HasDefaultValue(Entities.PlatformSettings.DefaultLlmUsageRetentionDays);
             e.Property(s => s.LlmStreamUsageEnabled).HasDefaultValue(true);
+            // Real column defaults, not the CLR zero EF would otherwise scaffold. A threshold of 0 matches
+            // nothing at all, so a row that picked up the zero would silently switch identification off - and
+            // restoring an older backup does exactly that, recreating the table from the dump and letting the
+            // migration re-add these columns with their column default.
+            e.Property(s => s.IdentificationThreshold)
+                .HasDefaultValue(Entities.PlatformSettings.DefaultIdentificationThreshold);
+            e.Property(s => s.IdentificationConfirmBand)
+                .HasDefaultValue(Entities.PlatformSettings.DefaultIdentificationConfirmBand);
+            e.Property(s => s.IdentificationMargin)
+                .HasDefaultValue(Entities.PlatformSettings.DefaultIdentificationMargin);
+            e.Property(s => s.IdentificationMinSpeechMs)
+                .HasDefaultValue(Entities.PlatformSettings.DefaultIdentificationMinSpeechMs);
             e.HasData(new PlatformSettings
             {
                 Id = Entities.PlatformSettings.SingletonId,
@@ -561,6 +574,28 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             }
         });
 
+        builder.Entity<SpeakerIdentityDecision>(e =>
+        {
+            // Read once per speaker on every re-scan, to skip a pair someone has already declined. Without
+            // the index that is a sequential scan of the whole log inside a loop over every speaker.
+            e.HasIndex(d => new { d.SpeakerId, d.PersonId });
+            // Same column-naming exception as everywhere else that points at a person.
+            e.Property(d => d.PersonId).HasColumnName("ProfileId");
+            e.HasOne(d => d.Speaker)
+                .WithMany()
+                .HasForeignKey(d => d.SpeakerId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(d => d.Person)
+                .WithMany()
+                .HasForeignKey(d => d.PersonId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Who decided is provenance; losing the account must not throw away the labelled pair.
+            e.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(d => d.DecidedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
         builder.Entity<Speaker>(e =>
         {
             e.HasIndex(s => new { s.RecordingId, s.Label }).IsUnique();
@@ -571,6 +606,13 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
                 e.Property(s => s.Embedding).HasColumnType("vector(192)"); // ECAPA-TDNN dimension
             else
                 e.Ignore(s => s.Embedding);
+            e.Property(s => s.SuggestedPersonId).HasColumnName("SuggestedProfileId");
+            // Deleting the person withdraws the suggestion rather than the speaker: the recording still has
+            // that voice in it, it just no longer has anyone to suggest.
+            e.HasOne<Person>()
+                .WithMany()
+                .HasForeignKey(s => s.SuggestedPersonId)
+                .OnDelete(DeleteBehavior.SetNull);
             // Identifying a speaker links it to a person; deleting the person just unlinks (SetNull).
             e.HasOne(s => s.Person)
                 .WithMany()

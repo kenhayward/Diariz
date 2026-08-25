@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 import { api } from "../lib/api";
 import { useTour } from "../lib/tour";
@@ -68,6 +69,7 @@ function MenuRow({
  */
 export default function UserMenu() {
   const { t } = useTranslation("account");
+  const navigate = useNavigate();
   const { initials, pictureUrl, email, fullName, isAdmin, isPlatformAdmin, canManageFormulas, canManagePeople, logout } = useAuth();
   const tour = useTour();
   const { data: storage } = useQuery({ queryKey: ["user-storage"], queryFn: api.getUserStorage });
@@ -199,6 +201,12 @@ export default function UserMenu() {
               <MenuRow label={t("manageFormulas")} onSelect={run(() => setFormulasOpen(true))} />
             )}
             {canManagePeople && <MenuRow label={t("people")} onSelect={run(() => setPeopleOpen(true))} />}
+            {/* No permission gate: the queue only ever shows your own recordings, and the person who can
+                say whether a voice belongs to someone is whoever was in the meeting. */}
+            <MenuRow
+              label={t("voicesToConfirm")}
+              onSelect={run(() => navigate("/voices-to-confirm"))}
+            />
             <MenuRow label={t("showTour")} onSelect={run(() => tour.start())} />
             {/* A new tab, so opening the docs never discards what the user was doing. */}
             <MenuRow

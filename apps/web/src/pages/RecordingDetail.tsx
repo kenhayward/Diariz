@@ -1372,6 +1372,7 @@ export default function RecordingDetail() {
                     onMulti={() => markMulti(label)}
                     canManagePeople={permissions.managePeople}
                     onEditPerson={() => setEditingPersonId(info?.personId ?? null)}
+                    onSuggestionDecided={() => void qc.invalidateQueries({ queryKey: ["recording", id] })}
                   />
                 );
               })}

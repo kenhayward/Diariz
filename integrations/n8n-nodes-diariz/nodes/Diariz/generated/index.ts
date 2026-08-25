@@ -1134,6 +1134,19 @@ const GENERATED: GeneratedResource[] = [
         "returnsArray": false
       },
       {
+        "value": "checkWhetherAPersonSSamplesResembleEachOther",
+        "displayName": "Check whether a person's samples resemble each other",
+        "description": "Scores every sample training this person's voiceprint against the others, to show which ones do not belong. Two distances per sample: to its closest companion, and to the centre of the person's other samples - the second is a true leave-one-out, and they disagree when a pair sits together but away from everything else.",
+        "method": "GET",
+        "path": "/api/people/{id}/diagnostics",
+        "pathParams": [
+          "id"
+        ],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": false
+      },
+      {
         "value": "chooseWhichAudioTrainsOneVoiceSample",
         "displayName": "Choose which audio trains one voice sample",
         "description": "Replaces the spans of the contributing recording's audio that this sample is embedded from, and queues a re-embed. Send an empty list to go back to the whole speaker, which is what every sample does by default. Adjacent spans are merged, so you can send one per segment the user ticked.",
@@ -1353,6 +1366,17 @@ const GENERATED: GeneratedResource[] = [
         ],
         "hasBody": false,
         "returnsArray": false
+      },
+      {
+        "value": "rankTheDirectoryByVoiceprintHealth",
+        "displayName": "Rank the directory by voiceprint health",
+        "description": "Everyone whose training set contains a sample resembling none of their others, worst first. A directory of any size makes the per-person view unusable on its own - knowing which people to look at is most of the work.",
+        "method": "GET",
+        "path": "/api/people/diagnostics",
+        "pathParams": [],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "removeAVoiceSample",
@@ -2769,6 +2793,50 @@ const GENERATED: GeneratedResource[] = [
         "queryParams": [],
         "hasBody": true,
         "returnsArray": false
+      }
+    ]
+  },
+  {
+    "tag": "SpeakerSuggestions",
+    "displayName": "Speaker Suggestion",
+    "value": "speakerSuggestions",
+    "operations": [
+      {
+        "value": "confirmASuggestedIdentity",
+        "displayName": "Confirm a suggested identity",
+        "description": "Names the speaker as the suggested person and adds that speaker's voice to their voiceprint, so the same voice in the same conditions is recognised outright next time.",
+        "method": "POST",
+        "path": "/api/speaker-suggestions/{speakerId}/accept",
+        "pathParams": [
+          "speakerId"
+        ],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": false
+      },
+      {
+        "value": "declineASuggestedIdentity",
+        "displayName": "Decline a suggested identity",
+        "description": "Leaves the speaker anonymous and records that this voice is not that person, so the same pair is never suggested again.",
+        "method": "POST",
+        "path": "/api/speaker-suggestions/{speakerId}/reject",
+        "pathParams": [
+          "speakerId"
+        ],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": false
+      },
+      {
+        "value": "listVoicesWaitingToBeConfirmed",
+        "displayName": "List voices waiting to be confirmed",
+        "description": "Speakers in your recordings that Diariz thinks it recognises, but not confidently enough to name on its own. Each carries the person it suspects, how far apart the two voiceprints are, and how much that speaker says - enough to judge without opening the recording.",
+        "method": "GET",
+        "path": "/api/speaker-suggestions",
+        "pathParams": [],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": true
       }
     ]
   },

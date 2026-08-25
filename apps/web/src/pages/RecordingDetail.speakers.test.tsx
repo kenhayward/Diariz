@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import SpeakerRow from "../components/detail/SpeakerRow";
@@ -45,6 +45,7 @@ function row(
     playing: boolean;
     canManagePeople: boolean;
     onEditPerson: () => void;
+    onSuggestionDecided: () => void;
   }> = {},
 ) {
   render(
@@ -66,6 +67,7 @@ function row(
       onMulti={handlers.onMulti ?? (() => {})}
       canManagePeople={handlers.canManagePeople ?? true}
       onEditPerson={handlers.onEditPerson ?? (() => {})}
+      onSuggestionDecided={handlers.onSuggestionDecided ?? (() => {})}
     />
     </QueryClientProvider>,
   );
@@ -77,9 +79,12 @@ function speakerRowButton() {
 }
 
 const speaker = (over: Partial<SpeakerInfo> = {}): SpeakerInfo => ({
+  id: "sp1",
   label: "SPEAKER_00", displayName: "SPEAKER_00", personId: null,
   identifiedAuto: false, isMultiSpeaker: false,
-  title: null, companyName: null, email: null, phone: null, isInternal: null, ...over,
+  title: null, companyName: null, email: null, phone: null, isInternal: null,
+  embeddingStale: false,
+  suggestedPersonId: null, suggestedPersonName: null, suggestedDistance: null, ...over,
 });
 
 function openAssign() {
@@ -314,5 +319,18 @@ describe("SpeakerRow", () => {
 
     row(speaker({ displayName: "Multiple Speakers", personId: "p1", isMultiSpeaker: true }));
     expect(screen.queryByRole("button", { name: /^Edit /i })).toBeNull();
+  });
+
+  it("asks about a pending suggestion, and only when there is one", () => {
+    // The prompt belongs on the transcript because the words and the audio are already here. A row with
+    // nothing pending must stay quiet - otherwise every speaker carries an empty question.
+    row(speaker());
+    expect(screen.queryByRole("button", { name: /^Yes$/ })).toBeNull();
+
+    cleanup();
+    row(speaker({ suggestedPersonId: "p1", suggestedPersonName: "Ada Lovelace", suggestedDistance: 0.35 }));
+
+    expect(screen.getByText(/Ada Lovelace/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Yes$/ })).toBeTruthy();
   });
 });

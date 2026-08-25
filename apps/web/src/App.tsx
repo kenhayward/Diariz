@@ -20,6 +20,7 @@ const ApiReference = lazy(() => import("./pages/ApiReference"));
 // Lazy-loaded: a Platform-Administrator-only page, no reason to ship it in the main bundle.
 const LlmUsage = lazy(() => import("./pages/LlmUsage"));
 const LlmModels = lazy(() => import("./pages/LlmModels"));
+const SpeakerSuggestions = lazy(() => import("./pages/SpeakerSuggestions"));
 import WorkspaceLayout from "./components/WorkspaceLayout";
 import RouteErrorBoundary from "./components/RouteErrorBoundary";
 import EmptyDetail from "./components/EmptyDetail";
@@ -103,6 +104,18 @@ export default function App() {
           <RequireAuth>
             <Suspense fallback={null}>
               <LlmModels />
+            </Suspense>
+          </RequireAuth>
+        }
+      />
+      {/* Your own recordings only, so no permission gate - the people who can answer whether a voice belongs
+          to someone are the ones who were in the meeting. */}
+      <Route
+        path="/voices-to-confirm"
+        element={
+          <RequireAuth>
+            <Suspense fallback={null}>
+              <SpeakerSuggestions />
             </Suspense>
           </RequireAuth>
         }

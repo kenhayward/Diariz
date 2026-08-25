@@ -2586,6 +2586,73 @@ Gates (`SpeakerProfilesController`):
 | List a person's attributed speakers; toggle one in or out of training | `ManagePeople` (list) / `ManagePeople` **or the person is you** (toggle) |
 | **Play a clip, or read a speaker's segments, in a recording you do not own** | `ManageVoiceprints` |
 
+**Identification is a three-way decision, not a threshold.** `IdentificationRules.Decide` is a pure function
+over a ranked candidate list, a speech duration and four settings, returning **accept / suggest / ignore**:
+
+- **Accept** at or below `IdentificationThreshold` — named automatically, as before.
+- **Suggest** up to `IdentificationConfirmBand` — offered for confirmation; the speaker stays anonymous.
+- **Ignore** otherwise, or when the best person fails to beat the next **person** by `IdentificationMargin`,
+  or when the speaker has less than `IdentificationMinSpeechMs` of speech.
+
+The margin is measured **between people, never between two voiceprints of the same person** — a later phase
+gives one person several templates whose distances sit close together by design, and rejecting on that would
+break the case it exists for. `ISpeakerIdentifier.RankAsync` therefore returns one entry per person and
+applies **no threshold at all**: it returns evidence, and the rules decide. Two places each holding their own
+idea of what counts as a match is how an operating point becomes impossible to calibrate.
+
+All four settings live on `PlatformSettings` (replacing the compiled `Identification:Threshold`), so they are
+tunable without a redeploy. `Identification:Enabled` remains a server-level master switch.
+
+**`IdentificationRescan`** re-runs the rules across every speaker that could still be identified. Identification
+otherwise happens exactly once, in the transcription callback, so enrolling someone never revisits earlier
+recordings. It is **synchronous** (ranking costs ~0.35 ms per 1,000 gallery rows per speaker) and supports a
+**dry run** that returns the same counts without writing, so the UI can preview before committing.
+
+**It adds; it never revokes** — and that is structural rather than a flag: the scan's query selects only
+speakers that are already anonymous, unlinked and never auto-labelled, so no label exists for it to remove.
+Revoking a stale automatic label stays at transcription time.
+
+**`SpeakerIdentityDecisions`** records every accept and reject with the distance that was on offer. Rejections
+are the platform's only labelled negatives (every manual link is a positive), and a rejected `(speaker,
+person)` pair is never suggested again — though it may still be **accepted** outright later, since an improved
+voiceprint is new evidence rather than the same question repeated.
+
+**The review queue** (`SpeakerSuggestionsController`, `/voices-to-confirm`) is scoped to the **caller's own
+recordings** and needs no permission: whoever can answer whether a voice belongs to someone was in the meeting,
+and a platform-wide queue would disclose who appears in every meeting in the instance. Accepting delegates to
+`ISpeakerAssignment` — the single place a speaker becomes a person — so the opt-out guard, the enrolment and
+the centroid rebuild cannot diverge from a manual assignment.
+
+**Voiceprint diagnostics run before anything clusters a training set, and that ordering is a finding rather
+than a preference.** `VoiceprintDiagnosis.Diagnose` is a pure function over one person's sample embeddings,
+returning two distances per sample plus a verdict:
+
+- **nearest sibling** - the closest other sample. "Does this have company?"
+- **distance to others** - the centroid of *the person's other samples*, a true **leave-one-out**. "Would the
+  rest of this voiceprint recognise it?"
+
+They disagree when a pair sits together but away from everything else, which is why both are reported.
+Including a sample in its own centroid would make everything resemble itself - the exact false reassurance
+this exists to prevent, and the first thing its tests mutation-check.
+
+Verdicts reuse the calibrated identification thresholds rather than a second set of constants: within
+`IdentificationThreshold` of its nearest sibling is `Core`, within `IdentificationConfirmBand` is `Variant`
+(a different recording condition), beyond that `Alone`. `Only` is the single-sample case - most of the
+directory - which must never be reported as an outlier.
+
+**Why this preceded multi-template voiceprints.** Measured on the live instance, of 108 samples belonging to
+people with more than one, 37 sit further than 0.45 from their nearest sibling and the widest same-person pair
+is 1.134 - orthogonal. The within-person spread overlaps the impostor range, so some of it is misattribution
+rather than device variation. Clustering an unreviewed training set would promote a wrong sample from a
+diluted nuisance into a sharp false-accept for whoever that voice really belongs to.
+
+`GET /api/people/{id}/diagnostics` diagnoses **against the training set only** - an excluded sample is shown
+but does not define what the others are measured against, or dropping an outlier would make everything else
+look like one. `GET /api/people/diagnostics` ranks the whole directory worst-first and **omits healthy
+people**, so an empty result means "nothing to fix"; the UI states that rather than rendering nothing.
+
+No schema change, no worker, no GPU: every sample already carries a `vector(192)` embedding.
+
 **`ManageVoiceprints` (32) is deliberately separate from `ManagePeople`.** Merging two duplicate contacts is
 routine directory hygiene that should stay widely delegable; listening to another user's meeting audio is not.
 It is seeded to **`Platform Administrators` only** - `Administrators` keeps directory access with no
