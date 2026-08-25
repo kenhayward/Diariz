@@ -4,6 +4,14 @@ This document explains how to build the firmware using Docker, which provides a 
 
 > **Note:** For the traditional nRF Connect build method, see our [official documentation](https://docs.omi.me/doc/developer/Compile_firmware).
 
+> **Vendored-copy warning (Diariz).** This is upstream Omi documentation, kept largely as it came.
+> Its paths assume the upstream layout, where the Omi repo *is* the root; in this tree everything
+> sits one level down under `omi/`, so a path written `firmware/...` here means `omi/firmware/...`.
+> The `build-docker.sh` route below is correct and is the one to use. For anything else - the
+> pinned container image, Windows specifics, flashing, troubleshooting - the authoritative
+> document for this tree is
+> [`omi/firmware/docs/08-build-and-flash-runbook.md`](../docs/08-build-and-flash-runbook.md).
+
 ## Prerequisites
 
 1. [Docker](https://www.docker.com/products/docker-desktop/) installed on your system
@@ -84,8 +92,13 @@ The repository contains two scripts for Docker-based firmware building:
 If you prefer to run the Docker commands manually, you can use:
 
 ```bash
-# Run from the root of the repository
-docker run --rm -it -v "$(pwd):/omi" -e CMAKE_PREFIX_PATH=/opt/toolchains -e PATH="/root/.local/bin:$PATH" ghcr.io/zephyrproject-rtos/ci bash
+# Run from the root of the repository. Three deliberate differences from the upstream version of
+# this command, each fixing a real bug in this tree - see docs/08 section 8.12:
+#   - the mount source is ./omi, not $(pwd), because omi/ is a subdirectory here
+#   - the image tag is pinned; :latest ships a Zephyr SDK too new for NCS 2.7.0 to configure
+#   - the host PATH is NOT injected with -e, which would replace the container's own PATH
+# On Windows, prefix the whole command with MSYS_NO_PATHCONV=1 (build-docker.sh does this itself).
+docker run --rm -it -v "$(pwd)/omi:/omi" -e CMAKE_PREFIX_PATH=/opt/toolchains ghcr.io/zephyrproject-rtos/ci:v0.26.14 bash
 pip install --user adafruit-nrfutil
 cd /omi/firmware/
 west init -m https://github.com/nrfconnect/sdk-nrf --mr v2.7.0 v2.7.0
@@ -93,7 +106,7 @@ cd v2.7.0
 west update -o=--depth=1 -n
 west blobs fetch hal_nordic
 west zephyr-export
-west build -b xiao_ble/nrf52840/sense --pristine always ../app -- \
+west build -b xiao_ble/nrf52840/sense --pristine always ../devkit -- \
     -DNCS_TOOLCHAIN_VERSION="NONE" \
     -DCONF_FILE="prj_xiao_ble_sense_devkitv2-adafruit.conf" \
     -DDTC_OVERLAY_FILE="/omi/firmware/devkit/overlay/xiao_ble_sense_devkitv2-adafruit.overlay" \
@@ -114,8 +127,11 @@ The script automatically detects Apple Silicon (arm64) architecture and uses the
 On Windows, you may need to adjust the path mapping in the Docker command:
 
 ```bash
-docker run --rm -it -v %cd%:/omi -e CMAKE_PREFIX_PATH=/opt/toolchains ghcr.io/zephyrproject-rtos/ci bash
+docker run --rm -it -v %cd%\omi:/omi -e CMAKE_PREFIX_PATH=/opt/toolchains ghcr.io/zephyrproject-rtos/ci:v0.26.14 bash
 ```
+
+(`%cd%` is cmd.exe syntax, not bash. From Git Bash use the `$(pwd)/omi` form above with
+`MSYS_NO_PATHCONV=1` set - see section 8.2 of the runbook.)
 
 ## Flashing the Firmware
 

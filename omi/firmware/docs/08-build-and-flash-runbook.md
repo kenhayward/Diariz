@@ -5,12 +5,17 @@ device. Written for the **Omi DevKit 2** - Seeed Studio XIAO nRF52840 Sense - wh
 hardware this project targets ([07-devkit2-target.md](07-devkit2-target.md)). The consumer
 CV1 is different in almost every respect; see section 8.10.
 
-> **Not yet executed.** This runbook was written by reading the build scripts, board
-> definitions and configs in this tree, not by running them - there is no nRF Connect SDK
-> toolchain on the machine it was written on. The commands are transcribed from
-> `scripts/build-docker.sh`, `scripts/build-firmware-in-docker.sh` and
-> `devkit/CMakePresets.json`, so they should be right, but treat the first run as a
-> shakedown and correct this file as you go. Known-uncertain points are marked **[unverified]**.
+> **Executed end to end on 2026-08-25.** This runbook was originally written by reading the
+> build scripts, board definitions and configs in this tree rather than by running them. It has
+> since been run for real on Windows 11 with Docker Desktop and produced a flashable
+> `zephyr.uf2`, and this file has been corrected against what actually happened. Section 8.13
+> records the exact configuration that worked.
+>
+> The **build** half (8.2, 8.11, 8.12) is now observed fact. The **flashing and on-device** half
+> (8.4 onward) has not been exercised - no firmware has been put on a device, and no card has
+> been through the format/no-format behaviour. Points still marked **[unverified]** are the ones
+> nothing has tested; treat those the way this whole document used to be treated, and correct
+> them as you go.
 
 ---
 
@@ -47,12 +52,15 @@ That is the whole list. The container brings its own Zephyr SDK, west, CMake and
 From anywhere in the repo, in **Git Bash**:
 
 ```bash
-MSYS_NO_PATHCONV=1 ./omi/firmware/scripts/build-docker.sh
+./omi/firmware/scripts/build-docker.sh
 ```
 
-`MSYS_NO_PATHCONV=1` matters on Windows: without it Git Bash rewrites the container-side
-`/omi` mount target into a Windows path and the build fails with confusing "no such file"
-errors from inside the container.
+That is the whole command - no environment prefix. Earlier revisions of this runbook told you to
+prefix it with `MSYS_NO_PATHCONV=1`, because without it Git Bash rewrites the container-side
+`/omi` mount target into a Windows path (`C:/Program Files/Git/omi`) and the build fails with
+confusing "no such file" errors from inside the container. **The script now exports that itself**
+(8.12) - verified to behave identically to prefixing it - so it is no longer the caller's problem.
+The variable is meaningless on Linux and macOS, and setting it there is a harmless no-op.
 
 First run downloads the container image and then ~1.5 GB of nRF Connect SDK sources into
 `omi/firmware/v2.7.0/`. Budget 20-40 minutes and a good connection. Later runs reuse both
@@ -61,8 +69,12 @@ and take a few minutes.
 To start completely fresh (deletes the in-tree SDK and build directories):
 
 ```bash
-MSYS_NO_PATHCONV=1 ./omi/firmware/scripts/build-docker.sh --clean
+./omi/firmware/scripts/build-docker.sh --clean
 ```
+
+You rarely want this. `west build` already runs with `--pristine always`, so the compile is clean
+every time regardless; `--clean` additionally deletes `omi/firmware/v2.7.0/` and re-downloads the
+~1.5 GB of SDK sources. Reach for it only when the west workspace itself is suspect.
 
 ### Where the output lands
 
@@ -81,35 +93,66 @@ not need it. A missing `zephyr.zip` is not a failed build.
 All of it is gitignored, along with `omi/firmware/v2.7.0/`. Nothing from a build should
 ever appear in `git status`; if it does, the ignore rules need extending.
 
-### The image is unpinned, and it has already bitten us
+### The image is pinned, and why it has to be
 
-`build-docker.sh` pulls `ghcr.io/zephyrproject-rtos/ci` with no tag, so it follows `latest`.
-That is not hypothetical: on 2026-08-25 the current image shipped a Debian Python marked
-**externally managed (PEP 668)**, and the script's `pip install --user adafruit-nrfutil`
-died with `error: externally-managed-environment` - taking the whole build with it, before a
-single line was compiled, because the install was chained to the build with `&&`.
+`build-docker.sh` pins `ghcr.io/zephyrproject-rtos/ci:v0.26.14`. This is not caution for its own
+sake. The application targets **nRF Connect SDK 2.7.0**, which ships **Zephyr 3.6.99**, which
+requires **Zephyr SDK 0.16.x**. That is a fixed target: no future SDK will ever satisfy it. So
+there is no such thing as an image that is both current and correct here, and following `latest`
+does not keep you up to date - it guarantees drifting out of the only range that can work.
 
-Fixed in this tree (see section 8.12), but the general hazard remains: if a build that
-worked last month stops working and nothing in the tree changed, **suspect the image
-first**. You can pin one without editing anything:
+It drifted twice on the same day, each time killing the build before a line was compiled:
+
+| `latest` shipped | Failure |
+|---|---|
+| A Debian Python enforcing **PEP 668** | `pip install --user adafruit-nrfutil` died with `error: externally-managed-environment`, and the install was chained to the build with `&&` |
+| **Zephyr SDK 1.0.1** | `CMake Error ... Could not find a configuration file for package "Zephyr-sdk" that is compatible with requested version "0.16"` |
+
+Both are fixed in this tree (8.12). What the candidate tags actually carry:
+
+| Tag | Zephyr SDK | |
+|---|---|---|
+| `latest` | 1.0.1 | too new - cannot configure |
+| `v0.27.0` / `v0.27.4` | 0.17.0-rc1 / 0.17.0 | too new |
+| `v0.26.15` | 0.16.9-rc2 | right series, but a release candidate |
+| **`v0.26.14`** | **0.16.8** | **the pinned default** - the SDK NCS 2.7.0 specifies. Verified end to end |
+| `v0.26.13` | 0.16.8 | equivalent fallback |
+| `v0.26.4` | 0.16.1 | in range; the tag an earlier revision of this runbook guessed at |
+
+The override still exists, so you can escape the pin without editing anything:
 
 ```bash
-ZEPHYR_CI_IMAGE=ghcr.io/zephyrproject-rtos/ci:v0.26.4 \
-  MSYS_NO_PATHCONV=1 ./omi/firmware/scripts/build-docker.sh
+ZEPHYR_CI_IMAGE=ghcr.io/zephyrproject-rtos/ci:v0.26.13 ./omi/firmware/scripts/build-docker.sh
 ```
 
-Pick a tag from the [package listing](https://github.com/zephyrproject-rtos/docker-image/pkgs/container/ci).
-If you find one that works end to end, record it here - a known-good tag is worth more than
-the newest one.
+To read the SDK version out of a tag **before** pulling ~20 GB of image (this fetches only the
+image config blob):
+
+```bash
+docker buildx imagetools inspect ghcr.io/zephyrproject-rtos/ci:v0.26.14 --format '{{json .Image}}' \
+  | tr ',' '\n' | grep -i "zsdk_version=[0-9]"
+```
+
+Tags come from the [package listing](https://github.com/zephyrproject-rtos/docker-image/pkgs/container/ci).
+The old advice still holds in spirit - if a build that worked last month stops working and nothing
+in the tree changed, suspect the image - but with the tag pinned, that now takes someone changing
+the pin.
 
 ### Windows gotchas
 
-* **`MSYS_NO_PATHCONV=1`** - covered above. Confirmed necessary in practice.
-* **`the input device is not a TTY`** - the script runs `docker run --rm -it`. If your
-  terminal refuses, prefix with `winpty`, or edit the script to drop `-it`. **[unverified]**
+* **`MSYS_NO_PATHCONV=1`** - no longer the caller's problem; the script exports it (8.12).
+  Verified both ways: without it, `-v "$REPO_ROOT:/omi"` mounts at `C:/Program Files/Git/omi` and
+  the container cannot see the tree; with it, `/omi` lists `firmware hardware tools` as expected.
+* **`cannot attach stdin to a TTY-enabled container because stdin is not a terminal`** - the script
+  runs `docker run --rm -it`, so it needs a real terminal. Confirmed: it fails exactly this way
+  from a non-interactive shell (a CI job, an editor task runner, an agent). Interactive Git Bash is
+  fine. To run it headless, drop `-it` from the script; `winpty` is the other documented workaround
+  but has not been tried. Depending on the Docker version you may see the older wording,
+  `the input device is not a TTY`.
 * **Slow builds / file-permission oddities** - the bind mount crosses the Windows/WSL2
-  boundary. If it is painful, clone the repo inside the WSL2 filesystem and build there.
-  **[unverified]**
+  boundary. In practice this was a non-issue on 2026-08-25: a build from a repo on an NTFS drive
+  completed with no permission problems and no notable slowness. Keep the fallback in mind - clone
+  inside the WSL2 filesystem and build there - but do not pre-emptively reach for it.
 
 ---
 
@@ -194,8 +237,10 @@ adafruit-nrfutil dfu genpkg --dev-type 0x0052 --dev-revision 0xCE68 \
 ```
 
 That package is for the **Adafruit nRF52 bootloader's** DFU, which is a different mechanism
-from the CV1's MCUboot OTA. **[unverified]** - the UF2 route is simpler, needs no app, and
-is what this runbook recommends. Reach for OTA only if you have a reason to.
+from the CV1's MCUboot OTA. The package is genuinely produced - a 303 KB `zephyr.zip` came out of
+the verified build (8.13) - but **[unverified]** still applies to installing it: nothing has been
+flashed this way. The UF2 route is simpler, needs no app, and is what this runbook recommends.
+Reach for OTA only if you have a reason to.
 
 ---
 
@@ -290,11 +335,12 @@ authoritative build, and `BUILD_AND_OTA_FLASH.md` covers OTA. Note that script r
 
 | Symptom | Likely cause |
 |---|---|
-| `error: externally-managed-environment` | An image whose Python enforces PEP 668. Fixed in this tree (8.12); if it returns, pin an older `ZEPHYR_CI_IMAGE` |
+| `Could not find a configuration file for package "Zephyr-sdk"` compatible with `"0.16"` | The image's Zephyr SDK is outside the 0.16.x range NCS 2.7.0 requires. Fixed by the pin (8.12); if you overrode `ZEPHYR_CI_IMAGE`, choose a `v0.26.x` tag |
+| `error: externally-managed-environment` | An image whose Python enforces PEP 668. Fixed in this tree (8.12); the pinned `v0.26.14` is not affected |
 | `west: command not found` / `cmake: not found` inside the container | The host PATH is being injected with `-e PATH=...`. Fixed in this tree (8.12) - check the script has not been reverted |
-| Build finishes but there is no `zephyr.zip` | Expected when `adafruit-nrfutil` could not install. The UF2 is what you flash |
-| `no such file or directory` from inside the container | Missing `MSYS_NO_PATHCONV=1` on Windows |
-| `the input device is not a TTY` | `docker run -it` under a non-TTY terminal; use `winpty` or drop `-it` |
+| Build finishes but there is no `zephyr.zip` | Expected when `adafruit-nrfutil` could not install. The UF2 is what you flash. The pinned image installs it fine, so on `v0.26.14` you should get one |
+| `no such file or directory` from inside the container | Git Bash path conversion. The script exports `MSYS_NO_PATHCONV=1` itself (8.12), so this should only bite when running docker by hand |
+| `cannot attach stdin to a TTY-enabled container` / `the input device is not a TTY` | `docker run -it` under a non-TTY shell. Run it from an interactive terminal, drop `-it`, or try `winpty` |
 | `west update` fails or hangs | Network, or a half-initialised workspace: `--clean` and retry |
 | `No board named 'xiao_ble_sense'` | Board renamed in NCS 2.7; use `xiao_ble/nrf52840/sense` |
 | Build succeeds, no `zephyr.uf2` | UF2 output is board-driven; check the build log for `CONFIG_BUILD_OUTPUT_UF2` |
@@ -305,7 +351,7 @@ authoritative build, and `BUILD_AND_OTA_FLASH.md` covers OTA. Note that script r
 
 ---
 
-## 8.12 Changes we made to the upstream build scripts
+## 8.12 Changes we made to the upstream build scripts and docs
 
 Recorded here because they are edits to vendored code, and a future diff against upstream
 will show them.
@@ -320,6 +366,12 @@ will show them.
 * **Moved the `adafruit-nrfutil` install out of the `&&` chain** into the inner script, so a
   failure to install an optional packaging tool can no longer abort the build.
 * **Added `ZEPHYR_CI_IMAGE`** so the image can be pinned without editing the script.
+* **Pinned the default image to `ghcr.io/zephyrproject-rtos/ci:v0.26.14`** (Zephyr SDK 0.16.8),
+  replacing the unpinned `:latest`. NCS 2.7.0 requires SDK 0.16.x, so an unpinned tag is not
+  merely risky here, it is wrong - see 8.2. The override still works.
+* **Exported `MSYS_NO_PATHCONV=1` inside the script**, so Windows callers no longer have to
+  remember it. Verified equivalent to prefixing it on the invocation, and an inert no-op on
+  Linux and macOS.
 
 **`scripts/build-firmware-in-docker.sh`**
 
@@ -328,7 +380,82 @@ will show them.
 * Makes OTA packaging conditional on the tool actually being present, and omits `zephyr.zip`
   from the summary when it was not produced.
 
-**[unverified]** - these were reasoned from the scripts and syntax-checked, not run: the
-sandbox this was written in cannot pull container images. The PEP 668 failure they address
-was real and reported from a live run; whether the PATH fix was also load-bearing will only
-be known once a build gets past the pip step.
+**`scripts/docker-build.md`** (upstream documentation, not code)
+
+* Added a banner marking it as a vendored copy whose paths assume the upstream layout, and
+  pointing at this runbook as authoritative for this tree.
+* Corrected the **Manual Build Process** recipe, which carried three real errors: it mounted
+  `$(pwd)` (the repo root) rather than `$(pwd)/omi`, injected the host `PATH` with `-e`, and
+  built `../app` - a directory that does not exist in this tree; the application is `../devkit`.
+  Pinned the image in its example commands to match the script.
+
+**Verified on 2026-08-25.** These edits were originally reasoned from the scripts and only
+syntax-checked, because the sandbox they were written in could not pull container images. A
+full build has since run with all of them in place and produced a flashable `zephyr.uf2`
+(8.13), so the PEP 668 fallback, the PATH fix, the pin and the exported `MSYS_NO_PATHCONV`
+are all now known to work together.
+
+One caveat on the PATH fix specifically: the build that validated it also changed the image,
+and `v0.26.14` may not have needed it. It is correct either way - injecting the host's Windows
+`PATH` into a Linux container cannot be right - but it has not been isolated as independently
+load-bearing.
+
+---
+
+## 8.13 The first verified build
+
+The configuration that produced a flashable image, recorded so a future failure can be diffed
+against a known-good state rather than guessed at.
+
+| | |
+|---|---|
+| Date | 2026-08-25 |
+| Host | Windows 11 (10.0.26200), Docker Desktop 29.6.1, WSL2 backend |
+| Shell | Git Bash, interactive |
+| Image | `ghcr.io/zephyrproject-rtos/ci:v0.26.14` - Zephyr SDK 0.16.8, ~19.9 GB on disk |
+| SDK sources | `omi/firmware/v2.7.0/`, ~2.2 GB after `west update` |
+| Command | `./omi/firmware/scripts/build-docker.sh` |
+| Result | All four artifacts, including the optional `zephyr.zip` |
+
+Artifact sizes, useful as a sanity check that a later build produced something comparable:
+
+| File | Bytes |
+|---|---|
+| `zephyr.uf2` | 604,672 |
+| `zephyr.hex` | 850,559 |
+| `zephyr.zip` | 303,109 |
+| `zephyr.bin` | 302,316 |
+
+Confirmed at the same time:
+
+* **`git status` stays clean.** Neither `v2.7.0/` nor `build/` appears - the ignore rules in
+  `.gitignore` (lines 482-483) cover them, as 8.2 claims.
+* **It builds correctly inside a git worktree.** `build-docker.sh` derives its mount from the
+  script's own location rather than the caller's working directory, and mounts only `<repo>/omi`,
+  so a worktree builds its own tree with no reference to the main checkout. Note the SDK download
+  is **per-worktree** - it is not shared with the main clone.
+* **`zephyr.zip` is produced on this image.** `v0.26.14` is Ubuntu 22.04 with Python 3.10, so
+  `adafruit-nrfutil` installs without hitting the PEP 668 fallback.
+
+### Disk cost
+
+Not small, and worth knowing before you start:
+
+| | |
+|---|---|
+| Pinned image | ~19.9 GB |
+| SDK sources per worktree | ~2.2 GB |
+| Build output | ~2 MB |
+
+If a failed run already pulled `ghcr.io/zephyrproject-rtos/ci:latest` (~31.6 GB), it is now
+useless and can be reclaimed:
+
+```bash
+docker image rm ghcr.io/zephyrproject-rtos/ci:latest
+```
+
+### Still not exercised
+
+Everything from section 8.5 onward. Nothing has been flashed, no card has been formatted or
+deliberately corrupted, the six-blink failure signal has not been seen, and no audio has come
+off a device. The build is trustworthy; the device half of this runbook is not yet.

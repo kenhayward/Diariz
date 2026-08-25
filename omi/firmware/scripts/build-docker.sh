@@ -9,6 +9,14 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
+# Git Bash rewrites arguments that look like Unix paths into Windows paths before a native
+# .exe sees them, which turns the container-side `-v ...:/omi` mount target into something
+# like C:/Program Files/Git/omi and makes the build fail with confusing "no such file"
+# errors from inside the container. Exporting this here is equivalent to prefixing it on
+# the invocation (verified), so it does not have to be the caller's problem. Unused and
+# harmless on Linux and macOS.
+export MSYS_NO_PATHCONV=1
+
 # Check if Docker is installed
 if ! command -v docker &> /dev/null; then
     echo -e "${RED}Error: Docker is not installed or not in PATH${NC}"
@@ -55,10 +63,16 @@ echo -e "${YELLOW}This might take a while the first time.${NC}"
 
 # Run the Docker container with the repository mounted correctly
 # Rely on the environment variables set within the ghcr.io/zephyrproject-rtos/ci image
-# Overridable so a broken `latest` can be worked around without editing this script.
-# The tag is unpinned by default, which means upstream image changes can break the build
-# - see the runbook, section 8.2.
-ZEPHYR_CI_IMAGE="${ZEPHYR_CI_IMAGE:-ghcr.io/zephyrproject-rtos/ci:latest}"
+#
+# The tag is PINNED, deliberately. This application targets nRF Connect SDK 2.7.0, which
+# ships Zephyr 3.6.99, which requires Zephyr SDK 0.16.x. That is a fixed target: no future
+# SDK will ever satisfy it. Following `latest` is therefore not "staying current", it is
+# drifting out of the only range that can work - it reached SDK 1.0.1 and CMake refused to
+# configure at all. v0.26.14 carries SDK 0.16.8, the version NCS 2.7.0 specifies, and is
+# the newest image whose SDK is a release rather than a release candidate.
+#
+# Verified end to end on 2026-08-25. Still overridable - see the runbook, section 8.2.
+ZEPHYR_CI_IMAGE="${ZEPHYR_CI_IMAGE:-ghcr.io/zephyrproject-rtos/ci:v0.26.14}"
 echo -e "${YELLOW}Image: ${ZEPHYR_CI_IMAGE}${NC}"
 
 # Two things here are deliberate:
