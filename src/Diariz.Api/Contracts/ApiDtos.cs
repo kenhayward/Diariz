@@ -505,6 +505,33 @@ public record SetVoiceSampleSpansRequest(IReadOnlyList<VoiceprintSpan> Spans);
 /// currently label.</summary>
 public record PersonDetailDto(PersonDto Person, int IdentifiedCount, IReadOnlyList<VoiceSampleDto> Samples);
 
+/// <summary>One speaker attributed to a person, whether or not it trains their voiceprint.
+///
+/// <para>Strictly larger a set than <see cref="PersonDetailDto.Samples"/>: automatic identification links a
+/// speaker without ever creating a voice sample, which is why a list built from samples alone read as
+/// arbitrary rather than as "the recordings this person appears in".</para>
+///
+/// <para><paramref name="IsTraining"/> and <paramref name="VoiceSampleId"/> are independent. An excluded
+/// sample is not training but still has an id, because re-including it is a toggle rather than a fresh
+/// enrolment.</para>
+///
+/// <para><paramref name="CanAccessRecording"/> is false when the caller neither owns the recording nor holds
+/// <c>ManageVoiceprints</c>. The row is still returned - it is part of what the voiceprint learned from -
+/// and the client renders it without a transcript or a play button.</para></summary>
+public record PersonAttributionDto(
+    Guid SpeakerId,
+    Guid RecordingId,
+    string RecordingName,
+    string SpeakerLabel,
+    string LinkedBy,
+    bool IsTraining,
+    Guid? VoiceSampleId,
+    long SpeechMs,
+    bool CanAccessRecording);
+
+/// <summary>Whether a speaker attributed to a person should train their voiceprint.</summary>
+public record SetTrainingRequest(bool Training);
+
 /// <summary>Create a person. Everything but the name is optional, and supplying
 /// <paramref name="RecordingId"/> + <paramref name="Label"/> enrols a voiceprint in the same call - which is
 /// what the "new person" affordance on a transcript does.</summary>
