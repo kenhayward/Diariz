@@ -387,9 +387,18 @@ public class PeopleController : ControllerBase
         if (!await CanManagePeopleAsync()) return Forbid();
         if (!await _db.People.AnyAsync(p => p.Id == id)) return NotFound();
 
+        var samples = await _db.VoiceSamples.Where(v => v.PersonId == id).ToListAsync();
+        var sampleSpeakerIds = samples.Select(v => v.SpeakerId).Distinct().ToList();
+
+        // Linked speakers, plus any speaker still holding a sample for this person. The second set is how a
+        // speaker that has been unassigned or reassigned stops being invisible: its sample was inside the
+        // centroid with nothing on screen accounting for it.
         var speakers = await _db.Speakers
-            .Where(s => s.PersonId == id)
-            .Select(s => new { s.Id, s.RecordingId, s.Label, s.IdentifiedAuto, s.IsMultiSpeaker })
+            .Where(s => s.PersonId == id || sampleSpeakerIds.Contains(s.Id))
+            .Select(s => new
+            {
+                s.Id, s.RecordingId, s.Label, s.IdentifiedAuto, s.IsMultiSpeaker, s.PersonId,
+            })
             .ToListAsync();
 
         var recIds = speakers.Select(s => s.RecordingId).Distinct().ToList();
@@ -406,6 +415,10 @@ public class PeopleController : ControllerBase
             .Where(r => canAssess || r.UserId == UserId)
             .Select(r => r.Id)
             .ToHashSet();
+
+        // Narrower than access on purpose: AssignSpeaker requires ownership, so a reassign control on a
+        // recording you merely have assessment access to would be a button that always fails.
+        var owned = recordings.Where(r => r.UserId == UserId).Select(r => r.Id).ToHashSet();
 
         // Speech per speaker comes from the current transcription's segments, which the API already stores -
         // no worker involvement, and the same figure a minimum-duration gate would read.
@@ -429,17 +442,17 @@ public class PeopleController : ControllerBase
                 ? ms
                 : 0;
 
-        var samples = await _db.VoiceSamples.Where(v => v.PersonId == id).ToListAsync();
-
         return Ok(PersonAttributions.Build(
             speakers
                 .Select(s => new AttributionInput(
                     s.Id, s.RecordingId, s.Label, s.IdentifiedAuto, s.IsMultiSpeaker,
-                    SpeechFor(s.RecordingId, s.Label)))
+                    SpeechFor(s.RecordingId, s.Label),
+                    VoiceprintTraining.StillLinked(id, s.PersonId, s.IsMultiSpeaker)))
                 .ToList(),
             samples,
             recordings.ToDictionary(r => r.Id, r => r.Display),
-            accessible));
+            accessible,
+            owned));
     }
 
     [HttpPut("{id:guid}/attributions/{speakerId:guid}/training")]

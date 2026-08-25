@@ -182,4 +182,58 @@ public class VoiceprintTrainingIntegrationTests(ContainersFixture fx)
         Assert.Contains(rows, r => r.PersonId == scattered);
         Assert.DoesNotContain(rows, r => r.PersonId == moved);
     }
+
+    [Fact]
+    public async Task A_moved_speakers_sample_is_still_listed_and_says_so()
+    {
+        // The counterpart to keeping it out of the centroid. Dropping six samples out of six voiceprints
+        // with no trace would repeat the original defect in a new place: invisible is how they survived.
+        var (personId, userId) = await SeedAsync(_ => null);
+
+        await using var db = fx.CreateDbContext();
+        var result = await Controller(db, userId).Attributions(personId);
+        var rows = Assert.IsAssignableFrom<IReadOnlyList<PersonAttributionDto>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+
+        Assert.Equal(2, rows.Count);
+
+        var moved = rows.Single(r => r.SpeakerLabel == "SPEAKER_01");
+        Assert.False(moved.StillLinked);
+        Assert.False(moved.IsTraining);
+        // The sample is named, not hidden: that is what makes the row explain itself rather than just
+        // appear.
+        Assert.NotNull(moved.VoiceSampleId);
+
+        var kept = rows.Single(r => r.SpeakerLabel == "SPEAKER_00");
+        Assert.True(kept.StillLinked);
+        Assert.True(kept.IsTraining);
+    }
+
+    [Fact]
+    public async Task Assessment_access_does_not_carry_the_right_to_reassign()
+    {
+        // Manage voiceprints exists so someone can listen to a segment and judge whether it is the right
+        // person. Editing the owner's transcript is a different act, and AssignSpeaker refuses it - so the
+        // control must not be offered, or it is a button that always fails.
+        var (personId, ownerId) = await SeedAsync(self => self);
+
+        await using var setup = fx.CreateDbContext();
+        var assessor = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test" };
+        setup.Users.Add(assessor);
+        Perms.Grant(setup, assessor.Id, PlatformPermission.ManagePeople | PlatformPermission.ManageVoiceprints);
+        await setup.SaveChangesAsync();
+
+        await using var db = fx.CreateDbContext();
+        var mine = Assert.IsAssignableFrom<IReadOnlyList<PersonAttributionDto>>(
+            Assert.IsType<OkObjectResult>((await Controller(db, ownerId).Attributions(personId)).Result).Value);
+        var theirs = Assert.IsAssignableFrom<IReadOnlyList<PersonAttributionDto>>(
+            Assert.IsType<OkObjectResult>((await Controller(db, assessor.Id).Attributions(personId)).Result).Value);
+
+        Assert.All(mine, r => Assert.True(r.CanReassign));
+
+        // Listed and audible to the assessor, but not editable - the two permissions are deliberately not
+        // the same permission.
+        Assert.All(theirs, r => Assert.True(r.CanAccessRecording));
+        Assert.All(theirs, r => Assert.False(r.CanReassign));
+    }
 }

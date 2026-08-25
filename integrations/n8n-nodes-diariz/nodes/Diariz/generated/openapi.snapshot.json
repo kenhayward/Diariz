@@ -2586,6 +2586,9 @@
           "canAccessRecording": {
             "type": "boolean"
           },
+          "canReassign": {
+            "type": "boolean"
+          },
           "isTraining": {
             "type": "boolean"
           },
@@ -2614,6 +2617,9 @@
               "string"
             ]
           },
+          "stillLinked": {
+            "type": "boolean"
+          },
           "voiceSampleId": {
             "format": "uuid",
             "type": [
@@ -2631,7 +2637,9 @@
           "isTraining",
           "voiceSampleId",
           "speechMs",
-          "canAccessRecording"
+          "canAccessRecording",
+          "stillLinked",
+          "canReassign"
         ],
         "type": "object"
       },

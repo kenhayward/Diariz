@@ -4,8 +4,12 @@ using Diariz.Domain.Entities;
 namespace Diariz.Api.Services;
 
 /// <summary>One attributed speaker, as the controller has already read it from the database.</summary>
+/// <param name="StillLinked">Whether the speaker still names this person - see
+/// <see cref="VoiceprintTraining.StillLinked"/>. False for one that has been unassigned, reassigned, or
+/// marked as overlapping speech.</param>
 public record AttributionInput(
-    Guid SpeakerId, Guid RecordingId, string Label, bool IdentifiedAuto, bool IsMultiSpeaker, long SpeechMs);
+    Guid SpeakerId, Guid RecordingId, string Label, bool IdentifiedAuto, bool IsMultiSpeaker, long SpeechMs,
+    bool StillLinked);
 
 /// <summary>What a person's Voiceprint tab lists: every speaker attributed to them, with whether it
 /// currently trains the voiceprint.
@@ -23,7 +27,8 @@ public static class PersonAttributions
         IReadOnlyList<AttributionInput> speakers,
         IReadOnlyList<VoiceSample> samples,
         IReadOnlyDictionary<Guid, string> recordingNames,
-        IReadOnlySet<Guid> accessibleRecordings)
+        IReadOnlySet<Guid> accessibleRecordings,
+        IReadOnlySet<Guid> ownedRecordings)
     {
         // Keyed on the speaker, never the recording: one person can have a speaker in each of two recordings
         // and only one of them enrolled.
@@ -32,9 +37,11 @@ public static class PersonAttributions
             .ToDictionary(g => g.Key, g => g.OrderBy(s => s.CreatedAt).First());
 
         return speakers
-            // Overlapping audio is a mix of people and can never train a single-person voiceprint, so it is
-            // not a candidate at all rather than a candidate the server would refuse.
-            .Where(s => !s.IsMultiSpeaker)
+            // A speaker that no longer names this person is not a candidate - overlapping audio is a mix of
+            // people and can never train a single-person voiceprint, and an unassigned one is the user's own
+            // statement that it was not them. It is listed anyway when a sample survives on it, because a
+            // sample inside a centroid that nothing on screen accounts for is the defect this closes.
+            .Where(s => s.StillLinked || bySpeaker.ContainsKey(s.SpeakerId))
             .Select(s =>
             {
                 var sample = bySpeaker.GetValueOrDefault(s.SpeakerId);
@@ -44,10 +51,12 @@ public static class PersonAttributions
                     recordingNames.TryGetValue(s.RecordingId, out var name) ? name : DeletedRecording,
                     s.Label,
                     s.IdentifiedAuto ? "auto" : "manual",
-                    sample is { ExcludedAt: null },
+                    sample is { ExcludedAt: null } && s.StillLinked,
                     sample?.Id,
                     s.SpeechMs,
-                    accessibleRecordings.Contains(s.RecordingId));
+                    accessibleRecordings.Contains(s.RecordingId),
+                    s.StillLinked,
+                    ownedRecordings.Contains(s.RecordingId));
             })
             .OrderBy(r => r.RecordingName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.SpeakerLabel, StringComparer.OrdinalIgnoreCase)
