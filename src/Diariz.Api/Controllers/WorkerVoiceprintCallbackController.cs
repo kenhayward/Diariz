@@ -47,6 +47,9 @@ public class WorkerVoiceprintCallbackController : ControllerBase
 
         if (body.Embedding is { Length: > 0 }) sample.Embedding = new Vector(body.Embedding);
         sample.UsedMs = body.UsedMs;
+        sample.RecomputeQueuedAt = null;
+        // A retry that worked clears the warning, or a row that failed once carries it for ever.
+        sample.RecomputeFailedAt = null;
 
         var speaker = await _db.Speakers.FirstOrDefaultAsync(s => s.Id == sample.SpeakerId);
         if (speaker is not null) speaker.EmbeddingStale = false;
@@ -73,9 +76,11 @@ public class WorkerVoiceprintCallbackController : ControllerBase
         var sample = await _db.VoiceSamples.FirstOrDefaultAsync(v => v.Id == body.VoiceSampleId);
         if (sample is null) return NotFound();
 
-        // Pending is derived from UsedMs being null. Zero is the honest value here: nothing was embedded
-        // this time round, and the row stops spinning.
-        sample.UsedMs = 0;
+        // UsedMs is left alone. Writing zero here is what the row used to do to stop itself spinning, and
+        // it rendered as "trains on 0:00" - a confident figure for audio that was never measured. The
+        // vector is untouched on failure, so the duration describing it must be too.
+        sample.RecomputeQueuedAt = null;
+        sample.RecomputeFailedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(CancellationToken.None);
 
         _log.LogWarning("Voiceprint re-embed failed for sample {SampleId}: {Error}", sample.Id, body.Error);

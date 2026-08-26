@@ -349,6 +349,17 @@ flagged recording meant remembering its name, switching tabs and finding it agai
 the rows beneath it (it counted only the outliers while the list showed everything). The ones worth a listen
 sort to the top, and a tick box narrows a long list to just those.
 
+**Re-measuring reports whether it worked.** Whether a job is in flight is recorded rather than inferred: it used to be read off the span selection, and selecting the whole speaker - the state every row starts in - is stored as no selection, so the commonest case reported nothing at all and the button looked inert. A failure now says so too. It leaves the existing voiceprint alone, which is right, but the row previously recorded zero seconds of training audio and was indistinguishable from a success. The button is named for what it does: it re-embeds **one recording's** contribution, and the person's voiceprint is the average of every recording behind it, so this is not a rebuild of the whole print.
+
+**A recording that turns out to be somebody else is fixed from the row it was found on.** Each row carries
+the same speaker typeahead the transcript and the Speakers tab use, showing who it currently says this is:
+reassign it to the right person, create someone not yet in the directory, mark it as **Multiple speakers**
+where two people talked over each other, or unlink it. Whichever is chosen, the recording stops training that
+person's voiceprint immediately, because training follows the transcript's own answer. The control appears
+only on recordings the caller **owns** - `ManageVoiceprints` grants listening to a segment for assessment,
+not editing somebody else's transcript, and all three endpoints behind the control enforce ownership, so
+offering it without the check would produce a button that always failed.
+
 **The figures are similarity, not distance.** They were printed as raw cosine distance under a label that
 reads as a match, so the worst recording in the directory displayed the largest and most reassuring number on
 the screen. `closest other: 82%` was an 18% match.
@@ -386,7 +397,7 @@ either, the row is still listed - it is part of what trained the voiceprint - bu
 recording you cannot access.
 
 Expanding one lists that speaker's segments with **tick boxes**: untick the places where someone
-else was talking over them and press **Recompute voiceprint**, and the worker re-embeds from exactly the
+else was talking over them and press **Re-measure this recording**, and the worker re-embeds from exactly the
 audio left ticked. A run of ticks queues **one** job, not one per click. What is stored is a set of
 **time spans**, not segment ids - a re-transcription replaces every segment row, and ids would dangle where
 wall-clock times survive - and ticking everything stores nothing at all, which is the "whole speaker" state

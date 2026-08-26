@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -17,6 +17,10 @@ vi.mock("../lib/api", () => ({
     removeVoiceSample: vi.fn(),
     personClip: vi.fn(),
     getPersonDiagnostics: vi.fn(),
+    searchPeople: vi.fn(),
+    assignSpeaker: vi.fn(),
+    markMultiSpeaker: vi.fn(),
+    createPerson: vi.fn(),
   },
   apiErrorMessage: (_e: unknown, fallback: string) => fallback,
 }));
@@ -36,7 +40,8 @@ function sample(over: Partial<VoiceSample> = {}): VoiceSample {
   return {
     id: "vs1", recordingId: "r1", recordingName: "Standup", speakerLabel: "SPEAKER_00",
     startMs: 0, createdAt: "2026-07-29T00:00:00Z",
-    selectedMs: 3000, usedMs: 3000, stale: false, pending: false, spans: [], ...over,
+    selectedMs: 3000, usedMs: 3000, stale: false, pending: false, recomputeFailed: false,
+    spans: [], ...over,
   };
 }
 
@@ -95,6 +100,12 @@ beforeEach(() => {
   mock(api.setVoiceSampleSpans).mockResolvedValue(undefined);
   mock(api.removeVoiceSample).mockResolvedValue(undefined);
   mock(api.getPersonDiagnostics).mockResolvedValue({ samples: [], aloneCount: 0, widestPair: null });
+  mock(api.searchPeople).mockResolvedValue([
+    { ...person(), id: "p9", name: "Grace Hopper" },
+  ]);
+  mock(api.assignSpeaker).mockResolvedValue(undefined);
+  mock(api.markMultiSpeaker).mockResolvedValue(undefined);
+  mock(api.createPerson).mockResolvedValue(undefined);
 });
 
 describe("PersonVoiceprintTab", () => {
@@ -171,7 +182,7 @@ describe("PersonVoiceprintTab", () => {
 
     await userEvent.click(await screen.findByRole("checkbox", { name: /Two/ }));
     await userEvent.click(screen.getByRole("checkbox", { name: /Three/ }));
-    await userEvent.click(screen.getByRole("button", { name: /Recompute voiceprint/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Re-measure this recording/ }));
 
     expect(api.setVoiceSampleSpans).toHaveBeenCalledTimes(1);
     expect(api.setVoiceSampleSpans).toHaveBeenCalledWith("p1", "vs1", [{ startMs: 0, endMs: 1000 }]);
@@ -200,7 +211,7 @@ describe("PersonVoiceprintTab", () => {
 
     await userEvent.click(await screen.findByRole("checkbox", { name: /Two/ }));
     await userEvent.click(screen.getByRole("checkbox", { name: /Three/ }));
-    await userEvent.click(screen.getByRole("button", { name: /Recompute voiceprint/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Re-measure this recording/ }));
 
     expect(api.setVoiceSampleSpans).toHaveBeenCalledWith("p1", "vs1", []);
   });
@@ -213,7 +224,7 @@ describe("PersonVoiceprintTab", () => {
 
     for (const box of await screen.findAllByRole("checkbox")) await userEvent.click(box);
 
-    expect(screen.getByRole("button", { name: /Recompute voiceprint/ }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: /Re-measure this recording/ }).hasAttribute("disabled")).toBe(true);
   });
 
   it("explains and offers nothing for someone who opted out", async () => {
@@ -229,7 +240,7 @@ describe("PersonVoiceprintTab", () => {
     setup(person({ canManageBiometrics: false }));
 
     expect(await screen.findByText("Standup")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Recompute voiceprint/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Re-measure this recording/ })).toBeNull();
   });
 
 
@@ -314,7 +325,7 @@ describe("PersonVoiceprintTab", () => {
     setup();
     await userEvent.click(await screen.findByRole("button", { name: /Show segments/ }));
     await userEvent.click(await screen.findByRole("checkbox", { name: /Two/ }));
-    await userEvent.click(screen.getByRole("button", { name: /Recompute voiceprint/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Re-measure this recording/ }));
 
     await waitFor(() => expect(screen.getByText(/Could not queue the recompute/)).toBeTruthy());
   });
@@ -466,5 +477,115 @@ describe("PersonVoiceprintTab", () => {
     await userEvent.click(screen.getByRole("button", { name: "Hide segments" }));
 
     expect(window.HTMLMediaElement.prototype.pause).toHaveBeenCalled();
+  });
+
+  // ---- Reassigning. When a recording behind someone's voiceprint turns out to be somebody else, the
+  // fix belongs where you found it - not in the transcript, hunting for the speaker again. ----
+
+  it("reassigns by recording and speaker label, which is what the endpoint is keyed on", async () => {
+    // Passing the speaker id instead would 404, and nothing in the types would catch it: both are
+    // strings, and both are on the row.
+    setup();
+    await screen.findByText("Standup");
+
+    await userEvent.click(screen.getByRole("button", { name: /change who SPEAKER_00 is/i }));
+    await userEvent.type(screen.getByRole("combobox"), "Grace");
+    await userEvent.click(await screen.findByRole("option", { name: /Grace Hopper/ }));
+
+    expect(api.assignSpeaker).toHaveBeenCalledWith("r1", "SPEAKER_00", "p9");
+  });
+
+  it("unlinks the speaker rather than guessing who it was", async () => {
+    setup();
+    await screen.findByText("Standup");
+
+    await userEvent.click(screen.getByRole("button", { name: /change who SPEAKER_00 is/i }));
+    await userEvent.click(screen.getByRole("option", { name: "Unassigned" }));
+
+    expect(api.assignSpeaker).toHaveBeenCalledWith("r1", "SPEAKER_00", null);
+  });
+
+  it("re-reads the list after a reassign", async () => {
+    // Otherwise the row goes on claiming the old person until the modal is closed and reopened.
+    setup();
+    await screen.findByText("Standup");
+    mock(api.getPersonAttributions).mockClear();
+
+    await userEvent.click(screen.getByRole("button", { name: /change who SPEAKER_00 is/i }));
+    await userEvent.click(screen.getByRole("option", { name: "Unassigned" }));
+
+    await waitFor(() => expect(api.getPersonAttributions).toHaveBeenCalled());
+  });
+
+  it("offers nothing to change in a recording you do not own", async () => {
+    // Manage voiceprints grants listening to a segment for assessment, not editing someone else's
+    // transcript - and the API refuses the write regardless, so the control would always fail.
+    // Asserted as absent rather than disabled: a disabled assertion would pass against a control that
+    // was never gated at all.
+    mock(api.getPersonAttributions).mockResolvedValue([attribution({ canReassign: false })]);
+    setup();
+    await screen.findByText("Standup");
+
+    expect(screen.queryByRole("button", { name: /change who SPEAKER_00 is/i })).toBeNull();
+  });
+
+  // ---- Recompute feedback. Reported after deploy: pressing the button appeared to do nothing. It
+  // genuinely said nothing at all when the whole speaker was selected, because `pending` was derived
+  // from a SpansJson that is null in exactly that case. ----
+
+  it("says a recompute is running, beside the button that started it", async () => {
+    // The row's header line already said "Recomputing...", but it sits above a scrolling segment list
+    // with the button below it - so the only feedback was off-screen from the control that caused it.
+    mock(api.getPerson).mockResolvedValue({
+      person: person(), identifiedCount: 1, samples: [sample({ pending: true, usedMs: null })],
+    });
+    setup();
+    await screen.findByText("Standup");
+
+    await userEvent.click(screen.getByRole("button", { name: "Show segments" }));
+
+    const recompute = await screen.findByRole("button", { name: /re-measure/i });
+    const strip = recompute.closest("div")!;
+    expect(within(strip).getByText(/recomputing/i)).toBeTruthy();
+  });
+
+  it("says so when the last recompute failed", async () => {
+    // A failure leaves the vector and the duration alone, so without saying so the row is
+    // indistinguishable from one that simply never ran.
+    mock(api.getPerson).mockResolvedValue({
+      person: person(), identifiedCount: 1, samples: [sample({ recomputeFailed: true })],
+    });
+    setup();
+    await screen.findByText("Standup");
+
+    await userEvent.click(screen.getByRole("button", { name: "Show segments" }));
+
+    expect(await screen.findByText(/could not be re-measured/i)).toBeTruthy();
+  });
+
+  it("names what the button actually does", async () => {
+    // "Recompute voiceprint" reads as "rebuild this person's whole print". It re-embeds this one
+    // recording's contribution; the person's print is the mean of every recording behind it.
+    setup();
+    await screen.findByText("Standup");
+
+    await userEvent.click(screen.getByRole("button", { name: "Show segments" }));
+
+    expect(await screen.findByRole("button", { name: /re-measure this recording/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /recompute voiceprint/i })).toBeNull();
+  });
+
+  it("can narrow the list to the recordings that train the voiceprint", async () => {
+    mock(api.getPersonAttributions).mockResolvedValue([
+      attribution({ speakerId: "sp1", recordingName: "Alpha", isTraining: true }),
+      attribution({ speakerId: "sp2", recordingName: "Bravo", voiceSampleId: null, isTraining: false }),
+    ]);
+    setup();
+    await screen.findByText("Bravo");
+
+    await userEvent.click(screen.getByRole("checkbox", { name: /only show the ones training/i }));
+
+    expect(screen.queryByText("Bravo")).toBeNull();
+    expect(screen.getByText("Alpha")).toBeTruthy();
   });
 });

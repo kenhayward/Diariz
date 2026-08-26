@@ -58,5 +58,26 @@ public class VoiceSample
     /// throws at SaveChanges - the in-memory provider will not catch it.</para></summary>
     public DateTimeOffset? ExcludedAt { get; set; }
 
+    /// <summary>When a re-embed was queued, or null when none is in flight.
+    ///
+    /// <para>Stored rather than inferred. It used to be read off <see cref="SpansJson"/> and
+    /// <see cref="UsedMs"/>, neither of which can express it: selecting the <b>whole speaker</b> serialises
+    /// to a null <c>SpansJson</c>, so the commonest case evaluated to "not pending" and the UI said nothing
+    /// at all when the button was pressed. <see cref="UsedMs"/> cannot stand in either - a sample enrolled
+    /// straight from a speaker is never re-embedded, so it is null for almost every row.</para>
+    ///
+    /// <para><b>Store UTC.</b> Npgsql rejects a non-zero-offset DateTimeOffset for a timestamptz.</para></summary>
+    public DateTimeOffset? RecomputeQueuedAt { get; set; }
+
+    /// <summary>When the last re-embed failed, or null if the last one succeeded or none has run.
+    ///
+    /// <para>A failure leaves the vector alone - a failed recompute must not destroy a working voiceprint -
+    /// so without this the row is indistinguishable from one that never ran. The callback previously wrote
+    /// <c>UsedMs = 0</c> purely to stop the row reading as pending, which rendered as "trains on 0:00": a
+    /// confident figure for audio that was never measured.</para>
+    ///
+    /// <para><b>Store UTC.</b></para></summary>
+    public DateTimeOffset? RecomputeFailedAt { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

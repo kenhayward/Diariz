@@ -52,7 +52,14 @@ recording condition, or as sounding unlike the rest - and the ones worth a liste
 Sounding unlike the rest is not a verdict of wrong. A recording can do that for two opposite reasons: it is
 the same person on a phone, in a car, or on a meeting-room speaker - which is useful audio to have - or it is
 **somebody else** who was named as this person by mistake, which is why recognition starts drifting. Only
-listening tells you which, so play it, and if it is not them, untick it.
+listening tells you which, so play it first.
+
+If it is not them, the name on the row is a dropdown: pick the right person, add someone who is not in the
+directory yet, choose **Multiple Speakers** if two people were talking at once, or **Unassigned** if you do
+not know who it was. The transcript is corrected at the same time, and the recording stops training this
+person's voiceprint straight away. The dropdown only appears on recordings you own - you can listen to
+someone else's to check a voice, but not change their transcript. If you would rather leave the transcript
+alone and only stop it teaching the voiceprint, untick **Trains the voiceprint** instead.
 
 The two figures beside each row are **similarity**, so a higher number means a closer match: how alike it is
 to its nearest other recording, and to the person's remaining recordings taken together. Those two disagree
@@ -63,7 +70,7 @@ name. **Needs review** narrows the list to just those. If nobody is marked, noth
 dismiss a warning while you are here; it comes back next time you open People.
 
 **Show segments** on any of them lists what that speaker said, with a tick box per line. Untick the lines
-where someone else was talking over them and press **Recompute voiceprint**; Diariz re-reads the audio you
+where someone else was talking over them and press **Re-measure this recording**; Diariz re-reads the audio you
 left ticked and rebuilds the voiceprint from it. Tick as many as you like before pressing it - the work
 happens once, not once per click.
 

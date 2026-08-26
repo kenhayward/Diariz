@@ -107,8 +107,9 @@ public class WorkerVoiceprintCallbackTests
         Assert.IsType<NoContentResult>(
             await controller.Result(new VoiceprintResult(sampleId, [0.6f, 0.8f], 120000, 200000)));
 
-        // Pending is derived as "spans chosen but nothing used yet", so this is what clears it.
-        Assert.Equal(120000, db.VoiceSamples.Single().UsedMs);
+        var after = db.VoiceSamples.Single();
+        Assert.Equal(120000, after.UsedMs);
+        Assert.Null(after.RecomputeQueuedAt);
     }
 
     [Fact]
@@ -151,15 +152,18 @@ public class WorkerVoiceprintCallbackTests
     [Fact]
     public async Task Failure_LeavesTheSampleUsableRatherThanPendingForever()
     {
-        // Pending is derived from UsedMs being null. If a failure left it null the row would spin forever
-        // with no way to tell a slow job from a dead one.
+        // A failure has to stop the row reading as pending, or a dead job is indistinguishable from a slow
+        // one. It used to do that by writing UsedMs = 0, which rendered as "trains on 0:00" - a confident
+        // figure for audio that was never measured. Now it says plainly that it failed.
         using var db = TestDb.Create();
         var (_, sampleId, _) = await SeedPendingSample(db);
         var (controller, _) = Build(db);
 
         Assert.IsType<NoContentResult>(await controller.Failure(new VoiceprintFailure(sampleId, "boom")));
 
-        Assert.NotNull(db.VoiceSamples.Single().UsedMs);
+        var after = db.VoiceSamples.Single();
+        Assert.Null(after.RecomputeQueuedAt);
+        Assert.NotNull(after.RecomputeFailedAt);
     }
 
     [Fact]

@@ -325,6 +325,9 @@ export interface VoiceSample {
   stale: boolean;
   /// A recompute is queued and has not reported back. Server-derived, so it survives a reload.
   pending: boolean;
+  /// The last re-measure failed. A failure leaves the vector and the duration alone - it must not destroy
+  /// a working voiceprint - so without this the row looks exactly like one that never ran.
+  recomputeFailed: boolean;
   /// The spans of audio this sample trains on. Empty means the whole speaker.
   spans: { startMs: number; endMs: number }[];
 }
