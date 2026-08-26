@@ -17,8 +17,18 @@ namespace Diariz.Api.IntegrationTests;
 /// <para>Integration rather than unit: the embeddings are <c>vector(192)</c>, which the in-memory provider
 /// Ignores. A unit test would diagnose a set of nulls and prove nothing about the thing being built.</para></summary>
 [Collection(IntegrationCollection.Name)]
-public class VoiceprintDiagnosticsIntegrationTests(ContainersFixture fx)
+public class VoiceprintDiagnosticsIntegrationTests(ContainersFixture fx) : IAsyncLifetime
 {
+    /// <summary>Every test in this class starts from an empty directory.
+    ///
+    /// <para>Structural rather than per-test, because the diagnosis became <b>directory-wide</b> the moment
+    /// it started asking "is somebody else closer?". Every verdict is now a claim about every other person
+    /// in the table, including whatever another class in this shared-container collection seeded - so a test
+    /// without this passes or fails on what ran before it. Three did, and others were passing by luck.</para></summary>
+    public Task InitializeAsync() => ClearDirectoryAsync();
+
+    public Task DisposeAsync() => Task.CompletedTask;
+
     /// <summary>A unit vector at a chosen cosine distance from <see cref="At"/>(0).</summary>
     private static Vector At(double distance)
     {
@@ -104,6 +114,48 @@ public class VoiceprintDiagnosticsIntegrationTests(ContainersFixture fx)
         Perms.Grant(db, user.Id, PlatformPermission.ManagePeople);
         await db.SaveChangesAsync();
         return (person.Id, user.Id);
+    }
+
+
+    /// <summary>Two people on the same arc: one with a tight pair of its own, and one whose second sample
+    /// sits closer to the other person than to its own sibling.</summary>
+    private async Task<(Guid subject, Guid other, string otherName, Guid oddSample, Guid userId)>
+        SeedImpostorAsync(double siblingAt, double impostorAt)
+    {
+        await using var db = fx.CreateDbContext();
+
+        var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test" };
+        var subject = new Person { Id = Guid.NewGuid(), Name = "Ada", SampleCount = 2 };
+        var other = new Person { Id = Guid.NewGuid(), Name = "Grace", SampleCount = 1 };
+        db.AddRange(user, subject, other);
+
+        Guid Add(Person p, double at)
+        {
+            var rec = new Recording
+            {
+                Id = Guid.NewGuid(), UserId = user.Id, Title = $"M{at}", BlobKey = "k",
+            };
+            var speaker = new Speaker
+            {
+                Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = p.Name,
+                PersonId = p.Id, Embedding = At(at),
+            };
+            var sample = new VoiceSample
+            {
+                Id = Guid.NewGuid(), PersonId = p.Id, SpeakerId = speaker.Id, RecordingId = rec.Id,
+                Embedding = At(at),
+            };
+            db.AddRange(rec, speaker, sample);
+            return sample.Id;
+        }
+
+        Add(subject, 0);                       // the anchor
+        var odd = Add(subject, siblingAt);     // this one is diagnosed
+        Add(other, impostorAt);                // somebody else, placed relative to the anchor
+
+        Perms.Grant(db, user.Id, PlatformPermission.ManagePeople);
+        await db.SaveChangesAsync();
+        return (subject.Id, other.Id, other.Name, odd, user.Id);
     }
 
     private static VoiceprintDiagnosticsDto Body(ActionResult<VoiceprintDiagnosticsDto> r) =>
@@ -246,7 +298,6 @@ public class VoiceprintDiagnosticsIntegrationTests(ContainersFixture fx)
     {
         // A list that includes healthy people is worse than useless: the ones with a real problem stop
         // standing out, which is the entire job of a ranking.
-        await ClearDirectoryAsync();
         var (_, _, userId) = await SeedAsync(0, 0.05, 0.1);
 
         await using var db = fx.CreateDbContext();
@@ -257,7 +308,6 @@ public class VoiceprintDiagnosticsIntegrationTests(ContainersFixture fx)
     public async Task The_ranking_omits_a_person_with_a_single_sample()
     {
         // Nothing wrong, only nothing to say. Most of the directory is in this state.
-        await ClearDirectoryAsync();
         var (_, _, userId) = await SeedAsync(0);
 
         await using var db = fx.CreateDbContext();
@@ -267,7 +317,6 @@ public class VoiceprintDiagnosticsIntegrationTests(ContainersFixture fx)
     [Fact]
     public async Task The_ranking_lists_a_person_with_an_outlier()
     {
-        await ClearDirectoryAsync();
         var (personId, _, userId) = await SeedAsync(0, 0.05, 0.9);
 
         await using var db = fx.CreateDbContext();
@@ -282,7 +331,6 @@ public class VoiceprintDiagnosticsIntegrationTests(ContainersFixture fx)
     [Fact]
     public async Task The_ranking_puts_the_worst_first()
     {
-        await ClearDirectoryAsync();
         var (mild, _, userId) = await SeedAsync(0, 0.05, 0.9);
         var (bad, _) = await SeedOrthogonalAsync(4);
 
@@ -300,7 +348,6 @@ public class VoiceprintDiagnosticsIntegrationTests(ContainersFixture fx)
     {
         // Dropping the outlier is the fix. If the ranking kept counting it, the list would never empty and
         // acting on it would look like it had done nothing.
-        await ClearDirectoryAsync();
         var (_, ids, userId) = await SeedAsync(0, 0.05, 0.9);
         await using (var db = fx.CreateDbContext())
         {
@@ -315,10 +362,189 @@ public class VoiceprintDiagnosticsIntegrationTests(ContainersFixture fx)
     [Fact]
     public async Task The_ranking_without_ManagePeople_is_forbidden()
     {
-        await ClearDirectoryAsync();
         await SeedAsync(0, 0.9);
 
         await using var db = fx.CreateDbContext();
         Assert.IsType<ForbidResult>((await Build(db, Guid.NewGuid()).DirectoryDiagnostics()).Result);
+    }
+
+    // ---- Is somebody else closer? Measured live, 27 of 92 samples belonging to multi-sample people were,
+    // and 9 of those sat within the accept distance of that other person. ----
+
+    [Fact]
+    public async Task A_sample_closer_to_someone_else_names_who()
+    {
+        // The name is the point: it turns a diagnosis into a reassignment, and the control for that is
+        // already on the row. A bare distance would leave the user to work out who from scratch.
+        var (personId, otherId, otherName, odd, userId) = await SeedImpostorAsync(siblingAt: 0.9, impostorAt: 0.95);
+
+        await using var db = fx.CreateDbContext();
+        var body = Body(await Build(db, userId).Diagnostics(personId));
+
+        var row = body.Samples.Single(x => x.VoiceSampleId == odd);
+        Assert.Equal(nameof(SampleVerdict.Impostor), row.Verdict);
+        Assert.Equal(otherId, row.NearestImpostorPersonId);
+        Assert.Equal(otherName, row.NearestImpostorName);
+    }
+
+    [Fact]
+    public async Task A_sample_that_looks_healthy_is_caught_when_someone_else_is_closer()
+    {
+        // Sits inside the accept distance of its own sibling - rated "matches the others" on the sibling
+        // question alone - while somebody else sits closer still. Exactly one live sample was in this
+        // state, and no sibling-only verdict could ever reach it.
+        var (personId, _, _, odd, userId) = await SeedImpostorAsync(siblingAt: 0.25, impostorAt: 0.10);
+
+        await using var db = fx.CreateDbContext();
+        var body = Body(await Build(db, userId).Diagnostics(personId));
+
+        Assert.Equal(
+            nameof(SampleVerdict.Impostor),
+            body.Samples.Single(x => x.VoiceSampleId == odd).Verdict);
+    }
+
+    [Fact]
+    public async Task The_ranking_puts_an_impostor_above_a_merely_scattered_person()
+    {
+        // "This is somebody else" is a different order of problem from "this sounds unlike the rest", and
+        // it is the one that becomes a confident false match the moment anything clusters the set.
+        var (impostorPerson, _, _, _, userId) = await SeedImpostorAsync(siblingAt: 0.9, impostorAt: 0.95);
+
+        // A second person who is merely scattered: two mutually distant samples, far from everyone.
+        await using (var db = fx.CreateDbContext())
+        {
+            var scattered = new Person { Id = Guid.NewGuid(), Name = "Alice", SampleCount = 2 };
+            db.People.Add(scattered);
+            foreach (var axis in new[] { 100, 150 })
+            {
+                var v = new float[192];
+                v[axis] = 1f;
+                var rec = new Recording
+                {
+                    Id = Guid.NewGuid(), UserId = userId, Title = $"S{axis}", BlobKey = "k",
+                };
+                var sp = new Speaker
+                {
+                    Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00",
+                    DisplayName = "Alice", PersonId = scattered.Id, Embedding = new Vector(v),
+                };
+                db.AddRange(rec, sp, new VoiceSample
+                {
+                    Id = Guid.NewGuid(), PersonId = scattered.Id, SpeakerId = sp.Id,
+                    RecordingId = rec.Id, Embedding = new Vector(v),
+                });
+            }
+            await db.SaveChangesAsync();
+        }
+
+        await using var read = fx.CreateDbContext();
+        var result = await Build(read, userId).DirectoryDiagnostics();
+        var rows = Assert.IsAssignableFrom<IReadOnlyList<PersonDiagnosticsSummaryDto>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+
+        Assert.Equal(impostorPerson, rows[0].PersonId);
+        Assert.True(rows[0].ImpostorCount > 0, "the person with an impostor leads the ranking");
+    }
+
+    [Fact]
+    public async Task A_healthy_person_reports_no_impostor_and_stays_out_of_the_ranking()
+    {
+        // The negative case, and the one most at risk of a false alarm: a tight training set in a directory
+        // that also contains somebody else. Two people sounding a bit alike is not a finding.
+        var (personId, _, _, _, userId) = await SeedImpostorAsync(siblingAt: 0.05, impostorAt: 0.9);
+
+        await using var db = fx.CreateDbContext();
+        var body = Body(await Build(db, userId).Diagnostics(personId));
+        Assert.All(body.Samples, x => Assert.NotEqual(nameof(SampleVerdict.Impostor), x.Verdict));
+
+        var result = await Build(db, userId).DirectoryDiagnostics();
+        var rows = Assert.IsAssignableFrom<IReadOnlyList<PersonDiagnosticsSummaryDto>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.DoesNotContain(rows, r => r.PersonId == personId);
+    }
+
+    // ---- Confirming shrinks the queue. Without this the tick box changes nothing until multi-template
+    // voiceprints ship, which would be a control that does not appear to work. ----
+
+    /// <summary>Marks one sample as vouched for by a human.</summary>
+    private async Task ConfirmAsync(Guid sampleId)
+    {
+        await using var db = fx.CreateDbContext();
+        var sample = await db.VoiceSamples.SingleAsync(v => v.Id == sampleId);
+        sample.ConfirmedAt = DateTimeOffset.UtcNow;
+        sample.ConfirmedByUserId = Guid.NewGuid();
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task Confirming_the_only_flagged_sample_takes_the_person_out_of_the_ranking()
+    {
+        var (_, ids, userId) = await SeedAsync(0, 0.05, 0.9);
+
+        await using (var read = fx.CreateDbContext())
+            Assert.Single(Ranking(await Build(read, userId).DirectoryDiagnostics()));
+
+        await ConfirmAsync(ids[2]);   // the distant one
+
+        await using var db = fx.CreateDbContext();
+        Assert.Empty(Ranking(await Build(db, userId).DirectoryDiagnostics()));
+    }
+
+    [Fact]
+    public async Task Unconfirming_puts_them_back()
+    {
+        // Revocable has to mean revocable everywhere, or taking a confirmation back would leave the queue
+        // permanently short of a recording somebody changed their mind about.
+        var (_, ids, userId) = await SeedAsync(0, 0.05, 0.9);
+        await ConfirmAsync(ids[2]);
+
+        await using (var db = fx.CreateDbContext())
+        {
+            var sample = await db.VoiceSamples.SingleAsync(v => v.Id == ids[2]);
+            sample.ConfirmedAt = null;
+            sample.ConfirmedByUserId = null;
+            await db.SaveChangesAsync();
+        }
+
+        await using var read = fx.CreateDbContext();
+        Assert.Single(Ranking(await Build(read, userId).DirectoryDiagnostics()));
+    }
+
+    [Fact]
+    public async Task Confirming_one_of_two_flagged_samples_reduces_the_count_and_keeps_the_person()
+    {
+        // Partial progress has to show. A person with two problems and one settled is still in the queue,
+        // with one thing left to do.
+        var (personId, userId) = await SeedOrthogonalAsync(3);
+
+        await using (var read = fx.CreateDbContext())
+            Assert.Equal(3, Ranking(await Build(read, userId).DirectoryDiagnostics())
+                .Single(r => r.PersonId == personId).AloneCount);
+
+        Guid first;
+        await using (var db = fx.CreateDbContext())
+            first = (await db.VoiceSamples.Where(v => v.PersonId == personId).ToListAsync())[0].Id;
+        await ConfirmAsync(first);
+
+        await using var db2 = fx.CreateDbContext();
+        var row = Ranking(await Build(db2, userId).DirectoryDiagnostics()).Single(r => r.PersonId == personId);
+        Assert.Equal(2, row.AloneCount);
+    }
+
+    [Fact]
+    public async Task A_confirmed_sample_keeps_its_verdict_on_the_persons_own_card()
+    {
+        // Only the queue shrinks. The distance is still what it is, and hiding the verdict would make a
+        // confirmed outlier indistinguishable from a healthy recording - which is exactly the state
+        // somebody vouching for it needs to be able to see and change their mind about.
+        var (personId, ids, userId) = await SeedAsync(0, 0.05, 0.9);
+        await ConfirmAsync(ids[2]);
+
+        await using var db = fx.CreateDbContext();
+        var body = Body(await Build(db, userId).Diagnostics(personId));
+
+        var row = body.Samples.Single(x => x.VoiceSampleId == ids[2]);
+        Assert.Equal(nameof(SampleVerdict.Alone), row.Verdict);
+        Assert.True(row.Confirmed);
     }
 }

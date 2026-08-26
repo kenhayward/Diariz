@@ -61,6 +61,22 @@ person's voiceprint straight away. The dropdown only appears on recordings you o
 someone else's to check a voice, but not change their transcript. If you would rather leave the transcript
 alone and only stop it teaching the voiceprint, untick **Trains the voiceprint** instead.
 
+A row can also say **Sounds more like** somebody, naming them. That is a different and more serious finding:
+it means this recording sits closer to one of that person's recordings than to any of this person's own. It
+is the comparison that tells the two cases apart - the same voice on a phone still sounds more like its own
+owner than like anybody else, so when it does not, the recording is usually the wrong person. Listen, and if
+it is them, use the name dropdown on the row to hand the recording over.
+
+This check needs something to compare against, so a person with only one recording is never marked this way,
+however close somebody else happens to sound.
+
+Once you have listened and you are happy a recording really is this person, tick **Confirmed as this
+person**. That takes it out of the review list and off the person's warning line in the People list. It is
+not the same as **Trains the voiceprint**: one says who it is, the other says whether the audio is good
+enough to learn from, and a noisy recording can be genuinely them and still not worth training on. You can
+untick it again, and the recording keeps showing its verdict either way, so you can always see what you
+agreed to. There is no way to confirm everything at once - the whole point is that somebody listened.
+
 The two figures beside each row are **similarity**, so a higher number means a closer match: how alike it is
 to its nearest other recording, and to the person's remaining recordings taken together. Those two disagree
 when a pair of recordings sit close to each other but away from everything else, which is worth seeing.

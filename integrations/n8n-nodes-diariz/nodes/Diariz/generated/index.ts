@@ -1408,6 +1408,20 @@ const GENERATED: GeneratedResource[] = [
         ],
         "hasBody": false,
         "returnsArray": true
+      },
+      {
+        "value": "vouchForARecordingBehindAVoiceprint",
+        "displayName": "Vouch for a recording behind a voiceprint",
+        "description": "Records that a human has listened to this recording and confirmed it really is this person, or takes that back.",
+        "method": "PUT",
+        "path": "/api/people/{id}/voiceprint/samples/{sampleId}/confirmed",
+        "pathParams": [
+          "id",
+          "sampleId"
+        ],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": false
       }
     ]
   },

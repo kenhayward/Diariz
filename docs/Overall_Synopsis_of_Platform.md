@@ -2568,6 +2568,24 @@ holding a rejected sample - idempotent in effect rather than in selection (the s
 kept, so the same people are found each time and recomputing a converged centroid is a no-op), which is why it
 needs no run-once marker.
 
+**Diagnosis is directory-wide, not per person** (`Services/VoiceprintDiagnosis.cs`). It takes the whole
+training set and reports, per sample, both the nearest *sibling* ("does this have company?") and the nearest
+**impostor** - the closest sample belonging to anyone else, with who that was. The impostor verdict takes
+precedence over the sibling ones, and is **comparative**: somebody else has to be closer than the person's
+own recordings, not merely close, because two people can genuinely sound alike. A sample with no sibling is
+never flagged this way - the evidence needs something of its own to compare against.
+
+This exists because sibling distance provably cannot separate a second microphone from a second person
+enrolled under one name, and that distinction has to be made before anything clusters the data. Measured
+before it was built: of the samples belonging to multi-sample people, over a quarter sat closer to a
+different person than to any of their own, and a third of those within the accept distance of that person.
+`VoiceSample.ConfirmedAt`/`ConfirmedByUserId` record a human vouching for a sample; confirmed samples leave
+the review ranking, and multi-template voiceprints are intended to seed only from them.
+
+Both endpoints load the whole training set in memory - a few hundred 192-d vectors is around a hundred
+kilobytes. At roughly two orders of magnitude more this wants a pgvector nearest-neighbour query and an
+index on `ProfileContributions.Embedding` instead.
+
 > **The `Person`/`VoiceSample` types map to the `SpeakerProfiles`/`ProfileContributions` tables**, and
 > `Person.CreatedByUserId` to the `"UserId"` column. Renaming those would be a destructive rename, forcing a
 > `MaintenanceController.CurrentFormat` bump that hard-rejects every older backup archive. Beware in raw SQL:

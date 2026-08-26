@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rowVerdict, similarityPercent, sortKey } from "./voiceprintVerdict";
+import { rowVerdict, similarityPercent, sortKey, worthChecking } from "./voiceprintVerdict";
 import type { SampleDiagnosis } from "./types";
 
 function diagnosis(over: Partial<SampleDiagnosis> = {}): SampleDiagnosis {
@@ -25,6 +25,13 @@ describe("similarityPercent", () => {
 });
 
 describe("rowVerdict", () => {
+  it("passes the server's impostor verdict through", () => {
+    // The one verdict that is not about how a recording compares with its own person's others. It says a
+    // different human sits closer, which is the only signal that separates a second microphone from a
+    // second person enrolled under one name.
+    expect(rowVerdict(diagnosis({ verdict: "Impostor" }), true)).toBe("impostor");
+  });
+
   it("passes the server's three verdicts through", () => {
     expect(rowVerdict(diagnosis({ verdict: "Core" }), true)).toBe("core");
     expect(rowVerdict(diagnosis({ verdict: "Variant" }), true)).toBe("variant");
@@ -48,12 +55,19 @@ describe("rowVerdict", () => {
 describe("sortKey", () => {
   it("puts the rows worth acting on at the top", () => {
     // In the live report the one row that mattered was third, under two healthy ones.
-    const order = (["core", "only", "alone", "variant", "unlinked"] as const)
+    const order = (["core", "only", "alone", "variant", "unlinked", "impostor"] as const)
       .slice()
       .sort((a, b) => sortKey(a) - sortKey(b));
 
-    expect(order[0]).toBe("alone");
-    expect(order[1]).toBe("unlinked");
+    // Impostor above alone: "this is somebody else" is a different order of problem from "this sounds
+    // unlike the rest", and the only one that becomes a confident match for the wrong person.
+    expect(order[0]).toBe("impostor");
+    expect(order[1]).toBe("alone");
+    expect(order[2]).toBe("unlinked");
+  });
+
+  it("counts an impostor as worth checking", () => {
+    expect(worthChecking("impostor")).toBe(true);
   });
 
   it("does not separate the rows that need no attention", () => {

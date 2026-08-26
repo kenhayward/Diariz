@@ -164,7 +164,7 @@ public class PeopleController : ControllerBase
             .Select(v => new
             {
                 v.Id, v.RecordingId, v.SpeakerId, v.CreatedAt, v.SpansJson, v.UsedMs,
-                v.RecomputeQueuedAt, v.RecomputeFailedAt,
+                v.RecomputeQueuedAt, v.RecomputeFailedAt, v.ConfirmedAt,
             })
             .ToListAsync();
         var recIds = raw.Select(v => v.RecordingId).ToList();
@@ -217,6 +217,7 @@ public class PeopleController : ControllerBase
                 // thing would eventually disagree.
                 speaker?.EmbeddingStale ?? false,
                 v.RecomputeQueuedAt is not null,
+                v.ConfirmedAt is not null,
                 v.RecomputeFailedAt is not null,
                 spans);
         }).ToList();
@@ -248,7 +249,11 @@ public class PeopleController : ControllerBase
                 .Join(_db.Speakers, v => v.SpeakerId, s => s.Id, (v, s) => new { Sample = v, Speaker = s })
                 .ToListAsync())
             .Where(x => VoiceprintTraining.Trains(x.Sample, x.Speaker))
-            .Select(x => new { x.Sample.Id, x.Sample.PersonId, x.Sample.Embedding })
+            .Select(x => new
+            {
+                x.Sample.Id, x.Sample.PersonId, x.Sample.Embedding,
+                Confirmed = x.Sample.ConfirmedAt is not null,
+            })
             .ToList();
 
         var byPerson = samples
@@ -262,22 +267,39 @@ public class PeopleController : ControllerBase
             .Where(p => personIds.Contains(p.Id))
             .ToDictionaryAsync(p => p.Id, p => p.Name);
 
+        // The whole set, so each person is diagnosed against everybody else rather than only themselves.
+        var everyone = samples
+            .Select(v => new TrainingSample(v.Id, v.PersonId, v.Embedding!.ToArray()))
+            .ToList();
+
         var rows = byPerson.Select(g =>
         {
-            var vectors = g.Select(v => (v.Id, v.Embedding!.ToArray())).ToList();
-            var diagnosed = VoiceprintDiagnosis.Diagnose(vectors, thresholds);
+            var vectors = g.Select(v => new TrainingSample(v.Id, v.PersonId, v.Embedding!.ToArray())).ToList();
+            var diagnosed = VoiceprintDiagnosis.Diagnose(g.Key, everyone, thresholds);
+
+            // A confirmed sample still carries its verdict - the distance did not change - but it leaves the
+            // queue. This is what stops the tick box being a control that appears to do nothing until
+            // multi-template voiceprints ship and start gating on it.
+            var confirmed = g.Where(v => v.Confirmed).Select(v => v.Id).ToHashSet();
+            var outstanding = diagnosed.Where(d => !confirmed.Contains(d.SampleId)).ToList();
+
             return new PersonDiagnosticsSummaryDto(
                 g.Key,
                 names.GetValueOrDefault(g.Key, ""),
                 vectors.Count,
-                diagnosed.Count(d => d.Verdict == SampleVerdict.Alone),
-                Widest(vectors.Select(v => v.Item2).ToList()));
+                outstanding.Count(d => d.Verdict == SampleVerdict.Alone),
+                Widest(vectors.Select(v => v.Embedding).ToList()),
+                outstanding.Count(d => d.Verdict == SampleVerdict.Impostor));
         })
         // Worst first: most samples resembling nothing else, then most scattered. Anyone with no outlier at
         // all is dropped - an empty problem list is noise, and a list that includes healthy people is worse
         // than useless because the real ones stop standing out.
-        .Where(r => r.AloneCount > 0)
-        .OrderByDescending(r => r.AloneCount)
+        .Where(r => r.ImpostorCount > 0 || r.AloneCount > 0)
+        // Impostors first: "this is somebody else" is a different order of problem from "this sounds unlike
+        // the rest", and the only one that turns into a confident match for the wrong person if the set is
+        // ever clustered.
+        .OrderByDescending(r => r.ImpostorCount)
+        .ThenByDescending(r => r.AloneCount)
         .ThenByDescending(r => r.WidestPair ?? 0)
         .ToList();
 
@@ -339,9 +361,30 @@ public class PeopleController : ControllerBase
         var training = samples.Where(Trains).ToList();
 
         var thresholds = IdentificationThresholds.From(await _settings.GetAsync());
-        var diagnosed = VoiceprintDiagnosis
-            .Diagnose(training.Select(v => (v.Id, v.Embedding.ToArray())).ToList(), thresholds)
-            .ToDictionary(d => d.SampleId);
+
+        // Everybody's training samples, not just this person's: "is somebody else closer?" is a claim about
+        // the whole directory and cannot be answered from one person's slice. A few hundred 192-d vectors is
+        // around a hundred kilobytes, and DirectoryDiagnostics already reads them all this way. At two orders
+        // of magnitude more this wants a pgvector nearest-neighbour query and an index instead.
+        var everyone = (await _db.VoiceSamples
+                .Where(v => v.ExcludedAt == null && v.Embedding != null)
+                .Join(_db.Speakers, v => v.SpeakerId, sp => sp.Id, (v, sp) => new { Sample = v, Speaker = sp })
+                .ToListAsync())
+            .Where(x => VoiceprintTraining.Trains(x.Sample, x.Speaker))
+            .Select(x => new TrainingSample(x.Sample.Id, x.Sample.PersonId, x.Sample.Embedding.ToArray()))
+            .ToList();
+
+        var diagnosed = VoiceprintDiagnosis.Diagnose(id, everyone, thresholds).ToDictionary(d => d.SampleId);
+
+        // One lookup for every impostor named, rather than one per row.
+        var impostorIds = diagnosed.Values
+            .Select(d => d.NearestImpostorPersonId)
+            .OfType<Guid>()
+            .Distinct()
+            .ToList();
+        var impostorNames = await _db.People
+            .Where(pp => impostorIds.Contains(pp.Id))
+            .ToDictionaryAsync(pp => pp.Id, pp => pp.Name);
 
         // Recording names and speaker labels, stitched in memory - VoiceSample deliberately has no FK to its
         // recording, and a deleted one must not take the sample with it.
@@ -362,7 +405,11 @@ public class PeopleController : ControllerBase
                 d?.DistanceToOthers,
                 // A sample that is not training was not diagnosed, so it has no verdict of its own.
                 (d?.Verdict ?? SampleVerdict.Only).ToString(),
-                Trains(v));
+                Trains(v),
+                v.ConfirmedAt is not null,
+                d?.NearestImpostorDistance,
+                d?.NearestImpostorPersonId,
+                d?.NearestImpostorPersonId is { } imp ? impostorNames.GetValueOrDefault(imp) : null);
         }).ToList();
 
         return Ok(new VoiceprintDiagnosticsDto(
@@ -376,6 +423,37 @@ public class PeopleController : ControllerBase
     /// measure.</summary>
     private static double? WidestPair(IReadOnlyList<VoiceSample> training) =>
         Widest(training.Select(v => v.Embedding.ToArray()).ToList());
+
+    [HttpPut("{id:guid}/voiceprint/samples/{sampleId:guid}/confirmed")]
+    [EndpointSummary("Vouch for a recording behind a voiceprint")]
+    [EndpointDescription(
+        "Records that a human has listened to this recording and confirmed it really is this person, or " +
+        "takes that back.\n\n" +
+        "**Not the same as including it in training.** That asks whether the audio is good enough to learn " +
+        "from; this asks whether it is the right person, and a recording can be genuinely them and still be " +
+        "too noisy to train on.\n\n" +
+        "It exists because distance cannot tell a second microphone apart from a second person enrolled " +
+        "under one name - only listening can - so a confirmed recording is one a human has settled. " +
+        "Confirming takes it out of the review queue.")]
+    public async Task<IActionResult> SetSampleConfirmed(
+        Guid id, Guid sampleId, SetSampleConfirmedRequest req)
+    {
+        var person = await _db.People.FirstOrDefaultAsync(p => p.Id == id);
+        if (person is null) return NotFound();
+        if (!await CanManageBiometricsAsync(person)) return Forbid();
+
+        // Scoped to the person as well as the sample id: the id alone would let a caller who may manage one
+        // person's biometrics vouch for a recording behind somebody else's voiceprint.
+        var sample = await _db.VoiceSamples.FirstOrDefaultAsync(v => v.Id == sampleId && v.PersonId == id);
+        if (sample is null) return NotFound();
+
+        // Both together or neither. A stale "confirmed by" against a cleared timestamp would be worse than
+        // no record at all.
+        sample.ConfirmedAt = req.Confirmed ? DateTimeOffset.UtcNow : null;
+        sample.ConfirmedByUserId = req.Confirmed ? UserId : null;
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
 
     [HttpGet("{id:guid}/attributions")]
     [EndpointSummary("List the speakers attributed to a person")]

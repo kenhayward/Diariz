@@ -2680,6 +2680,15 @@
               "string"
             ]
           },
+          "impostorCount": {
+            "default": 0,
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
           "name": {
             "type": "string"
           },
@@ -3575,6 +3584,10 @@
       },
       "SampleDiagnosisDto": {
         "properties": {
+          "confirmed": {
+            "default": false,
+            "type": "boolean"
+          },
           "distanceToOthers": {
             "format": "double",
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
@@ -3586,6 +3599,28 @@
           },
           "isTraining": {
             "type": "boolean"
+          },
+          "nearestImpostorDistance": {
+            "format": "double",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ]
+          },
+          "nearestImpostorName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "nearestImpostorPersonId": {
+            "format": "uuid",
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "nearestSiblingDistance": {
             "format": "double",
@@ -4298,6 +4333,17 @@
         },
         "required": [
           "tag"
+        ],
+        "type": "object"
+      },
+      "SetSampleConfirmedRequest": {
+        "properties": {
+          "confirmed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "confirmed"
         ],
         "type": "object"
       },
@@ -5486,6 +5532,10 @@
       },
       "VoiceSampleDto": {
         "properties": {
+          "confirmed": {
+            "default": false,
+            "type": "boolean"
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -9213,6 +9263,60 @@
           }
         },
         "summary": "Remove a voice sample",
+        "tags": [
+          "People"
+        ]
+      }
+    },
+    "/api/people/{id}/voiceprint/samples/{sampleId}/confirmed": {
+      "put": {
+        "description": "Records that a human has listened to this recording and confirmed it really is this person, or takes that back.\n\n**Not the same as including it in training.** That asks whether the audio is good enough to learn from; this asks whether it is the right person, and a recording can be genuinely them and still be too noisy to train on.\n\nIt exists because distance cannot tell a second microphone apart from a second person enrolled under one name - only listening can - so a confirmed recording is one a human has settled. Confirming takes it out of the review queue.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sampleId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSampleConfirmedRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSampleConfirmedRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSampleConfirmedRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Vouch for a recording behind a voiceprint",
         "tags": [
           "People"
         ]
