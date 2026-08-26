@@ -458,7 +458,17 @@ Not small, and worth knowing before you start:
 |---|---|
 | Pinned image | ~19.9 GB |
 | SDK sources per worktree | ~2.2 GB |
-| Build output | ~2 MB |
+| Build output | ~4 MB |
+
+The SDK download dwarfs everything tracked in git - the whole repository packs to under 100 MB -
+and it is **per-worktree**, so a second worktree costs another 2.2 GB. It is gitignored and
+entirely reclaimable:
+
+```bash
+rm -rf omi/firmware/v2.7.0
+```
+
+The only cost is that the next build re-downloads it, which is the 20-40 minutes in 8.2.
 
 If a failed run already pulled `ghcr.io/zephyrproject-rtos/ci:latest` (~31.6 GB), it is now
 useless and can be reclaimed:

@@ -10,7 +10,6 @@
 | `boards/omi/` | Out-of-tree board definition for `omi/nrf5340/cpuapp` (+ `_ns`, `cpunet`), devicetree, pinctrl, static partitions | Board root |
 | `bootloader/` | MCUboot config **and its RSA-2048 signing keys**, plus legacy XIAO UF2 bootloaders | Signing input |
 | `scripts/` | Docker/CI build scripts, plus `scripts/devkit/*.py` BLE client tools | Tooling |
-| `FLASH_3.0.8/` | Prebuilt v3.0.8 `merged.hex` + `merged_CPUNET.hex` and J-Link scripts for Mac/Windows | Prebuilt binaries |
 | `BUILD_AND_OTA_FLASH.md` | Build + OTA guide (NCS 2.9.0, sysbuild, `dfu_application.zip`) | Docs |
 
 The two applications are **not** variants of one codebase. They share the Opus 1.2.1 sources,

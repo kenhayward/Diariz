@@ -314,5 +314,6 @@ west build && cp build/zephyr/zephyr.uf2 /Volumes/XIAO-SENSE/
 
 `bootloader/bootloader0.9.0.uf2` and the files under `bootloader/deprecated/` are the XIAO
 bootloader images, kept for recovery. None of the MCUboot signing, `dfu_application.zip`, or
-J-Link material in `BUILD_AND_OTA_FLASH.md` and `FLASH_3.0.8/` applies to your device - that is
-all CV1.
+J-Link material in `BUILD_AND_OTA_FLASH.md` applies to your device - that is all CV1. The
+`FLASH_3.0.8/` directory of prebuilt CV1 images and J-Link scripts has been deleted for the same
+reason.

@@ -33,6 +33,13 @@ MIT / BSD / other permissive components include (non-exhaustive):
   - PyTorch, torchaudio, NumPy (BSD)
   - dompurify (MPL-2.0 OR Apache-2.0; used under Apache-2.0)
 
+Vendored source (a copy of the upstream project is included in this repository, not merely
+depended on):
+  - Omi wearable firmware and hardware designs, from BasedHardware/omi, under the MIT License,
+    Copyright (c) 2024 Based Hardware Contributors. The copy lives under omi/ and is used as the
+    base for an exploratory side project (see omi/firmware/docs/). The upstream MIT licence text
+    is retained at omi/hardware/consumer/LICENSE.
+
 Model / dataset usage terms (see README "Licensing & commercial use" for detail):
   - SpeechBrain ECAPA voiceprint weights are trained on the VoxCeleb dataset, published for
     research / non-commercial use.

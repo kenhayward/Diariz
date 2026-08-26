@@ -267,8 +267,9 @@ i.e. roughly **every 108 ms of audio**. Guard with `if (off + 1 + n > 440) break
   that boots far enough to look healthy cannot be rolled back automatically.
 - `firmware/readme.md` describes the *DevKit* storage model ("a new file is created... it will
   try to delete the file on the device"), which no longer matches the consumer device.
-- `omi.conf` pins `CONFIG_BT_DIS_FW_REV_STR="3.0.21"` while the prebuilt binaries in the tree
-  are `FLASH_3.0.8`.
+- `omi.conf` pins `CONFIG_BT_DIS_FW_REV_STR="3.0.21"` while the prebuilt binaries that used to
+  sit in the tree were `FLASH_3.0.8` - a version skew of thirteen releases. Those binaries have
+  since been deleted (they were CV1-only and stale); the config pin remains.
 
 ---
 
