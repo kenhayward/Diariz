@@ -164,7 +164,7 @@ public class PeopleController : ControllerBase
             .Select(v => new
             {
                 v.Id, v.RecordingId, v.SpeakerId, v.CreatedAt, v.SpansJson, v.UsedMs,
-                v.RecomputeQueuedAt, v.RecomputeFailedAt,
+                v.RecomputeQueuedAt, v.RecomputeFailedAt, v.ConfirmedAt,
             })
             .ToListAsync();
         var recIds = raw.Select(v => v.RecordingId).ToList();
@@ -217,6 +217,7 @@ public class PeopleController : ControllerBase
                 // thing would eventually disagree.
                 speaker?.EmbeddingStale ?? false,
                 v.RecomputeQueuedAt is not null,
+                v.ConfirmedAt is not null,
                 v.RecomputeFailedAt is not null,
                 spans);
         }).ToList();
@@ -410,6 +411,37 @@ public class PeopleController : ControllerBase
     /// measure.</summary>
     private static double? WidestPair(IReadOnlyList<VoiceSample> training) =>
         Widest(training.Select(v => v.Embedding.ToArray()).ToList());
+
+    [HttpPut("{id:guid}/voiceprint/samples/{sampleId:guid}/confirmed")]
+    [EndpointSummary("Vouch for a recording behind a voiceprint")]
+    [EndpointDescription(
+        "Records that a human has listened to this recording and confirmed it really is this person, or " +
+        "takes that back.\n\n" +
+        "**Not the same as including it in training.** That asks whether the audio is good enough to learn " +
+        "from; this asks whether it is the right person, and a recording can be genuinely them and still be " +
+        "too noisy to train on.\n\n" +
+        "It exists because distance cannot tell a second microphone apart from a second person enrolled " +
+        "under one name - only listening can - so a confirmed recording is one a human has settled. " +
+        "Confirming takes it out of the review queue.")]
+    public async Task<IActionResult> SetSampleConfirmed(
+        Guid id, Guid sampleId, SetSampleConfirmedRequest req)
+    {
+        var person = await _db.People.FirstOrDefaultAsync(p => p.Id == id);
+        if (person is null) return NotFound();
+        if (!await CanManageBiometricsAsync(person)) return Forbid();
+
+        // Scoped to the person as well as the sample id: the id alone would let a caller who may manage one
+        // person's biometrics vouch for a recording behind somebody else's voiceprint.
+        var sample = await _db.VoiceSamples.FirstOrDefaultAsync(v => v.Id == sampleId && v.PersonId == id);
+        if (sample is null) return NotFound();
+
+        // Both together or neither. A stale "confirmed by" against a cleared timestamp would be worse than
+        // no record at all.
+        sample.ConfirmedAt = req.Confirmed ? DateTimeOffset.UtcNow : null;
+        sample.ConfirmedByUserId = req.Confirmed ? UserId : null;
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
 
     [HttpGet("{id:guid}/attributions")]
     [EndpointSummary("List the speakers attributed to a person")]

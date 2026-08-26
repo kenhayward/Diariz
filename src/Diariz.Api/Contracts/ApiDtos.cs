@@ -517,6 +517,9 @@ public record VoiceSampleDto(
     bool Stale = false,
     /// <summary>A recompute is queued and has not reported back.</summary>
     bool Pending = false,
+    /// <summary>A human has listened and vouched that this recording really is this person. Independent of
+    /// whether it trains: one asks who it is, the other whether the audio is worth learning from.</summary>
+    bool Confirmed = false,
     /// <summary>The last recompute failed. The sample keeps the vector and the duration it already had - a
     /// failed re-embed must not destroy a working voiceprint - so without this the row would be
     /// indistinguishable from one that simply never ran.</summary>
@@ -619,6 +622,11 @@ public record PersonDiagnosticsSummaryDto(
 
 /// <summary>Whether a speaker attributed to a person should train their voiceprint.</summary>
 public record SetTrainingRequest(bool Training);
+
+/// <summary>Vouch for a recording behind a voiceprint, or take that back. <b>Not</b> the same as
+/// <see cref="SetTrainingRequest"/>: that one asks whether the audio is good enough to learn from, this asks
+/// whether it is the right person.</summary>
+public record SetSampleConfirmedRequest(bool Confirmed);
 
 /// <summary>One segment spoken by an attributed speaker, for choosing which audio trains a voiceprint.
 ///
