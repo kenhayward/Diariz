@@ -65,6 +65,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.256.1",
+    date: "2026-08-26",
+    pr: 638,
+    headline: "The Move to folder dialog uses the screen it has",
+    summary:
+      "**Move to folder** showed its folder list through a fixed window a little over seven rows tall, inside a dialog narrower than the names it had to fit. Anyone with more than a handful of folders scrolled a short slot in the middle of a mostly empty screen, and longer folder names ran out of room sideways.\n\nThe dialog now sizes itself against the screen instead: it stays where it always opened, centred, and grows down to about **85% of the window's height**, so a long folder tree is browsed rather than peeped at. It is also slightly wider, which is what stops the longer names being cut short.\n\nThe filter box at the top and the **New folder name** row at the bottom stay put while the list itself scrolls - so however far you scroll, the way out is still on screen. With only a few folders the dialog is no bigger than it needs to be; it grows to the cap only when there is something to show.\n\nThis is the **Move to folder** dialog only. The **Choose a folder** dialog in Preferences, which scrolls its whole body rather than just the list, is unchanged.",
+    changed: [
+      "The **Move to folder** dialog now grows to around 85% of the window height and is slightly wider, instead of capping its folder list at a fixed height. The filter box and the create-a-folder row stay pinned while the list scrolls.",
+    ],
+  },
+  {
     version: "0.256.0",
     date: "2026-08-26",
     pr: 634,

@@ -23,6 +23,15 @@ function renderPicker(props: Partial<Parameters<typeof FolderPickerModal>[0]> = 
 }
 
 describe("FolderPickerModal", () => {
+  /// This dialog already scrolls one level up (its own body wrapper is the scroller, under a `max-h-full`
+  /// box), so the picker keeps its default fixed list window here. `MoveToSectionModal` opts into
+  /// `fillHeight` instead; if that ever became the picker's default, this dialog would end up with two
+  /// nested growing scrollers fighting each other.
+  it("keeps the picker's own fixed list window, unlike the move dialog", () => {
+    renderPicker();
+    expect(screen.getByRole("list", { name: "Folders" }).className).toMatch(/max-h-64/);
+  });
+
   it("names itself and says what the choice is for", () => {
     renderPicker();
     expect(screen.getByRole("dialog", { name: "Choose a folder" })).toBeTruthy();
