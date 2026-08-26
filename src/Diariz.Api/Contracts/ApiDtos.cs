@@ -517,6 +517,9 @@ public record VoiceSampleDto(
     bool Stale = false,
     /// <summary>A recompute is queued and has not reported back.</summary>
     bool Pending = false,
+    /// <summary>A human has listened and vouched that this recording really is this person. Independent of
+    /// whether it trains: one asks who it is, the other whether the audio is worth learning from.</summary>
+    bool Confirmed = false,
     /// <summary>The last recompute failed. The sample keeps the vector and the duration it already had - a
     /// failed re-embed must not destroy a working voiceprint - so without this the row would be
     /// indistinguishable from one that simply never ran.</summary>
@@ -588,9 +591,21 @@ public record SampleDiagnosisDto(
     /// <summary>Cosine distance to the centroid of the person's <b>other</b> samples - "would the rest of
     /// this voiceprint recognise it?" A true leave-one-out. Null when there is no other sample.</summary>
     double? DistanceToOthers,
-    /// <summary>"Only", "Core", "Variant" or "Alone".</summary>
+    /// <summary>"Only", "Core", "Variant", "Alone" or "Impostor".</summary>
     string Verdict,
-    bool IsTraining);
+    bool IsTraining,
+    /// <summary>A human has listened and vouched that this recording really is this person. The verdict is
+    /// reported unchanged either way - only the review queue shrinks - because hiding it would make a
+    /// confirmed outlier indistinguishable from a healthy recording, and somebody who confirmed in haste
+    /// needs to be able to see what they signed off.</summary>
+    bool Confirmed = false,
+    /// <summary>Cosine distance to the closest sample belonging to <b>anyone else</b>. Null in a directory
+    /// holding only this person. Reported even when it is not a finding.</summary>
+    double? NearestImpostorDistance = null,
+    /// <summary>Who that was. Present whenever <paramref name="NearestImpostorDistance"/> is, so the finding
+    /// can be acted on with the reassign control already on the row rather than only read.</summary>
+    Guid? NearestImpostorPersonId = null,
+    string? NearestImpostorName = null);
 
 /// <summary>A person's training set, and how coherent it is.
 ///
@@ -603,10 +618,20 @@ public record VoiceprintDiagnosticsDto(
 /// <summary>One person's line in the voiceprint-health ranking: how many of their samples resemble nothing
 /// else, and how far apart their two most distant samples are.</summary>
 public record PersonDiagnosticsSummaryDto(
-    Guid PersonId, string Name, int SampleCount, int AloneCount, double? WidestPair);
+    Guid PersonId, string Name, int SampleCount, int AloneCount, double? WidestPair,
+    /// <summary>How many of this person's samples sit closer to somebody else than to any of their own.
+    /// Ranked above <paramref name="AloneCount"/>: "this is somebody else" is a different order of problem
+    /// from "this sounds unlike the rest", and the one that becomes a confident false match if clustered.
+    /// </summary>
+    int ImpostorCount = 0);
 
 /// <summary>Whether a speaker attributed to a person should train their voiceprint.</summary>
 public record SetTrainingRequest(bool Training);
+
+/// <summary>Vouch for a recording behind a voiceprint, or take that back. <b>Not</b> the same as
+/// <see cref="SetTrainingRequest"/>: that one asks whether the audio is good enough to learn from, this asks
+/// whether it is the right person.</summary>
+public record SetSampleConfirmedRequest(bool Confirmed);
 
 /// <summary>One segment spoken by an attributed speaker, for choosing which audio trains a voiceprint.
 ///

@@ -89,6 +89,16 @@ export default function PersonAttributionRow({
     }
   }
 
+  // Deliberately its own call, never chained to the training toggle. Confirming says this is the right
+  // person; training says the audio is worth learning from. A recording can be genuinely them and still be
+  // too noisy to train on, so driving one from the other would destroy a distinction the whole review
+  // workflow rests on.
+  const toggleConfirmed = () =>
+    run(
+      () => api.setSampleConfirmed(personId, sample!.id, !sample!.confirmed),
+      t("people:errConfirmFailed"),
+    );
+
   const toggleTraining = () =>
     run(
       () => api.setAttributionTraining(personId, attribution.speakerId, !attribution.isTraining),
@@ -177,7 +187,7 @@ export default function PersonAttributionRow({
             {t("people:attributionTrainedOn", { duration: trainedOn })}
           </span>
         )}
-        <VerdictChip verdict={verdict} />
+        <VerdictChip verdict={verdict} impostorName={diagnosis?.nearestImpostorName} />
         {diagnosis?.nearestSiblingDistance != null && (
           <span className="text-xs text-gray-500 dark:text-gray-400">
             {t("people:vpClosestMatch", { value: similarityPercent(diagnosis.nearestSiblingDistance) })}
@@ -219,6 +229,22 @@ export default function PersonAttributionRow({
                 aria-label={t("people:attributionTraining")}
               />
               {t("people:attributionTraining")}
+            </label>
+          )}
+          {/* Only where there is a sample: no embedding means no verdict and nothing to vouch for. There is
+              deliberately no way to confirm a whole person at once - the gate exists because only listening
+              separates a second microphone from a second person, so confirming unheard audio would
+              reintroduce exactly the failure it prevents. */}
+          {canManage && sample && (
+            <label className="flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-200">
+              <input
+                type="checkbox"
+                checked={sample.confirmed}
+                disabled={busy}
+                onChange={toggleConfirmed}
+                aria-label={t("people:attributionConfirmed")}
+              />
+              {t("people:attributionConfirmed")}
             </label>
           )}
           {/* Hidden rather than disabled. Playing the voice needs the segments, and they only arrive once
@@ -356,18 +382,26 @@ export default function PersonAttributionRow({
 /// `only` renders nothing: having no other recording to compare against is the state most of the directory
 /// is in, and it is not a finding. `unlinked` renders nothing here either - the row already carries its own
 /// badge, and saying it twice would read as two separate problems.
-function VerdictChip({ verdict }: { verdict: RowVerdict }) {
+function VerdictChip({ verdict, impostorName }: { verdict: RowVerdict; impostorName?: string | null }) {
   const { t } = useTranslation("people");
 
   const tone: Partial<Record<RowVerdict, string>> = {
     core: "text-green-700 dark:text-green-400",
     variant: "text-blue-700 dark:text-blue-300",
     alone: "text-amber-800 dark:text-amber-300",
+    // Red rather than amber: a different order of problem from "sounds unlike the rest".
+    impostor: "text-red-700 dark:text-red-400",
   };
   const label: Partial<Record<RowVerdict, string>> = {
     core: t("vpVerdictCore"),
     variant: t("vpVerdictVariant"),
     alone: t("vpVerdictAlone"),
+    // Named, because a verdict without the name is not actionable - it would leave the user to work out
+    // who from scratch when the server already knows and the reassign control is on this same row. The
+    // unnamed form is a fallback for a person deleted between the diagnosis and the render.
+    impostor: impostorName
+      ? t("vpVerdictImpostorNamed", { name: impostorName })
+      : t("vpVerdictImpostor"),
   };
 
   if (!label[verdict]) return null;

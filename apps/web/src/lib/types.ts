@@ -328,6 +328,9 @@ export interface VoiceSample {
   /// The last re-measure failed. A failure leaves the vector and the duration alone - it must not destroy
   /// a working voiceprint - so without this the row looks exactly like one that never ran.
   recomputeFailed: boolean;
+  /// A human has listened and vouched that this recording really is this person. Independent of whether it
+  /// trains: one asks who it is, the other whether the audio is worth learning from.
+  confirmed: boolean;
   /// The spans of audio this sample trains on. Empty means the whole speaker.
   spans: { startMs: number; endMs: number }[];
 }
@@ -376,10 +379,20 @@ export interface SampleDiagnosis {
   nearestSiblingDistance: number | null;
   /// Cosine distance to the centroid of the person's *other* samples - a true leave-one-out.
   distanceToOthers: number | null;
-  /// "Only", "Core", "Variant" or "Alone". `Alone` means "resembles none of the others", which is either a
-  /// recording condition nothing else covers or a different person - not a verdict of wrong.
+  /// "Only", "Core", "Variant", "Alone" or "Impostor". `Alone` means "resembles none of the others", which
+  /// is either a recording condition nothing else covers or a different person - not a verdict of wrong.
+  /// `Impostor` means a different person's recording sits closer than any of this person's own, which is
+  /// the only signal that separates those two cases.
   verdict: string;
   isTraining: boolean;
+  /// A human has listened and vouched that this really is this person. The verdict is still reported - only
+  /// the review queue shrinks.
+  confirmed: boolean;
+  /// Cosine distance to the closest recording belonging to anyone else, and who that was. Reported even
+  /// when it is not a finding.
+  nearestImpostorDistance: number | null;
+  nearestImpostorPersonId: string | null;
+  nearestImpostorName: string | null;
 }
 
 export interface VoiceprintDiagnostics {

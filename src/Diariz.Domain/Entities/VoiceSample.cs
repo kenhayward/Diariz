@@ -79,5 +79,26 @@ public class VoiceSample
     /// <para><b>Store UTC.</b></para></summary>
     public DateTimeOffset? RecomputeFailedAt { get; set; }
 
+    /// <summary>When a human listened and vouched that this recording really is this person, or null if
+    /// nobody has.
+    ///
+    /// <para><b>A different assertion from <see cref="ExcludedAt"/>.</b> Excluding asks whether the audio is
+    /// good enough to learn from; this asks whether it is the right person. A recording can be genuinely
+    /// them and still be too noisy to train on, and the two must be settable independently.</para>
+    ///
+    /// <para>It exists because distance provably cannot separate a second microphone from a second human -
+    /// the finding behind the impostor check - so only someone who has listened can settle it. Multi-template
+    /// voiceprints will gate template-seeding on this; until then it takes the recording out of the review
+    /// queue.</para>
+    ///
+    /// <para><b>Store UTC.</b> Npgsql rejects a non-zero-offset DateTimeOffset for a timestamptz.</para></summary>
+    public DateTimeOffset? ConfirmedAt { get; set; }
+
+    /// <summary>Who vouched for it. Recorded because the value of the gate is that a <em>named</em> human
+    /// listened; an anonymous flag would be an assertion nobody is accountable for. Deliberately no FK - the
+    /// record of who asserted it must outlive their account, exactly as the sample outlives its recording.
+    /// </summary>
+    public Guid? ConfirmedByUserId { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
