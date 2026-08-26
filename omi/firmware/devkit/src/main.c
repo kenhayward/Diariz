@@ -12,6 +12,7 @@
 #include "storage.h"
 #include "transport.h"
 #include "usb.h"
+#include "usb_mode.h"
 #include "utils.h"
 #include "wdog_facade.h"
 #define BOOT_BLINK_DURATION_MS 600
@@ -66,6 +67,25 @@ static void print_reset_reason(void)
 }
 
 bool is_connected = false;
+static bool card_failed = false;
+static volatile bool double_tap_pending;
+
+/*
+ * Called from the button work queue. Records the gesture and returns
+ * immediately - it must NOT dispatch.
+ *
+ * usb_mode_dispatch() performs fs_unmount(), fs_mount() and usb_enable(), and
+ * the button handler runs on the system work queue with a 2 KB stack
+ * (CONFIG_SYSTEM_WORKQUEUE_STACK_SIZE). Doing that work there overflowed the
+ * stack and faulted the device into a reboot - intermittently, because it
+ * depended how deep the call went. The CV1 tree documents the same hazard in
+ * rtc.c. All dispatch now happens on the main thread, which also removes a
+ * latent data race on the state machine's statics.
+ */
+void usb_mode_note_double_tap(void)
+{
+    double_tap_pending = true;
+}
 bool is_charging = false;
 extern bool is_off;
 extern bool usb_charge;
@@ -97,8 +117,117 @@ static void boot_led_sequence(void)
     set_led_blue(false);
 }
 
+/*
+ * Performs the actions the state machine asks for, and feeds back the results
+ * of the ones that can fail. Ordering is the state machine's business, not
+ * ours - do exactly what it says, in the order it says.
+ *
+ * The recursion is bounded: UNMOUNT_FS and REMOUNT_FS are only ever emitted
+ * from states that cannot emit them again in response to the result event, so
+ * it never nests more than two deep.
+ */
+void usb_mode_dispatch(usb_mode_event_t event)
+{
+    usb_mode_actions_t a = usb_mode_handle(event);
+
+    for (uint8_t i = 0; i < a.count; i++) {
+        switch (a.actions[i]) {
+        case USB_MODE_ACTION_STOP_CAPTURE:
+            mic_off();
+            break;
+
+        case USB_MODE_ACTION_RESUME_CAPTURE:
+            mic_on();
+            break;
+
+        case USB_MODE_ACTION_UNMOUNT_FS:
+            if (unmount_sd_card() == 0) {
+                usb_mode_dispatch(USB_MODE_EVENT_UNMOUNT_OK);
+            } else {
+                usb_mode_dispatch(USB_MODE_EVENT_UNMOUNT_FAIL);
+            }
+            break;
+
+        case USB_MODE_ACTION_REMOUNT_FS:
+            if (mount_sd_card() == 0) {
+                usb_mode_dispatch(USB_MODE_EVENT_REMOUNT_OK);
+            } else {
+                usb_mode_dispatch(USB_MODE_EVENT_REMOUNT_FAIL);
+            }
+            break;
+
+        case USB_MODE_ACTION_START_MSC:
+            usb_msc_start();
+            break;
+
+        case USB_MODE_ACTION_STOP_MSC:
+            usb_msc_stop();
+            break;
+
+        case USB_MODE_ACTION_LED_CARD_FAIL:
+            for (int b = 0; b < 6; b++) {
+                set_led_red(true);
+                k_msleep(150);
+                set_led_red(false);
+                k_msleep(150);
+            }
+            break;
+
+        case USB_MODE_ACTION_LED_CAPTURE:
+        case USB_MODE_ACTION_LED_TRANSFER:
+            /* set_led_state() reads the mode on its next tick. */
+            break;
+        }
+    }
+}
+
 void set_led_state()
 {
+    /* The mode owns the LED whenever we are not capturing. Without this, the
+     * 500 ms tick overwrites the transfer pattern immediately. No colour is
+     * free at runtime - steady blue means BLE connected and steady red means
+     * recording-but-disconnected - so transfer mode is a blue BLINK, with red
+     * and green forced off. Forcing green off matters: transfer mode always
+     * implies a USB connection and would otherwise carry the charging blink.
+     * See docs/09-usb-transfer-mode-design.md section 9.4.
+     */
+    if (usb_mode_get_state() != USB_MODE_CAPTURE) {
+        static bool transfer_blink;
+
+        /*
+         * Every non-capture state gets its own colour. ENTERING, LEAVING and
+         * CARD_FAIL previously all showed "all LEDs off", which made a device
+         * stuck mid-transition indistinguishable from one that had failed - and
+         * with CONFIG_CONSOLE=n the LED is the only diagnostic there is.
+         */
+        switch (usb_mode_get_state()) {
+        case USB_MODE_TRANSFER: /* blinking blue */
+            transfer_blink = !transfer_blink;
+            set_led_red(false);
+            set_led_green(false);
+            set_led_blue(transfer_blink);
+            break;
+        case USB_MODE_ENTERING: /* magenta */
+            set_led_red(true);
+            set_led_green(false);
+            set_led_blue(true);
+            break;
+        case USB_MODE_LEAVING: /* cyan */
+            set_led_red(false);
+            set_led_green(true);
+            set_led_blue(true);
+            break;
+        case USB_MODE_CARD_FAIL: /* white */
+            set_led_red(true);
+            set_led_green(true);
+            set_led_blue(true);
+            break;
+        default:
+            break;
+        }
+        return;
+    }
+
     // Recording and connected state - BLUE
 
     if (usb_charge) {
@@ -239,16 +368,26 @@ int main(void)
             set_led_red(false);
             k_msleep(400);
         }
-        return err;
+        /*
+         * Do NOT return. This used to exit main(), killing the button handling and
+         * the USB VBUS poll with it - so on a device whose card cannot be physically
+         * removed, an unreadable card was unrecoverable without opening the case.
+         * Carry on into the main loop in CARD_FAIL instead: a double-tap then
+         * presents the card over USB so the host can reformat it. That is the
+         * recovery path in design 9.6, which returning here made unreachable.
+         */
+        card_failed = true;
     }
     k_msleep(500);
 
     LOG_PRINTK("\n");
     LOG_INF("Initializing storage...\n");
 
-    err = storage_init();
-    if (err) {
-        LOG_ERR("Failed to initialize storage (err %d)", err);
+    if (!card_failed) {
+        err = storage_init();
+        if (err) {
+            LOG_ERR("Failed to initialize storage (err %d)", err);
+        }
     }
 #endif
 
@@ -361,12 +500,28 @@ int main(void)
     k_msleep(1000);
     set_led_blue(false);
 
+    if (card_failed) {
+        /* Reachable, deliberately: the double-tap recovery needs the main loop. */
+        usb_mode_init_card_failed();
+    } else {
+        usb_mode_init();
+    }
+
     // Main loop
     LOG_PRINTK("\n");
     LOG_INF("Entering main loop...\n");
 
     while (1) {
         watchdog_feed();
+
+        /* Single source of USB connection state - see usb.c. The device stack
+         * is disabled outside transfer mode, so its callbacks cannot tell us. */
+        usb_poll_vbus();
+
+        if (double_tap_pending) {
+            double_tap_pending = false;
+            usb_mode_dispatch(USB_MODE_EVENT_DOUBLE_TAP);
+        }
 
         set_led_state();
         k_msleep(500);

@@ -1,8 +1,17 @@
 # 9. USB transfer mode (design)
 
-**Status: designed, not built.** This is the agreed design for the first of three firmware
-sub-projects. Nothing in this document has been implemented; it is written to be turned into an
-implementation plan.
+**Status: built, partly verified on hardware (2026-08-26).** Recordings were copied off the
+device over USB-C without opening it, and decoded to 12m31s of valid Ogg Opus - the path this
+design exists to create works.
+
+Verification was cut short by a **hardware fault**: the SD card turned out to be physically fused
+into its holder, which produced constant filesystem EIO errors, an impossible 124 GB file, and
+results that changed between identical builds. Several checks are therefore untested, and some
+observations made during the session were measuring failing media rather than firmware. The full
+record, including what passed and what did not, is in
+[08 sections 8.14 and 8.15](08-build-and-flash-runbook.md).
+
+**Re-run the whole checklist on rebuilt hardware before treating this as proven.**
 
 Target hardware is the **Omi DevKit 2** as described in
 [07-devkit2-target.md](07-devkit2-target.md). Build and flash instructions are in
@@ -120,8 +129,29 @@ Three states:
 | `CARD_FAIL` | No | Nothing | Remount failed. Six red blinks, as today |
 
 Ordering matters and is the state machine's responsibility. Entering transfer mode:
-stop the microphone, close and sync the current file, `fs_unmount()`, then enable MSC - in that
-order. Leaving: disable MSC, `fs_mount()` (still with `FS_MOUNT_FLAG_NO_FORMAT`), resume capture.
+stop the microphone, **quiesce the writer**, `fs_unmount()`, then enable MSC - in that order.
+Leaving: disable MSC, `fs_mount()` (still with `FS_MOUNT_FLAG_NO_FORMAT`), resume capture.
+
+> **Corrected against hardware, 2026-08-26.** This step originally read "stop the microphone,
+> close and sync the current file, `fs_unmount()`", on the assumption that `mic_off()` stops the
+> writing. **It does not.** The audio pipeline writes from its own thread
+> (`transport.c` -> `write_to_storage()` -> `write_to_file()`), independent of the microphone and
+> with data still buffered after it stops. Unmounting therefore raced `fs_write()` against
+> `fs_unmount()` and faulted the device into a reboot on every double-tap.
+>
+> The mechanism to prevent it already existed and was simply not used: every write takes
+> `write_sdcard_mutex` and checks `is_sd_on()` first. So the correct sequence is **clear the flag,
+> then take the mutex** - the flag stops a new write starting, the mutex waits out one already
+> running - and only then unmount. Note `sd_off()` is the wrong tool: it physically disconnects
+> the SPI pins and drops the card's enable line, which would kill mass storage.
+>
+> A second race was found in the same place: `mount_sd_card()` set `sd_enabled = true` *before*
+> `disk_access_init()` and `fs_mount()`, so the writer could start writing into a filesystem that
+> was not mounted yet. It is now set at the end of a successful mount.
+>
+> The general lesson: **"stop capture" is not a single action on this firmware.** The microphone,
+> the encoder pipeline and the writer are separate threads, and only the writer's own lock makes
+> unmounting safe.
 
 Note that **D5 helps here**. The firmware opens and closes the file on every 440-byte write,
 which is a real inefficiency, but it means there is no long-lived file handle to reconcile at
@@ -130,8 +160,13 @@ closing the held handle explicitly.
 
 ### USB composite device
 
-Extend the existing `usb.c` rather than replace it. It already calls `usb_enable()` and
-maintains the `usb_charge` flag used by `main.c`; both are kept.
+Extend the existing `usb.c` rather than replace it, but **do not keep its `usb_enable()` call at
+boot**. This was corrected against hardware on 2026-08-26 - see the note at the end of this
+section.
+
+The USB device stack is enabled **only in transfer mode**. Outside it the stack is down, so
+plugging in enumerates nothing at all: the host sees no device, and the card stays exclusively
+the firmware's.
 
 Two classes are added:
 
@@ -144,8 +179,35 @@ overlay explicitly disables, which resolves **D8** and the contradiction documen
 [08 section 8.8](08-build-and-flash-runbook.md); and the USB descriptor work is done once
 instead of twice.
 
-`init_usb()` currently branches on `CONFIG_UART_CONSOLE`. That branch needs revisiting when the
-console moves to CDC.
+Charge detection therefore cannot come from the USB stack. It reads VBUS directly from the POWER
+peripheral (`nrf_power_usbregstatus_vbusdet_get`), which works with the stack disabled. A poll on
+the existing 500 ms main-loop tick edge-detects it and is the **single source** of both the
+`usb_charge` flag and the state machine's connect and disconnect events.
+
+`init_usb()` no longer enables anything, so its old `CONFIG_UART_CONSOLE` branch is gone rather
+than merely deferred.
+
+> **Corrected against hardware, 2026-08-26.** The original design said `usb.c` "already calls
+> `usb_enable()` ... both are kept", and treated `usb_msc_start`/`usb_msc_stop` as the thing that
+> controls host visibility. That was wrong. Zephyr's legacy stack exposes **every configured
+> class the moment the device enumerates**, so keeping the boot-time `usb_enable()` - which
+> existed only to detect charging - handed Windows the card on every plug-in, while the firmware
+> still had FatFs mounted and was appending audio to it. Precisely the both-owners-at-once case
+> section 9.3 forbids. The verification checklist caught it on the first item, before anything was
+> copied off.
+>
+> **It then happened a second time, for a different reason.** Removing the explicit
+> `usb_enable()` was necessary but not sufficient: `CONFIG_USB_DEVICE_INITIALIZE_AT_BOOT`
+> *depends on* `CONFIG_USB_CDC_ACM` and defaults on, so adding CDC - for the clock sub-project,
+> nothing to do with mass storage - made Zephyr call `usb_enable()` from `usb_device.c` during
+> system init, bypassing `init_usb()` entirely. The card was exposed again. It is now explicitly
+> `=n`.
+>
+> The lesson worth keeping: with the legacy USB stack, **enumeration is the thing to gate, not the
+> class**. Anything that enables the stack for an unrelated reason silently publishes the card,
+> and a Kconfig symbol you never typed can be that thing. **Assert the guard, do not infer it**:
+> verify `CONFIG_USB_DEVICE_INITIALIZE_AT_BOOT` is unset in the *generated* `.config`, not in the
+> project `.conf` - the whole failure was the gap between those two.
 
 ## 9.6 Formatting
 

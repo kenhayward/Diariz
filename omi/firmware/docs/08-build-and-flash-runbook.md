@@ -354,6 +354,11 @@ authoritative build, and `BUILD_AND_OTA_FLASH.md` covers OTA. Note that script r
 | Build finishes but there is no `zephyr.zip` | Expected when `adafruit-nrfutil` could not install. The UF2 is what you flash. The pinned image installs it fine, so on `v0.26.14` you should get one |
 | `no such file or directory` from inside the container | Git Bash path conversion. The script exports `MSYS_NO_PATHCONV=1` itself (8.12), so this should only bite when running docker by hand |
 | `cannot attach stdin to a TTY-enabled container` / `the input device is not a TTY` | `docker run -it` under a non-TTY shell. Run it from an interactive terminal, drop `-it`, or try `winpty` |
+| Bootloader drive appears on **every** plug-in | The bootloader is refusing to jump to an invalid application - usually a half-written UF2. Re-copy it. This is correct behaviour, not a brick |
+| Unplugging USB does not reset anything | **The device has a battery.** Removing USB is not a power cycle; RAM and retained registers survive. Press reset once instead. This wasted several cycles on 2026-08-26 |
+| The card appears on the host without a double-tap | Something enabled the USB device stack. Check `CONFIG_USB_DEVICE_INITIALIZE_AT_BOOT` in the **generated** `.config`, not the project `.conf` - it depends on `USB_CDC_ACM` and turns itself on |
+| A USB CDC console prints nothing | The host has not asserted **DTR**. `cat /dev/ttySn` in Git Bash never does. Open the port with `DtrEnable = $true` from PowerShell. Three capture attempts came back empty for this reason alone |
+| `fs: file close error (-5)` repeating several times a second | EIO on every write. `write_to_file()` ignores all three return values, so a failed `fs_open` still reaches `fs_write`/`fs_close`. Suspect the card or its holder before the firmware - on 2026-08-26 this turned out to be a card physically fused into its socket |
 | `west update` fails or hangs | Network, or a half-initialised workspace: `--clean` and retry |
 | `No board named 'xiao_ble_sense'` | Board renamed in NCS 2.7; use `xiao_ble/nrf52840/sense` |
 | Build succeeds, no `zephyr.uf2` | UF2 output is board-driven; check the build log for `CONFIG_BUILD_OUTPUT_UF2` |
@@ -488,3 +493,61 @@ remains unconfirmed:
   listened to end to end.
 * Everything already marked **[unverified]**: the VS Code route (8.3), OTA DFU (8.6), bootloader
   recovery (8.7), and re-enabling the console (8.8).
+
+---
+
+## 8.14 Verifying USB transfer mode
+
+Results from the first hardware session, 2026-08-26. Read 8.15 first - a hardware fault
+invalidated part of this run.
+
+| # | Check | Result |
+|---|---|---|
+| 1 | Boots with a good card, no six-blink | **Pass** |
+| 2 | Plugged in without a double-tap: no drive, recording continues | **Pass** - the gate. Took three attempts to get right; see 8.15 |
+| 3 | Double-tap: drive appears, LED blinking blue | **Pass** |
+| 4 | Copy `a01.txt` off and decode it | **Pass** - 75,199 frames, 12m31s, valid Ogg Opus via `omi-sync` |
+| 5 | Format from within transfer mode | **Not tested.** The card was formatted from a boot-exposed state instead |
+| 6 | Double-tap again: drive goes, capture resumes | **Pass** |
+| 7 | Unplug while in transfer mode | **Partial** - capture resumed correctly, but a later double-tap faulted the device |
+| 8 | Long-press during transfer must not power off | **Not tested** |
+| 9 | Unreadable card still presents over USB | **Not tested** |
+| 10 | Records again after a host format | **Pass** - the 12m31s capture in item 4 |
+| 11 | Flat-battery enumeration | **Not tested** |
+| 12 | Transfer speed | **Not measured** |
+
+Items 1-4, 6 and 10 together are the whole point of the sub-project: recordings came off the
+device over USB-C, decoded to real audio, without opening it. That path works.
+
+### 8.15 The hardware fault that invalidated the rest
+
+Partway through the session the device became unreliable: double-tap stopped working, then
+faulted the device outright, and results stopped being reproducible between identical builds.
+
+**The SD card was physically fused into its holder.** It was only found on trying to remove the
+card. Everything else follows from it:
+
+* `fs: file close error (-5)` firing about ten times a second during normal recording, with no
+  host attached at all.
+* An `a01.txt` reported as **124 GB** on a 128 GB card - about 7,750 hours of audio at the
+  32 kbps this firmware records, so not real data. A corrupt allocation, not a runaway write. The
+  measured write rate on good media was 31.5 kbps, exactly as designed.
+* Formatting failing repeatedly from Windows, including through `diskpart`.
+* The same firmware behaving differently on successive runs.
+
+**The lesson worth keeping: suspect the medium.** The EIO storm was visible in the very first
+console capture and was explained away twice - once as normal noise, once as contention with
+Windows - before anyone checked the hardware. A storage error that repeats several times a second
+during ordinary operation is not noise, and `write_to_file()` ignoring all three return values
+(doc 07) is what let it degrade silently instead of failing loudly.
+
+### What this means for the code
+
+A bisect against a known-good build cleared the writer-quiesce change in `sdcard.c`: reverting it
+to the byte-identical earlier version changed nothing, so it did not cause the faults. It stays,
+because quiescing the writer before `fs_unmount()` is correct regardless - but note it is
+**unverified on healthy hardware**.
+
+Re-run this whole table on a rebuilt device before treating transfer mode as proven.
+
+---

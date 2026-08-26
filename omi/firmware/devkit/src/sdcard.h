@@ -15,6 +15,16 @@
 int mount_sd_card(void);
 
 /**
+ * @brief Unmount the SD card so USB Mass Storage can take over the block device.
+ *
+ * The card stays powered - MSC serves the same physical card and needs it. Only
+ * the filesystem is released, so the host can own the block device.
+ *
+ * @return 0 if successful, negative errno code if error
+ */
+int unmount_sd_card(void);
+
+/**
  * @brief Create a file
  *
  * Creates a file at the given path
