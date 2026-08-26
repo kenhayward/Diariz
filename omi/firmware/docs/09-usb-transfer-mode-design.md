@@ -166,8 +166,18 @@ than merely deferred.
 > section 9.3 forbids. The verification checklist caught it on the first item, before anything was
 > copied off.
 >
+> **It then happened a second time, for a different reason.** Removing the explicit
+> `usb_enable()` was necessary but not sufficient: `CONFIG_USB_DEVICE_INITIALIZE_AT_BOOT`
+> *depends on* `CONFIG_USB_CDC_ACM` and defaults on, so adding CDC - for the clock sub-project,
+> nothing to do with mass storage - made Zephyr call `usb_enable()` from `usb_device.c` during
+> system init, bypassing `init_usb()` entirely. The card was exposed again. It is now explicitly
+> `=n`.
+>
 > The lesson worth keeping: with the legacy USB stack, **enumeration is the thing to gate, not the
-> class**. Anything that enables the stack for an unrelated reason silently publishes the card.
+> class**. Anything that enables the stack for an unrelated reason silently publishes the card,
+> and a Kconfig symbol you never typed can be that thing. **Assert the guard, do not infer it**:
+> verify `CONFIG_USB_DEVICE_INITIALIZE_AT_BOOT` is unset in the *generated* `.config`, not in the
+> project `.conf` - the whole failure was the gap between those two.
 
 ## 9.6 Formatting
 
