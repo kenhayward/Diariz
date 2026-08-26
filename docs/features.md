@@ -351,6 +351,28 @@ sort to the top, and a tick box narrows a long list to just those.
 
 **Re-measuring reports whether it worked.** Whether a job is in flight is recorded rather than inferred: it used to be read off the span selection, and selecting the whole speaker - the state every row starts in - is stored as no selection, so the commonest case reported nothing at all and the button looked inert. A failure now says so too. It leaves the existing voiceprint alone, which is right, but the row previously recorded zero seconds of training audio and was indistinguishable from a success. The button is named for what it does: it re-embeds **one recording's** contribution, and the person's voiceprint is the average of every recording behind it, so this is not a rebuild of the whole print.
 
+**Every recording is also asked whether somebody else is closer.** Comparing a recording only with its own
+person's others answers "does this have company?" - it can never answer "is this the right person?", and
+those need opposite responses. Measured on a real platform before this was built: of the recordings behind
+people with more than one, over a quarter sat closer to a different person than to any of their own, and a
+third of those were within the accept distance of that person. The sibling-only check flagged most of them
+but not all, and one read as perfectly healthy. Clustering that set - giving each outlier a template of its
+own - would have turned each of those from a diluted nuisance into a confident match for the wrong human,
+which is why multi-template voiceprints were deferred until the set is clean.
+
+The check is **comparative, not absolute**: two people can genuinely sound alike, so what marks a
+misattribution is somebody else being closer than the person's own recordings. It **names** them, so the
+finding lands on the reassign control already on the row. A person with a single recording is never flagged
+this way, because there is nothing of their own to compare against - a real limitation, since most of a
+directory is usually in that state.
+
+**Confirming a recording** records that a human listened and vouched for it, and takes it out of the review
+queue. It is deliberately a different assertion from whether the recording trains the voiceprint: one asks
+who it is, the other whether the audio is worth learning from, and a recording can be genuinely them and
+still be too noisy to train on. There is no bulk confirm - the value of the gate is that somebody listened,
+so a button that confirmed unheard audio would reintroduce the failure it exists to prevent. A confirmed
+recording keeps its verdict on the card; only the queue shrinks.
+
 **A recording that turns out to be somebody else is fixed from the row it was found on.** Each row carries
 the same speaker typeahead the transcript and the Speakers tab use, showing who it currently says this is:
 reassign it to the right person, create someone not yet in the directory, mark it as **Multiple speakers**
