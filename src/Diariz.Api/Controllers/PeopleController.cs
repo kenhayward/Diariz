@@ -264,14 +264,14 @@ public class PeopleController : ControllerBase
 
         var rows = byPerson.Select(g =>
         {
-            var vectors = g.Select(v => (v.Id, v.Embedding!.ToArray())).ToList();
-            var diagnosed = VoiceprintDiagnosis.Diagnose(vectors, thresholds);
+            var vectors = g.Select(v => new TrainingSample(v.Id, v.PersonId, v.Embedding!.ToArray())).ToList();
+            var diagnosed = VoiceprintDiagnosis.Diagnose(g.Key, vectors, thresholds);
             return new PersonDiagnosticsSummaryDto(
                 g.Key,
                 names.GetValueOrDefault(g.Key, ""),
                 vectors.Count,
                 diagnosed.Count(d => d.Verdict == SampleVerdict.Alone),
-                Widest(vectors.Select(v => v.Item2).ToList()));
+                Widest(vectors.Select(v => v.Embedding).ToList()));
         })
         // Worst first: most samples resembling nothing else, then most scattered. Anyone with no outlier at
         // all is dropped - an empty problem list is noise, and a list that includes healthy people is worse
@@ -340,7 +340,7 @@ public class PeopleController : ControllerBase
 
         var thresholds = IdentificationThresholds.From(await _settings.GetAsync());
         var diagnosed = VoiceprintDiagnosis
-            .Diagnose(training.Select(v => (v.Id, v.Embedding.ToArray())).ToList(), thresholds)
+            .Diagnose(id, training.Select(v => new TrainingSample(v.Id, v.PersonId, v.Embedding.ToArray())).ToList(), thresholds)
             .ToDictionary(d => d.SampleId);
 
         // Recording names and speaker labels, stitched in memory - VoiceSample deliberately has no FK to its
