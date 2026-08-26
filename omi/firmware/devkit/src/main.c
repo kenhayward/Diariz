@@ -68,6 +68,24 @@ static void print_reset_reason(void)
 
 bool is_connected = false;
 static bool card_failed = false;
+static volatile bool double_tap_pending;
+
+/*
+ * Called from the button work queue. Records the gesture and returns
+ * immediately - it must NOT dispatch.
+ *
+ * usb_mode_dispatch() performs fs_unmount(), fs_mount() and usb_enable(), and
+ * the button handler runs on the system work queue with a 2 KB stack
+ * (CONFIG_SYSTEM_WORKQUEUE_STACK_SIZE). Doing that work there overflowed the
+ * stack and faulted the device into a reboot - intermittently, because it
+ * depended how deep the call went. The CV1 tree documents the same hazard in
+ * rtc.c. All dispatch now happens on the main thread, which also removes a
+ * latent data race on the state machine's statics.
+ */
+void usb_mode_note_double_tap(void)
+{
+    double_tap_pending = true;
+}
 bool is_charging = false;
 extern bool is_off;
 extern bool usb_charge;
@@ -476,6 +494,11 @@ int main(void)
         /* Single source of USB connection state - see usb.c. The device stack
          * is disabled outside transfer mode, so its callbacks cannot tell us. */
         usb_poll_vbus();
+
+        if (double_tap_pending) {
+            double_tap_pending = false;
+            usb_mode_dispatch(USB_MODE_EVENT_DOUBLE_TAP);
+        }
 
         set_led_state();
         k_msleep(500);

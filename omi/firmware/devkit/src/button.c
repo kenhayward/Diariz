@@ -18,7 +18,8 @@
 #include "usb_mode.h"
 
 /* Defined in main.c, which owns performing the actions. */
-extern void usb_mode_dispatch(usb_mode_event_t event);
+/* Records the gesture only. main.c does the work - see the note there. */
+extern void usb_mode_note_double_tap(void);
 #include "wdog_facade.h"
 LOG_MODULE_REGISTER(button, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -252,7 +253,7 @@ void check_button_level(struct k_work *work_item)
         LOG_PRINTK("double tap detected\n");
         btn_last_event = event;
         notify_double_tap();
-        usb_mode_dispatch(USB_MODE_EVENT_DOUBLE_TAP);
+        usb_mode_note_double_tap();
     }
 
     // Long press, one time event
