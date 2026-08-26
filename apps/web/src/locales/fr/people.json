@@ -46,6 +46,8 @@
   "vpVerdictCore": "Correspond à ses autres enregistrements",
   "vpVerdictVariant": "Autre condition d'enregistrement",
   "vpVerdictAlone": "Ne ressemble pas aux autres",
+  "vpVerdictImpostorNamed": "Ressemble davantage à {{name}}",
+  "vpVerdictImpostor": "Ressemble davantage à quelqu'un d'autre",
   "vpClosestMatch": "meilleure correspondance {{value}}%",
   "vpMatchToRest": "correspondance avec le reste {{value}}%",
   "voiceprintUsingOf": "Utilise {{used}} sur les {{selected}} selectionnes",

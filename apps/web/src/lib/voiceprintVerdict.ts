@@ -10,7 +10,7 @@ import type { SampleDiagnosis } from "./types";
 ///
 /// `unlinked` is not a judgement about the voice - it means the speaker no longer names this person -
 /// so it is kept separate from the three the server derives from distances.
-export type RowVerdict = "alone" | "unlinked" | "variant" | "core" | "only";
+export type RowVerdict = "impostor" | "alone" | "unlinked" | "variant" | "core" | "only";
 
 /// A cosine distance as a percentage similarity.
 ///
@@ -31,6 +31,8 @@ export function rowVerdict(
   if (!diagnosis) return "only";
 
   switch (diagnosis.verdict) {
+    case "Impostor":
+      return "impostor";
     case "Alone":
       return "alone";
     case "Variant":
@@ -46,12 +48,15 @@ export function rowVerdict(
 /// leaves the server's ordering (by recording name) intact underneath - ranking `Core` against
 /// `Variant` would imply a difference the user is supposed to do something about.
 export function sortKey(verdict: RowVerdict): number {
-  if (verdict === "alone") return 0;
-  if (verdict === "unlinked") return 1;
-  return 2;
+  // Impostor first: "this is somebody else" is a different order of problem from "this sounds unlike the
+  // rest", and the only one that turns into a confident match for the wrong person if the set is clustered.
+  if (verdict === "impostor") return 0;
+  if (verdict === "alone") return 1;
+  if (verdict === "unlinked") return 2;
+  return 3;
 }
 
 /// Whether this row is one of the ones the "only ones worth checking" filter keeps.
 export function worthChecking(verdict: RowVerdict): boolean {
-  return verdict === "alone" || verdict === "unlinked";
+  return verdict === "impostor" || verdict === "alone" || verdict === "unlinked";
 }

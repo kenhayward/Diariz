@@ -46,6 +46,8 @@
   "vpVerdictCore": "Coincide con sus otras grabaciones",
   "vpVerdictVariant": "Otra situación de grabación",
   "vpVerdictAlone": "Suena distinta a las demás",
+  "vpVerdictImpostorNamed": "Se parece más a {{name}}",
+  "vpVerdictImpostor": "Se parece más a otra persona",
   "vpClosestMatch": "mejor coincidencia {{value}}%",
   "vpMatchToRest": "coincidencia con el resto {{value}}%",
   "voiceprintUsingOf": "Usando {{used}} de los {{selected}} seleccionados",

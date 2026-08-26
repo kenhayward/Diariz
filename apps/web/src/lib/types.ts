@@ -376,10 +376,20 @@ export interface SampleDiagnosis {
   nearestSiblingDistance: number | null;
   /// Cosine distance to the centroid of the person's *other* samples - a true leave-one-out.
   distanceToOthers: number | null;
-  /// "Only", "Core", "Variant" or "Alone". `Alone` means "resembles none of the others", which is either a
-  /// recording condition nothing else covers or a different person - not a verdict of wrong.
+  /// "Only", "Core", "Variant", "Alone" or "Impostor". `Alone` means "resembles none of the others", which
+  /// is either a recording condition nothing else covers or a different person - not a verdict of wrong.
+  /// `Impostor` means a different person's recording sits closer than any of this person's own, which is
+  /// the only signal that separates those two cases.
   verdict: string;
   isTraining: boolean;
+  /// A human has listened and vouched that this really is this person. The verdict is still reported - only
+  /// the review queue shrinks.
+  confirmed: boolean;
+  /// Cosine distance to the closest recording belonging to anyone else, and who that was. Reported even
+  /// when it is not a finding.
+  nearestImpostorDistance: number | null;
+  nearestImpostorPersonId: string | null;
+  nearestImpostorName: string | null;
 }
 
 export interface VoiceprintDiagnostics {

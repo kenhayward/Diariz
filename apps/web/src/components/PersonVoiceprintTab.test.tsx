@@ -72,7 +72,9 @@ function diagnosis(over: Partial<SampleDiagnosis> = {}): SampleDiagnosis {
   return {
     voiceSampleId: "vs1", speakerId: "sp1", recordingId: "r1", recordingName: "Standup",
     speakerLabel: "SPEAKER_00", nearestSiblingDistance: 0.1, distanceToOthers: 0.12,
-    verdict: "Core", isTraining: true, ...over,
+    verdict: "Core", isTraining: true, confirmed: false,
+    nearestImpostorDistance: null, nearestImpostorPersonId: null, nearestImpostorName: null,
+    ...over,
   };
 }
 
@@ -587,5 +589,62 @@ describe("PersonVoiceprintTab", () => {
 
     expect(screen.queryByText("Bravo")).toBeNull();
     expect(screen.getByText("Alpha")).toBeTruthy();
+  });
+
+  // ---- Somebody else is closer. 27 of 92 live samples were, and 9 of those within the accept distance
+  // of that other person - the finding that made clustering the set unsafe. ----
+
+  it("names who a recording sounds more like", async () => {
+    // A verdict without the name is not actionable: it would leave the user to work out who from scratch,
+    // when the server already knows and the reassign control is on the same row.
+    mock(api.getPersonDiagnostics).mockResolvedValue({
+      samples: [diagnosis({
+        verdict: "Impostor",
+        nearestImpostorDistance: 0.12,
+        nearestImpostorPersonId: "p9",
+        nearestImpostorName: "Grace Hopper",
+      })],
+      aloneCount: 0,
+      widestPair: 0.4,
+    });
+    setup();
+
+    expect(await screen.findByText(/sounds more like Grace Hopper/i)).toBeTruthy();
+  });
+
+  it("puts it above a recording that merely sounds unlike the others", async () => {
+    mock(api.getPersonAttributions).mockResolvedValue([
+      attribution({ speakerId: "sp1", recordingName: "Alpha" }),
+      attribution({ speakerId: "sp2", recordingName: "Bravo", voiceSampleId: "vs2" }),
+    ]);
+    mock(api.getPersonDiagnostics).mockResolvedValue({
+      samples: [
+        diagnosis({ speakerId: "sp1", verdict: "Alone", nearestSiblingDistance: 0.8 }),
+        diagnosis({
+          speakerId: "sp2", voiceSampleId: "vs2", verdict: "Impostor",
+          nearestImpostorPersonId: "p9", nearestImpostorName: "Grace Hopper",
+        }),
+      ],
+      aloneCount: 1,
+      widestPair: 0.8,
+    });
+    setup();
+
+    await screen.findByText("Bravo");
+    const names = screen.getAllByText(/Alpha|Bravo/).map((n) => n.textContent);
+    expect(names[0]).toBe("Bravo");
+  });
+
+  it("keeps a confirmed recording's verdict visible", async () => {
+    // Only the queue shrinks. Hiding it would make a confirmed outlier look identical to a healthy
+    // recording, which is exactly what somebody who confirmed in haste needs to be able to see.
+    mock(api.getPersonDiagnostics).mockResolvedValue({
+      samples: [diagnosis({ verdict: "Alone", nearestSiblingDistance: 0.8, confirmed: true })],
+      aloneCount: 0,
+      widestPair: 0.8,
+    });
+    setup();
+
+    expect(await screen.findByText(/sounds unlike their others/i)).toBeTruthy();
   });
 });

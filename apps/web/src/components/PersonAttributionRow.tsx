@@ -177,7 +177,7 @@ export default function PersonAttributionRow({
             {t("people:attributionTrainedOn", { duration: trainedOn })}
           </span>
         )}
-        <VerdictChip verdict={verdict} />
+        <VerdictChip verdict={verdict} impostorName={diagnosis?.nearestImpostorName} />
         {diagnosis?.nearestSiblingDistance != null && (
           <span className="text-xs text-gray-500 dark:text-gray-400">
             {t("people:vpClosestMatch", { value: similarityPercent(diagnosis.nearestSiblingDistance) })}
@@ -356,18 +356,26 @@ export default function PersonAttributionRow({
 /// `only` renders nothing: having no other recording to compare against is the state most of the directory
 /// is in, and it is not a finding. `unlinked` renders nothing here either - the row already carries its own
 /// badge, and saying it twice would read as two separate problems.
-function VerdictChip({ verdict }: { verdict: RowVerdict }) {
+function VerdictChip({ verdict, impostorName }: { verdict: RowVerdict; impostorName?: string | null }) {
   const { t } = useTranslation("people");
 
   const tone: Partial<Record<RowVerdict, string>> = {
     core: "text-green-700 dark:text-green-400",
     variant: "text-blue-700 dark:text-blue-300",
     alone: "text-amber-800 dark:text-amber-300",
+    // Red rather than amber: a different order of problem from "sounds unlike the rest".
+    impostor: "text-red-700 dark:text-red-400",
   };
   const label: Partial<Record<RowVerdict, string>> = {
     core: t("vpVerdictCore"),
     variant: t("vpVerdictVariant"),
     alone: t("vpVerdictAlone"),
+    // Named, because a verdict without the name is not actionable - it would leave the user to work out
+    // who from scratch when the server already knows and the reassign control is on this same row. The
+    // unnamed form is a fallback for a person deleted between the diagnosis and the render.
+    impostor: impostorName
+      ? t("vpVerdictImpostorNamed", { name: impostorName })
+      : t("vpVerdictImpostor"),
   };
 
   if (!label[verdict]) return null;
