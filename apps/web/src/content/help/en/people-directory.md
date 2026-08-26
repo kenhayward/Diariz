@@ -70,7 +70,7 @@ name. **Needs review** narrows the list to just those. If nobody is marked, noth
 dismiss a warning while you are here; it comes back next time you open People.
 
 **Show segments** on any of them lists what that speaker said, with a tick box per line. Untick the lines
-where someone else was talking over them and press **Recompute voiceprint**; Diariz re-reads the audio you
+where someone else was talking over them and press **Re-measure this recording**; Diariz re-reads the audio you
 left ticked and rebuilds the voiceprint from it. Tick as many as you like before pressing it - the work
 happens once, not once per click.
 

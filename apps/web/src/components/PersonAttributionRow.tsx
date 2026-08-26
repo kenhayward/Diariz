@@ -320,6 +320,19 @@ export default function PersonAttributionRow({
                   >
                     {t("people:voiceprintRecompute")}
                   </button>
+                  {/* Beside the button, not in the row's header line. The header already said
+                      "Recomputing..." but sits above a scrolling segment list with this button below it,
+                      so the only feedback was off-screen from the control that caused it. */}
+                  {sample.pending && (
+                    <span role="status" className="text-xs text-gray-500 dark:text-gray-400">
+                      {t("people:voiceprintRecomputing")}
+                    </span>
+                  )}
+                  {!sample.pending && sample.recomputeFailed && (
+                    <span className="text-xs text-red-600 dark:text-red-400">
+                      {t("people:voiceprintRecomputeFailed")}
+                    </span>
+                  )}
                   {effective.size === 0 && (
                     <span className="text-xs text-gray-500 dark:text-gray-400">
                       {t("people:voiceprintPickAtLeastOne")}

@@ -65,6 +65,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.255.0",
+    date: "2026-08-26",
+    pr: 632,
+    headline: "Re-measuring a recording says whether it worked",
+    summary:
+      "Pressing **Recompute voiceprint** looked like it did nothing, and in the commonest case it genuinely said nothing at all. Whether a re-measure was running was worked out from two other columns, and selecting the whole speaker - the state every row starts in - stored as \"no selection\", which those columns could not tell apart from \"not running\". So the row went straight back to showing a duration, as though the button had never been pressed.\n\nIt now records that a job was queued, rather than inferring it. The row says so beside the button that started it instead of in a line above a scrolling list, and it says when the job finished.\n\n**A failure now says it failed.** It used to be swallowed: the recording kept the voiceprint it already had - which is right, a failed re-measure must not destroy a working one - but the row then recorded zero seconds of audio and looked exactly like a success.\n\nThe button is also renamed. **Re-measure this recording** is what it does; the person's voiceprint is the average of every recording behind it, so re-measuring one does not rebuild the whole thing.",
+    added: [
+      "A tick box on the Voiceprint tab to show only the recordings currently training the voiceprint, alongside the one for the recordings worth checking. It appears only when it would actually hide something.",
+    ],
+    changed: [
+      "**Recompute voiceprint** is now **Re-measure this recording**, which is what it does. The person's voiceprint is the average of every recording behind it, so re-measuring one is not a rebuild of the whole print.",
+    ],
+    fixed: [
+      "Pressing the button now says a re-measure is running, beside the button rather than in a line above a scrolling list - and said nothing at all before, whenever the whole speaker was selected.",
+      "A re-measure that fails now says so. It used to leave the recording reporting zero seconds of training audio, which looked like a success.",
+    ],
+  },
+  {
     version: "0.254.0",
     date: "2026-08-25",
     pr: 629,

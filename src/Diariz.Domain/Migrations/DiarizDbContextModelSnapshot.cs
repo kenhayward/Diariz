@@ -2238,6 +2238,12 @@ namespace Diariz.Domain.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("ProfileId");
 
+                    b.Property<DateTimeOffset?>("RecomputeFailedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("RecomputeQueuedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("RecordingId")
                         .HasColumnType("uuid");
 

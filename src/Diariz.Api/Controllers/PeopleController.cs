@@ -161,7 +161,11 @@ public class PeopleController : ControllerBase
         var raw = await _db.VoiceSamples
             .Where(v => v.PersonId == id)
             .OrderBy(v => v.CreatedAt)
-            .Select(v => new { v.Id, v.RecordingId, v.SpeakerId, v.CreatedAt, v.SpansJson, v.UsedMs })
+            .Select(v => new
+            {
+                v.Id, v.RecordingId, v.SpeakerId, v.CreatedAt, v.SpansJson, v.UsedMs,
+                v.RecomputeQueuedAt, v.RecomputeFailedAt,
+            })
             .ToListAsync();
         var recIds = raw.Select(v => v.RecordingId).ToList();
         var spIds = raw.Select(v => v.SpeakerId).ToList();
@@ -212,7 +216,8 @@ public class PeopleController : ControllerBase
                 // Derived from the speaker rather than stored on the sample: two columns saying the same
                 // thing would eventually disagree.
                 speaker?.EmbeddingStale ?? false,
-                v.SpansJson is not null && v.UsedMs is null,
+                v.RecomputeQueuedAt is not null,
+                v.RecomputeFailedAt is not null,
                 spans);
         }).ToList();
 
@@ -961,9 +966,12 @@ public class PeopleController : ControllerBase
 
         var spans = VoiceprintSpans.FromSegments(req.Spans.Select(s => (s.StartMs, s.EndMs)));
         sample.SpansJson = VoiceprintSpans.Serialize(spans);
-        // Clearing this is what makes "pending" survive a page reload: it is derived, not held in the
-        // component. The callback sets it again.
         sample.UsedMs = null;
+        // Recorded rather than inferred, and this is what makes "pending" survive a page reload. Selecting
+        // the whole speaker serialises SpansJson to null, so a derived flag read false for the commonest
+        // case and the UI said nothing when the button was pressed. The callbacks clear it.
+        sample.RecomputeQueuedAt = DateTimeOffset.UtcNow;
+        sample.RecomputeFailedAt = null;
         await _db.SaveChangesAsync();
 
         await _queue.EnqueueVoiceprintAsync(

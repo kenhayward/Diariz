@@ -517,6 +517,10 @@ public record VoiceSampleDto(
     bool Stale = false,
     /// <summary>A recompute is queued and has not reported back.</summary>
     bool Pending = false,
+    /// <summary>The last recompute failed. The sample keeps the vector and the duration it already had - a
+    /// failed re-embed must not destroy a working voiceprint - so without this the row would be
+    /// indistinguishable from one that simply never ran.</summary>
+    bool RecomputeFailed = false,
     /// <summary>The spans of the recording's audio this sample trains on. <b>Empty means the whole
     /// speaker</b>, matching the column's null. The client needs these to know which segments to show as
     /// selected; there are a handful per sample, not thousands, so unlike segment words they ride along on
