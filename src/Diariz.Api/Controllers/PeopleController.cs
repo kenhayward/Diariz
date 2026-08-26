@@ -249,7 +249,11 @@ public class PeopleController : ControllerBase
                 .Join(_db.Speakers, v => v.SpeakerId, s => s.Id, (v, s) => new { Sample = v, Speaker = s })
                 .ToListAsync())
             .Where(x => VoiceprintTraining.Trains(x.Sample, x.Speaker))
-            .Select(x => new { x.Sample.Id, x.Sample.PersonId, x.Sample.Embedding })
+            .Select(x => new
+            {
+                x.Sample.Id, x.Sample.PersonId, x.Sample.Embedding,
+                Confirmed = x.Sample.ConfirmedAt is not null,
+            })
             .ToList();
 
         var byPerson = samples
@@ -272,13 +276,20 @@ public class PeopleController : ControllerBase
         {
             var vectors = g.Select(v => new TrainingSample(v.Id, v.PersonId, v.Embedding!.ToArray())).ToList();
             var diagnosed = VoiceprintDiagnosis.Diagnose(g.Key, everyone, thresholds);
+
+            // A confirmed sample still carries its verdict - the distance did not change - but it leaves the
+            // queue. This is what stops the tick box being a control that appears to do nothing until
+            // multi-template voiceprints ship and start gating on it.
+            var confirmed = g.Where(v => v.Confirmed).Select(v => v.Id).ToHashSet();
+            var outstanding = diagnosed.Where(d => !confirmed.Contains(d.SampleId)).ToList();
+
             return new PersonDiagnosticsSummaryDto(
                 g.Key,
                 names.GetValueOrDefault(g.Key, ""),
                 vectors.Count,
-                diagnosed.Count(d => d.Verdict == SampleVerdict.Alone),
+                outstanding.Count(d => d.Verdict == SampleVerdict.Alone),
                 Widest(vectors.Select(v => v.Embedding).ToList()),
-                diagnosed.Count(d => d.Verdict == SampleVerdict.Impostor));
+                outstanding.Count(d => d.Verdict == SampleVerdict.Impostor));
         })
         // Worst first: most samples resembling nothing else, then most scattered. Anyone with no outlier at
         // all is dropped - an empty problem list is noise, and a list that includes healthy people is worse
@@ -395,6 +406,7 @@ public class PeopleController : ControllerBase
                 // A sample that is not training was not diagnosed, so it has no verdict of its own.
                 (d?.Verdict ?? SampleVerdict.Only).ToString(),
                 Trains(v),
+                v.ConfirmedAt is not null,
                 d?.NearestImpostorDistance,
                 d?.NearestImpostorPersonId,
                 d?.NearestImpostorPersonId is { } imp ? impostorNames.GetValueOrDefault(imp) : null);

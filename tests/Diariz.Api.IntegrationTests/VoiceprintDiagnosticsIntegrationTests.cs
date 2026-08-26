@@ -462,4 +462,89 @@ public class VoiceprintDiagnosticsIntegrationTests(ContainersFixture fx) : IAsyn
             Assert.IsType<OkObjectResult>(result.Result).Value);
         Assert.DoesNotContain(rows, r => r.PersonId == personId);
     }
+
+    // ---- Confirming shrinks the queue. Without this the tick box changes nothing until multi-template
+    // voiceprints ship, which would be a control that does not appear to work. ----
+
+    /// <summary>Marks one sample as vouched for by a human.</summary>
+    private async Task ConfirmAsync(Guid sampleId)
+    {
+        await using var db = fx.CreateDbContext();
+        var sample = await db.VoiceSamples.SingleAsync(v => v.Id == sampleId);
+        sample.ConfirmedAt = DateTimeOffset.UtcNow;
+        sample.ConfirmedByUserId = Guid.NewGuid();
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task Confirming_the_only_flagged_sample_takes_the_person_out_of_the_ranking()
+    {
+        var (_, ids, userId) = await SeedAsync(0, 0.05, 0.9);
+
+        await using (var read = fx.CreateDbContext())
+            Assert.Single(Ranking(await Build(read, userId).DirectoryDiagnostics()));
+
+        await ConfirmAsync(ids[2]);   // the distant one
+
+        await using var db = fx.CreateDbContext();
+        Assert.Empty(Ranking(await Build(db, userId).DirectoryDiagnostics()));
+    }
+
+    [Fact]
+    public async Task Unconfirming_puts_them_back()
+    {
+        // Revocable has to mean revocable everywhere, or taking a confirmation back would leave the queue
+        // permanently short of a recording somebody changed their mind about.
+        var (_, ids, userId) = await SeedAsync(0, 0.05, 0.9);
+        await ConfirmAsync(ids[2]);
+
+        await using (var db = fx.CreateDbContext())
+        {
+            var sample = await db.VoiceSamples.SingleAsync(v => v.Id == ids[2]);
+            sample.ConfirmedAt = null;
+            sample.ConfirmedByUserId = null;
+            await db.SaveChangesAsync();
+        }
+
+        await using var read = fx.CreateDbContext();
+        Assert.Single(Ranking(await Build(read, userId).DirectoryDiagnostics()));
+    }
+
+    [Fact]
+    public async Task Confirming_one_of_two_flagged_samples_reduces_the_count_and_keeps_the_person()
+    {
+        // Partial progress has to show. A person with two problems and one settled is still in the queue,
+        // with one thing left to do.
+        var (personId, userId) = await SeedOrthogonalAsync(3);
+
+        await using (var read = fx.CreateDbContext())
+            Assert.Equal(3, Ranking(await Build(read, userId).DirectoryDiagnostics())
+                .Single(r => r.PersonId == personId).AloneCount);
+
+        Guid first;
+        await using (var db = fx.CreateDbContext())
+            first = (await db.VoiceSamples.Where(v => v.PersonId == personId).ToListAsync())[0].Id;
+        await ConfirmAsync(first);
+
+        await using var db2 = fx.CreateDbContext();
+        var row = Ranking(await Build(db2, userId).DirectoryDiagnostics()).Single(r => r.PersonId == personId);
+        Assert.Equal(2, row.AloneCount);
+    }
+
+    [Fact]
+    public async Task A_confirmed_sample_keeps_its_verdict_on_the_persons_own_card()
+    {
+        // Only the queue shrinks. The distance is still what it is, and hiding the verdict would make a
+        // confirmed outlier indistinguishable from a healthy recording - which is exactly the state
+        // somebody vouching for it needs to be able to see and change their mind about.
+        var (personId, ids, userId) = await SeedAsync(0, 0.05, 0.9);
+        await ConfirmAsync(ids[2]);
+
+        await using var db = fx.CreateDbContext();
+        var body = Body(await Build(db, userId).Diagnostics(personId));
+
+        var row = body.Samples.Single(x => x.VoiceSampleId == ids[2]);
+        Assert.Equal(nameof(SampleVerdict.Alone), row.Verdict);
+        Assert.True(row.Confirmed);
+    }
 }

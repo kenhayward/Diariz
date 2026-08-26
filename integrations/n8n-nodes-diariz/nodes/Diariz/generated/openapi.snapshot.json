@@ -3584,6 +3584,10 @@
       },
       "SampleDiagnosisDto": {
         "properties": {
+          "confirmed": {
+            "default": false,
+            "type": "boolean"
+          },
           "distanceToOthers": {
             "format": "double",
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",

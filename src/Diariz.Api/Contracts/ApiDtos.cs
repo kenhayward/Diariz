@@ -594,6 +594,11 @@ public record SampleDiagnosisDto(
     /// <summary>"Only", "Core", "Variant", "Alone" or "Impostor".</summary>
     string Verdict,
     bool IsTraining,
+    /// <summary>A human has listened and vouched that this recording really is this person. The verdict is
+    /// reported unchanged either way - only the review queue shrinks - because hiding it would make a
+    /// confirmed outlier indistinguishable from a healthy recording, and somebody who confirmed in haste
+    /// needs to be able to see what they signed off.</summary>
+    bool Confirmed = false,
     /// <summary>Cosine distance to the closest sample belonging to <b>anyone else</b>. Null in a directory
     /// holding only this person. Reported even when it is not a finding.</summary>
     double? NearestImpostorDistance = null,
