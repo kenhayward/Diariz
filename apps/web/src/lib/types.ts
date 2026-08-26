@@ -328,6 +328,9 @@ export interface VoiceSample {
   /// The last re-measure failed. A failure leaves the vector and the duration alone - it must not destroy
   /// a working voiceprint - so without this the row looks exactly like one that never ran.
   recomputeFailed: boolean;
+  /// A human has listened and vouched that this recording really is this person. Independent of whether it
+  /// trains: one asks who it is, the other whether the audio is worth learning from.
+  confirmed: boolean;
   /// The spans of audio this sample trains on. Empty means the whole speaker.
   spans: { startMs: number; endMs: number }[];
 }

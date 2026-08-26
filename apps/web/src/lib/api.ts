@@ -983,6 +983,13 @@ export const api = {
     await http.delete(`/api/people/${id}/voiceprint/samples/${sampleId}`);
   },
 
+  /// Record that a human has listened and vouched that this recording really is this person, or take that
+  /// back. Deliberately separate from `setAttributionTraining`: that one asks whether the audio is good
+  /// enough to learn from, this asks whether it is the right person.
+  async setSampleConfirmed(id: string, sampleId: string, confirmed: boolean): Promise<void> {
+    await http.put(`/api/people/${id}/voiceprint/samples/${sampleId}/confirmed`, { confirmed });
+  },
+
   /// Replace the spans of audio that train one voice sample, and queue a re-embed. An empty list goes
   /// back to the whole speaker. Returns as soon as the job is queued - poll the person for `pending`.
   async setVoiceSampleSpans(

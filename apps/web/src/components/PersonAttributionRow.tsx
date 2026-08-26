@@ -89,6 +89,16 @@ export default function PersonAttributionRow({
     }
   }
 
+  // Deliberately its own call, never chained to the training toggle. Confirming says this is the right
+  // person; training says the audio is worth learning from. A recording can be genuinely them and still be
+  // too noisy to train on, so driving one from the other would destroy a distinction the whole review
+  // workflow rests on.
+  const toggleConfirmed = () =>
+    run(
+      () => api.setSampleConfirmed(personId, sample!.id, !sample!.confirmed),
+      t("people:errConfirmFailed"),
+    );
+
   const toggleTraining = () =>
     run(
       () => api.setAttributionTraining(personId, attribution.speakerId, !attribution.isTraining),
@@ -219,6 +229,22 @@ export default function PersonAttributionRow({
                 aria-label={t("people:attributionTraining")}
               />
               {t("people:attributionTraining")}
+            </label>
+          )}
+          {/* Only where there is a sample: no embedding means no verdict and nothing to vouch for. There is
+              deliberately no way to confirm a whole person at once - the gate exists because only listening
+              separates a second microphone from a second person, so confirming unheard audio would
+              reintroduce exactly the failure it prevents. */}
+          {canManage && sample && (
+            <label className="flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-200">
+              <input
+                type="checkbox"
+                checked={sample.confirmed}
+                disabled={busy}
+                onChange={toggleConfirmed}
+                aria-label={t("people:attributionConfirmed")}
+              />
+              {t("people:attributionConfirmed")}
             </label>
           )}
           {/* Hidden rather than disabled. Playing the voice needs the segments, and they only arrive once

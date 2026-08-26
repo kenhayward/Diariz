@@ -60,6 +60,8 @@
   "vpOnlyTraining": "N'afficher que celles qui entraînent l'empreinte",
   "voiceprintPickAtLeastOne": "Choisissez au moins un segment.",
   "attributionTraining": "Entraîne l'empreinte vocale",
+  "attributionConfirmed": "Confirmé comme étant cette personne",
+  "errConfirmFailed": "Impossible d'enregistrer cela.",
   "attributionLinkedAuto": "Reconnu automatiquement",
   "attributionLinkedManual": "Nommé manuellement",
   "attributionNoAccess": "Dans un enregistrement auquel vous n'avez pas accès.",

@@ -60,6 +60,8 @@
   "vpOnlyTraining": "Nur die zeigen, die den Stimmabdruck trainieren",
   "voiceprintPickAtLeastOne": "Waehlen Sie mindestens ein Segment.",
   "attributionTraining": "Trainiert den Stimmabdruck",
+  "attributionConfirmed": "Als diese Person bestaetigt",
+  "errConfirmFailed": "Konnte das nicht speichern.",
   "attributionLinkedAuto": "Automatisch erkannt",
   "attributionLinkedManual": "Manuell benannt",
   "attributionNoAccess": "In einer Aufnahme, auf die Sie keinen Zugriff haben.",

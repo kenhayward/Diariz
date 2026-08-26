@@ -17,6 +17,7 @@ vi.mock("../lib/api", () => ({
     removeVoiceSample: vi.fn(),
     personClip: vi.fn(),
     getPersonDiagnostics: vi.fn(),
+    setSampleConfirmed: vi.fn(),
     searchPeople: vi.fn(),
     assignSpeaker: vi.fn(),
     markMultiSpeaker: vi.fn(),
@@ -108,6 +109,7 @@ beforeEach(() => {
   mock(api.assignSpeaker).mockResolvedValue(undefined);
   mock(api.markMultiSpeaker).mockResolvedValue(undefined);
   mock(api.createPerson).mockResolvedValue(undefined);
+  mock(api.setSampleConfirmed).mockResolvedValue(undefined);
 });
 
 describe("PersonVoiceprintTab", () => {
@@ -162,8 +164,12 @@ describe("PersonVoiceprintTab", () => {
     setup();
     await userEvent.click(await screen.findByRole("button", { name: /Show segments/ }));
 
-    const boxes = await screen.findAllByRole("checkbox");
-    expect(boxes.every((b) => (b as HTMLInputElement).checked)).toBe(true);
+    // Named per segment rather than "every checkbox on screen": the row also carries the training and
+    // confirmation ticks, which are not segments and answer entirely different questions.
+    const segments = await Promise.all(
+      ["One", "Two", "Three"].map((text) => screen.findByRole("checkbox", { name: text })),
+    );
+    expect(segments.every((b) => (b as HTMLInputElement).checked)).toBe(true);
   });
 
   it("ticks only the selected segments when spans are stored", async () => {
@@ -646,5 +652,72 @@ describe("PersonVoiceprintTab", () => {
     setup();
 
     expect(await screen.findByText(/sounds unlike their others/i)).toBeTruthy();
+  });
+
+  // ---- Vouching for a recording. It exists because distance provably cannot separate a second microphone
+  // from a second person enrolled under one name - only listening can. ----
+
+  it("records a human vouching for the recording", async () => {
+    setup();
+    await screen.findByText("Standup");
+
+    await userEvent.click(screen.getByRole("checkbox", { name: /confirmed as this person/i }));
+
+    expect(api.setSampleConfirmed).toHaveBeenCalledWith("p1", "vs1", true);
+  });
+
+  it("takes a confirmation back", async () => {
+    // Somebody who confirmed in haste, or before hearing a later recording that changes their mind, has to
+    // be able to undo it.
+    mock(api.getPerson).mockResolvedValue({
+      person: person(), identifiedCount: 1, samples: [sample({ confirmed: true })],
+    });
+    setup();
+    await screen.findByText("Standup");
+
+    await userEvent.click(screen.getByRole("checkbox", { name: /confirmed as this person/i }));
+
+    expect(api.setSampleConfirmed).toHaveBeenCalledWith("p1", "vs1", false);
+  });
+
+  it("is a separate assertion from whether the recording trains the voiceprint", async () => {
+    // The load-bearing one. Confirming says this is the right person; the training tick says the audio is
+    // worth learning from. A recording can be genuinely them and still be too noisy to train on, so
+    // neither control may quietly drive the other.
+    setup();
+    await screen.findByText("Standup");
+
+    await userEvent.click(screen.getByRole("checkbox", { name: /confirmed as this person/i }));
+    expect(api.setAttributionTraining).not.toHaveBeenCalled();
+
+    mock(api.setSampleConfirmed).mockClear();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Trains the voiceprint" }));
+    expect(api.setSampleConfirmed).not.toHaveBeenCalled();
+  });
+
+  it("offers nothing to confirm on a recording that trains nothing", async () => {
+    // No sample means no embedding, so no verdict and nothing to vouch for.
+    mock(api.getPersonAttributions).mockResolvedValue([
+      attribution({ voiceSampleId: null, isTraining: false }),
+    ]);
+    setup();
+    await screen.findByText("Standup");
+
+    expect(screen.queryByRole("checkbox", { name: /confirmed as this person/i })).toBeNull();
+  });
+
+  it("offers no way to confirm everything at once", async () => {
+    // Deliberate. The gate exists because only listening separates a second microphone from a second
+    // person, so a button that confirms unheard audio would reintroduce exactly the failure it prevents -
+    // and one live sample reads as healthy while sitting closer to somebody else.
+    mock(api.getPersonAttributions).mockResolvedValue([
+      attribution({ speakerId: "sp1", recordingName: "Alpha" }),
+      attribution({ speakerId: "sp2", recordingName: "Bravo", voiceSampleId: "vs2" }),
+    ]);
+    setup();
+    await screen.findByText("Bravo");
+
+    expect(screen.queryByRole("button", { name: /confirm all|confirm every/i })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: /confirm all|confirm every/i })).toBeNull();
   });
 });
