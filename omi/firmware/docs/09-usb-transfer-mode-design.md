@@ -1,8 +1,17 @@
 # 9. USB transfer mode (design)
 
-**Status: designed, not built.** This is the agreed design for the first of three firmware
-sub-projects. Nothing in this document has been implemented; it is written to be turned into an
-implementation plan.
+**Status: built, partly verified on hardware (2026-08-26).** Recordings were copied off the
+device over USB-C without opening it, and decoded to 12m31s of valid Ogg Opus - the path this
+design exists to create works.
+
+Verification was cut short by a **hardware fault**: the SD card turned out to be physically fused
+into its holder, which produced constant filesystem EIO errors, an impossible 124 GB file, and
+results that changed between identical builds. Several checks are therefore untested, and some
+observations made during the session were measuring failing media rather than firmware. The full
+record, including what passed and what did not, is in
+[08 sections 8.14 and 8.15](08-build-and-flash-runbook.md).
+
+**Re-run the whole checklist on rebuilt hardware before treating this as proven.**
 
 Target hardware is the **Omi DevKit 2** as described in
 [07-devkit2-target.md](07-devkit2-target.md). Build and flash instructions are in
