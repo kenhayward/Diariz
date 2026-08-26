@@ -15,6 +15,12 @@ void usb_mode_init(void)
     usb_connected = false;
 }
 
+void usb_mode_init_card_failed(void)
+{
+    usb_mode_init();
+    state = USB_MODE_CARD_FAIL;
+}
+
 usb_mode_state_t usb_mode_get_state(void)
 {
     return state;

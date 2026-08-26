@@ -284,6 +284,33 @@ static void test_never_both_mounted_and_msc(void)
     }
 }
 
+/*
+ * A card that will not mount at boot must NOT be a dead end. main.c used to
+ * return out of main() in that case, which killed the button handling and the
+ * USB poll along with it - so the recovery path below could never be reached on
+ * real hardware, and the only way out was to open the device. Boot straight
+ * into CARD_FAIL instead and let the double-tap present the card for
+ * reformatting. See design 9.6.
+ */
+static void test_boot_with_unmountable_card_can_recover(void)
+{
+    usb_mode_init_card_failed();
+    CHECK(usb_mode_get_state() == USB_MODE_CARD_FAIL);
+    CHECK(!usb_mode_allows_poweroff());
+
+    usb_mode_handle(USB_MODE_EVENT_USB_CONNECTED);
+    usb_mode_actions_t a = usb_mode_handle(USB_MODE_EVENT_DOUBLE_TAP);
+    CHECK(usb_mode_get_state() == USB_MODE_TRANSFER);
+    CHECK(a.count == 2);
+    CHECK(a.actions[0] == USB_MODE_ACTION_START_MSC);
+    CHECK(a.actions[1] == USB_MODE_ACTION_LED_TRANSFER);
+
+    /* And once the host has formatted it, a remount gets us back to capturing. */
+    usb_mode_handle(USB_MODE_EVENT_DOUBLE_TAP);
+    a = usb_mode_handle(USB_MODE_EVENT_REMOUNT_OK);
+    CHECK(usb_mode_get_state() == USB_MODE_CAPTURE);
+}
+
 int main(void)
 {
     test_starts_in_capture();
@@ -303,6 +330,7 @@ int main(void)
     test_unplug_during_entering_skips_msc();
     test_poweroff_only_allowed_in_capture();
     test_never_both_mounted_and_msc();
+    test_boot_with_unmountable_card_can_recover();
 
     if (failures) {
         printf("%d check(s) failed\n", failures);

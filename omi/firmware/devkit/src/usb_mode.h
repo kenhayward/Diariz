@@ -52,6 +52,14 @@ typedef struct {
 /* Reset to USB_MODE_CAPTURE with USB recorded as disconnected. */
 void usb_mode_init(void);
 
+/*
+ * Boot straight into USB_MODE_CARD_FAIL, for when the card could not be mounted
+ * at startup. The device stays reachable: a double-tap still presents the card
+ * so the host can reformat it, which is the only way back for a device whose
+ * card cannot be physically removed.
+ */
+void usb_mode_init_card_failed(void);
+
 usb_mode_state_t usb_mode_get_state(void);
 
 /* Feed one event. Returns the actions the caller must perform, in order. */

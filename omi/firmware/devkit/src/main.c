@@ -67,6 +67,7 @@ static void print_reset_reason(void)
 }
 
 bool is_connected = false;
+static bool card_failed = false;
 bool is_charging = false;
 extern bool is_off;
 extern bool usb_charge;
@@ -326,16 +327,26 @@ int main(void)
             set_led_red(false);
             k_msleep(400);
         }
-        return err;
+        /*
+         * Do NOT return. This used to exit main(), killing the button handling and
+         * the USB VBUS poll with it - so on a device whose card cannot be physically
+         * removed, an unreadable card was unrecoverable without opening the case.
+         * Carry on into the main loop in CARD_FAIL instead: a double-tap then
+         * presents the card over USB so the host can reformat it. That is the
+         * recovery path in design 9.6, which returning here made unreachable.
+         */
+        card_failed = true;
     }
     k_msleep(500);
 
     LOG_PRINTK("\n");
     LOG_INF("Initializing storage...\n");
 
-    err = storage_init();
-    if (err) {
-        LOG_ERR("Failed to initialize storage (err %d)", err);
+    if (!card_failed) {
+        err = storage_init();
+        if (err) {
+            LOG_ERR("Failed to initialize storage (err %d)", err);
+        }
     }
 #endif
 
@@ -448,7 +459,12 @@ int main(void)
     k_msleep(1000);
     set_led_blue(false);
 
-    usb_mode_init();
+    if (card_failed) {
+        /* Reachable, deliberately: the double-tap recovery needs the main loop. */
+        usb_mode_init_card_failed();
+    } else {
+        usb_mode_init();
+    }
 
     // Main loop
     LOG_PRINTK("\n");
