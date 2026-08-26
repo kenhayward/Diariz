@@ -236,6 +236,29 @@ disables I2C while enabling the IMU driver, and the overlay puts the LSM6DS3TR-C
 The IMU is unused by this application, so unlike the CV1 (where it backs the clock recovery)
 nothing depends on it.
 
+### D11 - The single-tap detector destroys the double-tap window. **Medium. FIXED**
+
+`button.c` advertises `DOUBLE_TAP_WINDOW` as 600 ms, but the single-tap branch ran on every
+25 Hz poll and tested `TAP_THRESHOLD` (300 ms) measured from `btn_press_start_time`. So roughly
+300 ms after the first press it fired `BUTTON_EVENT_SINGLE_TAP` and set `btn_last_tap_time = 0`,
+destroying the state the double-tap detector depends on.
+
+The effective window was therefore about **300 ms from the start of the first press, not 600 ms**
+- and since a tap itself takes 80-120 ms, under 200 ms remained to land the second press. In
+practice double-tap was close to unreachable by hand.
+
+It went unnoticed because nothing depended on it: `BUTTON_EVENT_DOUBLE_TAP` only fired a BLE
+notification, so a missed double-tap looked like nothing at all. USB transfer mode
+([09-usb-transfer-mode-design.md](09-usb-transfer-mode-design.md)) is the first feature where
+double-tap has a visible effect, and it surfaced immediately: the gesture did nothing however
+fast it was pressed, while a 3-second long-press still powered the device off - which is what
+proved the button and its FSM were working and isolated the fault to double-tap detection.
+
+Fixed by waiting out the full `DOUBLE_TAP_WINDOW`, measured from the tap rather than the press
+start, before committing to a single tap. **The fix has no unit test**: the FSM is timing-based
+and entangled with Zephyr work queues and file-scope globals, so testing it properly means
+extracting it as a pure function the way `usb_mode` was. That extraction is the right follow-up.
+
 ### D10 - Overlay comment contradicts the code. **Cosmetic**
 
 `cs-gpios = <&gpio0 2 GPIO_ACTIVE_LOW>;  // CS pin on P0.28` - the code says P0.02, the comment
