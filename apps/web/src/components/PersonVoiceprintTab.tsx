@@ -45,6 +45,7 @@ export default function PersonVoiceprintTab({ person }: { person: Person }) {
   });
 
   const [onlyWorthChecking, setOnlyWorthChecking] = useState(false);
+  const [onlyTraining, setOnlyTraining] = useState(false);
 
   const { play, stop, playingSegmentId } = useClipPlayer(person.id);
 
@@ -91,7 +92,9 @@ export default function PersonVoiceprintTab({ person }: { person: Person }) {
   const sorted = decorated.slice().sort((a, b) => sortKey(a.verdict) - sortKey(b.verdict));
   const checkable = decorated.filter((d) => worthChecking(d.verdict)).length;
   const aloneCount = decorated.filter((d) => d.verdict === "alone").length;
-  const visible = onlyWorthChecking ? sorted.filter((d) => worthChecking(d.verdict)) : sorted;
+  const visible = sorted
+    .filter((d) => !onlyWorthChecking || worthChecking(d.verdict))
+    .filter((d) => !onlyTraining || d.row.isTraining);
 
   // Describes the list beneath it. The old header counted only the outliers while the list showed every
   // recording, so "5 resemble none of the others" sat above rows reading "Matches the others" - both true,
@@ -108,17 +111,32 @@ export default function PersonVoiceprintTab({ person }: { person: Person }) {
         <p className="text-xs text-gray-500 dark:text-gray-400">{header}</p>
         {/* Offered only when it could keep something. A control whose only possible effect is to empty
             the list is worse than no control. */}
-        {checkable > 0 && (
-          <label className="flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-200">
-            <input
-              type="checkbox"
-              checked={onlyWorthChecking}
-              onChange={(e) => setOnlyWorthChecking(e.target.checked)}
-              aria-label={t("people:vpOnlyWorthChecking")}
-            />
-            {t("people:vpOnlyWorthChecking")}
-          </label>
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          {checkable > 0 && (
+            <label className="flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-200">
+              <input
+                type="checkbox"
+                checked={onlyWorthChecking}
+                onChange={(e) => setOnlyWorthChecking(e.target.checked)}
+                aria-label={t("people:vpOnlyWorthChecking")}
+              />
+              {t("people:vpOnlyWorthChecking")}
+            </label>
+          )}
+          {/* Offered only when it could hide something. Most people's rows all train, and a tick box that
+              can never change the list is noise. */}
+          {trainingCount > 0 && trainingCount < rows.length && (
+            <label className="flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-200">
+              <input
+                type="checkbox"
+                checked={onlyTraining}
+                onChange={(e) => setOnlyTraining(e.target.checked)}
+                aria-label={t("people:vpOnlyTraining")}
+              />
+              {t("people:vpOnlyTraining")}
+            </label>
+          )}
+        </div>
       </div>
 
       {rows.length === 0 ? (
