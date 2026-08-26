@@ -349,6 +349,15 @@ flagged recording meant remembering its name, switching tabs and finding it agai
 the rows beneath it (it counted only the outliers while the list showed everything). The ones worth a listen
 sort to the top, and a tick box narrows a long list to just those.
 
+**A recording that turns out to be somebody else is fixed from the row it was found on.** Each row carries
+the same speaker typeahead the transcript and the Speakers tab use, showing who it currently says this is:
+reassign it to the right person, create someone not yet in the directory, mark it as **Multiple speakers**
+where two people talked over each other, or unlink it. Whichever is chosen, the recording stops training that
+person's voiceprint immediately, because training follows the transcript's own answer. The control appears
+only on recordings the caller **owns** - `ManageVoiceprints` grants listening to a segment for assessment,
+not editing somebody else's transcript, and all three endpoints behind the control enforce ownership, so
+offering it without the check would produce a button that always failed.
+
 **The figures are similarity, not distance.** They were printed as raw cosine distance under a label that
 reads as a match, so the worst recording in the directory displayed the largest and most reassuring number on
 the screen. `closest other: 82%` was an 18% match.

@@ -17,6 +17,10 @@ vi.mock("../lib/api", () => ({
     removeVoiceSample: vi.fn(),
     personClip: vi.fn(),
     getPersonDiagnostics: vi.fn(),
+    searchPeople: vi.fn(),
+    assignSpeaker: vi.fn(),
+    markMultiSpeaker: vi.fn(),
+    createPerson: vi.fn(),
   },
   apiErrorMessage: (_e: unknown, fallback: string) => fallback,
 }));
@@ -95,6 +99,12 @@ beforeEach(() => {
   mock(api.setVoiceSampleSpans).mockResolvedValue(undefined);
   mock(api.removeVoiceSample).mockResolvedValue(undefined);
   mock(api.getPersonDiagnostics).mockResolvedValue({ samples: [], aloneCount: 0, widestPair: null });
+  mock(api.searchPeople).mockResolvedValue([
+    { ...person(), id: "p9", name: "Grace Hopper" },
+  ]);
+  mock(api.assignSpeaker).mockResolvedValue(undefined);
+  mock(api.markMultiSpeaker).mockResolvedValue(undefined);
+  mock(api.createPerson).mockResolvedValue(undefined);
 });
 
 describe("PersonVoiceprintTab", () => {
@@ -466,5 +476,55 @@ describe("PersonVoiceprintTab", () => {
     await userEvent.click(screen.getByRole("button", { name: "Hide segments" }));
 
     expect(window.HTMLMediaElement.prototype.pause).toHaveBeenCalled();
+  });
+
+  // ---- Reassigning. When a recording behind someone's voiceprint turns out to be somebody else, the
+  // fix belongs where you found it - not in the transcript, hunting for the speaker again. ----
+
+  it("reassigns by recording and speaker label, which is what the endpoint is keyed on", async () => {
+    // Passing the speaker id instead would 404, and nothing in the types would catch it: both are
+    // strings, and both are on the row.
+    setup();
+    await screen.findByText("Standup");
+
+    await userEvent.click(screen.getByRole("button", { name: /change who SPEAKER_00 is/i }));
+    await userEvent.type(screen.getByRole("combobox"), "Grace");
+    await userEvent.click(await screen.findByRole("option", { name: /Grace Hopper/ }));
+
+    expect(api.assignSpeaker).toHaveBeenCalledWith("r1", "SPEAKER_00", "p9");
+  });
+
+  it("unlinks the speaker rather than guessing who it was", async () => {
+    setup();
+    await screen.findByText("Standup");
+
+    await userEvent.click(screen.getByRole("button", { name: /change who SPEAKER_00 is/i }));
+    await userEvent.click(screen.getByRole("option", { name: "Unassigned" }));
+
+    expect(api.assignSpeaker).toHaveBeenCalledWith("r1", "SPEAKER_00", null);
+  });
+
+  it("re-reads the list after a reassign", async () => {
+    // Otherwise the row goes on claiming the old person until the modal is closed and reopened.
+    setup();
+    await screen.findByText("Standup");
+    mock(api.getPersonAttributions).mockClear();
+
+    await userEvent.click(screen.getByRole("button", { name: /change who SPEAKER_00 is/i }));
+    await userEvent.click(screen.getByRole("option", { name: "Unassigned" }));
+
+    await waitFor(() => expect(api.getPersonAttributions).toHaveBeenCalled());
+  });
+
+  it("offers nothing to change in a recording you do not own", async () => {
+    // Manage voiceprints grants listening to a segment for assessment, not editing someone else's
+    // transcript - and the API refuses the write regardless, so the control would always fail.
+    // Asserted as absent rather than disabled: a disabled assertion would pass against a control that
+    // was never gated at all.
+    mock(api.getPersonAttributions).mockResolvedValue([attribution({ canReassign: false })]);
+    setup();
+    await screen.findByText("Standup");
+
+    expect(screen.queryByRole("button", { name: /change who SPEAKER_00 is/i })).toBeNull();
   });
 });

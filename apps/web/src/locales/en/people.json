@@ -60,6 +60,8 @@
   "attributionLinkedManual": "Named by hand",
   "attributionNoAccess": "In a recording you cannot access.",
   "attributionUnlinked": "No longer linked to this person",
+  "attributionReassignAria": "Change who {{label}} is in {{recording}}",
+  "errReassignFailed": "Could not change who this speaker is.",
   "attributionPlayVoice": "Play voice",
   "attributionPlaySegment": "Play segment",
   "attributionStop": "Stop",

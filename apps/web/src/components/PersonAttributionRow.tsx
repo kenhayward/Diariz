@@ -5,6 +5,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { formatDuration } from "../lib/format";
 import { clipQueue, type ClipRequest } from "../lib/clipPlayback";
 import { isSelected, spansForSegments } from "../lib/voiceprintSelection";
+import SpeakerAssign from "./SpeakerAssign";
 import { similarityPercent, type RowVerdict } from "../lib/voiceprintVerdict";
 import type { AttributionSegment, PersonAttribution, SampleDiagnosis, VoiceSample } from "../lib/types";
 
@@ -16,6 +17,7 @@ import type { AttributionSegment, PersonAttribution, SampleDiagnosis, VoiceSampl
 /// voiceprint is actually being used and read as an arbitrary subset.
 export default function PersonAttributionRow({
   personId,
+  personName,
   attribution,
   sample,
   diagnosis,
@@ -27,6 +29,9 @@ export default function PersonAttributionRow({
   playingSegmentId,
 }: {
   personId: string;
+  /// Shown on the reassign control as the current answer, so the row states who it currently says this
+  /// is rather than making you infer it from which person's card you are on.
+  personName: string;
   attribution: PersonAttribution;
   /// The sample behind this speaker, when one exists. Null for a speaker that trains nothing, and also
   /// present-but-excluded for one that used to.
@@ -43,7 +48,7 @@ export default function PersonAttributionRow({
   onChanged: () => void;
   playingSegmentId: string | null;
 }) {
-  const { t } = useTranslation(["people", "common"]);
+  const { t } = useTranslation(["people", "common", "workspace"]);
   const [expanded, setExpanded] = useState(false);
   /// The ticked segment ids, or null before the segments have arrived and seeded it.
   const [ticked, setTicked] = useState<Set<string> | null>(null);
@@ -88,6 +93,35 @@ export default function PersonAttributionRow({
     run(
       () => api.setAttributionTraining(personId, attribution.speakerId, !attribution.isTraining),
       t("people:errTrainingFailed"),
+    );
+
+  // All three go through `run`, so a refusal shows on the row and the lists re-read on success. Each is
+  // gated by canReassign above, which reports recording ownership - the API enforces the same on all
+  // three endpoints, so a control offered without it would simply always fail.
+  const reassign = (toPersonId: string | null) =>
+    run(
+      () => api.assignSpeaker(attribution.recordingId, attribution.speakerLabel, toPersonId),
+      t("people:errReassignFailed"),
+    );
+
+  const markMulti = () =>
+    run(
+      () => api.markMultiSpeaker(attribution.recordingId, attribution.speakerLabel),
+      t("people:errReassignFailed"),
+    );
+
+  // Creates and assigns in one call, so someone not yet in the directory does not need a detour to add
+  // them first.
+  const createAndAssign = (name: string) =>
+    run(
+      async () => {
+        await api.createPerson({
+          name,
+          recordingId: attribution.recordingId,
+          label: attribution.speakerLabel,
+        });
+      },
+      t("people:errReassignFailed"),
     );
 
   const recompute = () =>
@@ -202,6 +236,27 @@ export default function PersonAttributionRow({
             >
               {playing ? t("people:attributionStop") : t("people:attributionPlayVoice")}
             </button>
+          )}
+          {/* The same typeahead the transcript and Speakers tab use. A bespoke button here would be a
+              second way to do something the app already does one way, and this one already searches the
+              ungated people endpoint, offers Create for someone not in the directory, and offers
+              Multiple speakers - which matters here, because overlapping speech is one of the commonest
+              reasons a recording sounds unlike a person's others. */}
+          {attribution.canReassign && (
+            <SpeakerAssign
+              label={attribution.speakerLabel}
+              ariaLabel={t("people:attributionReassignAria", {
+                label: attribution.speakerLabel,
+                recording: attribution.recordingName,
+              })}
+              isMulti={false}
+              displayName={attribution.stillLinked ? personName : undefined}
+              width="w-48"
+              subtle
+              onAssign={reassign}
+              onCreate={createAndAssign}
+              onMulti={markMulti}
+            />
           )}
           <button
             type="button"
