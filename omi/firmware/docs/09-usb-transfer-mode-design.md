@@ -120,8 +120,29 @@ Three states:
 | `CARD_FAIL` | No | Nothing | Remount failed. Six red blinks, as today |
 
 Ordering matters and is the state machine's responsibility. Entering transfer mode:
-stop the microphone, close and sync the current file, `fs_unmount()`, then enable MSC - in that
-order. Leaving: disable MSC, `fs_mount()` (still with `FS_MOUNT_FLAG_NO_FORMAT`), resume capture.
+stop the microphone, **quiesce the writer**, `fs_unmount()`, then enable MSC - in that order.
+Leaving: disable MSC, `fs_mount()` (still with `FS_MOUNT_FLAG_NO_FORMAT`), resume capture.
+
+> **Corrected against hardware, 2026-08-26.** This step originally read "stop the microphone,
+> close and sync the current file, `fs_unmount()`", on the assumption that `mic_off()` stops the
+> writing. **It does not.** The audio pipeline writes from its own thread
+> (`transport.c` -> `write_to_storage()` -> `write_to_file()`), independent of the microphone and
+> with data still buffered after it stops. Unmounting therefore raced `fs_write()` against
+> `fs_unmount()` and faulted the device into a reboot on every double-tap.
+>
+> The mechanism to prevent it already existed and was simply not used: every write takes
+> `write_sdcard_mutex` and checks `is_sd_on()` first. So the correct sequence is **clear the flag,
+> then take the mutex** - the flag stops a new write starting, the mutex waits out one already
+> running - and only then unmount. Note `sd_off()` is the wrong tool: it physically disconnects
+> the SPI pins and drops the card's enable line, which would kill mass storage.
+>
+> A second race was found in the same place: `mount_sd_card()` set `sd_enabled = true` *before*
+> `disk_access_init()` and `fs_mount()`, so the writer could start writing into a filesystem that
+> was not mounted yet. It is now set at the end of a successful mount.
+>
+> The general lesson: **"stop capture" is not a single action on this firmware.** The microphone,
+> the encoder pipeline and the writer are separate threads, and only the writer's own lock makes
+> unmounting safe.
 
 Note that **D5 helps here**. The firmware opens and closes the file on every 440-byte write,
 which is a real inefficiency, but it means there is no long-lived file handle to reconcile at

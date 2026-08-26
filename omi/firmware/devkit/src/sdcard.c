@@ -50,6 +50,13 @@ uint32_t file_num_array[2];
 
 static const char *disk_mount_pt = "/SD:/";
 
+/*
+ * Defined in transport.c. The audio pipeline writes from its own thread, taking
+ * this mutex and checking is_sd_on() before every write. Anything that pulls the
+ * filesystem out from under it must clear the flag and then take the mutex.
+ */
+extern struct k_mutex write_sdcard_mutex;
+
 bool sd_enabled = false;
 
 int mount_sd_card(void)
@@ -66,7 +73,10 @@ int mount_sd_card(void)
         LOG_ERR("Error setting up SD Pin");
         return -1;
     }
-    sd_enabled = true;
+    /* sd_enabled is set at the END of this function, not here. The transport
+     * thread writes as soon as is_sd_on() returns true, and setting it before
+     * disk_access_init() and fs_mount() let it write into a filesystem that was
+     * not mounted yet. */
 
     // initialize the sd card
     const char *disk_pdrv = "SD";
@@ -151,6 +161,9 @@ int mount_sd_card(void)
 
     LOG_INF("result of check: %d", res);
 
+    /* Only now is it safe for the transport thread to start writing. */
+    sd_enabled = true;
+
     return 0;
 }
 
@@ -160,7 +173,21 @@ int unmount_sd_card(void)
      * physical card and needs it powered. Only the filesystem is released, so
      * the host can own the block device. See docs/09-usb-transfer-mode-design.md.
      */
+    /*
+     * Stop the audio pipeline writing before the filesystem goes away.
+     *
+     * transport.c writes from its own thread, taking write_sdcard_mutex and
+     * checking is_sd_on() each time. mic_off() alone does NOT stop it - there
+     * can still be buffered data in flight - so unmounting without this raced
+     * fs_write() against fs_unmount() and faulted the device into a reboot.
+     *
+     * Clearing the flag first means no new write starts; taking the mutex then
+     * waits for any write already running to finish.
+     */
+    sd_enabled = false;
+    k_mutex_lock(&write_sdcard_mutex, K_FOREVER);
     int res = fs_unmount(&mount_point);
+    k_mutex_unlock(&write_sdcard_mutex);
     if (res != 0) {
         LOG_ERR("fs_unmount failed: %d", res);
         return res;
