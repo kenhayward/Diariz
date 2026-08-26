@@ -130,8 +130,13 @@ closing the held handle explicitly.
 
 ### USB composite device
 
-Extend the existing `usb.c` rather than replace it. It already calls `usb_enable()` and
-maintains the `usb_charge` flag used by `main.c`; both are kept.
+Extend the existing `usb.c` rather than replace it, but **do not keep its `usb_enable()` call at
+boot**. This was corrected against hardware on 2026-08-26 - see the note at the end of this
+section.
+
+The USB device stack is enabled **only in transfer mode**. Outside it the stack is down, so
+plugging in enumerates nothing at all: the host sees no device, and the card stays exclusively
+the firmware's.
 
 Two classes are added:
 
@@ -144,8 +149,25 @@ overlay explicitly disables, which resolves **D8** and the contradiction documen
 [08 section 8.8](08-build-and-flash-runbook.md); and the USB descriptor work is done once
 instead of twice.
 
-`init_usb()` currently branches on `CONFIG_UART_CONSOLE`. That branch needs revisiting when the
-console moves to CDC.
+Charge detection therefore cannot come from the USB stack. It reads VBUS directly from the POWER
+peripheral (`nrf_power_usbregstatus_vbusdet_get`), which works with the stack disabled. A poll on
+the existing 500 ms main-loop tick edge-detects it and is the **single source** of both the
+`usb_charge` flag and the state machine's connect and disconnect events.
+
+`init_usb()` no longer enables anything, so its old `CONFIG_UART_CONSOLE` branch is gone rather
+than merely deferred.
+
+> **Corrected against hardware, 2026-08-26.** The original design said `usb.c` "already calls
+> `usb_enable()` ... both are kept", and treated `usb_msc_start`/`usb_msc_stop` as the thing that
+> controls host visibility. That was wrong. Zephyr's legacy stack exposes **every configured
+> class the moment the device enumerates**, so keeping the boot-time `usb_enable()` - which
+> existed only to detect charging - handed Windows the card on every plug-in, while the firmware
+> still had FatFs mounted and was appending audio to it. Precisely the both-owners-at-once case
+> section 9.3 forbids. The verification checklist caught it on the first item, before anything was
+> copied off.
+>
+> The lesson worth keeping: with the legacy USB stack, **enumeration is the thing to gate, not the
+> class**. Anything that enables the stack for an unrelated reason silently publishes the card.
 
 ## 9.6 Formatting
 

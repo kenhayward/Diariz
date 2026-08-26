@@ -457,6 +457,10 @@ int main(void)
     while (1) {
         watchdog_feed();
 
+        /* Single source of USB connection state - see usb.c. The device stack
+         * is disabled outside transfer mode, so its callbacks cannot tell us. */
+        usb_poll_vbus();
+
         set_led_state();
         k_msleep(500);
     }
