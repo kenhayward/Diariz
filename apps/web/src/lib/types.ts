@@ -362,6 +362,9 @@ export interface PersonAttribution {
   /// Narrower than `canAccessRecording`: only the recording's owner may relabel its speakers. Manage
   /// voiceprints grants listening for assessment, not editing someone else's transcript.
   canReassign: boolean;
+  /// False once the recording's audio has been deleted. The transcript survives, so the row still lists what
+  /// was said - but there is nothing left to play.
+  audioAvailable: boolean;
 }
 
 /// How well one enrolled sample resembles the rest of a person's training set.

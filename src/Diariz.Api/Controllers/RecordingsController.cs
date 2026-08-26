@@ -248,10 +248,14 @@ public class RecordingsController : ControllerBase
         // (no lazy-create in a GET); absent/off -> no projection.
         var platform = await _db.PlatformSettings
             .FirstOrDefaultAsync(p => p.Id == Diariz.Domain.Entities.PlatformSettings.SingletonId);
+        // Audio a voiceprint was enrolled from is exempt, so the hint has to ask the same question the sweep
+        // does or it promises a deletion that will never happen.
+        var trainsAVoiceprint = await _db.VoiceSamples
+            .AnyAsync(v => v.RecordingId == rec.Id && v.ExcludedAt == null);
         DateTimeOffset? scheduledDeletion =
             platform is { AutoDeleteAudioEnabled: true }
-            && rec.HasAudio && !rec.IsAudioProtected
-            && AudioRetentionSweep.IsTranscribedStatus(rec.Status)
+            && AudioRetentionSweep.WouldDelete(
+                rec.Status, rec.HasAudio, rec.IsAudioProtected, trainsAVoiceprint)
                 ? rec.CreatedAt.AddDays(platform.AudioRetentionDays)
                 : null;
 

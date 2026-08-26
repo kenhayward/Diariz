@@ -58,7 +58,7 @@ function attribution(over: Partial<PersonAttribution> = {}): PersonAttribution {
   return {
     speakerId: "sp1", recordingId: "r1", recordingName: "Standup", speakerLabel: "SPEAKER_00",
     linkedBy: "manual", isTraining: true, voiceSampleId: "vs1", speechMs: 3000,
-    canAccessRecording: true, stillLinked: true, canReassign: true, ...over,
+    canAccessRecording: true, stillLinked: true, canReassign: true, audioAvailable: true, ...over,
   };
 }
 
@@ -719,5 +719,33 @@ describe("PersonVoiceprintTab", () => {
 
     expect(screen.queryByRole("button", { name: /confirm all|confirm every/i })).toBeNull();
     expect(screen.queryByRole("checkbox", { name: /confirm all|confirm every/i })).toBeNull();
+  });
+
+  // ---- Audio that no longer exists. The platform deletes recording audio after its retention window;
+  // the transcript survives, so the row can list what was said with nothing left to play. ----
+
+  it("says the audio is gone instead of offering a button that does nothing", async () => {
+    mock(api.getPersonAttributions).mockResolvedValue([attribution({ audioAvailable: false })]);
+    setup();
+    await screen.findByText("Standup");
+
+    expect(await screen.findByText(/audio deleted/i)).toBeTruthy();
+
+    await userEvent.click(screen.getByRole("button", { name: "Show segments" }));
+    expect(screen.queryByRole("button", { name: "Play voice" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Play segment" })).toBeNull();
+  });
+
+  it("still lists what was said, and still lets you vouch for it", async () => {
+    // Nearly half the training set is in this state and it grows nightly. Blocking confirmation would
+    // strand all of it permanently unresolvable, so the row is honest about the audio and leaves the
+    // judgement to the user - they may remember the meeting, or the transcript may settle it.
+    mock(api.getPersonAttributions).mockResolvedValue([attribution({ audioAvailable: false })]);
+    setup();
+    await screen.findByText("Standup");
+    await userEvent.click(screen.getByRole("button", { name: "Show segments" }));
+
+    expect(await screen.findByText("One")).toBeTruthy();
+    expect(screen.getByRole("checkbox", { name: /confirmed as this person/i })).toBeTruthy();
   });
 });
