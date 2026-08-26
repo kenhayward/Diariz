@@ -185,9 +185,22 @@ int unmount_sd_card(void)
      * waits for any write already running to finish.
      */
     sd_enabled = false;
-    k_mutex_lock(&write_sdcard_mutex, K_FOREVER);
+
+    /*
+     * Bounded, not K_FOREVER. This runs on the main thread, which also feeds the
+     * watchdog - blocking here indefinitely would reset the device 30 seconds
+     * later with no clue as to why. Clearing sd_enabled above already stops any
+     * new write, so the wait only has to outlast one write already in progress;
+     * if it somehow does not, unmounting anyway is better than hanging.
+     */
+    int lock = k_mutex_lock(&write_sdcard_mutex, K_MSEC(1000));
+    if (lock != 0) {
+        LOG_ERR("write_sdcard_mutex timeout (%d); unmounting regardless", lock);
+    }
     int res = fs_unmount(&mount_point);
-    k_mutex_unlock(&write_sdcard_mutex);
+    if (lock == 0) {
+        k_mutex_unlock(&write_sdcard_mutex);
+    }
     if (res != 0) {
         LOG_ERR("fs_unmount failed: %d", res);
         return res;

@@ -194,14 +194,37 @@ void set_led_state()
     if (usb_mode_get_state() != USB_MODE_CAPTURE) {
         static bool transfer_blink;
 
-        if (usb_mode_get_state() == USB_MODE_TRANSFER) {
+        /*
+         * Every non-capture state gets its own colour. ENTERING, LEAVING and
+         * CARD_FAIL previously all showed "all LEDs off", which made a device
+         * stuck mid-transition indistinguishable from one that had failed - and
+         * with CONFIG_CONSOLE=n the LED is the only diagnostic there is.
+         */
+        switch (usb_mode_get_state()) {
+        case USB_MODE_TRANSFER: /* blinking blue */
             transfer_blink = !transfer_blink;
+            set_led_red(false);
+            set_led_green(false);
             set_led_blue(transfer_blink);
-        } else {
-            set_led_blue(false);
+            break;
+        case USB_MODE_ENTERING: /* magenta */
+            set_led_red(true);
+            set_led_green(false);
+            set_led_blue(true);
+            break;
+        case USB_MODE_LEAVING: /* cyan */
+            set_led_red(false);
+            set_led_green(true);
+            set_led_blue(true);
+            break;
+        case USB_MODE_CARD_FAIL: /* white */
+            set_led_red(true);
+            set_led_green(true);
+            set_led_blue(true);
+            break;
+        default:
+            break;
         }
-        set_led_red(false);
-        set_led_green(false);
         return;
     }
 
