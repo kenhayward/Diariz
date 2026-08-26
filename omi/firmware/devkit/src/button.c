@@ -212,8 +212,22 @@ void check_button_level(struct k_work *work_item)
     // Check for single tap
     if (btn_state == BUTTON_RELEASED && !btn_is_pressed) {
         uint32_t press_duration = (btn_release_time - btn_press_start_time) * BUTTON_CHECK_INTERVAL;
+        /*
+         * Wait out the full DOUBLE_TAP_WINDOW before committing to "single tap",
+         * and measure it from the tap itself rather than from the press start.
+         *
+         * This used to test TAP_THRESHOLD (300 ms) from btn_press_start_time, so
+         * roughly 300 ms after the first press this branch fired and cleared
+         * btn_last_tap_time - destroying the state the double-tap detector needs.
+         * The effective double-tap window was therefore ~300 ms from the first
+         * press, not the 600 ms the constant advertises, and since a tap itself
+         * takes 80-120 ms that left under 200 ms to get the second press in.
+         *
+         * Nothing depended on double-tap doing anything visible until USB
+         * transfer mode, which is why this went unnoticed. See docs 07 (D11).
+         */
         if (press_duration < TAP_THRESHOLD && btn_last_tap_time > 0 &&
-            (current_time - btn_press_start_time) * BUTTON_CHECK_INTERVAL > TAP_THRESHOLD) {
+            (current_time - btn_last_tap_time) * BUTTON_CHECK_INTERVAL > DOUBLE_TAP_WINDOW) {
             event = BUTTON_EVENT_SINGLE_TAP;
             btn_last_tap_time = 0;
         } else if ((current_time - btn_press_start_time) * BUTTON_CHECK_INTERVAL > TAP_THRESHOLD) {
