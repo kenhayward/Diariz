@@ -588,9 +588,16 @@ public record SampleDiagnosisDto(
     /// <summary>Cosine distance to the centroid of the person's <b>other</b> samples - "would the rest of
     /// this voiceprint recognise it?" A true leave-one-out. Null when there is no other sample.</summary>
     double? DistanceToOthers,
-    /// <summary>"Only", "Core", "Variant" or "Alone".</summary>
+    /// <summary>"Only", "Core", "Variant", "Alone" or "Impostor".</summary>
     string Verdict,
-    bool IsTraining);
+    bool IsTraining,
+    /// <summary>Cosine distance to the closest sample belonging to <b>anyone else</b>. Null in a directory
+    /// holding only this person. Reported even when it is not a finding.</summary>
+    double? NearestImpostorDistance = null,
+    /// <summary>Who that was. Present whenever <paramref name="NearestImpostorDistance"/> is, so the finding
+    /// can be acted on with the reassign control already on the row rather than only read.</summary>
+    Guid? NearestImpostorPersonId = null,
+    string? NearestImpostorName = null);
 
 /// <summary>A person's training set, and how coherent it is.
 ///
@@ -603,7 +610,12 @@ public record VoiceprintDiagnosticsDto(
 /// <summary>One person's line in the voiceprint-health ranking: how many of their samples resemble nothing
 /// else, and how far apart their two most distant samples are.</summary>
 public record PersonDiagnosticsSummaryDto(
-    Guid PersonId, string Name, int SampleCount, int AloneCount, double? WidestPair);
+    Guid PersonId, string Name, int SampleCount, int AloneCount, double? WidestPair,
+    /// <summary>How many of this person's samples sit closer to somebody else than to any of their own.
+    /// Ranked above <paramref name="AloneCount"/>: "this is somebody else" is a different order of problem
+    /// from "this sounds unlike the rest", and the one that becomes a confident false match if clustered.
+    /// </summary>
+    int ImpostorCount = 0);
 
 /// <summary>Whether a speaker attributed to a person should train their voiceprint.</summary>
 public record SetTrainingRequest(bool Training);

@@ -2680,6 +2680,15 @@
               "string"
             ]
           },
+          "impostorCount": {
+            "default": 0,
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
           "name": {
             "type": "string"
           },
@@ -3586,6 +3595,28 @@
           },
           "isTraining": {
             "type": "boolean"
+          },
+          "nearestImpostorDistance": {
+            "format": "double",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ]
+          },
+          "nearestImpostorName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "nearestImpostorPersonId": {
+            "format": "uuid",
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "nearestSiblingDistance": {
             "format": "double",

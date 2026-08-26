@@ -262,22 +262,32 @@ public class PeopleController : ControllerBase
             .Where(p => personIds.Contains(p.Id))
             .ToDictionaryAsync(p => p.Id, p => p.Name);
 
+        // The whole set, so each person is diagnosed against everybody else rather than only themselves.
+        var everyone = samples
+            .Select(v => new TrainingSample(v.Id, v.PersonId, v.Embedding!.ToArray()))
+            .ToList();
+
         var rows = byPerson.Select(g =>
         {
             var vectors = g.Select(v => new TrainingSample(v.Id, v.PersonId, v.Embedding!.ToArray())).ToList();
-            var diagnosed = VoiceprintDiagnosis.Diagnose(g.Key, vectors, thresholds);
+            var diagnosed = VoiceprintDiagnosis.Diagnose(g.Key, everyone, thresholds);
             return new PersonDiagnosticsSummaryDto(
                 g.Key,
                 names.GetValueOrDefault(g.Key, ""),
                 vectors.Count,
                 diagnosed.Count(d => d.Verdict == SampleVerdict.Alone),
-                Widest(vectors.Select(v => v.Embedding).ToList()));
+                Widest(vectors.Select(v => v.Embedding).ToList()),
+                diagnosed.Count(d => d.Verdict == SampleVerdict.Impostor));
         })
         // Worst first: most samples resembling nothing else, then most scattered. Anyone with no outlier at
         // all is dropped - an empty problem list is noise, and a list that includes healthy people is worse
         // than useless because the real ones stop standing out.
-        .Where(r => r.AloneCount > 0)
-        .OrderByDescending(r => r.AloneCount)
+        .Where(r => r.ImpostorCount > 0 || r.AloneCount > 0)
+        // Impostors first: "this is somebody else" is a different order of problem from "this sounds unlike
+        // the rest", and the only one that turns into a confident match for the wrong person if the set is
+        // ever clustered.
+        .OrderByDescending(r => r.ImpostorCount)
+        .ThenByDescending(r => r.AloneCount)
         .ThenByDescending(r => r.WidestPair ?? 0)
         .ToList();
 
@@ -339,9 +349,30 @@ public class PeopleController : ControllerBase
         var training = samples.Where(Trains).ToList();
 
         var thresholds = IdentificationThresholds.From(await _settings.GetAsync());
-        var diagnosed = VoiceprintDiagnosis
-            .Diagnose(id, training.Select(v => new TrainingSample(v.Id, v.PersonId, v.Embedding.ToArray())).ToList(), thresholds)
-            .ToDictionary(d => d.SampleId);
+
+        // Everybody's training samples, not just this person's: "is somebody else closer?" is a claim about
+        // the whole directory and cannot be answered from one person's slice. A few hundred 192-d vectors is
+        // around a hundred kilobytes, and DirectoryDiagnostics already reads them all this way. At two orders
+        // of magnitude more this wants a pgvector nearest-neighbour query and an index instead.
+        var everyone = (await _db.VoiceSamples
+                .Where(v => v.ExcludedAt == null && v.Embedding != null)
+                .Join(_db.Speakers, v => v.SpeakerId, sp => sp.Id, (v, sp) => new { Sample = v, Speaker = sp })
+                .ToListAsync())
+            .Where(x => VoiceprintTraining.Trains(x.Sample, x.Speaker))
+            .Select(x => new TrainingSample(x.Sample.Id, x.Sample.PersonId, x.Sample.Embedding.ToArray()))
+            .ToList();
+
+        var diagnosed = VoiceprintDiagnosis.Diagnose(id, everyone, thresholds).ToDictionary(d => d.SampleId);
+
+        // One lookup for every impostor named, rather than one per row.
+        var impostorIds = diagnosed.Values
+            .Select(d => d.NearestImpostorPersonId)
+            .OfType<Guid>()
+            .Distinct()
+            .ToList();
+        var impostorNames = await _db.People
+            .Where(pp => impostorIds.Contains(pp.Id))
+            .ToDictionaryAsync(pp => pp.Id, pp => pp.Name);
 
         // Recording names and speaker labels, stitched in memory - VoiceSample deliberately has no FK to its
         // recording, and a deleted one must not take the sample with it.
@@ -362,7 +393,10 @@ public class PeopleController : ControllerBase
                 d?.DistanceToOthers,
                 // A sample that is not training was not diagnosed, so it has no verdict of its own.
                 (d?.Verdict ?? SampleVerdict.Only).ToString(),
-                Trains(v));
+                Trains(v),
+                d?.NearestImpostorDistance,
+                d?.NearestImpostorPersonId,
+                d?.NearestImpostorPersonId is { } imp ? impostorNames.GetValueOrDefault(imp) : null);
         }).ToList();
 
         return Ok(new VoiceprintDiagnosticsDto(
