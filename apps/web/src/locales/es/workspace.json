@@ -751,5 +751,6 @@
   "suggestionExcludedCount_one": "{{count}} fragmento excluido",
   "suggestionExcludedCount_other": "{{count}} fragmentos excluidos",
   "suggestionRestoreExcluded": "Restaurar",
+  "suggestionTrainsFrom": "Al confirmar se entrena con {{kept}} de {{total}} fragmentos",
   "voicesToConfirm": "Voces por confirmar"
 }

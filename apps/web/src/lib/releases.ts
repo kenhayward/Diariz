@@ -65,6 +65,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.259.1",
+    date: "2026-08-27",
+    pr: 643,
+    headline: "Your segment marks stay put, and say how to keep them",
+    summary:
+      "Marking segments in and out, then glancing at another voice, threw the marks away. Coming back showed every excluded segment restored and every tick gone, with nothing said about it.\n\n**Your marks now stay with the voice they belong to.** Look at another voice and back, and they are exactly as you left them. They are still kept apart per voice - one voice's exclusions never reach another's voiceprint - which was the point of the original behaviour; it simply achieved it by discarding your work.\n\n**And it now says how to make them permanent.** There is no separate save: the tick beside the question is what commits, and it applies whatever is still in the list. That button now says **Confirm this voice** in words rather than being an icon with a tooltip, and while anything is excluded a line above it reads *Confirming trains from 4 of 5 segments*, so you can see what you are about to do before you do it.\n\nMarks live for as long as the window is open. Closing it without confirming still discards them - nothing is written until you confirm the voice.",
+    fixed: [
+      "Marking segments in or out in Voices to Confirm and then opening another voice **threw the marks away**. They are now kept per voice, so switching away and back leaves them exactly as you left them - while still never letting one voice's exclusions reach another's voiceprint.",
+    ],
+    changed: [
+      "The tick and cross beside the question now read **Confirm this voice** and **Not this person** in words rather than being icons with a tooltip. Confirming is the only thing that commits, and there is no separate save, so the button had to say so.",
+      "While any segment is excluded, the panel states what confirming will do - *Confirming trains from 4 of 5 segments* - instead of leaving it to be discovered afterwards on the person's Voiceprint tab.",
+    ],
+  },
+  {
     version: "0.259.0",
     date: "2026-08-27",
     pr: 641,

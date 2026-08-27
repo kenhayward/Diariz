@@ -307,8 +307,13 @@ Saying no to a segment takes it out of the list, and accepting then trains from 
 carried as spans on the enrolled sample and re-embedded by the worker, the same mechanism the Voiceprint
 tab's span selection uses, rather than a second way of saying the same thing. Excluding nothing sends no
 spans at all, which means the whole speaker and queues no re-embed, because that is what almost every accept
-wants. Exclusions belong to the voice being judged and are cleared when another is opened, and a **Restore**
-puts back anything excluded by mistake - one click with no undo that shapes a biometric needs a way back.
+wants. Exclusions are held **per voice** for the sitting: one voice's marks never reach another's voiceprint, and
+switching away and back leaves them as they were. Those are two requirements rather than one, and the first
+implementation conflated them - it got the isolation by discarding the marks on every switch, which live use
+found within a day. Nothing is written until the voice itself is confirmed, which is also the only thing that
+commits, so the button says **Confirm this voice** in words and the panel states what it will train from
+while anything is excluded. A **Restore** puts back anything excluded by mistake - one click with no undo
+that shapes a biometric needs a way back.
 What it deliberately does **not** do is relabel those segments in the transcript: the speaker is one row, and
 splitting it into two people is a different operation. It is deliberately **not**
 a panel inside the People directory: the queue shows **your own recordings only** and needs no permission -

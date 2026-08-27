@@ -751,5 +751,6 @@
   "suggestionExcludedCount_one": "{{count}} passage retire",
   "suggestionExcludedCount_other": "{{count}} passages retires",
   "suggestionRestoreExcluded": "Restaurer",
+  "suggestionTrainsFrom": "Confirmer entraine sur {{kept}} passages sur {{total}}",
   "voicesToConfirm": "Voix a confirmer"
 }

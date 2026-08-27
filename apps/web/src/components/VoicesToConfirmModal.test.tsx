@@ -308,8 +308,8 @@ describe("VoicesToConfirmModal", () => {
     ).toBe("false");
   });
 
-  it("starts each voice with nothing excluded", async () => {
-    // Exclusions belong to the voice being judged. Carrying them across would silently drop audio from a
+  it("does not carry one voice's marks to another", async () => {
+    // Exclusions belong to the voice being judged. Leaking them across would silently drop audio from a
     // different person's voiceprint.
     mock(api.getSpeakerSuggestions).mockResolvedValue([
       suggestion(),
@@ -320,10 +320,76 @@ describe("VoicesToConfirmModal", () => {
     await decide("Two", "No");
 
     await userEvent.click(screen.getByRole("button", { name: /Grace Hopper/ }));
-    await evidence().findByText("Two");
-    await userEvent.click(screen.getByRole("button", { name: /Ada Lovelace/ }));
 
     expect(await evidence().findByText("Two")).toBeTruthy();
+  });
+
+  it("keeps each voice's marks when you look at another and come back", async () => {
+    // Reported from live use: marking segments and then glancing at another voice threw the work away
+    // silently. Keeping the marks per voice gives the isolation above without losing what was decided -
+    // the two are not in tension, and the first version confused them.
+    mock(api.getSpeakerSuggestions).mockResolvedValue([
+      suggestion(),
+      suggestion({ speakerId: "sp2", personName: "Grace Hopper" }),
+    ]);
+    setup();
+    await ready();
+    await decide("Two", "No");
+    await decide("Three", "Yes");
+
+    await userEvent.click(screen.getByRole("button", { name: /Grace Hopper/ }));
+    await evidence().findByText("Two");
+    await userEvent.click(screen.getByRole("button", { name: /Ada Lovelace/ }));
+    await evidence().findByText("One");
+
+    expect(evidence().queryByText("Two")).toBeNull();
+    expect(
+      within(seg("Three")).getByRole("button", { name: /^Yes$/ }).getAttribute("aria-pressed"),
+    ).toBe("true");
+  });
+
+  it("still trains from the kept segments after switching away and back", async () => {
+    // The marks surviving is only worth anything if they are still what gets sent.
+    mock(api.getSpeakerSuggestions).mockResolvedValue([
+      suggestion(),
+      suggestion({ speakerId: "sp2", personName: "Grace Hopper" }),
+    ]);
+    setup();
+    await ready();
+    await decide("Two", "No");
+    await userEvent.click(screen.getByRole("button", { name: /Grace Hopper/ }));
+    await evidence().findByText("Two");
+    await userEvent.click(screen.getByRole("button", { name: /Ada Lovelace/ }));
+    await evidence().findByText("One");
+
+    await userEvent.click(evidence().getByRole("button", { name: /Confirm this voice/ }));
+
+    await waitFor(() =>
+      expect(api.acceptSpeakerSuggestion).toHaveBeenCalledWith("sp1", [
+        { startMs: 0, endMs: 1000 },
+        { startMs: 2000, endMs: 3000 },
+      ]),
+    );
+  });
+
+  it("says in words what the confirm button will do", async () => {
+    // Asked in live use: "how do I make this permanent?". The answer was already the tick at the top, but
+    // an icon with only a tooltip did not say so, and there is no separate save to look for.
+    setup();
+    await ready();
+
+    const confirm = evidence().getByRole("button", { name: /Confirm this voice/ });
+    expect(confirm.textContent).toMatch(/Confirm this voice/);
+  });
+
+  it("says how much of the voice will train the voiceprint", async () => {
+    // The consequence of the exclusions, stated before they are committed rather than after.
+    setup();
+    await ready();
+
+    await decide("Two", "No");
+
+    expect(await evidence().findByText(/2 of 3 segments/)).toBeTruthy();
   });
 
   // ---- Playing the whole voice through ----

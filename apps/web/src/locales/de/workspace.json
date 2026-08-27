@@ -751,5 +751,6 @@
   "suggestionExcludedCount_one": "{{count}} Abschnitt entfernt",
   "suggestionExcludedCount_other": "{{count}} Abschnitte entfernt",
   "suggestionRestoreExcluded": "Wiederherstellen",
+  "suggestionTrainsFrom": "Bestaetigen schult mit {{kept}} von {{total}} Abschnitten",
   "voicesToConfirm": "Stimmen zur Bestaetigung"
 }

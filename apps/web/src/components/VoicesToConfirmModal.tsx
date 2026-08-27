@@ -23,6 +23,10 @@ import type { SpeakerSuggestion } from "../lib/types";
 ///
 /// The same accept and reject as the prompt on the transcript, so a decision made here is the same decision
 /// made there.
+/// Shared empty set, so "this voice has no marks" is one stable identity rather than a new object per
+/// render feeding a dependency array.
+const NONE: ReadonlySet<string> = new Set();
+
 export default function VoicesToConfirmModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation(["workspace", "common"]);
   const [error, setError] = useState<string | null>(null);
@@ -30,11 +34,17 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
   const [done, setDone] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
-  /// Segments the reviewer said are not this person, and ones they explicitly vouched for. Both belong to
-  /// the voice being judged and are cleared when it changes - carrying an exclusion across would silently
-  /// drop audio from a different person's voiceprint.
-  const [excluded, setExcluded] = useState<Set<string>>(new Set());
-  const [confirmed, setConfirmed] = useState<Set<string>>(new Set());
+  /// Segments the reviewer said are not this person, and ones they explicitly vouched for - **per voice**.
+  ///
+  /// Keyed by speaker rather than held as one set and cleared on every switch. Both properties are needed
+  /// and they are not in tension: one voice's marks must never reach another's voiceprint, *and* glancing
+  /// at another voice must not throw away work already done. The first version conflated them and got the
+  /// isolation by discarding the marks, which live use found immediately.
+  ///
+  /// In memory for this sitting only. Nothing is written until the voice itself is confirmed, which is
+  /// what makes the marks mean anything.
+  const [excluded, setExcluded] = useState<Record<string, Set<string>>>({});
+  const [confirmed, setConfirmed] = useState<Record<string, Set<string>>>({});
   /// Whether the current playback came from Play all, so that one button can say Stop all while the
   /// per-segment buttons keep saying Play.
   const [playingAll, setPlayingAll] = useState(false);
@@ -66,12 +76,10 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
   const { play, stop, playingSegmentId } = useClipPlayer(fetchClip);
 
   // The segment list is replaced when the open voice changes, so without this a clip would play on with
-  // nothing on screen able to stop it - and the previous voice's judgements would apply to this one.
+  // nothing on screen able to stop it. The marks are not cleared here - they are kept per voice above.
   useEffect(() => {
     stop();
     setPlayingAll(false);
-    setExcluded(new Set());
-    setConfirmed(new Set());
   }, [openSpeakerId, stop]);
 
   const { data: segments = [], isLoading: segmentsLoading } = useQuery({
@@ -80,7 +88,24 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
     enabled: openSpeakerId !== null,
   });
 
-  const kept = segments.filter((g) => !excluded.has(g.id));
+  const myExcluded = (openSpeakerId && excluded[openSpeakerId]) || NONE;
+  const myConfirmed = (openSpeakerId && confirmed[openSpeakerId]) || NONE;
+  const kept = segments.filter((g) => !myExcluded.has(g.id));
+
+  /// Adds or removes one segment id in the open voice's set, leaving every other voice untouched.
+  function mark(
+    set: (f: (cur: Record<string, Set<string>>) => Record<string, Set<string>>) => void,
+    id: string,
+    on: boolean,
+  ) {
+    if (!openSpeakerId) return;
+    set((cur) => {
+      const next = new Set(cur[openSpeakerId] ?? NONE);
+      if (on) next.add(id);
+      else next.delete(id);
+      return { ...cur, [openSpeakerId]: next };
+    });
+  }
 
   /// Follow the clip that is playing, so a long list does not leave the highlight off screen - which is
   /// exactly when playing straight through is the point. `nearest` rather than `center`: it only moves the
@@ -103,15 +128,16 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
     void play(openSpeakerId!, clipQueue(kept, kept.map((g) => g.id)));
   }
 
+  function restoreExcluded() {
+    if (!openSpeakerId) return;
+    setExcluded((cur) => ({ ...cur, [openSpeakerId]: new Set() }));
+  }
+
   function exclude(g: AttributionSegment) {
     // Stop first if it is the one playing: the row is about to leave the list, and its Stop button with it.
     if (playingSegmentId === g.id) stop();
-    setExcluded((cur) => new Set(cur).add(g.id));
-    setConfirmed((cur) => {
-      const next = new Set(cur);
-      next.delete(g.id);
-      return next;
-    });
+    mark(setExcluded, g.id, true);
+    mark(setConfirmed, g.id, false);
   }
 
   async function decide(s: SpeakerSuggestion, accept: boolean) {
@@ -123,13 +149,19 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
       if (accept)
         await api.acceptSpeakerSuggestion(
           s.speakerId,
-          excluded.size > 0 ? kept.map((g) => ({ startMs: g.startMs, endMs: g.endMs })) : undefined,
+          myExcluded.size > 0 ? kept.map((g) => ({ startMs: g.startMs, endMs: g.endMs })) : undefined,
         );
       else await api.rejectSpeakerSuggestion(s.speakerId);
       // Only after the server agreed: dropping the voice on a failure would look like the decision stuck,
       // and it would return on the next load with nothing to explain why.
       setDone((prev) => new Set(prev).add(s.speakerId));
       setOpenId(null);
+      const forget = (cur: Record<string, Set<string>>) => {
+        const { [s.speakerId]: _gone, ...rest } = cur;
+        return rest;
+      };
+      setExcluded(forget);
+      setConfirmed(forget);
     } catch (e) {
       setError(apiErrorMessage(e, t("workspace:suggestionFailed")));
     } finally {
@@ -145,15 +177,18 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
       type="button"
       onClick={() => open && void decide(open, accept)}
       disabled={open === null || busy === openSpeakerId}
-      aria-label={accept ? t("workspace:suggestionConfirmVoice") : t("workspace:suggestionRejectVoice")}
       title={accept ? t("workspace:suggestionConfirmVoice") : t("workspace:suggestionRejectVoice")}
-      className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border disabled:opacity-50 ${
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded border px-2 py-1 text-xs font-medium disabled:opacity-50 ${
         accept
           ? "border-green-600 text-green-700 hover:bg-green-50 dark:border-green-500 dark:text-green-400 dark:hover:bg-green-900/30"
           : "border-red-600 text-red-700 hover:bg-red-50 dark:border-red-500 dark:text-red-400 dark:hover:bg-red-900/30"
       }`}
     >
-      {accept ? <CheckIcon size={16} /> : <XIcon size={16} />}
+      {accept ? <CheckIcon size={13} /> : <XIcon size={13} />}
+      {/* Named in words, not only in a tooltip. This pair is the only thing that commits anything, and
+          live use asked outright how to make the per-segment marks permanent - there is no separate
+          save to find, and an icon alone never said so. */}
+      {accept ? t("workspace:suggestionConfirmVoice") : t("workspace:suggestionRejectVoice")}
     </button>
   );
 
@@ -164,14 +199,14 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
     <button
       type="button"
       onClick={() =>
-        accept ? setConfirmed((cur) => new Set(cur).add(g.id)) : exclude(g)
+        accept ? mark(setConfirmed, g.id, true) : exclude(g)
       }
-      aria-pressed={accept ? confirmed.has(g.id) : false}
+      aria-pressed={accept ? myConfirmed.has(g.id) : false}
       aria-label={accept ? t("workspace:suggestionYes") : t("workspace:suggestionNo")}
       title={accept ? t("workspace:suggestionSegmentYesHint") : t("workspace:suggestionSegmentNoHint")}
       className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
         accept
-          ? confirmed.has(g.id)
+          ? myConfirmed.has(g.id)
             ? "border-green-600 bg-green-600 text-white dark:border-green-500 dark:bg-green-600"
             : "border-gray-300 text-green-700 hover:bg-green-50 dark:border-gray-600 dark:text-green-400 dark:hover:bg-green-900/30"
           : "border-gray-300 text-red-700 hover:bg-red-50 dark:border-gray-600 dark:text-red-400 dark:hover:bg-red-900/30"
@@ -251,8 +286,20 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
                 className="flex min-h-0 flex-1 flex-col rounded border dark:border-gray-700"
               >
                 <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2 dark:border-gray-700">
-                  <span className="min-w-0 flex-1 truncate text-sm text-gray-800 dark:text-gray-100">
-                    {open && t("workspace:suggestionAsk", { name: open.personName })}
+                  <span className="min-w-0 flex-1 text-sm text-gray-800 dark:text-gray-100">
+                    <span className="block truncate">
+                      {open && t("workspace:suggestionAsk", { name: open.personName })}
+                    </span>
+                    {/* The consequence of the exclusions, stated before they are committed rather than
+                        discovered afterwards on the person's Voiceprint tab. */}
+                    {myExcluded.size > 0 && (
+                      <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
+                        {t("workspace:suggestionTrainsFrom", {
+                          kept: kept.length,
+                          total: segments.length,
+                        })}
+                      </span>
+                    )}
                   </span>
                   {verdictButton(true)}
                   {verdictButton(false)}
@@ -272,16 +319,16 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
                       ? t("workspace:suggestionStopAll")
                       : t("workspace:suggestionPlayAll")}
                   </button>
-                  {excluded.size > 0 && (
+                  {myExcluded.size > 0 && (
                     <>
                       <span className="text-gray-500 dark:text-gray-400">
-                        {t("workspace:suggestionExcludedCount", { count: excluded.size })}
+                        {t("workspace:suggestionExcludedCount", { count: myExcluded.size })}
                       </span>
                       {/* One click, no undo, and it shapes a biometric - reopening the modal is not a
                           recovery path. */}
                       <button
                         type="button"
-                        onClick={() => setExcluded(new Set())}
+                        onClick={() => restoreExcluded()}
                         className="underline text-gray-600 dark:text-gray-300"
                       >
                         {t("workspace:suggestionRestoreExcluded")}
