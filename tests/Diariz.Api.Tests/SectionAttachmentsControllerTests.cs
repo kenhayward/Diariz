@@ -403,4 +403,24 @@ public class SectionAttachmentsControllerTests
         Assert.IsType<NoContentResult>(await controller.Rename(section.Id, added.Id, new RenameAttachmentRequest("renamed")));
         Assert.IsType<NoContentResult>(await controller.Delete(section.Id, added.Id));
     }
+
+    [Fact]
+    public async Task AddFile_drops_an_extension_that_is_not_a_plain_suffix()
+    {
+        // The display name is path-stripped and capped already; the storage key was not checked at all, and
+        // it is a path in the object store. Same gap as recordings had - one client filename, three places
+        // it lands.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var section = await Seed(db, userId);
+        var storage = new FakeAudioStorage();
+        var controller = Build(db, userId, storage);
+
+        var bytes = Encoding.UTF8.GetBytes("%PDF-1.4 fake");
+        await controller.AddFile(section.Id, FileOf("notes.pdf\nINFO forged", "application/pdf", bytes));
+
+        var a = await db.SectionAttachments.SingleAsync();
+        Assert.Equal($"{userId}/section-attachments/{a.Id}", a.BlobKey);
+        Assert.True(storage.Objects.ContainsKey(a.BlobKey!));
+    }
 }

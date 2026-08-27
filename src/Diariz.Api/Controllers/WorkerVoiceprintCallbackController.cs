@@ -83,7 +83,12 @@ public class WorkerVoiceprintCallbackController : ControllerBase
         sample.RecomputeFailedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(CancellationToken.None);
 
-        _log.LogWarning("Voiceprint re-embed failed for sample {SampleId}: {Error}", sample.Id, body.Error);
+        // The worker's text is an arbitrary exception message. Through LogSanitizer like every other
+        // externally-influenced value we log, so a newline in it cannot write a second line that
+        // reads like one of ours.
+        _log.LogWarning(
+            "Voiceprint re-embed failed for sample {SampleId}: {Error}",
+            sample.Id, LogSanitizer.Clean(body.Error));
         return NoContent();
     }
 }

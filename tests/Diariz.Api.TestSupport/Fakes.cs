@@ -1142,3 +1142,25 @@ public sealed class FakeAudioClipper : IAudioClipper
         return Task.FromResult(Bytes);
     }
 }
+
+/// <summary>Records what was actually written to the log, rendered the way a text sink would render it.
+///
+/// <para>Exists so "this value is sanitised before it is logged" can be asserted rather than read. The
+/// suites otherwise pass <c>NullLogger</c>, which discards the very thing under test - a log-forging guard
+/// verified only by eye is a guard that can be deleted without any test noticing.</para></summary>
+public sealed class CapturingLogger<T> : Microsoft.Extensions.Logging.ILogger<T>
+{
+    public List<(Microsoft.Extensions.Logging.LogLevel Level, string Message)> Entries { get; } = [];
+
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+    public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+    public void Log<TState>(
+        Microsoft.Extensions.Logging.LogLevel logLevel,
+        Microsoft.Extensions.Logging.EventId eventId,
+        TState state,
+        Exception? exception,
+        Func<TState, Exception?, string> formatter) =>
+        Entries.Add((logLevel, formatter(state, exception)));
+}
