@@ -884,6 +884,43 @@ public class RecordingsControllerTests
         Assert.Equal(413, Assert.IsType<ObjectResult>(result.Result).StatusCode);
     }
 
+    // ---- The storage key must not carry the client's filename verbatim ----
+
+    [Fact]
+    public async Task Upload_keeps_an_ordinary_extension_on_the_storage_key()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var storage = new FakeAudioStorage();
+        var controller = Build(db, userId, new FakeJobQueue(), storage);
+
+        await controller.Upload(FakeAudio(Encoding.UTF8.GetBytes("audio"), "standup.webm"), "x", 1000);
+
+        Assert.EndsWith(".webm", (await db.Recordings.SingleAsync()).BlobKey);
+    }
+
+    [Fact]
+    public async Task Upload_drops_an_extension_that_is_not_a_plain_suffix()
+    {
+        // The key reaches object storage, the worker's temp path - and so its exception text and our log -
+        // and the Content-Disposition header on download. None of those should carry client punctuation.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var storage = new FakeAudioStorage();
+        var controller = Build(db, userId, new FakeJobQueue(), storage);
+
+        await controller.Upload(
+            FakeAudio(Encoding.UTF8.GetBytes("audio"), "standup.webm\nINFO forged"), "x", 1000);
+
+        var key = (await db.Recordings.SingleAsync()).BlobKey;
+        Assert.Equal($"{userId}/{(await db.Recordings.SingleAsync()).Id}", key);
+        Assert.DoesNotContain("\n", key);
+        // Whatever the key became, the bytes still went to it - dropping the extension must not orphan them.
+        Assert.True(storage.Objects.ContainsKey(key));
+    }
+
     // ---- A pending suggestion on the Speakers panel ----
 
     private static async Task<SpeakerInfoDto> SpeakerOf(

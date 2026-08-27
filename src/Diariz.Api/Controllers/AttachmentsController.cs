@@ -93,7 +93,9 @@ public class AttachmentsController : ControllerBase
                 "Storage quota exceeded. Delete some recordings/attachments or ask an administrator to raise your quota.");
 
         var id = Guid.NewGuid();
-        var ext = Path.GetExtension(file.FileName);
+        // Through StorageKeys, not Path.GetExtension: the filename is the client's, and this
+        // key is a path in the object store. The display name is sanitised separately below.
+        var ext = StorageKeys.SafeExtension(file.FileName);
         var blobKey = $"{UserId}/attachments/{id}{ext}";
 
         await using (var stream = file.OpenReadStream())

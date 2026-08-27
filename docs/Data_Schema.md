@@ -1285,9 +1285,17 @@ rendered on demand by the API from the database.
 
 - **Bucket:** `recordings` (configurable via `Storage:Bucket`). Created on API startup
   (`AudioStorage.EnsureBucketAsync`) if absent.
-- **Object key:** `{userId}/{recordingId}{ext}` — e.g. `8f3a…/c1b2…​.webm`. The extension comes from the
-  uploaded file name (recordings default to `.webm`). The `userId` prefix gives a natural per-user "folder"
-  and keeps keys unguessable (random Guids).
+- **Object key:** `{userId}/{recordingId}{ext}`. The `userId` prefix gives a natural per-user "folder" and
+  keeps keys unguessable (random Guids).
+- **`{ext}` is derived from the uploaded file name but never taken from it verbatim.**
+  `StorageKeys.SafeExtension` keeps a dot plus up to eight ASCII letters or digits, lowercased, and returns
+  the empty string for anything else - so a key may legitimately have no extension at all. It is an
+  allow-list on purpose: a deny-list is the version that stops covering the case nobody predicted.
+  `Path.GetExtension` returns everything after the final dot, so using it directly put an arbitrary
+  client-controlled string into the key - which is also the worker's temporary file path (and thus its
+  exception text, and our log) and, for recordings, the `Content-Disposition` filename on download. Nothing
+  depends on the extension being present: `ContentType` is stored on the row, and audio is identified by
+  decoding it. The same helper builds the attachment and folder-attachment keys below.
 - The key is stored on `Recording.BlobKey`; `Recording.ContentType` holds the MIME type.
 - **Attachment files** use key `{userId}/attachments/{attachmentId}{ext}` (stored on `Attachment.BlobKey`);
   the API streams them back same-origin (inline) and counts their bytes toward the user's quota.

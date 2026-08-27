@@ -65,6 +65,18 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.259.4",
+    date: "2026-08-27",
+    pr: 649,
+    headline: "Two hardening fixes around uploaded filenames and worker logs",
+    summary:
+      "Two hardening fixes, from a static-analysis warning and the review it prompted. Neither exposes anything or lets anyone do something they could not already do; both are worth closing.\n\n**The name a file is stored under no longer trusts what the file was called.** Diariz works out what an upload actually is by decoding it, never by its name - but the name it filed the bytes under was still built from the client's filename, whatever characters that contained. That value also shows up in the download header when you save a recording. An extension that is not an ordinary one is now dropped; nothing needs it. This covers recordings, meeting attachments and folder attachments alike, since all three were built the same way.\n\n**A failure message from the transcription worker is cleaned before it reaches the log.** Everywhere else that logs text from outside already did this; this one place did not, so line breaks in such a message could add entries that read like Diariz's own.\n\nNothing already stored changes, and no file becomes unreachable: existing keys are kept as they are.",
+    fixed: [
+      "The name an uploaded file is **stored under** is no longer built from the client's filename without checking it - for recordings, meeting attachments and folder attachments alike. Only an ordinary extension is kept, which is safe because the format is determined by decoding the file rather than by its name. The same value appears in the **download** header for a recording, where the rest of the filename was already being cleaned and this part was not.",
+      "A failure message from the transcription worker is now **cleaned before being logged**, as text from outside is everywhere else in Diariz. Line breaks in such a message could otherwise add entries to the log that read like Diariz's own.",
+    ],
+  },
+  {
     version: "0.259.3",
     date: "2026-08-27",
     pr: 646,
