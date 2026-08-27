@@ -65,6 +65,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.259.5",
+    date: "2026-08-27",
+    pr: 658,
+    headline: "The AI settings fit on a screen",
+    summary:
+      "The AI settings page spent three lines and a gap on every setting - the name, then the control, then the description underneath - so a handful of settings ran well past the bottom of the window.\n\n**Each setting is now one line**: its name, the control, and the description, side by side. Every control sits in the same vertical line down the page, including the ones in the voice-identification section, so the page can be read down a column rather than hunted through. The dialog is wider to make room.\n\nMeasured on the AI tab: the content is **35% shorter** (975px to 638px), with all nine settings on a line each. Nothing was removed - every description is still there, at the end of its row. On a narrow window it falls back to the old stacked layout, because three columns cannot fit and a description squeezed into a few characters is worse than one on its own line.",
+    changed: [
+      "Every setting on **Settings -> AI** is now a single line - name, control, description - instead of three lines and a gap. The controls line up in one column down the whole page, including the voice-identification settings, and the dialog is wider to fit. The AI tab is **35% shorter** as a result; every description is kept.",
+    ],
+  },
+  {
     version: "0.259.4",
     date: "2026-08-27",
     pr: 651,
