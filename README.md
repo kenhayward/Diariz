@@ -66,6 +66,8 @@ See **[docs/features.md](docs/features.md)** for the full prose description of e
 
 ## Architecture
 
+For a visual navigation of the architecure see **[docs/Runtime_Architecture.html](docs/Runtime_Architecture.html)**
+
 | Component | Tech | Path |
 | :--- | :--- | :--- |
 | API / auth / orchestration | ASP.NET Core (C#) + EF Core + SignalR | [src/Diariz.Api](src/Diariz.Api) |
