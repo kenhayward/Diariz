@@ -155,4 +155,69 @@ public class AudioRetentionSweepTests
         Assert.True(storage.Objects.ContainsKey(prot.BlobKey));
         Assert.True(storage.Objects.ContainsKey(failed.BlobKey));
     }
+
+    // ---- Audio behind a voiceprint. Found live: 74 of 156 training samples sat behind recordings whose
+    // audio the nightly sweep had already deleted, so nearly half the review queue could not be listened
+    // to at all - and the confirmation workflow rests entirely on listening. ----
+
+    /// <summary>Adds a live training sample against a recording, as enrolling a speaker does.</summary>
+    private static void Enrol(DiarizDbContext db, Recording rec, DateTimeOffset? excludedAt = null)
+    {
+        var person = new Person { Id = Guid.NewGuid(), Name = "Ada" };
+        var speaker = new Speaker
+        {
+            Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "Ada",
+            PersonId = person.Id,
+        };
+        db.AddRange(person, speaker, new VoiceSample
+        {
+            Id = Guid.NewGuid(), PersonId = person.Id, SpeakerId = speaker.Id, RecordingId = rec.Id,
+            ExcludedAt = excludedAt,
+        });
+        db.SaveChanges();
+    }
+
+    [Fact]
+    public async Task Audio_a_voiceprint_was_enrolled_from_is_kept()
+    {
+        // The evidence for a voiceprint outlives the retention window. Judging whether a recording really
+        // is the right person can only be done by ear, so deleting it makes that question permanently
+        // unanswerable - while the embedding it produced goes on being used.
+        var rec = Rec();
+        var (db, storage) = Seed(rec);
+        Enrol(db, rec);
+
+        var deleted = await AudioRetentionSweep.RunAsync(
+            db, storage, Now, RetentionDays, NullLogger.Instance);
+
+        Assert.Equal(0, deleted);
+        Assert.Null((await db.Recordings.SingleAsync()).AudioDeletedAt);
+    }
+
+    [Fact]
+    public async Task A_recording_whose_sample_was_dropped_is_deletable_again()
+    {
+        // The exemption follows the evidence, not the history. Once nothing trains from a recording there
+        // is nothing left to audition, and it rejoins the ordinary policy.
+        var rec = Rec();
+        var (db, storage) = Seed(rec);
+        Enrol(db, rec, excludedAt: Now.AddDays(-1));
+
+        var deleted = await AudioRetentionSweep.RunAsync(
+            db, storage, Now, RetentionDays, NullLogger.Instance);
+
+        Assert.Equal(1, deleted);
+    }
+
+    [Fact]
+    public async Task An_ordinary_recording_is_still_swept()
+    {
+        // The exemption must stay narrow: it covers the handful of recordings a voiceprint was built from,
+        // not the library.
+        var rec = Rec();
+        var (db, storage) = Seed(rec);
+
+        Assert.Equal(1, await AudioRetentionSweep.RunAsync(
+            db, storage, Now, RetentionDays, NullLogger.Instance));
+    }
 }

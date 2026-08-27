@@ -366,6 +366,20 @@ finding lands on the reassign control already on the row. A person with a single
 this way, because there is nothing of their own to compare against - a real limitation, since most of a
 directory is usually in that state.
 
+**Audio a voiceprint was enrolled from is exempt from automatic deletion.** The retention sweep removes
+recording audio past its window and keeps the transcript, which is right in general and wrong for the
+handful of recordings a biometric was built from: whether one really is the right person can only be settled
+by ear, so deleting it makes the question permanently unanswerable while the embedding it produced goes on
+being used. Measured on a real platform before the exemption: 47% of training samples were already behind
+deleted audio, growing nightly. The exemption is derived from the samples rather than a flag on the
+recording, so dropping the last one lets it rejoin the policy with nothing to remember to clear, and it
+covers the **automatic** sweep only - deleting audio by hand stays available, because the objection is to a
+background job destroying evidence silently rather than to a person choosing to. One predicate answers both
+the sweep and the recording page's "will be deleted on" hint, so the hint cannot promise a deletion that
+will not happen. Where audio has already gone the row says so and offers no playback, but still lists what
+was said and can still be confirmed - blocking that would strand every already-swept recording permanently
+unresolvable.
+
 **Confirming a recording** records that a human listened and vouched for it, and takes it out of the review
 queue. It is deliberately a different assertion from whether the recording trains the voiceprint: one asks
 who it is, the other whether the audio is worth learning from, and a recording can be genuinely them and

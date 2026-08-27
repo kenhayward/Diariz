@@ -2583,6 +2583,10 @@
       },
       "PersonAttributionDto": {
         "properties": {
+          "audioAvailable": {
+            "default": true,
+            "type": "boolean"
+          },
           "canAccessRecording": {
             "type": "boolean"
           },

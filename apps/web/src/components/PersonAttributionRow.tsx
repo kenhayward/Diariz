@@ -250,7 +250,14 @@ export default function PersonAttributionRow({
           {/* Hidden rather than disabled. Playing the voice needs the segments, and they only arrive once
               expanded - so before that the control cannot work, and a greyed-out button reads as broken
               rather than as not yet applicable. */}
-          {expanded && segments.length > 0 && (
+          {/* Nothing to play once the audio is gone. Offering it anyway was a control that silently did
+              nothing, which reads as a broken feature rather than an absent recording. */}
+          {!attribution.audioAvailable && (
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {t("people:attributionAudioDeleted")}
+            </span>
+          )}
+          {attribution.audioAvailable && expanded && segments.length > 0 && (
             <button
               type="button"
               onClick={() =>
@@ -312,20 +319,22 @@ export default function PersonAttributionRow({
                         className="mt-1 shrink-0"
                       />
                     )}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        playingSegmentId === s.id
-                          ? onStop()
-                          : onPlay(attribution.speakerId, clipQueue(segments, [s.id]))
-                      }
-                      aria-label={t("people:attributionPlaySegment")}
-                      className="mt-0.5 shrink-0 text-xs underline text-gray-600 dark:text-gray-300"
-                    >
-                      {playingSegmentId === s.id
-                        ? t("people:attributionStop")
-                        : t("people:attributionPlaySegment")}
-                    </button>
+                    {attribution.audioAvailable && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          playingSegmentId === s.id
+                            ? onStop()
+                            : onPlay(attribution.speakerId, clipQueue(segments, [s.id]))
+                        }
+                        aria-label={t("people:attributionPlaySegment")}
+                        className="mt-0.5 shrink-0 text-xs underline text-gray-600 dark:text-gray-300"
+                      >
+                        {playingSegmentId === s.id
+                          ? t("people:attributionStop")
+                          : t("people:attributionPlaySegment")}
+                      </button>
+                    )}
                     <span className="min-w-0 flex-1 text-xs text-gray-700 dark:text-gray-200">{s.text}</span>
                     <span className="shrink-0 font-mono text-[10px] text-gray-400 dark:text-gray-500">
                       {formatDuration(s.endMs - s.startMs)}

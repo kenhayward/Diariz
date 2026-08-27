@@ -65,6 +65,7 @@
   "attributionLinkedAuto": "Reconnu automatiquement",
   "attributionLinkedManual": "Nommé manuellement",
   "attributionNoAccess": "Dans un enregistrement auquel vous n'avez pas accès.",
+  "attributionAudioDeleted": "Audio supprimé - lecture impossible",
   "attributionUnlinked": "N'est plus lié à cette personne",
   "attributionReassignAria": "Changer qui est {{label}} dans {{recording}}",
   "errReassignFailed": "Impossible de changer qui est ce locuteur.",

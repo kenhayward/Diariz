@@ -65,6 +65,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.257.0",
+    date: "2026-08-26",
+    pr: 637,
+    headline: "Keep the audio a voiceprint was built from",
+    summary:
+      "Recording audio is deleted automatically once it passes the retention window your administrator sets. The transcript survives, which is the point - but it meant the recordings behind a voiceprint quietly lost the one thing needed to check them. On the platform this was found on, **47% of the recordings training a voiceprint could no longer be played**, and the figure grew every night.\n\nThat matters because confirming a recording really is the right person can only be done by ear. Nearly half the review list was asking for a judgement that had become impossible to make - and the **Play** buttons were still there, doing nothing when pressed.\n\n**Audio a voiceprint was enrolled from is no longer deleted automatically.** It is a small set - the recordings you actually enrolled someone from, not your library - and it is the evidence behind a biometric, so it is worth keeping. Deleting audio **by hand** is unchanged: the objection is to a background job removing it silently, not to you deciding you no longer want it.\n\nWhere the audio has already gone, the row now says **Audio deleted - cannot be played** and offers no play buttons. It still lists what was said, and you can still confirm the recording: you may well remember the meeting, and blocking it would leave those recordings permanently stuck in the review list.\n\nNothing here affects recognition. The voiceprints themselves were computed when the recording was transcribed and are unaffected - it is only listening back that the deleted audio prevents.",
+    changed: [
+      "Recordings that a voiceprint was enrolled from are now **exempt from automatic audio deletion**, so they can still be listened to when checking whether a voice really is that person. Deleting audio by hand is unchanged, and a recording stops being exempt once nothing trains from it.",
+      "The recording page's \"audio will be deleted on\" note now accounts for that exemption instead of promising a deletion that will not happen.",
+    ],
+    fixed: [
+      "A recording whose audio has already been deleted now says so on the person's Voiceprint tab, instead of offering **Play voice** and **Play segment** buttons that silently did nothing. It still lists what was said, and can still be confirmed.",
+    ],
+  },
+  {
     version: "0.256.1",
     date: "2026-08-26",
     pr: 638,
