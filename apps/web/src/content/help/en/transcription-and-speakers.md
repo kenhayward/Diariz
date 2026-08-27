@@ -57,8 +57,14 @@ answering one moves you straight on to the next.
 people share a microphone, or they talk over each other, and the software puts it all under one label. Say
 **no** to a segment and it leaves the list; what remains is what the voiceprint is trained from, so a stretch
 that is somebody else is genuinely kept out rather than just hidden from you. Say **yes** to mark one you are
-sure of. **Restore** puts back anything you excluded by mistake, and starting on another voice clears your
-choices, since they belonged to the one before it.
+sure of, and **Restore** puts back anything you excluded by mistake.
+
+**Confirming the voice is what makes those marks count.** There is no separate save: pressing **Confirm this
+voice** answers the question and trains the voiceprint from whatever is still in the list. While anything is
+excluded the panel tells you what that will be, so you can check before committing. Your marks stay with the
+voice they belong to, so you can look at another voice and come back to find them as you left them - but they
+last only while the window is open. Close it without confirming and nothing is kept, because nothing was
+written.
 
 Excluding a segment shapes the **voiceprint**, not the transcript. Those segments stay under the same speaker
 and will carry that person's name once you confirm the voice. If a speaker really is two different people,
