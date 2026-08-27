@@ -54,16 +54,24 @@ export default function FolderPicker({
   selectedId,
   onSelect,
   onDrillChange,
+  fillHeight = false,
 }: {
   sections: SectionDto[];
   /// `null` selects the root; both consumers show that choice as "Ungrouped".
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  /// Let the folder list grow into whatever height the caller's box gives it, instead of the default
+  /// fixed 16rem window. Only meaningful inside a caller that is itself height-constrained and lays its
+  /// children out as a flex column - `MoveToSectionModal` caps itself against the viewport, so the list is
+  /// the child that shrinks and scrolls while the caller's own header and footer stay pinned. The default
+  /// stays the fixed window for callers (`FolderPickerModal`) that already do their own scrolling one
+  /// level up, where a second growing scroller would just fight the first.
   /// Reports the drill position as the caller navigates, so a caller with its own notion of "where a new
   /// thing goes" (MoveToSectionModal's create-and-move form) can follow it. The picker still owns the
   /// state itself - this is a report, not a control: nothing here reads a position back in, and there is
   /// no way to set it from outside.
   onDrillChange?: (sectionId: string | null) => void;
+  fillHeight?: boolean;
 }) {
   const { t } = useTranslation("workspace");
   const [filter, setFilter] = useState("");
@@ -117,7 +125,9 @@ export default function FolderPicker({
   }
 
   return (
-    <div>
+    // In fill mode the caller's height is what bounds this, so the column has to be able to shrink below
+    // its content (`min-h-0`) or the list below simply overflows the dialog instead of scrolling.
+    <div className={fillHeight ? "flex min-h-0 flex-1 flex-col" : undefined}>
       {/* `aria-label` alone names this field - it wins over any associated <label> in the accessible-name
           computation, so a wrapping sr-only label here would be dead weight, not a second line of
           defence. */}
@@ -168,7 +178,11 @@ export default function FolderPicker({
         </p>
       )}
 
-      <ul role="list" aria-label={t("folderPickerListLabel")} className="max-h-64 overflow-y-auto">
+      <ul
+        role="list"
+        aria-label={t("folderPickerListLabel")}
+        className={`overflow-y-auto ${fillHeight ? "min-h-0 flex-1" : "max-h-64"}`}
+      >
         {filtering ? (
           matches.length === 0 ? (
             <li className="px-2 py-3 text-sm text-gray-500 dark:text-gray-400">{t("folderPickerNoMatches")}</li>
