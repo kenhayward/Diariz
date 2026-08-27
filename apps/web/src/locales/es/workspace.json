@@ -734,7 +734,7 @@
   "suggestionYes": "Sí",
   "suggestionNo": "No",
   "suggestionFailed": "No se pudo guardar esa respuesta.",
-  "suggestionsTitle": "Voces por confirmar",
+  "suggestionsTitle": "Revisar coincidencias de voz",
   "suggestionsIntro": "Diariz reconocio estas voces, pero no con la seguridad suficiente para nombrarlas. Elija una para escuchar lo que dijo y luego confirme o rechace. Confirmar entrena la huella vocal; el rechazo se recuerda, de modo que la misma voz no se vuelve a ofrecer.",
   "suggestionsNone": "No hay nada por confirmar.",
   "suggestionsFailed": "No se pudo cargar la lista.",
@@ -751,6 +751,5 @@
   "suggestionExcludedCount_one": "{{count}} fragmento excluido",
   "suggestionExcludedCount_other": "{{count}} fragmentos excluidos",
   "suggestionRestoreExcluded": "Restaurar",
-  "suggestionTrainsFrom": "Al confirmar se entrena con {{kept}} de {{total}} fragmentos",
-  "voicesToConfirm": "Voces por confirmar"
+  "suggestionTrainsFrom": "Al confirmar se entrena con {{kept}} de {{total}} fragmentos"
 }

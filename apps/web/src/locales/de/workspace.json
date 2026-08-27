@@ -734,7 +734,7 @@
   "suggestionYes": "Ja",
   "suggestionNo": "Nein",
   "suggestionFailed": "Diese Antwort konnte nicht gespeichert werden.",
-  "suggestionsTitle": "Stimmen zur Bestaetigung",
+  "suggestionsTitle": "Stimmzuordnungen pruefen",
   "suggestionsIntro": "Diariz hat diese Stimmen erkannt, war sich aber nicht sicher genug, um sie zu benennen. Waehlen Sie eine aus, um zu hoeren, was gesagt wurde, und bestaetigen oder lehnen Sie ab. Bestaetigen schult den Stimmabdruck; eine Ablehnung wird gemerkt, dieselbe Stimme wird nicht erneut vorgeschlagen.",
   "suggestionsNone": "Nichts zu bestätigen.",
   "suggestionsFailed": "Die Liste konnte nicht geladen werden.",
@@ -751,6 +751,5 @@
   "suggestionExcludedCount_one": "{{count}} Abschnitt entfernt",
   "suggestionExcludedCount_other": "{{count}} Abschnitte entfernt",
   "suggestionRestoreExcluded": "Wiederherstellen",
-  "suggestionTrainsFrom": "Bestaetigen schult mit {{kept}} von {{total}} Abschnitten",
-  "voicesToConfirm": "Stimmen zur Bestaetigung"
+  "suggestionTrainsFrom": "Bestaetigen schult mit {{kept}} von {{total}} Abschnitten"
 }

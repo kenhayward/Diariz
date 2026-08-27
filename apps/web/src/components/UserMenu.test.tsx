@@ -108,6 +108,26 @@ describe("UserMenu", () => {
     expect(screen.getByRole("menuitem", { name: /sign out/i })).toBeTruthy();
   });
 
+  it("names the voice-review item, rather than showing its translation key", () => {
+    // It read "voicesToConfirm" in the live menu: the key lives in the workspace catalogue while this menu
+    // translates against the account one, and with no fallback namespace i18next renders the key itself.
+    // The label and the modal's own title now come from the same key, so they cannot drift apart either.
+    renderMenu();
+    fireEvent.click(screen.getByRole("button", { name: /account/i }));
+
+    const item = screen.getByRole("menuitem", { name: /review voice matches/i });
+    expect(item.textContent).toBe("Review Voice Matches");
+  });
+
+  it("opens the voice review over the page it was opened from", async () => {
+    renderMenu();
+    fireEvent.click(screen.getByRole("button", { name: /account/i }));
+
+    fireEvent.click(screen.getByRole("menuitem", { name: /review voice matches/i }));
+
+    expect(await screen.findByRole("dialog", { name: /review voice matches/i })).toBeTruthy();
+  });
+
   it("hides Settings for non-platform-admins and shows it for platform admins", () => {
     renderMenu();
     fireEvent.click(screen.getByRole("button", { name: /account/i }));
