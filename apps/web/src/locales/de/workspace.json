@@ -742,5 +742,14 @@
   "suggestionPlay": "Abspielen",
   "suggestionStop": "Stopp",
   "suggestionNoWords": "Fuer diese Stimme sind keine Woerter aufgezeichnet.",
+  "suggestionConfirmVoice": "Diese Stimme bestaetigen",
+  "suggestionRejectVoice": "Nicht diese Person",
+  "suggestionSegmentYesHint": "Ja - dieser Abschnitt ist sie",
+  "suggestionSegmentNoHint": "Nein - diesen Abschnitt entfernen",
+  "suggestionPlayAll": "Alle abspielen",
+  "suggestionStopAll": "Alle stoppen",
+  "suggestionExcludedCount_one": "{{count}} Abschnitt entfernt",
+  "suggestionExcludedCount_other": "{{count}} Abschnitte entfernt",
+  "suggestionRestoreExcluded": "Wiederherstellen",
   "voicesToConfirm": "Stimmen zur Bestaetigung"
 }

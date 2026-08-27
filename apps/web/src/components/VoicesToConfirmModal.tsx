@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 import { formatDuration } from "../lib/format";
+import type { AttributionSegment } from "../lib/types";
 import { clipQueue } from "../lib/clipPlayback";
 import { useClipPlayer } from "../lib/useClipPlayer";
 import { CheckIcon, PlayIcon, StopIcon, XIcon } from "./icons";
@@ -29,6 +30,14 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
   const [done, setDone] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  /// Segments the reviewer said are not this person, and ones they explicitly vouched for. Both belong to
+  /// the voice being judged and are cleared when it changes - carrying an exclusion across would silently
+  /// drop audio from a different person's voiceprint.
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  const [confirmed, setConfirmed] = useState<Set<string>>(new Set());
+  /// Whether the current playback came from Play all, so that one button can say Stop all while the
+  /// per-segment buttons keep saying Play.
+  const [playingAll, setPlayingAll] = useState(false);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -57,8 +66,13 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
   const { play, stop, playingSegmentId } = useClipPlayer(fetchClip);
 
   // The segment list is replaced when the open voice changes, so without this a clip would play on with
-  // nothing on screen able to stop it.
-  useEffect(() => stop(), [openSpeakerId, stop]);
+  // nothing on screen able to stop it - and the previous voice's judgements would apply to this one.
+  useEffect(() => {
+    stop();
+    setPlayingAll(false);
+    setExcluded(new Set());
+    setConfirmed(new Set());
+  }, [openSpeakerId, stop]);
 
   const { data: segments = [], isLoading: segmentsLoading } = useQuery({
     queryKey: ["suggestion-segments", openSpeakerId],
@@ -66,11 +80,51 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
     enabled: openSpeakerId !== null,
   });
 
+  const kept = segments.filter((g) => !excluded.has(g.id));
+
+  /// Follow the clip that is playing, so a long list does not leave the highlight off screen - which is
+  /// exactly when playing straight through is the point. `nearest` rather than `center`: it only moves the
+  /// list when it has to, so a short list does not jump about under the reader.
+  const listRef = useRef<HTMLUListElement>(null);
+  useEffect(() => {
+    if (!playingSegmentId) return;
+    listRef.current
+      ?.querySelector(`[data-segment-id="${playingSegmentId}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [playingSegmentId]);
+
+  function playOne(g: AttributionSegment) {
+    setPlayingAll(false);
+    void play(openSpeakerId!, clipQueue(segments, [g.id]));
+  }
+
+  function playThrough() {
+    setPlayingAll(true);
+    void play(openSpeakerId!, clipQueue(kept, kept.map((g) => g.id)));
+  }
+
+  function exclude(g: AttributionSegment) {
+    // Stop first if it is the one playing: the row is about to leave the list, and its Stop button with it.
+    if (playingSegmentId === g.id) stop();
+    setExcluded((cur) => new Set(cur).add(g.id));
+    setConfirmed((cur) => {
+      const next = new Set(cur);
+      next.delete(g.id);
+      return next;
+    });
+  }
+
   async function decide(s: SpeakerSuggestion, accept: boolean) {
     setBusy(s.speakerId);
     setError(null);
     try {
-      if (accept) await api.acceptSpeakerSuggestion(s.speakerId);
+      // No spans is "the whole speaker" - the overwhelmingly common case, and the cheap one, since sending
+      // a full list instead would queue a re-embed that changes nothing.
+      if (accept)
+        await api.acceptSpeakerSuggestion(
+          s.speakerId,
+          excluded.size > 0 ? kept.map((g) => ({ startMs: g.startMs, endMs: g.endMs })) : undefined,
+        );
       else await api.rejectSpeakerSuggestion(s.speakerId);
       // Only after the server agreed: dropping the voice on a failure would look like the decision stuck,
       // and it would return on the next load with nothing to explain why.
@@ -83,15 +137,16 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
     }
   }
 
-  /// Tick and cross rather than words: the pair sits inline at text height, so the decision is one glance
-  /// and one click away from the evidence it is about.
+  /// The answer for the **whole voice**: it clears the voice from the queue either way. Named differently
+  /// from the per-segment pair below, which answers only for one segment - two controls both called "Yes"
+  /// on one panel is ambiguous to read and worse to hear announced.
   const verdictButton = (accept: boolean) => (
     <button
       type="button"
       onClick={() => open && void decide(open, accept)}
       disabled={open === null || busy === openSpeakerId}
-      aria-label={accept ? t("workspace:suggestionYes") : t("workspace:suggestionNo")}
-      title={accept ? t("workspace:suggestionYes") : t("workspace:suggestionNo")}
+      aria-label={accept ? t("workspace:suggestionConfirmVoice") : t("workspace:suggestionRejectVoice")}
+      title={accept ? t("workspace:suggestionConfirmVoice") : t("workspace:suggestionRejectVoice")}
       className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border disabled:opacity-50 ${
         accept
           ? "border-green-600 text-green-700 hover:bg-green-50 dark:border-green-500 dark:text-green-400 dark:hover:bg-green-900/30"
@@ -99,6 +154,30 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
       }`}
     >
       {accept ? <CheckIcon size={16} /> : <XIcon size={16} />}
+    </button>
+  );
+
+  /// The answer for **one segment**, at the same height as the words beside it. A diarization label is not
+  /// always one human, so a reviewer can vouch for the voice while excluding the stretches that are not it;
+  /// the exclusions narrow what the voiceprint is trained from.
+  const segmentButton = (g: AttributionSegment, accept: boolean) => (
+    <button
+      type="button"
+      onClick={() =>
+        accept ? setConfirmed((cur) => new Set(cur).add(g.id)) : exclude(g)
+      }
+      aria-pressed={accept ? confirmed.has(g.id) : false}
+      aria-label={accept ? t("workspace:suggestionYes") : t("workspace:suggestionNo")}
+      title={accept ? t("workspace:suggestionSegmentYesHint") : t("workspace:suggestionSegmentNoHint")}
+      className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
+        accept
+          ? confirmed.has(g.id)
+            ? "border-green-600 bg-green-600 text-white dark:border-green-500 dark:bg-green-600"
+            : "border-gray-300 text-green-700 hover:bg-green-50 dark:border-gray-600 dark:text-green-400 dark:hover:bg-green-900/30"
+          : "border-gray-300 text-red-700 hover:bg-red-50 dark:border-gray-600 dark:text-red-400 dark:hover:bg-red-900/30"
+      }`}
+    >
+      {accept ? <CheckIcon size={11} /> : <XIcon size={11} />}
     </button>
   );
 
@@ -179,32 +258,65 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
                   {verdictButton(false)}
                 </div>
 
-                <ul className="min-h-0 flex-1 overflow-y-auto">
+                {/* Play the voice straight through, and undo an exclusion. Both act on the list as a
+                    whole, so they sit above it rather than on any one row. */}
+                <div className="flex shrink-0 flex-wrap items-center gap-3 border-b px-3 py-1.5 text-xs dark:border-gray-700">
+                  <button
+                    type="button"
+                    onClick={() => (playingAll && playingSegmentId ? stop() : playThrough())}
+                    disabled={kept.length === 0}
+                    className="inline-flex items-center gap-1.5 rounded border px-2 py-0.5 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200"
+                  >
+                    {playingAll && playingSegmentId ? <StopIcon size={11} /> : <PlayIcon size={11} />}
+                    {playingAll && playingSegmentId
+                      ? t("workspace:suggestionStopAll")
+                      : t("workspace:suggestionPlayAll")}
+                  </button>
+                  {excluded.size > 0 && (
+                    <>
+                      <span className="text-gray-500 dark:text-gray-400">
+                        {t("workspace:suggestionExcludedCount", { count: excluded.size })}
+                      </span>
+                      {/* One click, no undo, and it shapes a biometric - reopening the modal is not a
+                          recovery path. */}
+                      <button
+                        type="button"
+                        onClick={() => setExcluded(new Set())}
+                        className="underline text-gray-600 dark:text-gray-300"
+                      >
+                        {t("workspace:suggestionRestoreExcluded")}
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                <ul ref={listRef} className="min-h-0 flex-1 overflow-y-auto">
                   {segmentsLoading ? (
                     <li className="p-3 text-sm text-gray-500 dark:text-gray-400">{t("common:loading")}</li>
-                  ) : segments.length === 0 ? (
+                  ) : kept.length === 0 ? (
                     <li className="p-3 text-sm text-gray-500 dark:text-gray-400">
                       {t("workspace:suggestionNoWords")}
                     </li>
                   ) : (
-                    segments.map((g) => {
+                    kept.map((g) => {
                       const playing = playingSegmentId === g.id;
                       return (
                         // One line per segment: the control, the time, the words. Every part is text
                         // height, so a long list stays a single line a row and scannable.
                         <li
                           key={g.id}
-                          className="flex items-center gap-2 px-3 py-1 text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+                          data-segment-id={g.id}
+                          className={`flex items-center gap-2 px-3 py-1 text-sm ${
+                            playing
+                              ? "bg-blue-50 dark:bg-blue-900/30"
+                              : "hover:bg-gray-50 dark:hover:bg-gray-800"
+                          }`}
                         >
                           {/* One button, two states. A separate stop control would sit dead on every row
                               that is not playing. */}
                           <button
                             type="button"
-                            onClick={() =>
-                              playing
-                                ? stop()
-                                : void play(openSpeakerId!, clipQueue(segments, [g.id]))
-                            }
+                            onClick={() => (playing ? stop() : playOne(g))}
                             aria-label={
                               playing ? t("workspace:suggestionStop") : t("workspace:suggestionPlay")
                             }
@@ -221,6 +333,8 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
                             {formatDuration(g.startMs)}
                           </span>
                           <span className="min-w-0 flex-1 text-gray-700 dark:text-gray-200">{g.text}</span>
+                          {segmentButton(g, true)}
+                          {segmentButton(g, false)}
                         </li>
                       );
                     })

@@ -5,6 +5,7 @@ using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.EntityFrameworkCore;
 
 namespace Diariz.Api.Controllers;
@@ -23,7 +24,8 @@ namespace Diariz.Api.Controllers;
 [Authorize]
 [Route("api/speaker-suggestions")]
 public class SpeakerSuggestionsController(
-    DiarizDbContext db, ISpeakerAssignment assignment, IAudioClipper clipper, IAudioStorage storage)
+    DiarizDbContext db, ISpeakerAssignment assignment, IAudioClipper clipper, IAudioStorage storage,
+    IJobQueue queue)
     : ControllerBase
 {
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -162,8 +164,15 @@ public class SpeakerSuggestionsController(
         "same voice in the same conditions is recognised outright next time.\n\n" +
         "The result is a **manual** identification, not an automatic one - re-running identification will " +
         "never take it away. Naming someone who has opted out of voice-printing is allowed; enrolling their " +
-        "voice is not, and does not happen.")]
-    public Task<IActionResult> Accept(Guid speakerId) => DecideAsync(speakerId, IdentityDecisionKind.Accepted);
+        "voice is not, and does not happen.\n\n" +
+        "Send **spans** to train from only part of the speaker - a diarization label is not always one " +
+        "human, and the reviewer may have excluded the stretches that are somebody else. Omit the body " +
+        "for the whole speaker. Excluding audio narrows what the voiceprint learns from; it does not " +
+        "relabel those segments in the transcript.")]
+    public Task<IActionResult> Accept(
+        Guid speakerId,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] AcceptSuggestionRequest? request = null) =>
+        DecideAsync(speakerId, IdentityDecisionKind.Accepted, request?.Spans);
 
     [HttpPost("{speakerId:guid}/reject")]
     [EndpointSummary("Decline a suggested identity")]
@@ -175,7 +184,8 @@ public class SpeakerSuggestionsController(
         "allowed to apply - that is new evidence, not the same question asked twice.")]
     public Task<IActionResult> Reject(Guid speakerId) => DecideAsync(speakerId, IdentityDecisionKind.Rejected);
 
-    private async Task<IActionResult> DecideAsync(Guid speakerId, IdentityDecisionKind decision)
+    private async Task<IActionResult> DecideAsync(
+        Guid speakerId, IdentityDecisionKind decision, IReadOnlyList<VoiceprintSpan>? spans = null)
     {
         var speaker = await db.Speakers.FirstOrDefaultAsync(s => s.Id == speakerId);
         if (speaker is null) return NotFound();
@@ -208,6 +218,7 @@ public class SpeakerSuggestionsController(
             // Through the shared assignment: the opt-out guard, the enrolment and the centroid rebuild are
             // the same rules a manual assignment follows, and must not diverge from them.
             await assignment.AssignAsync(speaker, person);
+            await TrainFromAsync(speaker, person.Id, spans);
         }
         else
         {
@@ -218,5 +229,41 @@ public class SpeakerSuggestionsController(
 
         await db.SaveChangesAsync();
         return NoContent();
+    }
+
+    /// <summary>Narrows the sample the assignment just enrolled to the spans the reviewer kept, and queues a
+    /// re-embed from exactly those.
+    ///
+    /// <para>A diarization label is not always one human, so a reviewer can answer "yes, that is them" while
+    /// excluding the stretches that are somebody else. Without this the exclusion would be a control that
+    /// lies: the enrolment would take in precisely the audio just marked as not this person.</para>
+    ///
+    /// <para>Deliberately the <b>same</b> shape as the Voiceprint tab's span selection - `SpansJson` plus a
+    /// queued <see cref="VoiceprintJob"/> - rather than a second way to say the same thing. No spans is the
+    /// whole speaker, which is what every sample does by default and what most accepts want.</para>
+    ///
+    /// <para>Silent when there is no sample to shape: an opted-out person is named without being enrolled,
+    /// and a speaker with no embedding was never enrolled either.</para></summary>
+    private async Task TrainFromAsync(Speaker speaker, Guid personId, IReadOnlyList<VoiceprintSpan>? spans)
+    {
+        if (spans is not { Count: > 0 }) return;
+
+        var sample = await db.VoiceSamples
+            .FirstOrDefaultAsync(v => v.PersonId == personId && v.SpeakerId == speaker.Id);
+        if (sample is null) return;
+
+        var rec = await db.Recordings.FirstOrDefaultAsync(r => r.Id == speaker.RecordingId);
+        // The queue only offers voices whose audio still exists, so this cannot normally fail - but a
+        // queued job the worker could only fail is worse than leaving the sample on the whole speaker.
+        if (rec is null || rec.AudioDeletedAt is not null) return;
+
+        var merged = VoiceprintSpans.FromSegments(spans.Select(s => (s.StartMs, s.EndMs)));
+        sample.SpansJson = VoiceprintSpans.Serialize(merged);
+        sample.UsedMs = null;
+        sample.RecomputeQueuedAt = DateTimeOffset.UtcNow;
+        sample.RecomputeFailedAt = null;
+        await db.SaveChangesAsync();
+
+        await queue.EnqueueVoiceprintAsync(new VoiceprintJob(sample.Id, rec.Id, rec.BlobKey, merged));
     }
 }

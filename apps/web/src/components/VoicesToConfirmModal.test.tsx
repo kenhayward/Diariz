@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -30,7 +30,37 @@ function suggestion(over: Partial<SpeakerSuggestion> = {}): SpeakerSuggestion {
 const segments: AttributionSegment[] = [
   { id: "g1", startMs: 0, endMs: 1000, text: "One" },
   { id: "g2", startMs: 1000, endMs: 2000, text: "Two" },
+  { id: "g3", startMs: 2000, endMs: 3000, text: "Three" },
 ];
+
+/// One reused audio element under the hook's control, so a test can fire `onended` and watch the queue
+/// advance. jsdom has no media pipeline, so without this "plays each in turn" could only assert the first
+/// clip - which is the half that was already working.
+class FakeAudio {
+  static instances: FakeAudio[] = [];
+  onended: (() => void) | null = null;
+  src = "";
+  paused = true;
+  constructor() {
+    FakeAudio.instances.push(this);
+  }
+  play() {
+    this.paused = false;
+    return Promise.resolve();
+  }
+  pause() {
+    this.paused = true;
+  }
+}
+
+const audio = () => FakeAudio.instances[FakeAudio.instances.length - 1];
+
+/// Advance to the next clip the way the browser would, once the current one finishes.
+async function finishClip() {
+  await act(async () => {
+    audio().onended?.();
+  });
+}
 
 function setup() {
   render(
@@ -43,11 +73,26 @@ function setup() {
 /// The right-hand panel, so a query for "Ada Lovelace" cannot accidentally match the left-hand row.
 const evidence = () => within(screen.getByRole("region", { name: /evidence/i }));
 
+/// The panel only renders once the queue has arrived, so `evidence()` has to be awaited into existence.
+async function ready(name = /Ada Lovelace/) {
+  await screen.findByRole("button", { name });
+  await evidence().findByText("Two");
+}
+
+const seg = (text: string) => evidence().getByText(text).closest("li") as HTMLElement;
+const decide = (text: string, answer: "Yes" | "No") =>
+  userEvent.click(within(seg(text)).getByRole("button", { name: new RegExp("^" + answer + "$") }));
+
 beforeEach(() => {
   vi.clearAllMocks();
   // jsdom implements neither media playback nor object URLs, and the modal legitimately uses both.
   window.HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
   window.HTMLMediaElement.prototype.pause = vi.fn();
+  FakeAudio.instances = [];
+  window.Audio = FakeAudio as never;
+  // jsdom computes no geometry and implements no scrolling; that the call is made, on the right row, is
+  // the whole contract - whether it lands is the browser's job.
+  Element.prototype.scrollIntoView = vi.fn();
   URL.createObjectURL = vi.fn(() => "blob:clip");
   URL.revokeObjectURL = vi.fn();
   mock(api.getSpeakerSuggestions).mockResolvedValue([suggestion()]);
@@ -115,21 +160,23 @@ describe("VoicesToConfirmModal", () => {
     await userEvent.click(evidence().getAllByRole("button", { name: /^Play$/ })[0]);
 
     await waitFor(() => expect(evidence().getAllByRole("button", { name: /^Stop$/ })).toHaveLength(1));
-    expect(evidence().getAllByRole("button", { name: /^Play$/ })).toHaveLength(1);
+    expect(evidence().getAllByRole("button", { name: /^Play$/ })).toHaveLength(2);
 
     const stopping = evidence().getByRole("button", { name: /^Stop$/ });
     expect(stopping.querySelector("rect")).toBeTruthy();
     expect(stopping.querySelector("polygon")).toBeNull();
-    expect(evidence().getByRole("button", { name: /^Play$/ }).querySelector("polygon")).toBeTruthy();
+    expect(
+      evidence().getAllByRole("button", { name: /^Play$/ })[0].querySelector("polygon"),
+    ).toBeTruthy();
   });
 
   it("confirms the open voice and drops it from the queue", async () => {
     setup();
     await screen.findByRole("button", { name: /Ada Lovelace/ });
 
-    await userEvent.click(evidence().getByRole("button", { name: /^Yes$/ }));
+    await userEvent.click(evidence().getByRole("button", { name: /Confirm this voice/ }));
 
-    await waitFor(() => expect(api.acceptSpeakerSuggestion).toHaveBeenCalledWith("sp1"));
+    await waitFor(() => expect(api.acceptSpeakerSuggestion).toHaveBeenCalledWith("sp1", undefined));
     await waitFor(() => expect(screen.queryByRole("button", { name: /Ada Lovelace/ })).toBeNull());
   });
 
@@ -137,7 +184,7 @@ describe("VoicesToConfirmModal", () => {
     setup();
     await screen.findByRole("button", { name: /Ada Lovelace/ });
 
-    await userEvent.click(evidence().getByRole("button", { name: /^No$/ }));
+    await userEvent.click(evidence().getByRole("button", { name: /Not this person/ }));
 
     await waitFor(() => expect(api.rejectSpeakerSuggestion).toHaveBeenCalledWith("sp1"));
   });
@@ -150,7 +197,7 @@ describe("VoicesToConfirmModal", () => {
     setup();
     await screen.findByRole("button", { name: /Ada Lovelace/ });
 
-    await userEvent.click(evidence().getByRole("button", { name: /^Yes$/ }));
+    await userEvent.click(evidence().getByRole("button", { name: /Confirm this voice/ }));
 
     await waitFor(() => expect(api.getSuggestionSegments).toHaveBeenCalledWith("sp2"));
   });
@@ -161,7 +208,7 @@ describe("VoicesToConfirmModal", () => {
     setup();
     await screen.findByRole("button", { name: /Ada Lovelace/ });
 
-    await userEvent.click(evidence().getByRole("button", { name: /^No$/ }));
+    await userEvent.click(evidence().getByRole("button", { name: /Not this person/ }));
 
     await waitFor(() => expect(screen.getByText(/Could not save/)).toBeTruthy());
     expect(screen.getByRole("button", { name: /Ada Lovelace/ })).toBeTruthy();
@@ -189,5 +236,154 @@ describe("VoicesToConfirmModal", () => {
     setup();
 
     expect(await screen.findByText(/Nothing waiting/)).toBeTruthy();
+  });
+
+  // ---- Judging a speaker one segment at a time ----
+  //
+  // A diarization label is not always one human. Answering only for the whole list forces a reviewer who
+  // can hear that part of it is somebody else either to accept audio that is not this person, or to throw
+  // away a correct identification. Excluding a segment therefore has to reach the voiceprint - otherwise
+  // the control is a lie, and the enrolment takes in exactly the audio just marked as not them.
+
+  it("takes a segment out of the list when you say it is not them", async () => {
+    setup();
+    await ready();
+
+    await decide("Two", "No");
+
+    expect(evidence().queryByText("Two")).toBeNull();
+    expect(evidence().getByText("One")).toBeTruthy();
+    expect(evidence().getByText("Three")).toBeTruthy();
+  });
+
+  it("trains the voiceprint from only the segments that were kept", async () => {
+    setup();
+    await ready();
+    await decide("Two", "No");
+
+    await userEvent.click(evidence().getByRole("button", { name: /Confirm this voice/ }));
+
+    await waitFor(() =>
+      expect(api.acceptSpeakerSuggestion).toHaveBeenCalledWith("sp1", [
+        { startMs: 0, endMs: 1000 },
+        { startMs: 2000, endMs: 3000 },
+      ]),
+    );
+  });
+
+  it("asks for the whole speaker when nothing was excluded", async () => {
+    // The overwhelmingly common case, and it stays the cheap one: no spans means the whole speaker, and
+    // sending the full list instead would queue a re-embed that changes nothing.
+    setup();
+    await ready();
+
+    await userEvent.click(evidence().getByRole("button", { name: /Confirm this voice/ }));
+
+    await waitFor(() => expect(api.acceptSpeakerSuggestion).toHaveBeenCalledWith("sp1", undefined));
+  });
+
+  it("puts back segments excluded by mistake", async () => {
+    // One click, no undo, and it shapes a biometric. Reopening the modal is not a recovery path.
+    setup();
+    await ready();
+    await decide("Two", "No");
+
+    await userEvent.click(evidence().getByRole("button", { name: /Restore/ }));
+
+    expect(await evidence().findByText("Two")).toBeTruthy();
+  });
+
+  it("acknowledges a segment you confirm", async () => {
+    // Without feedback, Yes looks like a button that does nothing - the row was already in the list.
+    setup();
+    await ready();
+
+    await decide("Two", "Yes");
+
+    expect(
+      within(seg("Two")).getByRole("button", { name: /^Yes$/ }).getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(
+      within(seg("One")).getByRole("button", { name: /^Yes$/ }).getAttribute("aria-pressed"),
+    ).toBe("false");
+  });
+
+  it("starts each voice with nothing excluded", async () => {
+    // Exclusions belong to the voice being judged. Carrying them across would silently drop audio from a
+    // different person's voiceprint.
+    mock(api.getSpeakerSuggestions).mockResolvedValue([
+      suggestion(),
+      suggestion({ speakerId: "sp2", personName: "Grace Hopper" }),
+    ]);
+    setup();
+    await ready();
+    await decide("Two", "No");
+
+    await userEvent.click(screen.getByRole("button", { name: /Grace Hopper/ }));
+    await evidence().findByText("Two");
+    await userEvent.click(screen.getByRole("button", { name: /Ada Lovelace/ }));
+
+    expect(await evidence().findByText("Two")).toBeTruthy();
+  });
+
+  // ---- Playing the whole voice through ----
+
+  it("plays every kept segment in turn", async () => {
+    setup();
+    await ready();
+
+    await userEvent.click(evidence().getByRole("button", { name: /Play all/ }));
+
+    await waitFor(() => expect(api.suggestionClip).toHaveBeenCalledWith("sp1", 0, 1000));
+    await finishClip();
+    await waitFor(() => expect(api.suggestionClip).toHaveBeenCalledWith("sp1", 1000, 2000));
+    await finishClip();
+    await waitFor(() => expect(api.suggestionClip).toHaveBeenCalledWith("sp1", 2000, 3000));
+  });
+
+  it("skips a segment that was excluded", async () => {
+    setup();
+    await ready();
+    await decide("Two", "No");
+
+    await userEvent.click(evidence().getByRole("button", { name: /Play all/ }));
+
+    await waitFor(() => expect(api.suggestionClip).toHaveBeenCalledWith("sp1", 0, 1000));
+    await finishClip();
+    await waitFor(() => expect(api.suggestionClip).toHaveBeenCalledWith("sp1", 2000, 3000));
+    expect(api.suggestionClip).not.toHaveBeenCalledWith("sp1", 1000, 2000);
+  });
+
+  it("brings the segment being played into view", async () => {
+    // A long list scrolls, so the highlight is invisible for most of a play-through without this - which is
+    // exactly when following along is the point.
+    setup();
+    await ready();
+
+    await userEvent.click(evidence().getByRole("button", { name: /Play all/ }));
+    await waitFor(() => expect(api.suggestionClip).toHaveBeenCalledWith("sp1", 0, 1000));
+    await finishClip();
+
+    await waitFor(() => {
+      const rows = mock(Element.prototype.scrollIntoView).mock.instances as HTMLElement[];
+      expect(rows[rows.length - 1]).toBe(seg("Two"));
+    });
+  });
+
+  it("turns Play all into Stop while it is running", async () => {
+    setup();
+    await ready();
+
+    await userEvent.click(evidence().getByRole("button", { name: /Play all/ }));
+
+    await waitFor(() => expect(evidence().getByRole("button", { name: /Stop all/ })).toBeTruthy());
+    expect(evidence().queryByRole("button", { name: /Play all/ })).toBeNull();
+
+    // The glyph as well as the words: they are set independently, so a test reading only the label passes
+    // with the icon frozen as a play triangle - which is what the user is looking at when they want to
+    // stop it. Mutating the icon alone proved that gap was real, here and on the per-segment button.
+    const stopping = evidence().getByRole("button", { name: /Stop all/ });
+    expect(stopping.querySelector("rect")).toBeTruthy();
+    expect(stopping.querySelector("polygon")).toBeNull();
   });
 });

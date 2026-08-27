@@ -1,6 +1,20 @@
 {
   "components": {
     "schemas": {
+      "AcceptSuggestionRequest": {
+        "properties": {
+          "spans": {
+            "items": {
+              "$ref": "#/components/schemas/VoiceprintSpan"
+            },
+            "type": [
+              "null",
+              "array"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "ActionListItemDto": {
         "properties": {
           "actor": {
@@ -14517,7 +14531,7 @@
     },
     "/api/speaker-suggestions/{speakerId}/accept": {
       "post": {
-        "description": "Names the speaker as the suggested person and adds that speaker's voice to their voiceprint, so the same voice in the same conditions is recognised outright next time.\n\nThe result is a **manual** identification, not an automatic one - re-running identification will never take it away. Naming someone who has opted out of voice-printing is allowed; enrolling their voice is not, and does not happen.",
+        "description": "Names the speaker as the suggested person and adds that speaker's voice to their voiceprint, so the same voice in the same conditions is recognised outright next time.\n\nThe result is a **manual** identification, not an automatic one - re-running identification will never take it away. Naming someone who has opted out of voice-printing is allowed; enrolling their voice is not, and does not happen.\n\nSend **spans** to train from only part of the speaker - a diarization label is not always one human, and the reviewer may have excluded the stretches that are somebody else. Omit the body for the whole speaker. Excluding audio narrows what the voiceprint learns from; it does not relabel those segments in the transcript.",
         "parameters": [
           {
             "in": "path",
@@ -14529,6 +14543,46 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AcceptSuggestionRequest"
+                  }
+                ]
+              }
+            },
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AcceptSuggestionRequest"
+                  }
+                ]
+              }
+            },
+            "text/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AcceptSuggestionRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "OK"

@@ -742,5 +742,14 @@
   "suggestionPlay": "Lire",
   "suggestionStop": "Arreter",
   "suggestionNoWords": "Aucune parole enregistree pour cette voix.",
+  "suggestionConfirmVoice": "Confirmer cette voix",
+  "suggestionRejectVoice": "Pas cette personne",
+  "suggestionSegmentYesHint": "Oui - ce passage est bien elle",
+  "suggestionSegmentNoHint": "Non - retirer ce passage",
+  "suggestionPlayAll": "Tout lire",
+  "suggestionStopAll": "Tout arreter",
+  "suggestionExcludedCount_one": "{{count}} passage retire",
+  "suggestionExcludedCount_other": "{{count}} passages retires",
+  "suggestionRestoreExcluded": "Restaurer",
   "voicesToConfirm": "Voix a confirmer"
 }
