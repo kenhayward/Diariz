@@ -1,6 +1,6 @@
 # Diariz
 
-![Diariz](images/Diariz%20Backdrop.png)
+![Diariz](images/Diariz%20Intro.png)
 
 **Smart Meeting Transcription.** Personal, multi-user voice/meeting transcription platform: record audio
 (mic or system audio), transcribe it server-side with **speaker diarization** and word-level timestamps,
