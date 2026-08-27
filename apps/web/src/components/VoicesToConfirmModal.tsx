@@ -359,7 +359,17 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
                               : "hover:bg-gray-50 dark:hover:bg-gray-800"
                           }`}
                         >
-                          {/* One button, two states. A separate stop control would sit dead on every row
+                          {/* Where in the recording, not how long the segment is: it places what you are
+                              hearing, and is what you would scrub to if you opened the transcript. */}
+                          <span className="shrink-0 font-mono text-xs text-gray-500 dark:text-gray-400">
+                            {formatDuration(g.startMs)}
+                          </span>
+                          <span className="min-w-0 flex-1 text-gray-700 dark:text-gray-200">{g.text}</span>
+                          {/* Beside the answer rather than across the row from it. Working through the queue
+                              is listen-then-decide over and over, and with the two controls at opposite
+                              ends every segment cost a full traverse of the panel.
+
+                              One button, two states. A separate stop control would sit dead on every row
                               that is not playing. */}
                           <button
                             type="button"
@@ -368,18 +378,12 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
                               playing ? t("workspace:suggestionStop") : t("workspace:suggestionPlay")
                             }
                             title={playing ? t("workspace:suggestionStop") : t("workspace:suggestionPlay")}
-                            // h-5 matches the 20px line box of the text beside it, measured in the browser, so an ordinary
-                            // segment is one line high rather than being padded out by its own control.
+                            // h-5 matches the 20px line box of the text beside it, measured in the browser,
+                            // so an ordinary segment is one line high rather than padded out by its control.
                             className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
                           >
                             {playing ? <StopIcon size={11} /> : <PlayIcon size={11} />}
                           </button>
-                          {/* Where in the recording, not how long the segment is: it places what you are
-                              hearing, and is what you would scrub to if you opened the transcript. */}
-                          <span className="shrink-0 font-mono text-xs text-gray-500 dark:text-gray-400">
-                            {formatDuration(g.startMs)}
-                          </span>
-                          <span className="min-w-0 flex-1 text-gray-700 dark:text-gray-200">{g.text}</span>
                           {segmentButton(g, true)}
                           {segmentButton(g, false)}
                         </li>
