@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../../lib/api";
+import SettingRow, { SETTING_CONTROL, SETTING_GRID } from "./SettingRow";
 
 /// How confident Diariz has to be before it names a voice, plus the re-scan that applies the current
 /// settings to recordings already transcribed.
@@ -63,30 +64,32 @@ export default function IdentificationSettings({
     step: string,
     min: number,
   ) => (
-    <label className="block text-sm">
-      <span className="mb-1 block font-medium text-gray-700 dark:text-gray-200">{label}</span>
-      <input
-        type="number"
-        min={min}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        aria-label={label}
-        className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-      />
-      <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">{hint}</span>
-    </label>
+    <SettingRow key={label} label={label} hint={hint}>
+      {(id) => (
+        <input
+          id={id}
+          type="number"
+          min={min}
+          step={step}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={SETTING_CONTROL}
+        />
+      )}
+    </SettingRow>
   );
 
   return (
-    <section className="flex flex-col gap-3">
+    <section className="flex flex-col gap-2">
       <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">{t("identificationTitle")}</h3>
       <p className="text-xs text-gray-500 dark:text-gray-400">{t("identificationIntro")}</p>
 
-      {field(t("identThresholdLabel"), t("identThresholdHint"), threshold, setThreshold, "0.01", 0)}
-      {field(t("identBandLabel"), t("identBandHint"), band, setBand, "0.01", 0)}
-      {field(t("identMarginLabel"), t("identMarginHint"), margin, setMargin, "0.01", 0)}
-      {field(t("identMinSpeechLabel"), t("identMinSpeechHint"), minSpeechMs, setMinSpeechMs, "500", 0)}
+      <div className={SETTING_GRID} data-setting-grid>
+        {field(t("identThresholdLabel"), t("identThresholdHint"), threshold, setThreshold, "0.01", 0)}
+        {field(t("identBandLabel"), t("identBandHint"), band, setBand, "0.01", 0)}
+        {field(t("identMarginLabel"), t("identMarginHint"), margin, setMargin, "0.01", 0)}
+        {field(t("identMinSpeechLabel"), t("identMinSpeechHint"), minSpeechMs, setMinSpeechMs, "500", 0)}
+      </div>
 
       <div className="rounded border p-3 dark:border-gray-700">
         <p className="text-xs text-gray-500 dark:text-gray-400">{t("rescanIntro")}</p>

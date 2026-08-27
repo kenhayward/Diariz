@@ -9,6 +9,7 @@ import { platformWebhookEvents, SIGNAL_EXEMPT_EVENT_KEYS } from "../lib/webhookE
 import PanelModal from "./PanelModal";
 import MaintenancePanel from "./MaintenancePanel";
 import IdentificationSettings from "./settings/IdentificationSettings";
+import SettingRow, { SETTING_CONTROL, SETTING_GRID } from "./settings/SettingRow";
 
 // Lazily loaded: both are large, and most visits to Settings never open either. They are the same
 // components the /admin/* routes render - `embedded` only drops the page chrome this modal provides.
@@ -178,7 +179,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
       <div
         role="dialog"
         aria-label="Settings"
-        className="flex h-[85vh] w-full max-w-3xl flex-col rounded-lg border bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900"
+        className="flex h-[85vh] w-full max-w-5xl flex-col rounded-lg border bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900"
       >
         <div className="border-b px-5 pt-4 dark:border-gray-700">
           <h2 className="mb-3 text-base font-semibold dark:text-gray-100">{t("settingsTitle")}</h2>
@@ -206,32 +207,35 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
             /* Platform-wide AI generation policy: minutes mode + the global LLM request timeout. */
             <div className="space-y-3">
               <p className="text-xs text-gray-500 dark:text-gray-400">{t("platformAiIntro")}</p>
-              <label className="block text-sm">
-                <span className="mb-1 block font-medium text-gray-700 dark:text-gray-200">{t("minutesModeLabel")}</span>
-                <select
-                  value={minutesMode}
-                  onChange={(e) => setMinutesMode(e.target.value as MinutesGenerationMode)}
-                  aria-label={t("minutesModeLabel")}
-                  className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                >
-                  <option value="SingleCall">{t("minutesModeSingle")}</option>
-                  <option value="PerSection">{t("minutesModePerSection")}</option>
-                </select>
-                <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">{t("minutesModeHint")}</span>
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1 block font-medium text-gray-700 dark:text-gray-200">{t("llmTimeoutLabel")}</span>
-                <input
-                  type="number"
-                  min={5}
-                  step={1}
-                  value={llmTimeout}
-                  onChange={(e) => setLlmTimeout(e.target.value)}
-                  aria-label={t("llmTimeoutLabel")}
-                  className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                />
-                <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">{t("llmTimeoutHint")}</span>
-              </label>
+
+              <div className={SETTING_GRID} data-setting-grid>
+                <SettingRow label={t("minutesModeLabel")} hint={t("minutesModeHint")}>
+                  {(id) => (
+                    <select
+                      id={id}
+                      value={minutesMode}
+                      onChange={(e) => setMinutesMode(e.target.value as MinutesGenerationMode)}
+                      className={SETTING_CONTROL}
+                    >
+                      <option value="SingleCall">{t("minutesModeSingle")}</option>
+                      <option value="PerSection">{t("minutesModePerSection")}</option>
+                    </select>
+                  )}
+                </SettingRow>
+                <SettingRow label={t("llmTimeoutLabel")} hint={t("llmTimeoutHint")}>
+                  {(id) => (
+                    <input
+                      id={id}
+                      type="number"
+                      min={5}
+                      step={1}
+                      value={llmTimeout}
+                      onChange={(e) => setLlmTimeout(e.target.value)}
+                      className={SETTING_CONTROL}
+                    />
+                  )}
+                </SettingRow>
+              </div>
 
               {/* Its own component rather than four more fields inline: this modal was already 845 lines,
                   and the panel carries a re-scan control with state of its own. Controlled, because the
@@ -251,39 +255,43 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                   calls ask for token counts (consumed since 0.217.0 to report real tokens/duration on
                   streamed calls). */}
               <div className="border-t pt-3 dark:border-gray-700">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={llmUsageLoggingEnabled}
-                    onChange={(e) => setLlmUsageLoggingEnabled(e.target.checked)}
-                  />
-                  <span className="font-medium text-gray-700 dark:text-gray-200">{t("llmUsageLoggingLabel")}</span>
-                </label>
-                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{t("llmUsageLoggingHint")}</p>
-
-                <label className="mt-2 block text-sm">
-                  <span className="mb-1 block font-medium text-gray-700 dark:text-gray-200">{t("llmUsageRetentionLabel")}</span>
-                  <input
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={llmUsageRetentionDays}
-                    onChange={(e) => setLlmUsageRetentionDays(e.target.value)}
-                    aria-label={t("llmUsageRetentionLabel")}
-                    className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                  />
-                  <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">{t("llmUsageRetentionHint")}</span>
-                </label>
-
-                <label className="mt-2 flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={llmStreamUsageEnabled}
-                    onChange={(e) => setLlmStreamUsageEnabled(e.target.checked)}
-                  />
-                  <span className="font-medium text-gray-700 dark:text-gray-200">{t("llmStreamUsageLabel")}</span>
-                </label>
-                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{t("llmStreamUsageHint")}</p>
+                <div className={SETTING_GRID} data-setting-grid>
+                  {/* A checkbox sits in the same middle column as every other control, so the column of
+                      controls stays a straight line rather than jumping for the tick boxes. */}
+                  <SettingRow label={t("llmUsageLoggingLabel")} hint={t("llmUsageLoggingHint")}>
+                    {(id) => (
+                      <input
+                        id={id}
+                        type="checkbox"
+                        checked={llmUsageLoggingEnabled}
+                        onChange={(e) => setLlmUsageLoggingEnabled(e.target.checked)}
+                      />
+                    )}
+                  </SettingRow>
+                  <SettingRow label={t("llmUsageRetentionLabel")} hint={t("llmUsageRetentionHint")}>
+                    {(id) => (
+                      <input
+                        id={id}
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={llmUsageRetentionDays}
+                        onChange={(e) => setLlmUsageRetentionDays(e.target.value)}
+                        className={SETTING_CONTROL}
+                      />
+                    )}
+                  </SettingRow>
+                  <SettingRow label={t("llmStreamUsageLabel")} hint={t("llmStreamUsageHint")}>
+                    {(id) => (
+                      <input
+                        id={id}
+                        type="checkbox"
+                        checked={llmStreamUsageEnabled}
+                        onChange={(e) => setLlmStreamUsageEnabled(e.target.checked)}
+                      />
+                    )}
+                  </SettingRow>
+                </div>
 
                 <button
                   type="button"

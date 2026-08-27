@@ -182,6 +182,62 @@ describe("SettingsModal", () => {
     expect(api.updatePlatformSettings).not.toHaveBeenCalled();
   });
 
+  // ---- The AI tab's layout ----
+  //
+  // Each setting is one line: name, control, description. What makes the controls line up is that every
+  // section declares the *same fixed column tracks* - sized to content, each section's widest label would
+  // set its own first column and the controls would step in and out down the page.
+  //
+  // These assert the structure that makes alignment possible. They cannot assert alignment itself: jsdom
+  // computes no geometry, so every width here is zero. That is measured in a real browser instead.
+
+  it("lays every AI setting out on the same column tracks", async () => {
+    renderModal();
+    await screen.findByLabelText(/minutes generation/i);
+
+    const grids = document.querySelectorAll("[data-setting-grid]");
+    // The AI tab's own settings, plus the voice-identification section.
+    expect(grids.length).toBeGreaterThanOrEqual(2);
+
+    const tracks = [...grids].map((g) => g.className);
+    expect(new Set(tracks).size).toBe(1);
+  });
+
+  it("keeps every AI setting reachable by the name shown beside it", async () => {
+    // The rewrite moves each control out of a wrapping <label> and onto htmlFor/id. Getting that wrong
+    // leaves a control with no accessible name - invisible to a screen reader, and to these tests.
+    renderModal();
+
+    for (const name of [
+      /minutes generation/i,
+      /llm timeout/i,
+      /log llm usage/i,
+      /keep usage log for/i,
+      /request token counts/i,
+      /accept a match at or below/i,
+      /ask about a match up to/i,
+      /require this much clear air/i,
+      /ignore speakers under/i,
+    ]) {
+      expect(await screen.findByLabelText(name)).toBeTruthy();
+    }
+  });
+
+  it("shows a description for every AI setting", async () => {
+    // The compaction moves the description to the end of the row rather than dropping it.
+    renderModal();
+    await screen.findByLabelText(/minutes generation/i);
+
+    for (const hint of [
+      /how meeting minutes are generated/i,
+      /request timeout for every AI call/i,
+      /the name is applied automatically/i,
+      /Diariz asks instead of naming/i,
+    ]) {
+      expect(screen.getByText(hint)).toBeTruthy();
+    }
+  });
+
   it("shows the LLM usage logging settings loaded from the API", async () => {
     (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
       ...platformDefaults, llmUsageLoggingEnabled: false, llmUsageRetentionDays: 45, llmStreamUsageEnabled: false,
