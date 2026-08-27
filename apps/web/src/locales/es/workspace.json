@@ -735,8 +735,12 @@
   "suggestionNo": "No",
   "suggestionFailed": "No se pudo guardar esa respuesta.",
   "suggestionsTitle": "Voces por confirmar",
-  "suggestionsIntro": "Diariz reconoció estas voces pero no con suficiente seguridad para nombrarlas. Confirmar entrena la huella de voz; un rechazo se recuerda, así que la misma voz no se vuelve a proponer.",
+  "suggestionsIntro": "Diariz reconocio estas voces, pero no con la seguridad suficiente para nombrarlas. Elija una para escuchar lo que dijo y luego confirme o rechace. Confirmar entrena la huella vocal; el rechazo se recuerda, de modo que la misma voz no se vuelve a ofrecer.",
   "suggestionsNone": "No hay nada por confirmar.",
   "suggestionsFailed": "No se pudo cargar la lista.",
+  "suggestionEvidence": "Pruebas",
+  "suggestionPlay": "Reproducir",
+  "suggestionStop": "Detener",
+  "suggestionNoWords": "No hay palabras grabadas para esta voz.",
   "voicesToConfirm": "Voces por confirmar"
 }

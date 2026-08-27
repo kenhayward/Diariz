@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
 import type { ClipRequest } from "../lib/clipPlayback";
+import { useClipPlayer } from "../lib/useClipPlayer";
 import PersonAttributionRow from "./PersonAttributionRow";
 import { rowVerdict, sortKey, worthChecking } from "../lib/voiceprintVerdict";
 import type { Person } from "../lib/types";
@@ -47,7 +48,13 @@ export default function PersonVoiceprintTab({ person }: { person: Person }) {
   const [onlyWorthChecking, setOnlyWorthChecking] = useState(false);
   const [onlyTraining, setOnlyTraining] = useState(false);
 
-  const { play, stop, playingSegmentId } = useClipPlayer(person.id);
+  // Stable, so the player's callbacks are not rebuilt on every render.
+  const fetchClip = useCallback(
+    (speakerId: string, fromMs: number, toMs: number) =>
+      api.personClip(person.id, speakerId, fromMs, toMs),
+    [person.id],
+  );
+  const { play, stop, playingSegmentId } = useClipPlayer(fetchClip);
 
   const onPlay = useCallback(
     (speakerId: string, queue: ClipRequest[]) => play(speakerId, queue),
@@ -168,68 +175,4 @@ export default function PersonVoiceprintTab({ person }: { person: Person }) {
       )}
     </div>
   );
-}
-
-/// Plays a queue of clips through one `<audio>` element, one segment at a time.
-///
-/// Each clip is fetched as a Blob rather than pointed at by a token-bearing URL - see `api.personClip`. Only
-/// one clip plays at a time across the whole tab, so two rows cannot talk over each other.
-function useClipPlayer(personId: string) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const urlRef = useRef<string | null>(null);
-  const queueRef = useRef<{ speakerId: string; items: ClipRequest[]; index: number } | null>(null);
-  const [playingSegmentId, setPlayingSegmentId] = useState<string | null>(null);
-
-  const release = useCallback(() => {
-    if (urlRef.current) {
-      URL.revokeObjectURL(urlRef.current);
-      urlRef.current = null;
-    }
-  }, []);
-
-  const stop = useCallback(() => {
-    queueRef.current = null;
-    audioRef.current?.pause();
-    release();
-    setPlayingSegmentId(null);
-  }, [release]);
-
-  const playAt = useCallback(
-    async (index: number) => {
-      const q = queueRef.current;
-      if (!q || index >= q.items.length) {
-        stop();
-        return;
-      }
-      const item = q.items[index];
-      q.index = index;
-
-      const blob = await api.personClip(personId, q.speakerId, item.fromMs, item.toMs);
-      // A newer press may have superseded this fetch while it was in flight.
-      if (queueRef.current !== q || q.index !== index) return;
-
-      release();
-      urlRef.current = URL.createObjectURL(blob);
-
-      const audio = (audioRef.current ??= new Audio());
-      audio.onended = () => void playAt(index + 1);
-      audio.src = urlRef.current;
-      setPlayingSegmentId(item.segmentId);
-      await audio.play();
-    },
-    [personId, release, stop],
-  );
-
-  const play = useCallback(
-    async (speakerId: string, items: ClipRequest[]) => {
-      if (items.length === 0) return;
-      queueRef.current = { speakerId, items, index: 0 };
-      await playAt(0);
-    },
-    [playAt],
-  );
-
-  useEffect(() => () => release(), [release]);
-
-  return { play, stop, playingSegmentId };
 }

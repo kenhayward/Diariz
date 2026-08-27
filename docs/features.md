@@ -291,9 +291,20 @@ renames, prunes training samples, merges duplicates, and erases voiceprints (GDP
 either cleared it and was applied silently, or fell short and vanished. Between the acceptance distance and a
 second, looser **confirmation band**, a match is now offered instead - **Might be Ada Lovelace - is it?** on
 the speaker in the transcript, where the words and the audio already are, and gathered under **Voices to
-confirm** in the account menu for working through a backlog. The queue shows **your own recordings only**, and
-needs no permission: the people who can answer whether a voice belongs to someone were in the meeting, and a
-platform-wide queue would disclose who appears in every meeting in the instance. Confirming enrols that
+Confirm** in the account menu for working through a backlog. That queue is a **two-panel window** opened over
+whatever you were reading, directly below Preferences in the account menu: the waiting voices on the left,
+and on the right what the open voice actually said - a line per segment, each with a single play/stop button
+that cuts a clip of exactly that moment on the server. The answer is a tick and a cross beside the question,
+so listening and deciding happen in one place without leaving the page you were on. It is deliberately **not**
+a panel inside the People directory: the queue shows **your own recordings only** and needs no permission -
+the people who can answer whether a voice belongs to someone were in the meeting - whereas the directory is
+gated on Manage people, so folding one into the other would take the queue away from everyone who cannot
+browse it. A platform-wide queue would also disclose who appears in every meeting in the instance. **A voice
+whose recording audio has already been deleted is not offered at all** - neither in the queue nor as a prompt
+on the transcript. The only honest way to answer is to listen, and the retention sweep takes recording audio
+once it passes its window (the 0.257.0 exemption covers audio behind an *enrolled* sample, and a pending
+suggestion is by definition not enrolled). Such a row is not a question but a permanent occupant of the list,
+so the question is withheld rather than decided - the suggestion itself is left untouched. Confirming enrols that
 speaker, which is how the system learns a voice in a condition it was previously unsure about; declining is
 remembered, so the same pair is never suggested again - though a later outright match still applies, because
 that is new evidence rather than the same question asked twice. Every answer is stored with the distance that

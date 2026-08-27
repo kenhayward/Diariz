@@ -198,6 +198,29 @@ export const CheckIcon = (p: IconProps) => (
   </svg>
 );
 
+/// A cross. The refusing half of a yes/no pair - see `CheckIcon` for the accepting half.
+export const XIcon = (p: IconProps) => (
+  <svg {...svgProps(p)}>
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
+/// A filled play triangle. Filled rather than stroked because at 14px a stroked triangle reads as an
+/// arrowhead; its Stop counterpart is filled for the same reason.
+export const PlayIcon = (p: IconProps) => (
+  <svg {...svgProps(p)}>
+    <polygon points="6 3 20 12 6 21" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+/// A filled stop square, the other state of the same button as `PlayIcon`.
+export const StopIcon = (p: IconProps) => (
+  <svg {...svgProps(p)}>
+    <rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor" stroke="none" />
+  </svg>
+);
+
 /// An indeterminate progress ring, spun by Tailwind's `animate-spin`.
 ///
 /// The gap in the ring is what makes the rotation visible - a closed circle spinning looks static. Takes a

@@ -45,9 +45,21 @@ Answer **Yes** and the speaker is named and that voice is added to their voicepr
 recognised outright next time. Answer **No** and the speaker stays anonymous; Diariz remembers, and will not
 ask you about that pairing again.
 
-The same questions are gathered under **Voices to confirm** in the account menu, which is the easier place to
-work through several at once. You only ever see suggestions for your own recordings. Nothing is named until
-you say so - a pending question changes nothing about the transcript, the summary or a search.
+The same questions are gathered under **Voices to Confirm** in the account menu, just below Preferences,
+which is the easier place to work through several at once. It opens as a window over whatever you were
+reading, so you keep your place. The voices waiting are listed on the left; choosing one shows what that
+voice actually said on the right, a line per segment. Each line has a play button - press it to hear that
+moment, press it again to stop - and the tick and cross beside the question record your answer. Answering one
+moves you straight on to the next.
+
+You only ever see suggestions for your own recordings, and no permission is needed: the person who can say
+whether a voice belongs to someone is whoever was in the meeting. Nothing is named until you say so - a
+pending question changes nothing about the transcript, the summary or a search.
+
+**A voice is only offered while there is still audio to judge it by.** Recording audio is deleted once it
+passes the retention period your administrator sets, and the transcript is kept. Since the only honest way to
+answer is to listen, a suggestion whose audio has gone is not offered - not in this list, and not on the
+transcript either. Nothing is decided on your behalf; the question is simply not put to you.
 
 **Recordings made before someone was enrolled are not checked automatically.** Diariz matches voices while a
 recording is being transcribed, so a person you add today was not known when last month's meeting was

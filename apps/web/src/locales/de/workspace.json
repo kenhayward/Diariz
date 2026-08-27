@@ -734,9 +734,13 @@
   "suggestionYes": "Ja",
   "suggestionNo": "Nein",
   "suggestionFailed": "Diese Antwort konnte nicht gespeichert werden.",
-  "suggestionsTitle": "Zu bestätigende Stimmen",
-  "suggestionsIntro": "Diariz hat diese Stimmen erkannt, war sich aber nicht sicher genug, um sie zu benennen. Eine Bestätigung trainiert den Stimmabdruck; eine Ablehnung wird gemerkt, sodass dieselbe Stimme nicht erneut vorgeschlagen wird.",
+  "suggestionsTitle": "Stimmen zur Bestaetigung",
+  "suggestionsIntro": "Diariz hat diese Stimmen erkannt, war sich aber nicht sicher genug, um sie zu benennen. Waehlen Sie eine aus, um zu hoeren, was gesagt wurde, und bestaetigen oder lehnen Sie ab. Bestaetigen schult den Stimmabdruck; eine Ablehnung wird gemerkt, dieselbe Stimme wird nicht erneut vorgeschlagen.",
   "suggestionsNone": "Nichts zu bestätigen.",
   "suggestionsFailed": "Die Liste konnte nicht geladen werden.",
-  "voicesToConfirm": "Zu bestätigende Stimmen"
+  "suggestionEvidence": "Belege",
+  "suggestionPlay": "Abspielen",
+  "suggestionStop": "Stopp",
+  "suggestionNoWords": "Fuer diese Stimme sind keine Woerter aufgezeichnet.",
+  "voicesToConfirm": "Stimmen zur Bestaetigung"
 }

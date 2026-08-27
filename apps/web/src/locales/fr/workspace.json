@@ -734,9 +734,13 @@
   "suggestionYes": "Oui",
   "suggestionNo": "Non",
   "suggestionFailed": "Impossible d'enregistrer cette réponse.",
-  "suggestionsTitle": "Voix à confirmer",
-  "suggestionsIntro": "Diariz a reconnu ces voix sans être assez sûr pour les nommer. Confirmer entraîne l'empreinte vocale ; un refus est mémorisé, de sorte que la même voix n'est plus proposée.",
+  "suggestionsTitle": "Voix a confirmer",
+  "suggestionsIntro": "Diariz a reconnu ces voix sans etre assez sur pour les nommer. Choisissez-en une pour entendre ce qui a ete dit, puis confirmez ou refusez. Confirmer entraine l'empreinte vocale ; un refus est memorise, la meme voix n'est plus proposee.",
   "suggestionsNone": "Rien à confirmer.",
   "suggestionsFailed": "Impossible de charger la liste.",
-  "voicesToConfirm": "Voix à confirmer"
+  "suggestionEvidence": "Extraits",
+  "suggestionPlay": "Lire",
+  "suggestionStop": "Arreter",
+  "suggestionNoWords": "Aucune parole enregistree pour cette voix.",
+  "voicesToConfirm": "Voix a confirmer"
 }
