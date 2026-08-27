@@ -281,6 +281,12 @@ three-second window the case for that work is weak.
 
 ## Architecture at a glance
 
+> For an interactive version of this picture - 10 core runtime components, the primary request path,
+> external dependencies and the trust boundaries, with pan/zoom, light/dark and guided views - open
+> **[`Runtime_Architecture.html`](Runtime_Architecture.html)** in a browser. It is generated from
+> `Runtime_Architecture.archify.json`; regenerate rather than hand-editing the HTML (see the
+> "Architecture diagram" section of `CLAUDE.md`). The ASCII sketch below stays as the quick reference.
+
 ```
                          Browser / Desktop shell (SPA)
                                    │  HTTPS (same-origin)
