@@ -5,11 +5,11 @@ import LinkifiedText from "./LinkifiedText";
 describe("LinkifiedText", () => {
   it("turns an embedded http(s) URL into a new-tab link and keeps the surrounding text", () => {
     render(
-      <LinkifiedText text="Join here https://3ds.zoom.us/j/83845281617?pwd=VOSGb6qHqxH2zJqonR9v45l9sJanSp.1 before 3pm" />,
+      <LinkifiedText text="Join here https://acme.zoom.us/j/11122233344?pwd=AbCdEfGhIjKlMnOpQrStUv.1 before 3pm" />,
     );
-    const link = screen.getByRole("link", { name: /zoom\.us\/j\/83845281617/ });
+    const link = screen.getByRole("link", { name: /zoom\.us\/j\/11122233344/ });
     expect(link.getAttribute("href")).toBe(
-      "https://3ds.zoom.us/j/83845281617?pwd=VOSGb6qHqxH2zJqonR9v45l9sJanSp.1",
+      "https://acme.zoom.us/j/11122233344?pwd=AbCdEfGhIjKlMnOpQrStUv.1",
     );
     expect(link.getAttribute("target")).toBe("_blank");
     expect(link.getAttribute("rel")).toBe("noopener noreferrer");

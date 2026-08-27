@@ -478,13 +478,13 @@ public class FormulaRunProcessorTests
         {
             Id = userId, UserName = "a@b.test", Email = "a@b.test", FullName = "Ignored Display Name",
         });
-        db.People.Add(new Person { Id = Guid.NewGuid(), LinkedUserId = userId, Name = "Ken Hayward" });
+        db.People.Add(new Person { Id = Guid.NewGuid(), LinkedUserId = userId, Name = "Ada Lovelace" });
         await db.SaveChangesAsync();
 
         var chat = new FakeChatStreamClient();
         await Run(db, chat, new FakeLlmSettingsResolver(), new FakeHubContext(),
             new FormulaRunJob(rec.Id, null, result.Id, formula.Id, userId));
 
-        Assert.Equal("Ask Ken Hayward", chat.LastMessages![0].Content);
+        Assert.Equal("Ask Ada Lovelace", chat.LastMessages![0].Content);
     }
 }

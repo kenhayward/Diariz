@@ -13,7 +13,7 @@ public class RoomModelTests
         var room = new Room
         {
             Id = Guid.NewGuid(),
-            Name = "Ken Hayward",
+            Name = "Ada Lovelace",
             Kind = RoomKind.Personal,
             OwnerUserId = ownerId,
         };

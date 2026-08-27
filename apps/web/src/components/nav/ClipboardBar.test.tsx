@@ -30,7 +30,7 @@ function ClipboardSpy({ onChange }: { onChange: (cut: MoveClipboardCut | null) =
 const sections: SectionDto[] = [
   { id: "falcon", name: "Project Falcon", parentId: null, position: 0 },
   { id: "customers", name: "Customers", parentId: null, position: 1 },
-  { id: "ambu", name: "Ambu", parentId: "customers", position: 0 },
+  { id: "northwind", name: "Northwind", parentId: "customers", position: 0 },
 ];
 
 function renderBar(opts: {
@@ -85,7 +85,7 @@ describe("ClipboardBar", () => {
 
   it("shows the folder count for a folder cut", () => {
     renderBar({
-      seed: (c) => c.cutFolder("ambu", "customers", null),
+      seed: (c) => c.cutFolder("northwind", "customers", null),
       destSectionId: "falcon",
       destRoomId: null,
     });
@@ -192,10 +192,10 @@ describe("ClipboardBar", () => {
   it("disables Paste and shows the reason when pasting a folder into itself", () => {
     renderBar({
       seed: (c) => c.cutFolder("customers", null, null),
-      destSectionId: "ambu",
+      destSectionId: "northwind",
       destRoomId: null,
     });
-    const button = screen.getByRole("button", { name: "Paste into Ambu" }) as HTMLButtonElement;
+    const button = screen.getByRole("button", { name: "Paste into Northwind" }) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
     expect(screen.getByText("Can't paste a folder into itself.")).toBeTruthy();
   });

@@ -98,5 +98,6 @@ Shadow (floating panel only, not needed in-app): `0 14px 46px rgba(0,0,0,.4)`.
 
 ## Files
 - `Diariz Transcript Hub.dc.html` — the high-fidelity prototype (open in a browser). Contains both the **Hub (landing)** and **Transcript (drilled-in)** frames at 1280×720.
-- `screenshots/hub-landing.png` — reference render of the hub. *(The top bar visible here is out of scope — see Scope.)*
-- `screenshots/transcript-view.png` — reference render of the drilled-in Transcript view with the embedded audio + conversation-flow track. *(Top bar out of scope.)*
+- Reference renders were removed: they were captured from the live instance and showed a real meeting's
+  title, attendees and joining link. Open the prototype above in a browser for the same two frames.
+  *(The top bar it shows is out of scope — see Scope.)*

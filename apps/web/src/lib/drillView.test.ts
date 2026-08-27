@@ -17,10 +17,10 @@ const section = (id: string, name: string, parentId: string | null = null, posit
 const recording = (id: string, sectionId: string | null): RecordingSummary =>
   ({ id, title: `rec-${id}`, name: null, sectionId, sectionName: null }) as unknown as RecordingSummary;
 
-// Customers > Ambu, plus a loose recording at the root.
+// Customers > Northwind, plus a loose recording at the root.
 const sections = [
   section("customers", "Customers"),
-  section("ambu", "Ambu", "customers"),
+  section("northwind", "Northwind", "customers"),
   section("podcasts", "Podcasts", null, 1),
 ];
 
@@ -31,8 +31,8 @@ const deepChain: SectionDto[] = Array.from({ length: MAX_FOLDER_DEPTH }, (_, i) 
 const recordings = [
   recording("r-root", null),
   recording("r-cust", "customers"),
-  recording("r-ambu", "ambu"),
-  recording("r-ambu2", "ambu"),
+  recording("r-northwind", "northwind"),
+  recording("r-northwind2", "northwind"),
 ];
 const tree = buildRecordingTree(recordings, sections);
 
@@ -45,14 +45,14 @@ describe("childrenOf", () => {
 
   it("inside a section: its subsections plus only its own direct recordings", () => {
     const level = childrenOf(tree, "customers");
-    expect(level.sections.map((s) => s.id)).toEqual(["ambu"]);
+    expect(level.sections.map((s) => s.id)).toEqual(["northwind"]);
     expect(level.items.map((r) => r.id)).toEqual(["r-cust"]);
   });
 
   it("inside a leaf subsection: no subsections, its recordings", () => {
-    const level = childrenOf(tree, "ambu");
+    const level = childrenOf(tree, "northwind");
     expect(level.sections).toEqual([]);
-    expect(level.items.map((r) => r.id)).toEqual(["r-ambu", "r-ambu2"]);
+    expect(level.items.map((r) => r.id)).toEqual(["r-northwind", "r-northwind2"]);
   });
 
   // Drilling into a section that has since been deleted must land somewhere, not crash.
@@ -67,7 +67,7 @@ describe("breadcrumbOf", () => {
   });
 
   it("walks parentId root-first, ending at the node itself", () => {
-    expect(breadcrumbOf(sections, "ambu").map((s) => s.name)).toEqual(["Customers", "Ambu"]);
+    expect(breadcrumbOf(sections, "northwind").map((s) => s.name)).toEqual(["Customers", "Northwind"]);
   });
 
   it("is just the node for a top-level section", () => {
@@ -77,8 +77,8 @@ describe("breadcrumbOf", () => {
   // Written generically against parentId, so it needed no change when the domain's cap was lifted from
   // two levels to eight.
   it("handles depth beyond the old two-level cap", () => {
-    const deep = [...sections, section("eu", "EU", "ambu"), section("nordic", "Nordic", "eu")];
-    expect(breadcrumbOf(deep, "nordic").map((s) => s.name)).toEqual(["Customers", "Ambu", "EU", "Nordic"]);
+    const deep = [...sections, section("eu", "EU", "northwind"), section("nordic", "Nordic", "eu")];
+    expect(breadcrumbOf(deep, "nordic").map((s) => s.name)).toEqual(["Customers", "Northwind", "EU", "Nordic"]);
   });
 
   it("returns empty for an unknown id", () => {
@@ -96,7 +96,7 @@ describe("depthOf", () => {
   it("counts the root as 0 and a top-level folder as 1", () => {
     expect(depthOf(sections, null)).toBe(0);
     expect(depthOf(sections, "customers")).toBe(1);
-    expect(depthOf(sections, "ambu")).toBe(2);
+    expect(depthOf(sections, "northwind")).toBe(2);
   });
 
   it("is 0 for an unknown id", () => {
@@ -106,7 +106,7 @@ describe("depthOf", () => {
 
 describe("heightOf", () => {
   it("is 1 for a leaf", () => {
-    expect(heightOf(sections, "ambu")).toBe(1);
+    expect(heightOf(sections, "northwind")).toBe(1);
     expect(heightOf(sections, "podcasts")).toBe(1);
   });
 
@@ -146,7 +146,7 @@ describe("sectionCreateTarget", () => {
 
   // The cap is now 8 levels, not 1, so a sub-section is an ordinary parent.
   it("inside a sub-section: a sub-section of that", () => {
-    expect(sectionCreateTarget(sections, "ambu")).toEqual({
+    expect(sectionCreateTarget(sections, "northwind")).toEqual({
       kind: "child",
       parent: sections[1],
     });
@@ -169,7 +169,7 @@ describe("recordingCountOf", () => {
   });
 
   it("counts only its own for a leaf", () => {
-    expect(recordingCountOf(tree, "ambu")).toBe(2);
+    expect(recordingCountOf(tree, "northwind")).toBe(2);
   });
 
   it("is zero for an empty section", () => {

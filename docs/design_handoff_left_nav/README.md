@@ -1,7 +1,7 @@
 # Handoff: Diariz Left-Panel Navigation (drill-in × search × rooms)
 
 ## Overview
-Redesign of the **left navigation panel** in Diariz (`apps/web`) — the pane that lists recordings organised into **sections** and **subsections** (e.g. *Customers / Ambu*). The current panel is a single always-expanded tree; once a section holds hundreds of recordings (and some accounts will soon hit thousands) it scrolls endlessly and you lose your place.
+Redesign of the **left navigation panel** in Diariz (`apps/web`) — the pane that lists recordings organised into **sections** and **subsections** (e.g. *Customers / Northwind*). The current panel is a single always-expanded tree; once a section holds hundreds of recordings (and some accounts will soon hit thousands) it scrolls endlessly and you lose your place.
 
 This design replaces the flat tree with a **drill-in (push) model + a persistent, scope-aware search**, sitting under a **room switcher**:
 
@@ -100,5 +100,5 @@ Spacing: header padding 12×14; list padding 0×8 with 8–10px row padding; dro
 
 ## Files
 - `Diariz Left Nav.html` — high-fidelity prototype (open in a browser). Contains all states in **light (5a)** and **dark (5b)**: idle drill-in, room switcher open, scoped search, everywhere search.
-- `screenshots/nav-light.png` — light-mode reference render.
-- `screenshots/nav-dark.png` — dark-mode reference render.
+- Reference renders were removed: they were captured from the live instance and showed real customer
+  folder names and recording titles. Open the prototype above in a browser for the same views.

@@ -15,7 +15,7 @@ Every blocker is cleared. What remains is one rebuild, then verification, then p
 | Secrets, MinIO bucket + scoped key, proxy | done |
 | Container up, **migrations applied**, task worker embedded | done |
 | SMTP | **working** - proven by a real SMTP login |
-| First account (`ken@stocks-hayward.com`) + org `diariz` | done |
+| First account (`ada@example.com`) + org `diariz` | done |
 | Team `diariz`, three projects with DSNs | done |
 | DSNs in `.env`, app services reporting | done |
 | Both proxy hosts in NPM | done |
@@ -79,7 +79,7 @@ The pattern across all five: a symptom pointing at a *policy* or at your own con
 **The verification checklist** in `docs/GlitchTip_Deployment.md`. Notes that will save time:
 
 - **Check 9 is the one that matters** - open a captured event and read the *whole* payload: no transcript text, no `access_token`, no voiceprint vector, no request body. Eight leak paths were found this way during the build; a ninth would be found the same way. Read the raw JSON, not the UI's sections:
-  `https://errors.dev.diariz.stocks-hayward.com/api/0/issues/<id>/events/latest/` (works in a logged-in browser tab).
+  `https://errors.dev.app.example.com/api/0/issues/<id>/events/latest/` (works in a logged-in browser tab).
 - **A real event is already waiting for it**: issue 2 in `diariz-web`, `Error: scrubber check`, thrown from the browser console, with genuine breadcrumbs and request context. It was deliberately left in place when the test artifacts were cleaned up.
 - **Check 7 should now resolve to a readable frame** - source maps are proven.
 - **Check 8 (trace propagation) cannot be verified from the database.** DuckDB means spans are in Parquet and no Postgres table carries a `trace_id`. It has to be a UI comparison of two spans' trace ids.
@@ -99,7 +99,7 @@ The pattern across all five: a symptom pointing at a *policy* or at your own con
 | --- | --- |
 | **Node** | Installed (v24.18.1), but **not on the tool shell's PATH** - prefix with `export PATH="$PATH:/c/Program Files/nodejs"`. `npm ci` has been run in `apps/web`, so vitest works |
 | **.NET SDK is NOT installed** | Only the runtime. Build and test via Docker: `docker run --rm -v "C:\Users\kenha\repos\Diariz:/src" -v diariz-nuget:/root/.nuget/packages -w /src mcr.microsoft.com/dotnet/sdk:10.0 dotnet test tests/Diariz.Api.Tests/Diariz.Api.Tests.csproj` (the named volume keeps the NuGet cache warm) |
-| **Git identity was unset** | Set repo-local to `Ken Hayward <kenhayward@hotmail.com>`, matching the bulk of history |
+| **Git identity was unset** | Set repo-local to `Ada Lovelace <ada.lovelace@example.com>`, matching the bulk of history |
 | Host LAN address | `192.168.1.49` |
 | The `minio` container | Busybox: no `grep`, `sed` or `which`. Text processing on the host |
 | The `glitchtip` container | Full Python image - it *does* have grep, and `./manage.py shell -c` is the fastest way to ask the database a direct question |

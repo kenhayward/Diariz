@@ -48,7 +48,7 @@ That is roughly three times Phase 1 in one commit, with no safe stopping point. 
 
 ## Two spec corrections this plan makes
 
-**`Room.Name` cannot be globally unique.** The spec says unique, and also says a personal room is named after its owner. Two users called "Ken Hayward" would collide on the backfill and the migration would fail on a real database. The unique index is therefore **filtered to shared rooms**: `WHERE "Kind" = 1`. Personal room names are display labels, not identifiers.
+**`Room.Name` cannot be globally unique.** The spec says unique, and also says a personal room is named after its owner. Two users called "Ada Lovelace" would collide on the backfill and the migration would fail on a real database. The unique index is therefore **filtered to shared rooms**: `WHERE "Kind" = 1`. Personal room names are display labels, not identifiers.
 
 **Personal rooms are created by `RoomScope`, not at the four user-creation sites.** Users are created in `AdminUsersController`, `AuthController`, `GoogleSignInHandler`, and `Seeder` - four places today, and a fifth tomorrow that somebody forgets. Instead `RoomScope.PersonalRoomIdAsync()` **finds-or-creates**, so the room exists by the time anything needs it and no creation site can forget. The filtered unique index on `OwnerUserId` makes the race safe; a `DbUpdateException` means another request won, so we re-read.
 
@@ -111,7 +111,7 @@ public class RoomModelTests
         var room = new Room
         {
             Id = Guid.NewGuid(),
-            Name = "Ken Hayward",
+            Name = "Ada Lovelace",
             Kind = RoomKind.Personal,
             OwnerUserId = ownerId,
         };
@@ -391,7 +391,7 @@ public class RoomsIntegrationTests(ContainersFixture fx)
         await using var db = fx.CreateDbContext();
         var a = await NewUserAsync(db);
         var b = await NewUserAsync(db);
-        var name = $"Ken Hayward {Guid.NewGuid():N}";
+        var name = $"Ada Lovelace {Guid.NewGuid():N}";
 
         db.Rooms.Add(Personal(a, name));
         db.Rooms.Add(Personal(b, name));

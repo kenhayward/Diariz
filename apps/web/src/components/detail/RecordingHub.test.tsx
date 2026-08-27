@@ -25,8 +25,8 @@ const rec = (over: Partial<RecordingDetail> = {}): RecordingDetail =>
     maxSpeakers: null,
     speakerNames: {},
     speakers: [
-      { label: "SPEAKER_00", displayName: "Ken Hayward", personId: null, identifiedAuto: false, isMultiSpeaker: false },
-      { label: "SPEAKER_01", displayName: "Marie Dubois", personId: null, identifiedAuto: false, isMultiSpeaker: false },
+      { label: "SPEAKER_00", displayName: "Ada Lovelace", personId: null, identifiedAuto: false, isMultiSpeaker: false },
+      { label: "SPEAKER_01", displayName: "Nadia Dubois", personId: null, identifiedAuto: false, isMultiSpeaker: false },
     ],
     current: {
       id: "t1",
@@ -37,7 +37,7 @@ const rec = (over: Partial<RecordingDetail> = {}): RecordingDetail =>
       segments: Array.from({ length: 142 }, (_, i) => ({
         id: `s${i}`,
         speaker: "SPEAKER_00",
-        speakerDisplay: "Ken Hayward",
+        speakerDisplay: "Ada Lovelace",
         startMs: i * 1000,
         endMs: i * 1000 + 900,
         original: "hi",
@@ -49,8 +49,8 @@ const rec = (over: Partial<RecordingDetail> = {}): RecordingDetail =>
     summary: { model: "gpt", text: "The team agreed to consolidate the frameworks.", createdAt: "x", isUserEdited: false },
     meetingMinutes: null,
     actions: [
-      { id: "a1", text: "Draft consolidated matrix", actor: "PA", deadline: "", ordinal: 0, completed: false, completedAt: null },
-      { id: "a2", text: "Resolve AURA vs MARIE", actor: "AL", deadline: "", ordinal: 1, completed: false, completedAt: null },
+      { id: "a1", text: "Draft consolidated catalogue", actor: "PA", deadline: "", ordinal: 0, completed: false, completedAt: null },
+      { id: "a2", text: "Resolve ORION vs VEGA", actor: "AL", deadline: "", ordinal: 1, completed: false, completedAt: null },
       { id: "a3", text: "Circulate agenda", actor: "KH", deadline: "", ordinal: 2, completed: true, completedAt: "x" },
     ],
     actionsExtracted: true,
@@ -67,11 +67,11 @@ const rec = (over: Partial<RecordingDetail> = {}): RecordingDetail =>
   }) as RecordingDetail;
 
 const notes: MeetingNote[] = [
-  { id: "n1", text: "Check whether MARIE covers the audit trail.", capturedAtMs: 1000, ordinal: 0, createdAt: "x" },
+  { id: "n1", text: "Check whether VEGA covers the audit trail.", capturedAtMs: 1000, ordinal: 0, createdAt: "x" },
 ];
 const attachments: Attachment[] = [
-  { id: "f1", kind: "File", name: "QnR-matrix.pdf", contentType: "application/pdf", sizeBytes: 248_000, url: null, ordinal: 0 },
-  { id: "f2", kind: "Url", name: "3ds.zoom.us/j/8303", contentType: null, sizeBytes: 0, url: "https://3ds.zoom.us/j/8303", ordinal: 1 },
+  { id: "f1", kind: "File", name: "roadmap-matrix.pdf", contentType: "application/pdf", sizeBytes: 248_000, url: null, ordinal: 0 },
+  { id: "f2", kind: "Url", name: "example.zoom.us/j/0000", contentType: null, sizeBytes: 0, url: "https://example.zoom.us/j/0000", ordinal: 1 },
 ];
 const formulaResults: FormulaResult[] = [
   {
@@ -115,7 +115,7 @@ function renderHub(
       formulaResults={formulaResults}
       shots={shots}
       meetingTypeTitle="Meeting minutes template"
-      speakerNameOf={(l) => (l === "SPEAKER_00" ? "Ken Hayward" : "Marie Dubois")}
+      speakerNameOf={(l) => (l === "SPEAKER_00" ? "Ada Lovelace" : "Nadia Dubois")}
       minutesRunning={false}
       hasTranscript
       isSummarizing={false}
@@ -148,9 +148,9 @@ describe("RecordingHub", () => {
 
   it("previews the section's real contents, not placeholder copy", () => {
     renderHub(h);
-    expect(screen.getByText(/Draft consolidated matrix/)).toBeTruthy();
-    expect(screen.getByText("Check whether MARIE covers the audit trail.")).toBeTruthy();
-    expect(screen.getByText("QnR-matrix.pdf")).toBeTruthy();
+    expect(screen.getByText(/Draft consolidated catalogue/)).toBeTruthy();
+    expect(screen.getByText("Check whether VEGA covers the audit trail.")).toBeTruthy();
+    expect(screen.getByText("roadmap-matrix.pdf")).toBeTruthy();
     expect(screen.getByText("Risk register extract")).toBeTruthy();
   });
 
@@ -262,7 +262,7 @@ describe("RecordingHub", () => {
   // outside a three-column tile.
   it("ellipsises a long preview row rather than letting it run past the card edge", () => {
     renderHub(h);
-    for (const text of [/Draft consolidated matrix/, "QnR-matrix.pdf", "Risk register extract"]) {
+    for (const text of [/Draft consolidated catalogue/, "roadmap-matrix.pdf", "Risk register extract"]) {
       const row = screen.getByText(text);
       const classes = row.className.split(/\s+/);
       expect(classes).toContain("truncate");

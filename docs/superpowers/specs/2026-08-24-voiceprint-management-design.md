@@ -9,7 +9,7 @@ Baseline version: 0.248.2
 Three related complaints, all about not being able to see or control what a voiceprint is made of.
 
 1. **Two people with the same name are indistinguishable.** The duplicates banner reports
-   `Same name: Ken Hayward, Ken Hayward` and the merge dialog refuses the merge with "these records each
+   `Same name: Ada Lovelace, Ada Lovelace` and the merge dialog refuses the merge with "these records each
    have a Diariz account" - without saying *which* accounts, so there is no way to tell which row is you.
 2. **Nothing shows what trained a voiceprint.** A voiceprint drifts and the user cannot see, let alone
    change, the audio behind it.
@@ -63,7 +63,7 @@ surfaces cannot drift:
 
 | State | Renders as |
 |---|---|
-| `isSelf` | `ken@example.com - your account` |
+| `isSelf` | `ada@example.com - your account` |
 | linked, not you | `ken.hayward@acme.com - Diariz account` |
 | not linked | `no Diariz account` (muted) |
 

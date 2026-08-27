@@ -19,9 +19,9 @@ function person(id: string, name: string, over: Partial<Person> = {}): Person {
 /// The pair that prompted this: an enrolled voiceprint with nothing but a name, beside the account person of
 /// the same human. Merging is right, but which way round it goes decides what survives - so the dialog has to
 /// say so rather than leave it to a one-line confirm.
-const enrolled = person("p1", "Ken Hayward", { hasVoiceprint: true, sampleCount: 5 });
-const account = person("p2", "Ken hayward", {
-  email: "ken@example.com", linkedUserId: "u1", title: "Director",
+const enrolled = person("p1", "Ada Lovelace", { hasVoiceprint: true, sampleCount: 5 });
+const account = person("p2", "Ada lovelace", {
+  email: "ada@example.com", linkedUserId: "u1", title: "Director",
 });
 
 const onMerge = vi.fn();
@@ -38,23 +38,23 @@ beforeEach(() => {
 
 describe("MergePeopleDialog", () => {
   /// The refusal is the whole reason this pair cannot be merged, so it has to say which two accounts it
-  /// means. Before this, both rows read "Ken Hayward" and the message named neither.
+  /// means. Before this, both rows read "Ada Lovelace" and the message named neither.
   it("names both accounts when it refuses a linked/linked merge", () => {
     render_(
-      person("a", "Ken Hayward", { linkedUserId: "u1", isSelf: true, email: "ken@example.com" }),
-      person("b", "Ken Hayward", { linkedUserId: "u2", email: "ken@acme.com" }),
+      person("a", "Ada Lovelace", { linkedUserId: "u1", isSelf: true, email: "ada@example.com" }),
+      person("b", "Ada Lovelace", { linkedUserId: "u2", email: "ada@acme.com" }),
     );
 
-    expect(screen.getByText("ken@example.com - your account")).toBeTruthy();
-    expect(screen.getByText("ken@acme.com - Diariz account")).toBeTruthy();
+    expect(screen.getByText("ada@example.com - your account")).toBeTruthy();
+    expect(screen.getByText("ada@acme.com - Diariz account")).toBeTruthy();
     // And it must still refuse.
     expect(screen.queryByRole("button", { name: /Merge/ })).toBeNull();
   });
 
   it("shows the no-account state for an unlinked person", () => {
     render_(
-      person("a", "Ken Hayward", { linkedUserId: "u1", isSelf: true, email: "ken@example.com" }),
-      person("b", "Ken Hayward"),
+      person("a", "Ada Lovelace", { linkedUserId: "u1", isSelf: true, email: "ada@example.com" }),
+      person("b", "Ada Lovelace"),
     );
 
     expect(screen.getByText("no Diariz account")).toBeTruthy();
@@ -66,12 +66,12 @@ describe("MergePeopleDialog", () => {
     // Direction is the decision that matters here, and the identity line is what makes it decidable - so
     // it has to follow the swap rather than staying pinned to a position.
     render_(
-      person("a", "Ken Hayward", { linkedUserId: "u1", isSelf: true, email: "ken@example.com" }),
-      person("b", "Ken Hayward"),
+      person("a", "Ada Lovelace", { linkedUserId: "u1", isSelf: true, email: "ada@example.com" }),
+      person("b", "Ada Lovelace"),
     );
 
     const keptBefore = screen.getByText(/Keep/).parentElement!;
-    expect(keptBefore.textContent).toContain("ken@example.com - your account");
+    expect(keptBefore.textContent).toContain("ada@example.com - your account");
 
     fireEvent.click(screen.getByText(/Swap/));
 
@@ -82,8 +82,8 @@ describe("MergePeopleDialog", () => {
   it("names which record is kept and which is deleted", () => {
     render_();
 
-    expect(screen.getByText(/Keep .*Ken Hayward/)).toBeTruthy();
-    expect(screen.getByText(/Delete .*Ken hayward/)).toBeTruthy();
+    expect(screen.getByText(/Keep .*Ada Lovelace/)).toBeTruthy();
+    expect(screen.getByText(/Delete .*Ada lovelace/)).toBeTruthy();
   });
 
   it("says how many voice samples move, and where", () => {
@@ -91,7 +91,7 @@ describe("MergePeopleDialog", () => {
     render_(account, enrolled);
 
     expect(screen.getByText(/5 samples/)).toBeTruthy();
-    expect(screen.getByText(/5 samples/).textContent).toContain("Ken hayward");
+    expect(screen.getByText(/5 samples/).textContent).toContain("Ada lovelace");
   });
 
   it("says nothing about voice samples when neither has any", () => {
@@ -122,8 +122,8 @@ describe("MergePeopleDialog", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /swap/i }));
 
-    expect(screen.getByText(/Keep .*Ken hayward/)).toBeTruthy();
-    expect(screen.getByText(/Delete .*Ken Hayward/)).toBeTruthy();
+    expect(screen.getByText(/Keep .*Ada lovelace/)).toBeTruthy();
+    expect(screen.getByText(/Delete .*Ada Lovelace/)).toBeTruthy();
   });
 
   it("merges the source into the target, in that order", async () => {

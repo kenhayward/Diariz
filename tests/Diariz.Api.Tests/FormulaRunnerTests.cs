@@ -380,13 +380,13 @@ public class FormulaRunnerTests
         {
             Id = userId, UserName = "a@b.test", Email = "a@b.test", FullName = "Display Name",
         });
-        db.People.Add(new Person { Id = Guid.NewGuid(), LinkedUserId = userId, Name = "Ken Hayward" });
+        db.People.Add(new Person { Id = Guid.NewGuid(), LinkedUserId = userId, Name = "Ada Lovelace" });
         var formula = await SeedPromptFormula(db, userId, "What role did $USERNAME play in this meeting?");
 
         var chat = new FakeChatStreamClient();
         await MakeRunner(db, chat, new FakeLlmSettingsResolver()).RunAsync(userId, rec.Id, formula.Id);
 
-        Assert.Equal("What role did Ken Hayward play in this meeting?", chat.LastMessages![0].Content);
+        Assert.Equal("What role did Ada Lovelace play in this meeting?", chat.LastMessages![0].Content);
     }
 
     /// <summary>No directory entry (an account that predates it) falls back to the display name.</summary>
@@ -480,7 +480,7 @@ public class FormulaRunnerTests
         var (rec, _) = await SeedRecordingWithTranscript(db, userId);
         db.Users.Add(new ApplicationUser
         {
-            Id = userId, UserName = "a@b.test", Email = "a@b.test", FullName = "Ken Hayward",
+            Id = userId, UserName = "a@b.test", Email = "a@b.test", FullName = "Ada Lovelace",
         });
 
         var content = new TemplateContent([
@@ -499,7 +499,7 @@ public class FormulaRunnerTests
         var result = await MakeRunner(db, new FakeChatStreamClient(), new FakeLlmSettingsResolver())
             .RunAsync(userId, rec.Id, formula.Id);
 
-        Assert.Contains("Prepared for Ken Hayward.", result.Text);
+        Assert.Contains("Prepared for Ada Lovelace.", result.Text);
     }
 
     private static async Task<Formula> SeedPromptFormula(DiarizDbContext db, Guid userId, string prompt)

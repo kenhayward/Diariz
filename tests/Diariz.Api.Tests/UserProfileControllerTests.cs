@@ -197,7 +197,7 @@ public class UserProfileControllerTests
         using var host = new IdentityTestHost();
         var user = new ApplicationUser
         {
-            UserName = "vp@b.test", Email = "vp@b.test", IsEnabled = true, FullName = "Ken Hayward",
+            UserName = "vp@b.test", Email = "vp@b.test", IsEnabled = true, FullName = "Ada Lovelace",
         };
         await host.Users.CreateAsync(user);
         var person = await new PeopleDirectory(host.Db).EnsureForUserAsync(user.Id);
@@ -208,7 +208,7 @@ public class UserProfileControllerTests
         var res = await sut.Get();
 
         Assert.Equal(person.Id, res.Value!.Person!.Id);
-        Assert.Equal("Ken Hayward", res.Value.Person.Name);
+        Assert.Equal("Ada Lovelace", res.Value.Person.Name);
         Assert.True(res.Value.Person.HasVoiceprint);
         Assert.Equal(8, res.Value.Person.SampleCount);
         Assert.False(res.Value.Person.VoiceprintOptOut);

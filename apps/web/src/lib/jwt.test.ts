@@ -14,7 +14,7 @@ describe("jwt", () => {
   });
 
   it("reads the email claim", () => {
-    expect(emailFromToken(fakeJwt({ email: "ken@diariz.io" }))).toBe("ken@diariz.io");
+    expect(emailFromToken(fakeJwt({ email: "ada@diariz.io" }))).toBe("ada@diariz.io");
   });
 
   it("returns null for malformed or empty tokens", () => {

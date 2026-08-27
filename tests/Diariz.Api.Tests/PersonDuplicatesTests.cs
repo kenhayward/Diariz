@@ -71,8 +71,8 @@ public class PersonDuplicatesTests
     }
 
     /// <summary>The bug this fixes, from production. Lizzie Mcneil had been given the email address that
-    /// belongs to Ken's account person, so those two were reported as an email duplicate - and that
-    /// <b>consumed</b> Ken's account person, making the genuine "Ken Hayward" / "Ken hayward" name pair
+    /// belongs to Ada's account person, so those two were reported as an email duplicate - and that
+    /// <b>consumed</b> Ada's account person, making the genuine "Ada Lovelace" / "Ada lovelace" name pair
     /// impossible to report. The user only found it by editing Lizzie's email to break the coincidence.
     ///
     /// A weak email coincidence must not suppress a strong name match. One person may therefore appear in
@@ -81,9 +81,9 @@ public class PersonDuplicatesTests
     [Fact]
     public void Find_AnEmailCoincidence_DoesNotSuppressAGenuineNameMatch()
     {
-        var enrolled = P("Ken Hayward");
-        var account = P("Ken hayward", "ken@example.com");
-        var unrelated = P("Lizzie Mcneil", "ken@example.com");
+        var enrolled = P("Ada Lovelace");
+        var account = P("Ada lovelace", "ada@example.com");
+        var unrelated = P("Lizzie Mcneil", "ada@example.com");
 
         var groups = PersonDuplicates.Find([enrolled, account, unrelated]);
 

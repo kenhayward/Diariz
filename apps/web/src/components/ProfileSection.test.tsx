@@ -85,15 +85,15 @@ describe("ProfileSection transcription language", () => {
       (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ ...PROFILE, person });
 
     it("shows the linked person and its sample count", async () => {
-      withPerson({ id: "p1", name: "Ken Hayward", hasVoiceprint: true, sampleCount: 8, voiceprintOptOut: false });
+      withPerson({ id: "p1", name: "Ada Lovelace", hasVoiceprint: true, sampleCount: 3, voiceprintOptOut: false });
       renderSection();
 
-      expect(await screen.findByText("Ken Hayward")).toBeTruthy();
-      expect(screen.getByText(/8 samples/i)).toBeTruthy();
+      expect(await screen.findByText("Ada Lovelace")).toBeTruthy();
+      expect(screen.getByText(/3 samples/i)).toBeTruthy();
     });
 
     it("tells a user with no voiceprint how to get one", async () => {
-      withPerson({ id: "p1", name: "Ken Hayward", hasVoiceprint: false, sampleCount: 0, voiceprintOptOut: false });
+      withPerson({ id: "p1", name: "Ada Lovelace", hasVoiceprint: false, sampleCount: 0, voiceprintOptOut: false });
       renderSection();
 
       expect(await screen.findByText(/no voiceprint yet/i)).toBeTruthy();
@@ -101,7 +101,7 @@ describe("ProfileSection transcription language", () => {
     });
 
     it("says so when the user has opted out of voice-printing", async () => {
-      withPerson({ id: "p1", name: "Ken Hayward", hasVoiceprint: false, sampleCount: 0, voiceprintOptOut: true });
+      withPerson({ id: "p1", name: "Ada Lovelace", hasVoiceprint: false, sampleCount: 0, voiceprintOptOut: true });
       renderSection();
 
       expect(await screen.findByText(/opted out of voice-printing/i)).toBeTruthy();

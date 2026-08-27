@@ -17,7 +17,7 @@ const staleChunk = {
 };
 
 const STALE = new Error(
-  "Failed to fetch dynamically imported module: https://diariz.stocks-hayward.com/assets/LlmModels-CcQYuFEJ.js",
+  "Failed to fetch dynamically imported module: https://app.example.com/assets/LlmModels-CcQYuFEJ.js",
 );
 
 function renderBoundary(error: Error) {

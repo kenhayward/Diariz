@@ -143,15 +143,15 @@ In `apps/web/src/components/nav/DrillBreadcrumb.test.tsx`, replace the three men
     const onDrill = vi.fn();
     let location = { pathname: "", search: "" };
     render(
-      <MemoryRouter initialEntries={["/?in=ambu"]}>
+      <MemoryRouter initialEntries={["/?in=northwind"]}>
         <LocationSpy onChange={(loc) => (location = loc)} />
-        <DrillBreadcrumb sections={sections} sectionId="ambu" basePath="" onDrill={onDrill} />
+        <DrillBreadcrumb sections={sections} sectionId="northwind" basePath="" onDrill={onDrill} />
       </MemoryRouter>,
     );
 
     await userEvent.click(screen.getByRole("link", { name: "View folder page" }));
 
-    expect(location.pathname).toBe("/sections/ambu");
+    expect(location.pathname).toBe("/sections/northwind");
     expect(onDrill).not.toHaveBeenCalled();
   });
 
@@ -161,36 +161,36 @@ In `apps/web/src/components/nav/DrillBreadcrumb.test.tsx`, replace the three men
   it("keeps the drill position when opening the folder page", async () => {
     let location = { pathname: "", search: "" };
     render(
-      <MemoryRouter initialEntries={["/?in=ambu"]}>
+      <MemoryRouter initialEntries={["/?in=northwind"]}>
         <LocationSpy onChange={(loc) => (location = loc)} />
-        <DrillBreadcrumb sections={sections} sectionId="ambu" basePath="" onDrill={vi.fn()} />
+        <DrillBreadcrumb sections={sections} sectionId="northwind" basePath="" onDrill={vi.fn()} />
       </MemoryRouter>,
     );
 
     await userEvent.click(screen.getByRole("link", { name: "View folder page" }));
 
-    expect(location.pathname + location.search).toBe("/sections/ambu?in=ambu");
+    expect(location.pathname + location.search).toBe("/sections/northwind?in=northwind");
   });
 
   it("keeps the room prefix on the folder page button in a shared room", () => {
     render(
-      <MemoryRouter initialEntries={["/?in=ambu"]}>
-        <DrillBreadcrumb sections={sections} sectionId="ambu" basePath="/rooms/r1" onDrill={vi.fn()} />
+      <MemoryRouter initialEntries={["/?in=northwind"]}>
+        <DrillBreadcrumb sections={sections} sectionId="northwind" basePath="/rooms/r1" onDrill={vi.fn()} />
       </MemoryRouter>,
     );
 
     const link = screen.getByRole("link", { name: "View folder page" });
-    expect(link.getAttribute("href")).toBe("/rooms/r1/sections/ambu?in=ambu");
+    expect(link.getAttribute("href")).toBe("/rooms/r1/sections/northwind?in=northwind");
   });
 
   // Promoting the button out of the menu means taking it OUT of the menu - one action, one control.
   it("leaves the menu as nothing but the ancestor chain", async () => {
-    renderCrumb("ambu");
+    renderCrumb("northwind");
 
     await userEvent.click(screen.getByLabelText("Show full folder path"));
 
     const items = screen.getAllByRole("menuitem").map((el) => el.textContent);
-    expect(items).toEqual(["Customers", "Ambu"]);
+    expect(items).toEqual(["Customers", "Northwind"]);
   });
 ```
 
@@ -214,7 +214,7 @@ In `"still offers a way out for an unknown folder"` (line 156), before the exist
 cd apps/web && npm test -- src/components/nav/DrillBreadcrumb.test.tsx
 ```
 
-Expected: FAIL. The three button tests fail with "Unable to find an accessible element with the role \"link\" and name \"View folder page\"" (no such control exists yet). `"leaves the menu as nothing but the ancestor chain"` fails because the menu still holds the old entry, so the received array is `["View folder page", "Customers", "Ambu"]` - note the label already reads "View folder page" after Step 1, which confirms the key rename took effect.
+Expected: FAIL. The three button tests fail with "Unable to find an accessible element with the role \"link\" and name \"View folder page\"" (no such control exists yet). `"leaves the menu as nothing but the ancestor chain"` fails because the menu still holds the old entry, so the received array is `["View folder page", "Customers", "Northwind"]` - note the label already reads "View folder page" after Step 1, which confirms the key rename took effect.
 
 - [ ] **Step 8: Implement the DrillBreadcrumb change**
 

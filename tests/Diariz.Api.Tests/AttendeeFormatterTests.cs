@@ -47,8 +47,8 @@ public class AttendeeFormatterTests
     {
         // Segments with no attributed speaker carry the literal "UNKNOWN" label (Segment.SpeakerLabel default).
         Assert.Equal("1 unidentified attendee", AttendeeFormatter.Summarize(["UNKNOWN"]));
-        Assert.Equal("Ken Hayward and 4 unidentified attendees",
-            AttendeeFormatter.Summarize(["Ken Hayward", "UNKNOWN", "SPEAKER_00", "SPEAKER_02", "SPEAKER_03"]));
+        Assert.Equal("Ada Lovelace and 4 unidentified attendees",
+            AttendeeFormatter.Summarize(["Ada Lovelace", "UNKNOWN", "SPEAKER_00", "SPEAKER_02", "SPEAKER_03"]));
     }
 
     [Fact]

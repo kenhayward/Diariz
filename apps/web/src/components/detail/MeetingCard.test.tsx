@@ -6,7 +6,7 @@ import type { CalendarEvent, CalendarLink } from "../../lib/types";
 const link: CalendarLink = {
   eventId: "evt1",
   calendarId: "work@g",
-  summary: "QnR Competences merging to one",
+  summary: "Quarterly roadmap review",
   start: "2026-06-30T19:00:00Z",
   end: "2026-06-30T19:30:00Z",
   htmlLink: "https://cal/evt1",
@@ -14,7 +14,7 @@ const link: CalendarLink = {
 
 const event: CalendarEvent = {
   id: "evt1",
-  summary: "QnR Competences merging to one",
+  summary: "Quarterly roadmap review",
   start: "2026-06-30T19:00:00Z",
   end: "2026-06-30T19:30:00Z",
   htmlLink: "https://cal/evt1",
@@ -38,7 +38,7 @@ beforeEach(() => {
 describe("MeetingCard", () => {
   it("shows the linked meeting's details, with change and unlink actions", () => {
     render(<MeetingCard calendarLink={link} linkedEvent={event} suggestion={null} calendarConnected {...h} />);
-    expect(screen.getByText("QnR Competences merging to one")).toBeTruthy();
+    expect(screen.getByText("Quarterly roadmap review")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Change meeting" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Unlink meeting" })).toBeTruthy();
   });
@@ -51,7 +51,7 @@ describe("MeetingCard", () => {
 
   it("falls back to the stored snapshot when the live event hasn't loaded", () => {
     render(<MeetingCard calendarLink={link} linkedEvent={null} suggestion={null} calendarConnected {...h} />);
-    expect(screen.getByText("QnR Competences merging to one")).toBeTruthy();
+    expect(screen.getByText("Quarterly roadmap review")).toBeTruthy();
   });
 
   it("offers the suggested meeting when the recording isn't linked yet", () => {
@@ -76,7 +76,7 @@ describe("MeetingCard", () => {
 
   it("still shows a linked meeting even if the calendar has since been disconnected", () => {
     render(<MeetingCard calendarLink={link} linkedEvent={event} suggestion={null} calendarConnected={false} {...h} />);
-    expect(screen.getByText("QnR Competences merging to one")).toBeTruthy();
+    expect(screen.getByText("Quarterly roadmap review")).toBeTruthy();
   });
 
   it("summarises the meeting and opens the section when the summary is activated", () => {
@@ -95,7 +95,7 @@ describe("MeetingCard", () => {
     // The invite's body is no longer inlined - that is the whole point of the change.
     expect(screen.queryByText("Apologies it is late for Europe.")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /QnR Competences merging to one/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Quarterly roadmap review/ }));
     expect(h.onOpen).toHaveBeenCalled();
   });
 

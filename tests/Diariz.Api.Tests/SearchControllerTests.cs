@@ -88,7 +88,7 @@ public class SearchControllerTests
         var user = Guid.NewGuid();
         Build(db, user, new FakeTranscriptSearch()); // ensure the user exists first
         var parent = await SeedSection(db, user, "Customers");
-        var child = await SeedSection(db, user, "Ambu", parent.Id);
+        var child = await SeedSection(db, user, "Northwind", parent.Id);
         var inParent = await SeedRecording(db, user, parent.Id);
         var inChild = await SeedRecording(db, user, child.Id);
         var elsewhere = await SeedRecording(db, user); // ungrouped - must not be in scope
@@ -142,7 +142,7 @@ public class SearchControllerTests
         var user = Guid.NewGuid();
         Build(db, user, new FakeTranscriptSearch());
         var parent = await SeedSection(db, user, "Customers");
-        await SeedSection(db, user, "Ambu", parent.Id);
+        await SeedSection(db, user, "Northwind", parent.Id);
 
         var c = Build(db, user, new FakeTranscriptSearch());
         var res = await c.Search("custom");
@@ -158,10 +158,10 @@ public class SearchControllerTests
         var user = Guid.NewGuid();
         Build(db, user, new FakeTranscriptSearch());
         var parent = await SeedSection(db, user, "Customers");
-        await SeedSection(db, user, "Ambu", parent.Id);
+        await SeedSection(db, user, "Northwind", parent.Id);
 
         var c = Build(db, user, new FakeTranscriptSearch());
-        var res = await c.Search("ambu");
+        var res = await c.Search("northwind");
 
         var folder = Assert.Single(res.Value!.Folders);
         Assert.Equal(["Customers"], folder.Breadcrumb);
@@ -214,7 +214,7 @@ public class SearchControllerTests
         var user = Guid.NewGuid();
         Build(db, user, new FakeTranscriptSearch());
         var parent = await SeedSection(db, user, "Customers");
-        var child = await SeedSection(db, user, "Ambu", parent.Id);
+        var child = await SeedSection(db, user, "Northwind", parent.Id);
         var rec = await SeedRecording(db, user, child.Id, "Account review");
 
         var fake = new FakeTranscriptSearch { Hits = { Hit(rec.Id, "Account review", 0, 0.9) } };
@@ -222,8 +222,8 @@ public class SearchControllerTests
         var res = await c.Search("hello");
 
         var hit = Assert.Single(res.Value!.Recordings);
-        Assert.Equal("Ambu", hit.SectionName);
-        Assert.Equal(["Customers", "Ambu"], hit.Breadcrumb);
+        Assert.Equal("Northwind", hit.SectionName);
+        Assert.Equal(["Customers", "Northwind"], hit.Breadcrumb);
     }
 
     [Fact]

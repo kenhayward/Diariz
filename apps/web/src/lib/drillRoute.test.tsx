@@ -13,7 +13,7 @@ function Probe() {
     <div>
       <span data-testid="at">{sectionId ?? "root"}</span>
       <span data-testid="url">{location.pathname + location.search}</span>
-      <button onClick={() => drillTo("ambu")}>drill</button>
+      <button onClick={() => drillTo("northwind")}>drill</button>
       <button onClick={() => drillTo("eu")}>drill deeper</button>
       <button onClick={drillOut}>out</button>
       <button onClick={() => navigate(-1)}>back</button>
@@ -45,7 +45,7 @@ describe("useDrillSectionId", () => {
   it("drills in", () => {
     renderAt();
     fireEvent.click(screen.getByText("drill"));
-    expect(at()).toBe("ambu");
+    expect(at()).toBe("northwind");
   });
 
   it("drills out to the root", () => {
@@ -63,7 +63,7 @@ describe("useDrillSectionId", () => {
     fireEvent.click(screen.getByText("drill deeper"));
     expect(at()).toBe("eu");
     fireEvent.click(screen.getByText("back"));
-    expect(at()).toBe("ambu");
+    expect(at()).toBe("northwind");
     fireEvent.click(screen.getByText("back"));
     expect(at()).toBe("root");
   });
@@ -74,6 +74,6 @@ describe("useDrillSectionId", () => {
     fireEvent.click(screen.getByText("drill"));
     expect(url()).toContain("/recordings/rec-1");
     expect(url()).toContain("ts=900");
-    expect(at()).toBe("ambu");
+    expect(at()).toBe("northwind");
   });
 });

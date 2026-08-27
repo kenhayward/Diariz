@@ -191,7 +191,8 @@ plus `<circle cx="7.5" cy="7.5" r="1.3" fill="currentColor"/>`. Add it to `compo
 | `Manual Tagging -light-.dc.html` | The same design in the light theme. |
 | `Manual Tagging v1 (three options).dc.html` | The earlier option board — 1a (chosen), 1b (header-cluster button + type-ahead), 1c (row-list popover for many tags). Useful for the type-ahead and many-tag fallbacks. |
 | `support.js` | Runtime needed to open the `.dc.html` files in a browser. Not application code. |
-| `screenshots/recording-hub-tags-light.png` | Light theme, popover open. |
-| `screenshots/recording-hub-tags-dark.png` | Dark theme, popover open. |
+
+Reference screenshots were removed: they were captured from the live instance and showed real folder
+names, a real recording title and its summary. The `.dc.html` files above render the same states.
 
 Open either `.dc.html` directly in a browser (with `support.js` beside it) to try the interaction.

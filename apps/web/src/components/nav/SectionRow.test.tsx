@@ -40,8 +40,8 @@ function renderRow(
         <MemoryRouter>
           <ClipboardSpy onChange={onCut} />
           <SectionRow
-            id="ambu"
-            name="Ambu"
+            id="northwind"
+            name="Northwind"
             count={3}
             canNest
             parentSectionId={parentSectionId}
@@ -73,7 +73,7 @@ describe("SectionRow", () => {
     renderRow("customers", (c) => (cut = c));
     openKebab();
     fireEvent.click(screen.getByRole("menuitem", { name: /^cut$/i }));
-    expect(cut).toEqual({ kind: "folders", ids: ["ambu"], sourceSectionId: "customers", sourceRoomId: null });
+    expect(cut).toEqual({ kind: "folders", ids: ["northwind"], sourceSectionId: "customers", sourceRoomId: null });
   });
 
   it("records the root as the source for a top-level folder", () => {
@@ -81,7 +81,7 @@ describe("SectionRow", () => {
     renderRow(null, (c) => (cut = c));
     openKebab();
     fireEvent.click(screen.getByRole("menuitem", { name: /^cut$/i }));
-    expect(cut).toEqual({ kind: "folders", ids: ["ambu"], sourceSectionId: null, sourceRoomId: null });
+    expect(cut).toEqual({ kind: "folders", ids: ["northwind"], sourceSectionId: null, sourceRoomId: null });
   });
 
   // Pasting into a shared room is disabled, and so is pasting a shared-room cut anywhere else - so a cut
@@ -107,14 +107,14 @@ describe("SectionRow", () => {
   // generation order rather than anything visible here.
   it("greys out the row with a dashed outline when it is the clipboard's cut folder", () => {
     renderRow("customers", noop, { cut: true });
-    const row = screen.getByText("Ambu").closest("div")!;
+    const row = screen.getByText("Northwind").closest("div")!;
     expect(row.className).toContain("opacity-50");
     expect(row.className).toContain("outline-dashed");
   });
 
   it("does not grey out the row when it has not been cut", () => {
     renderRow("customers", noop);
-    const row = screen.getByText("Ambu").closest("div")!;
+    const row = screen.getByText("Northwind").closest("div")!;
     expect(row.className).not.toContain("opacity-50");
     expect(row.className).not.toContain("outline-dashed");
   });
