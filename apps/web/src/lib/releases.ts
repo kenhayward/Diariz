@@ -65,6 +65,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.259.2",
+    date: "2026-08-27",
+    pr: 644,
+    headline: "Listen and answer without crossing the panel",
+    summary:
+      "Working through the queue is listen, then decide, over and over. The play button sat at the far left of each segment and its yes and no at the far right, so every single segment cost a full traverse of the panel with the mouse.\n\nThe play button now sits **immediately left of the tick**, so the three controls are together at the end of the row: hear it, then answer, without moving. Nothing else about the row changes.",
+    changed: [
+      "In Voices to Confirm, each segment's **play button has moved to sit beside its yes and no** at the end of the row, rather than at the opposite end from them. Working through a queue is listen-then-decide repeatedly, and the two controls being apart cost a full mouse traverse per segment.",
+    ],
+  },
+  {
     version: "0.259.1",
     date: "2026-08-27",
     pr: 643,

@@ -392,6 +392,21 @@ describe("VoicesToConfirmModal", () => {
     expect(await evidence().findByText(/2 of 3 segments/)).toBeTruthy();
   });
 
+  it("puts the play button beside the answer, not across the row from it", async () => {
+    // Working through a queue is listen-then-decide, over and over. With the play control at the far left
+    // and the answer at the far right, every segment costs a full traverse of the panel.
+    setup();
+    await ready();
+
+    const parts = [...seg("One").children];
+    const at = (label: string) => parts.findIndex((el) => el.getAttribute("aria-label") === label);
+
+    expect(at("Yes")).toBe(at("Play") + 1);
+    expect(at("No")).toBe(at("Yes") + 1);
+    // The words still come first, so the three controls sit together at the end of the row.
+    expect(parts.findIndex((el) => el.textContent === "One")).toBeLessThan(at("Play"));
+  });
+
   // ---- Playing the whole voice through ----
 
   it("plays every kept segment in turn", async () => {
