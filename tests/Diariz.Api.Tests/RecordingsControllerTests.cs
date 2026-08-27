@@ -884,6 +884,62 @@ public class RecordingsControllerTests
         Assert.Equal(413, Assert.IsType<ObjectResult>(result.Result).StatusCode);
     }
 
+    // ---- A pending suggestion on the Speakers panel ----
+
+    private static async Task<SpeakerInfoDto> SpeakerOf(
+        DiarizDbContext db, Guid userId, Guid recordingId)
+    {
+        var dto = (await Build(db, userId, new FakeJobQueue()).Get(recordingId)).Value!;
+        return Assert.Single(dto.Speakers);
+    }
+
+    private static async Task<Recording> SeedSuggestion(
+        DiarizDbContext db, Guid userId, bool audioDeleted)
+    {
+        var rec = await SeedRecording(db, userId, versions: 1);
+        rec.AudioDeletedAt = audioDeleted ? DateTimeOffset.UtcNow : null;
+        var person = new Person { Id = Guid.NewGuid(), CreatedByUserId = userId, Name = "Alice" };
+        db.People.Add(person);
+        db.Speakers.Add(new Speaker
+        {
+            Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "SPEAKER_00",
+            SuggestedPersonId = person.Id, SuggestedDistance = 0.35, SuggestedAt = DateTimeOffset.UtcNow,
+        });
+        await db.SaveChangesAsync();
+        return rec;
+    }
+
+    [Fact]
+    public async Task Get_offers_a_pending_suggestion_while_the_audio_is_there()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedSuggestion(db, userId, audioDeleted: false);
+
+        var speaker = await SpeakerOf(db, userId, rec.Id);
+
+        Assert.NotNull(speaker.SuggestedPersonId);
+        Assert.Equal("Alice", speaker.SuggestedPersonName);
+    }
+
+    [Fact]
+    public async Task Get_withholds_a_suggestion_once_the_audio_is_gone()
+    {
+        // "Might be Alice - is it?" can only be answered by listening. With the audio swept there is nothing
+        // to listen to, so the prompt is asking for a judgement it has made impossible. The suggestion is
+        // still stored - this hides the question, it does not decide it.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedSuggestion(db, userId, audioDeleted: true);
+
+        var speaker = await SpeakerOf(db, userId, rec.Id);
+
+        Assert.Null(speaker.SuggestedPersonId);
+        Assert.Null(speaker.SuggestedPersonName);
+        Assert.Null(speaker.SuggestedDistance);
+        Assert.NotNull(db.Speakers.Single(x => x.RecordingId == rec.Id).SuggestedPersonId);
+    }
+
     // ---- RenameSpeaker ----
 
     [Fact]

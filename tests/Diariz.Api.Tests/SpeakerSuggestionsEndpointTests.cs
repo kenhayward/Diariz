@@ -24,8 +24,11 @@ public class SpeakerSuggestionsEndpointTests
         return new Vector(v);
     }
 
-    private static SpeakerSuggestionsController Build(DiarizDbContext db, Guid userId) =>
-        new(db, new SpeakerAssignment(db, new PeopleDirectory(db)))
+    private static SpeakerSuggestionsController Build(
+        DiarizDbContext db, Guid userId, FakeAudioClipper? clipper = null,
+        FakeAudioStorage? storage = null) =>
+        new(db, new SpeakerAssignment(db, new PeopleDirectory(db)),
+            clipper ?? new FakeAudioClipper(), storage ?? new FakeAudioStorage())
         {
             ControllerContext = Http.Context(userId),
         };
@@ -36,13 +39,14 @@ public class SpeakerSuggestionsEndpointTests
     /// (unless <paramref name="ownedByCaller"/> says otherwise).</summary>
     private static Seeded Seed(
         DiarizDbContext db, Guid userId, bool ownedByCaller = true, bool withSuggestion = true,
-        bool optedOut = false)
+        bool optedOut = false, bool audioDeleted = false)
     {
         var person = new Person { Id = Guid.NewGuid(), Name = "Alice", VoiceprintOptOut = optedOut };
         var rec = new Recording
         {
             Id = Guid.NewGuid(), UserId = ownedByCaller ? userId : Guid.NewGuid(),
             Title = "Standup", BlobKey = "k",
+            AudioDeletedAt = audioDeleted ? DateTimeOffset.UtcNow : null,
         };
         var tr = new Transcription { Id = Guid.NewGuid(), RecordingId = rec.Id, Version = 1 };
         var speaker = new Speaker
@@ -240,5 +244,136 @@ public class SpeakerSuggestionsEndpointTests
         Seed(db, userId);
 
         Assert.IsType<NotFoundResult>(await Build(db, userId).Accept(Guid.NewGuid()));
+    }
+
+    // ---- Audio is what makes the question answerable ----
+
+    [Fact]
+    public async Task Pending_does_not_ask_about_a_recording_whose_audio_is_gone()
+    {
+        // The only honest way to answer "is this speaker that person?" is to listen. Once the retention
+        // sweep has taken the audio there is nothing to listen to, so the row is not a question - it is a
+        // permanent occupant of the queue. The 0.257.0 exemption covers audio behind an *enrolled* sample;
+        // a pending suggestion is by definition not enrolled, so these accumulate.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        Seed(db, userId, audioDeleted: true);
+
+        Assert.Empty(Rows(await Build(db, userId).Pending()));
+    }
+
+    // ---- The evidence behind one suggestion ----
+
+    private static IReadOnlyList<AttributionSegmentDto> Segs(
+        ActionResult<IReadOnlyList<AttributionSegmentDto>> r) =>
+        Assert.IsAssignableFrom<IReadOnlyList<AttributionSegmentDto>>(
+            Assert.IsType<OkObjectResult>(r.Result).Value);
+
+    [Fact]
+    public async Task Segments_lists_what_the_suggested_speaker_said()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var s = Seed(db, userId);
+
+        var seg = Assert.Single(Segs(await Build(db, userId).Segments(s.SpeakerId)));
+
+        Assert.Equal("hello", seg.Text);
+        Assert.Equal(0, seg.StartMs);
+        Assert.Equal(30000, seg.EndMs);
+    }
+
+    [Fact]
+    public async Task Segments_returns_only_that_speakers_words()
+    {
+        // Never the recording's transcript. The queue answers one narrow question, and everybody else in
+        // the meeting stays out of reach - the same line the assessment endpoints hold.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var s = Seed(db, userId);
+        var trId = db.Transcriptions.Single(t => t.RecordingId == s.RecordingId).Id;
+        db.Segments.Add(new Segment
+        {
+            Id = Guid.NewGuid(), TranscriptionId = trId, SpeakerLabel = "SPEAKER_01",
+            StartMs = 30000, EndMs = 40000, Original = "someone else", Ordinal = 1,
+        });
+        db.SaveChanges();
+
+        var seg = Assert.Single(Segs(await Build(db, userId).Segments(s.SpeakerId)));
+        Assert.Equal("hello", seg.Text);
+    }
+
+    [Fact]
+    public async Task Segments_does_not_open_another_users_recording()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var s = Seed(db, userId, ownedByCaller: false);
+
+        Assert.IsType<NotFoundResult>(
+            (await Build(db, userId).Segments(s.SpeakerId)).Result);
+    }
+
+    [Fact]
+    public async Task Segments_refuses_a_speaker_with_nothing_pending()
+    {
+        // The endpoint exists to serve the queue. Without that bound it would read any of your own
+        // speakers' words through a route that carries none of the recording's own checks.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var s = Seed(db, userId, withSuggestion: false);
+
+        Assert.IsType<NotFoundResult>(
+            (await Build(db, userId).Segments(s.SpeakerId)).Result);
+    }
+
+    // ---- Listening ----
+
+    [Fact]
+    public async Task Clip_cuts_the_span_asked_for()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var s = Seed(db, userId);
+        var clipper = new FakeAudioClipper();
+
+        var result = await Build(db, userId, clipper).Clip(s.SpeakerId, 1000, 4000);
+
+        Assert.IsType<FileContentResult>(result);
+        Assert.Equal((1000, 4000), (clipper.Calls.Single().FromMs, clipper.Calls.Single().ToMs));
+    }
+
+    [Fact]
+    public async Task Clip_refuses_a_span_outside_the_speakers_own_segments()
+    {
+        // Arbitrary offsets into a meeting are not on offer. The suggestion names one speaker; the audio it
+        // unlocks is that speaker's and no more.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var s = Seed(db, userId);
+        var clipper = new FakeAudioClipper();
+
+        Assert.IsType<NotFoundResult>(await Build(db, userId, clipper).Clip(s.SpeakerId, 40000, 45000));
+        Assert.Empty(clipper.Calls);
+    }
+
+    [Fact]
+    public async Task Clip_refuses_when_the_audio_has_been_deleted()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var s = Seed(db, userId, audioDeleted: true);
+
+        Assert.IsType<NotFoundResult>(await Build(db, userId).Clip(s.SpeakerId, 0, 1000));
+    }
+
+    [Fact]
+    public async Task Clip_does_not_open_another_users_recording()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var s = Seed(db, userId, ownedByCaller: false);
+
+        Assert.IsType<NotFoundResult>(await Build(db, userId).Clip(s.SpeakerId, 0, 1000));
     }
 }

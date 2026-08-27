@@ -916,6 +916,24 @@ export const api = {
     return data;
   },
 
+  /// What one suggested speaker said - never the recording's transcript.
+  async getSuggestionSegments(speakerId: string): Promise<AttributionSegment[]> {
+    const { data } = await http.get<AttributionSegment[]>(
+      `/api/speaker-suggestions/${speakerId}/segments`,
+    );
+    return data;
+  },
+
+  /// A short WAV of one of that speaker's spans, as a Blob. Fetched with the bearer through axios rather
+  /// than handed to `<audio>` as a token-bearing URL, for the reasons in `personClip`.
+  async suggestionClip(speakerId: string, fromMs: number, toMs: number): Promise<Blob> {
+    const { data } = await http.get(`/api/speaker-suggestions/${speakerId}/clip`, {
+      params: { fromMs, toMs },
+      responseType: "blob",
+    });
+    return data as Blob;
+  },
+
   async acceptSpeakerSuggestion(speakerId: string): Promise<void> {
     await http.post(`/api/speaker-suggestions/${speakerId}/accept`);
   },

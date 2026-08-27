@@ -22,7 +22,9 @@ namespace Diariz.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/speaker-suggestions")]
-public class SpeakerSuggestionsController(DiarizDbContext db, ISpeakerAssignment assignment) : ControllerBase
+public class SpeakerSuggestionsController(
+    DiarizDbContext db, ISpeakerAssignment assignment, IAudioClipper clipper, IAudioStorage storage)
+    : ControllerBase
 {
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
@@ -38,7 +40,12 @@ public class SpeakerSuggestionsController(DiarizDbContext db, ISpeakerAssignment
     {
         var rows = await db.Speakers
             .Where(s => s.SuggestedPersonId != null)
-            .Join(db.Recordings.Where(r => r.UserId == UserId),
+            // Audio still there, deliberately. "Is this speaker that person?" is answerable only by ear, so
+            // once the retention sweep has taken the audio the row is not a question - it is a permanent
+            // occupant of the queue. The exemption added in 0.257.0 protects audio behind an *enrolled*
+            // sample; a pending suggestion is by definition not enrolled, so without this the queue fills
+            // with rows nobody can ever clear.
+            .Join(db.Recordings.Where(r => r.UserId == UserId && r.AudioDeletedAt == null),
                 s => s.RecordingId, r => r.Id,
                 (s, r) => new
                 {
@@ -70,6 +77,82 @@ public class SpeakerSuggestionsController(DiarizDbContext db, ISpeakerAssignment
             // Closest first: the easiest calls to make, and the ones most likely to be right.
             .OrderBy(r => r.Distance)
             .ToList());
+    }
+
+    /// <summary>A speaker the caller may judge, and the transcription that says which audio is theirs.
+    ///
+    /// <para>Four rules, in one place because two endpoints enforcing them separately is how they come to
+    /// disagree: the speaker exists, a suggestion is actually <b>pending</b> on it, the caller owns the
+    /// recording, and the audio is still there. The pending check is what bounds these endpoints to the
+    /// queue - without it they would read and play any of your own speakers through a route carrying none
+    /// of the recording's own checks.</para></summary>
+    private async Task<(ActionResult? Failure, Speaker? Speaker, Recording? Recording, Guid TranscriptionId)>
+        ResolveAsync(Guid speakerId)
+    {
+        var speaker = await db.Speakers.FirstOrDefaultAsync(s => s.Id == speakerId);
+        if (speaker is null || speaker.SuggestedPersonId is null) return (NotFound(), null, null, default);
+
+        var rec = await db.Recordings.FirstOrDefaultAsync(
+            r => r.Id == speaker.RecordingId && r.UserId == UserId && r.AudioDeletedAt == null);
+        if (rec is null) return (NotFound(), null, null, default);
+
+        var trId = await db.Transcriptions
+            .Where(t => t.RecordingId == rec.Id)
+            .OrderByDescending(t => t.Version)
+            .Select(t => (Guid?)t.Id)
+            .FirstOrDefaultAsync();
+        if (trId is null) return (NotFound(), null, null, default);
+
+        return (null, speaker, rec, trId.Value);
+    }
+
+    [HttpGet("{speakerId:guid}/segments")]
+    [EndpointSummary("List what a suggested speaker said")]
+    [EndpointDescription(
+        "The segments this speaker spoke in the recording's current transcription - the evidence behind one " +
+        "pending suggestion, so it can be judged without opening the recording.\n\n" +
+        "**Only that speaker's segments**, never the recording's transcript: the suggestion names one " +
+        "speaker, and everybody else in the meeting stays out of reach. Your own recordings only, and only " +
+        "while a suggestion is actually pending.")]
+    public async Task<ActionResult<IReadOnlyList<AttributionSegmentDto>>> Segments(Guid speakerId)
+    {
+        var (failure, speaker, _, trId) = await ResolveAsync(speakerId);
+        if (failure is not null) return failure;
+
+        var rows = await db.Segments
+            .Where(s => s.TranscriptionId == trId && s.SpeakerLabel == speaker!.Label)
+            .OrderBy(s => s.Ordinal)
+            .Select(s => new AttributionSegmentDto(s.Id, s.StartMs, s.EndMs, s.Revised ?? s.Original))
+            .ToListAsync();
+
+        return Ok(rows);
+    }
+
+    [HttpGet("{speakerId:guid}/clip")]
+    [EndpointSummary("Play a clip of a suggested speaker")]
+    [EndpointDescription(
+        "Serves a short WAV clip of one span, so the voice can be judged by ear - the only way the question " +
+        "can honestly be answered.\n\n" +
+        "The span **must fall inside a segment this speaker spoke** in the current transcription; arbitrary " +
+        "offsets are refused with 404. Your own recordings only. Clips are capped at two minutes.")]
+    [Produces("audio/wav")]
+    public async Task<IActionResult> Clip(Guid speakerId, [FromQuery] long fromMs, [FromQuery] long toMs)
+    {
+        var (failure, speaker, rec, trId) = await ResolveAsync(speakerId);
+        if (failure is not null) return failure;
+
+        // The span must be audio this speaker actually produced. The suggestion unlocks one speaker's voice,
+        // not a seek bar over someone's meeting.
+        var covered = await db.Segments.AnyAsync(s =>
+            s.TranscriptionId == trId
+            && s.SpeakerLabel == speaker!.Label
+            && s.StartMs <= fromMs && s.EndMs >= toMs);
+        if (!covered) return NotFound();
+
+        // Presigned and internal: ffmpeg range-seeks the object store rather than the API pulling a whole
+        // recording to cut seconds out of it. The URL never leaves this process.
+        var url = await storage.GetPresignedReadUrlAsync(rec!.BlobKey, TimeSpan.FromMinutes(5));
+        return File(await clipper.ClipAsync(url, fromMs, toMs), "audio/wav");
     }
 
     [HttpPost("{speakerId:guid}/accept")]

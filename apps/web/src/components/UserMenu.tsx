@@ -1,7 +1,6 @@
 import { useState, type CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 import { api } from "../lib/api";
 import { useTour } from "../lib/tour";
@@ -16,6 +15,7 @@ import PreferencesModal from "./PreferencesModal";
 import ManageUsersModal from "./ManageUsersModal";
 import ManageFormulasModal from "./ManageFormulasModal";
 import PeopleModal from "./PeopleModal";
+import VoicesToConfirmModal from "./VoicesToConfirmModal";
 import AboutModal from "./AboutModal";
 import FeedbackModal from "./FeedbackModal";
 
@@ -69,7 +69,6 @@ function MenuRow({
  */
 export default function UserMenu() {
   const { t } = useTranslation("account");
-  const navigate = useNavigate();
   const { initials, pictureUrl, email, fullName, isAdmin, isPlatformAdmin, canManageFormulas, canManagePeople, logout } = useAuth();
   const tour = useTour();
   const { data: storage } = useQuery({ queryKey: ["user-storage"], queryFn: api.getUserStorage });
@@ -81,6 +80,7 @@ export default function UserMenu() {
   const [usersOpen, setUsersOpen] = useState(false);
   const [formulasOpen, setFormulasOpen] = useState(false);
   const [peopleOpen, setPeopleOpen] = useState(false);
+  const [voicesOpen, setVoicesOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
 
@@ -195,18 +195,16 @@ export default function UserMenu() {
           {/* Menu rows (same gating + modal handlers as before). */}
           <div role="menu" style={{ padding: 8, display: "flex", flexDirection: "column" }}>
             <MenuRow label={t("preferences")} onSelect={run(() => setPreferencesOpen(true))} />
+            {/* Directly below Preferences, and no permission gate: the queue only ever shows your
+                own recordings, and whoever can say a voice belongs to someone was in the meeting.
+                Deliberately not folded into People, which is gated on Manage people. */}
+            <MenuRow label={t("voicesToConfirm")} onSelect={run(() => setVoicesOpen(true))} />
             {isPlatformAdmin && <MenuRow label={t("settings")} onSelect={run(() => setSettingsOpen(true))} />}
             {isAdmin && <MenuRow label={t("manageUsers")} onSelect={run(() => setUsersOpen(true))} />}
             {canManageFormulas && (
               <MenuRow label={t("manageFormulas")} onSelect={run(() => setFormulasOpen(true))} />
             )}
             {canManagePeople && <MenuRow label={t("people")} onSelect={run(() => setPeopleOpen(true))} />}
-            {/* No permission gate: the queue only ever shows your own recordings, and the person who can
-                say whether a voice belongs to someone is whoever was in the meeting. */}
-            <MenuRow
-              label={t("voicesToConfirm")}
-              onSelect={run(() => navigate("/voices-to-confirm"))}
-            />
             <MenuRow label={t("showTour")} onSelect={run(() => tour.start())} />
             {/* A new tab, so opening the docs never discards what the user was doing. */}
             <MenuRow
@@ -233,6 +231,7 @@ export default function UserMenu() {
       {usersOpen && <ManageUsersModal onClose={() => setUsersOpen(false)} />}
       {formulasOpen && <ManageFormulasModal onClose={() => setFormulasOpen(false)} />}
       {peopleOpen && <PeopleModal onClose={() => setPeopleOpen(false)} />}
+      {voicesOpen && <VoicesToConfirmModal onClose={() => setVoicesOpen(false)} />}
       {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
       {feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} />}
     </div>

@@ -224,7 +224,7 @@ public class RecordingsController : ControllerBase
 
         var speakers = rec.Speakers
             .OrderBy(s => s.Label)
-            .Select(s => Describe(s, people))
+            .Select(s => Describe(s, people, audioAvailable: rec.AudioDeletedAt is null))
             .ToList();
         var current = rec.Transcriptions.FirstOrDefault();
         TranscriptionDto? tDto = current is null ? null : new(
@@ -2173,20 +2173,27 @@ public class RecordingsController : ControllerBase
     /// <summary>Projects a speaker plus, when it was identified as someone, that person's details - so the
     /// Speakers panel needs no second call. A "Multiple Speakers" slot is deliberately left bare: it is
     /// overlapping audio, not one person, so attaching a job title to it would be a lie.</summary>
-    private static SpeakerInfoDto Describe(Speaker s, IReadOnlyDictionary<Guid, Person> people)
+    private static SpeakerInfoDto Describe(
+        Speaker s, IReadOnlyDictionary<Guid, Person> people, bool audioAvailable)
     {
         // A pending suggestion, if the suggested person is one we loaded. Carried on the speaker rather than
         // fetched separately so the transcript can offer the question where the evidence is - the words and
         // the audio are already on screen there.
-        var suggestedName = s.SuggestedPersonId is { } sid && people.TryGetValue(sid, out var suggested)
+        //
+        // Withheld once the audio is gone. "Might be Alice - is it?" can only be answered by listening, so
+        // with nothing left to play the prompt asks for a judgement it has made impossible. This hides the
+        // question rather than deciding it: the suggestion stays on the speaker, and would return if the
+        // audio ever did. The review queue drops the same rows for the same reason.
+        var pending = audioAvailable ? s.SuggestedPersonId : null;
+        var suggestedName = pending is { } sid && people.TryGetValue(sid, out var suggested)
             ? suggested.Name
             : null;
 
         if (s.IsMultiSpeaker || s.PersonId is not { } personId || !people.TryGetValue(personId, out var person))
             return new SpeakerInfoDto(s.Id, s.Label, s.DisplayName, s.PersonId, s.IdentifiedAuto, s.IsMultiSpeaker,
                 EmbeddingStale: s.EmbeddingStale,
-                SuggestedPersonId: s.SuggestedPersonId, SuggestedPersonName: suggestedName,
-                SuggestedDistance: s.SuggestedDistance);
+                SuggestedPersonId: pending, SuggestedPersonName: suggestedName,
+                SuggestedDistance: pending is null ? null : s.SuggestedDistance);
 
         // An identified speaker has nothing pending: assigning clears the suggestion.
         return new SpeakerInfoDto(

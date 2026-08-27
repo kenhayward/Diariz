@@ -734,9 +734,13 @@
   "suggestionYes": "Yes",
   "suggestionNo": "No",
   "suggestionFailed": "Could not save that answer.",
-  "suggestionsTitle": "Voices to confirm",
-  "suggestionsIntro": "Diariz recognised these voices but was not confident enough to name them. Confirming one teaches the voiceprint; declining is remembered, so the same voice is not offered again.",
+  "suggestionsTitle": "Voices to Confirm",
+  "suggestionsIntro": "Diariz recognised these voices but was not confident enough to name them. Pick one to hear what they said, then confirm or decline. Confirming teaches the voiceprint; declining is remembered, so the same voice is not offered again.",
   "suggestionsNone": "Nothing waiting to be confirmed.",
   "suggestionsFailed": "Could not load the list.",
-  "voicesToConfirm": "Voices to confirm"
+  "suggestionEvidence": "Evidence",
+  "suggestionPlay": "Play",
+  "suggestionStop": "Stop",
+  "suggestionNoWords": "No words recorded for this voice.",
+  "voicesToConfirm": "Voices to Confirm"
 }

@@ -2660,11 +2660,33 @@ are the platform's only labelled negatives (every manual link is a positive), an
 person)` pair is never suggested again — though it may still be **accepted** outright later, since an improved
 voiceprint is new evidence rather than the same question repeated.
 
-**The review queue** (`SpeakerSuggestionsController`, `/voices-to-confirm`) is scoped to the **caller's own
-recordings** and needs no permission: whoever can answer whether a voice belongs to someone was in the meeting,
-and a platform-wide queue would disclose who appears in every meeting in the instance. Accepting delegates to
-`ISpeakerAssignment` — the single place a speaker becomes a person — so the opt-out guard, the enrolment and
-the centroid rebuild cannot diverge from a manual assignment.
+**The review queue** (`SpeakerSuggestionsController`, the `VoicesToConfirmModal` in the account menu) is
+scoped to the **caller's own recordings** and needs no permission: whoever can answer whether a voice belongs
+to someone was in the meeting, and a platform-wide queue would disclose who appears in every meeting in the
+instance. Accepting delegates to `ISpeakerAssignment` — the single place a speaker becomes a person — so the
+opt-out guard, the enrolment and the centroid rebuild cannot diverge from a manual assignment.
+
+It is a modal rather than a route (the standalone `/voices-to-confirm` page was removed in 0.258.0), and
+deliberately **separate from the People modal**, which is gated on `ManagePeople`: folding the ungated queue
+inside a gated surface would have removed it from everyone who cannot browse the directory.
+
+Two further endpoints serve the evidence beside each question — `GET {speakerId}/segments` and
+`GET {speakerId}/clip?fromMs=&toMs=`. They exist rather than reusing `PeopleController`'s assessment
+endpoints because those resolve through `ResolveAssessmentTargetAsync`, which requires `Speaker.PersonId ==
+personId`; a suggested speaker is by definition **unlinked**, so every such call would 404. Widening that
+gate was rejected: it is what bounds **cross-owner** access under `ManageVoiceprints`, and blurring it to
+admit a different case would weaken a deliberately narrow boundary. The queue's own `ResolveAsync` holds four
+rules instead — the speaker exists, a suggestion is actually **pending** on it, the caller **owns** the
+recording, and the audio still exists — and `Clip` additionally requires the span to fall inside one of that
+speaker's own segments. The pending check is what bounds these routes to the queue; without it they would
+read and play any of the caller's own speakers through a route carrying none of the recording's own checks.
+
+**A suggestion is withheld once the recording's audio is gone**, in both surfaces: `Pending()` joins only
+recordings with `AudioDeletedAt == null`, and `RecordingsController.Describe` nulls `SuggestedPersonId` /
+`SuggestedPersonName` / `SuggestedDistance` for the same reason. The question is answerable only by ear, so
+without audio it is not a question but an unclearable row. The stored suggestion is untouched — this hides
+the question rather than deciding it — and the shared audio-retention exemption (0.257.0) does not cover
+these, since it protects audio behind an **enrolled** sample and a pending suggestion is not yet enrolled.
 
 **Voiceprint diagnostics run before anything clusters a training set, and that ordering is a finding rather
 than a preference.** `VoiceprintDiagnosis.Diagnose` is a pure function over one person's sample embeddings,
