@@ -22,10 +22,13 @@ namespace Diariz.Api.Tests;
 /// "pending" either.</para></summary>
 public class VoiceprintRecomputeStateTests
 {
-    private static WorkerVoiceprintCallbackController Callback(Diariz.Domain.DiarizDbContext db) =>
+    private static WorkerVoiceprintCallbackController Callback(
+        Diariz.Domain.DiarizDbContext db,
+        CapturingLogger<WorkerVoiceprintCallbackController>? log = null) =>
         new(db, new Diariz.Api.Services.PeopleDirectory(db),
             Options.Create(new Diariz.Api.Configuration.WorkerOptions { CallbackSecret = "s" }),
-            NullLogger<WorkerVoiceprintCallbackController>.Instance)
+            (Microsoft.Extensions.Logging.ILogger<WorkerVoiceprintCallbackController>?)log
+                ?? NullLogger<WorkerVoiceprintCallbackController>.Instance)
         {
             ControllerContext = Http.Context(null, ("X-Worker-Secret", "s")),
         };
@@ -104,5 +107,27 @@ public class VoiceprintRecomputeStateTests
         await Callback(db).Result(new VoiceprintResult(sample.Id, [0.5f], 10, 10));
 
         Assert.Null((await db.VoiceSamples.SingleAsync(v => v.Id == sample.Id)).RecomputeFailedAt);
+    }
+
+    // ---- The failure text comes from the worker, and lands in a log ----
+
+    [Fact]
+    public async Task Failure_does_not_let_the_worker_forge_a_log_line()
+    {
+        // Every other externally-influenced value logged in this codebase goes through LogSanitizer first;
+        // this call site was missed, which is what CodeQL flagged. The worker's text is an arbitrary Python
+        // exception message, and a newline in it writes a second line that reads like our own log.
+        using var db = TestDb.Create();
+        var sample = await SeedAsync(db);
+        var log = new CapturingLogger<WorkerVoiceprintCallbackController>();
+
+        await Callback(db, log).Failure(
+            new VoiceprintFailure(sample.Id, "boom\nwarn: Voiceprint re-embed succeeded for everything"));
+
+        var entry = Assert.Single(log.Entries);
+        Assert.DoesNotContain("\n", entry.Message);
+        Assert.DoesNotContain("\r", entry.Message);
+        // Still says what went wrong - sanitising must not amount to discarding the diagnosis.
+        Assert.Contains("boom", entry.Message);
     }
 }

@@ -408,7 +408,9 @@ public class RecordingsController : ControllerBase
             EndedAt = ended,
             Status = RecordingStatus.Uploaded
         };
-        rec.BlobKey = $"{UserId}/{rec.Id}{Path.GetExtension(audio.FileName)}";
+        // Through AudioFormats, not Path.GetExtension: the filename is the client's, and this key
+        // reaches object storage, the worker's temp path and the Content-Disposition header.
+        rec.BlobKey = $"{UserId}/{rec.Id}{StorageKeys.SafeExtension(audio.FileName)}";
 
         await _storage.UploadAsync(rec.BlobKey, stream, rec.ContentType);
 
