@@ -1,0 +1,417 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Diariz Runtime Architecture",
+    "output": "diariz-architecture.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/kenhayward/Diariz",
+      "revision": "9dbb7b050edcb07d319036dfb488208cd62e07aa"
+    },
+    "views": [
+      {
+        "id": "capture-to-transcript",
+        "label": "Capture to transcript",
+        "focus": [
+          "clients",
+          "edge",
+          "api",
+          "redis",
+          "gpu",
+          "minio"
+        ],
+        "note": "The primary path: record, upload, enqueue, transcribe on GPU, post results back."
+      },
+      {
+        "id": "llm-features",
+        "label": "LLM features",
+        "focus": [
+          "api",
+          "redis",
+          "llm",
+          "postgres"
+        ],
+        "note": "Summaries, minutes, actions, tags and embeddings run inside the API process off Redis streams."
+      },
+      {
+        "id": "trust-boundaries",
+        "label": "Trust boundaries",
+        "focus": [
+          "clients",
+          "agents",
+          "edge",
+          "api"
+        ],
+        "note": "Every client crosses nginx into the API, the only place auth and RBAC are enforced."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "agents",
+      "type": "external",
+      "label": "Claude.ai and n8n",
+      "sublabel": "MCP + REST integrations",
+      "tag": "OAuth 2.1 / API tokens",
+      "pos": [
+        50,
+        110
+      ],
+      "size": [
+        170,
+        84
+      ],
+      "sources": [
+        {
+          "path": "src/Diariz.Api/Auth/McpBearerAuthenticationHandler.cs"
+        }
+      ]
+    },
+    {
+      "id": "llm",
+      "type": "external",
+      "label": "OpenAI-compatible LLM",
+      "sublabel": "chat + embeddings endpoint",
+      "tag": "per-user or platform",
+      "pos": [
+        570,
+        110
+      ],
+      "size": [
+        190,
+        84
+      ],
+      "sources": [
+        {
+          "path": "src/Diariz.Api/Services/SummarizationClient.cs"
+        }
+      ]
+    },
+    {
+      "id": "hf",
+      "type": "external",
+      "label": "Hugging Face Hub",
+      "sublabel": "gated model weights",
+      "tag": "HF_TOKEN",
+      "pos": [
+        1110,
+        110
+      ],
+      "size": [
+        190,
+        84
+      ],
+      "sources": [
+        {
+          "path": "src/Diariz.Worker/pipeline.py"
+        }
+      ]
+    },
+    {
+      "id": "clients",
+      "type": "frontend",
+      "label": "Web and desktop clients",
+      "sublabel": "React 19 SPA; Electron shell",
+      "tag": "mic + system audio",
+      "pos": [
+        50,
+        320
+      ],
+      "size": [
+        170,
+        84
+      ],
+      "sources": [
+        {
+          "path": "apps/web/src/App.tsx"
+        }
+      ]
+    },
+    {
+      "id": "edge",
+      "type": "frontend",
+      "label": "nginx edge",
+      "sublabel": "static SPA :8081",
+      "tag": "proxies /api /hubs /mcp",
+      "pos": [
+        315,
+        320
+      ],
+      "size": [
+        160,
+        84
+      ],
+      "sources": [
+        {
+          "path": "apps/web/nginx.conf"
+        }
+      ]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "Diariz API",
+      "sublabel": "ASP.NET Core 10, EF Core, SignalR",
+      "tag": "auth, RBAC, orchestration",
+      "pos": [
+        570,
+        320
+      ],
+      "size": [
+        190,
+        84
+      ],
+      "sources": [
+        {
+          "path": "src/Diariz.Api/Program.cs"
+        }
+      ]
+    },
+    {
+      "id": "redis",
+      "type": "messagebus",
+      "label": "Redis Streams",
+      "sublabel": "11 job queues",
+      "tag": "consumer groups",
+      "pos": [
+        855,
+        320
+      ],
+      "size": [
+        160,
+        84
+      ],
+      "sources": [
+        {
+          "path": "src/Diariz.Api/Services/JobQueue.cs"
+        }
+      ]
+    },
+    {
+      "id": "gpu",
+      "type": "backend",
+      "label": "GPU transcription worker",
+      "sublabel": "Python: WhisperX, pyannote, ECAPA",
+      "tag": "CUDA / ROCm",
+      "pos": [
+        1110,
+        320
+      ],
+      "size": [
+        190,
+        84
+      ],
+      "sources": [
+        {
+          "path": "src/Diariz.Worker/worker.py"
+        }
+      ]
+    },
+    {
+      "id": "postgres",
+      "type": "database",
+      "label": "PostgreSQL 16",
+      "sublabel": "pgvector + pg_trgm",
+      "tag": "internal :5432",
+      "pos": [
+        315,
+        530
+      ],
+      "size": [
+        160,
+        84
+      ],
+      "sources": [
+        {
+          "path": "src/Diariz.Domain/DiarizDbContext.cs"
+        }
+      ]
+    },
+    {
+      "id": "minio",
+      "type": "cloud",
+      "label": "MinIO (S3)",
+      "sublabel": "audio blobs + attachments",
+      "tag": "internal :9000",
+      "pos": [
+        855,
+        530
+      ],
+      "size": [
+        160,
+        84
+      ],
+      "sources": [
+        {
+          "path": "src/Diariz.Api/Services/AudioStorage.cs"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "User devices and third-party clients",
+      "wraps": [
+        "agents",
+        "clients"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "External services (network egress)",
+      "wraps": [
+        "llm",
+        "hf"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Server deployment - Docker network diariz",
+      "wraps": [
+        "edge",
+        "api",
+        "redis",
+        "gpu",
+        "postgres",
+        "minio"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "JWT / OAuth 2.1 / RBAC enforced here",
+      "wraps": [
+        "edge",
+        "api"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "clients-to-edge",
+      "from": "clients",
+      "to": "edge",
+      "label": "HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "agents-to-edge",
+      "from": "agents",
+      "to": "edge",
+      "label": "/mcp (SSE)",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "top",
+      "via": [
+        [
+          395,
+          152
+        ]
+      ]
+    },
+    {
+      "id": "edge-to-api",
+      "from": "edge",
+      "to": "api",
+      "label": "proxy :8080",
+      "variant": "emphasis"
+    },
+    {
+      "id": "api-to-llm",
+      "from": "api",
+      "to": "llm",
+      "label": "chat/completions"
+    },
+    {
+      "id": "api-to-postgres",
+      "from": "api",
+      "to": "postgres",
+      "label": "EF Core"
+    },
+    {
+      "id": "api-to-minio",
+      "from": "api",
+      "to": "minio",
+      "label": "store audio"
+    },
+    {
+      "id": "api-to-redis",
+      "from": "api",
+      "to": "redis",
+      "label": "enqueue job",
+      "variant": "emphasis"
+    },
+    {
+      "id": "redis-to-gpu",
+      "from": "redis",
+      "to": "gpu",
+      "label": "XREADGROUP",
+      "variant": "emphasis"
+    },
+    {
+      "id": "gpu-to-hf",
+      "from": "gpu",
+      "to": "hf",
+      "label": "model weights",
+      "variant": "dashed"
+    },
+    {
+      "id": "gpu-to-minio",
+      "from": "gpu",
+      "to": "minio",
+      "label": "download blob"
+    },
+    {
+      "id": "gpu-to-api",
+      "from": "gpu",
+      "to": "api",
+      "label": "POST result (X-Worker-Secret)",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "via": [
+        [
+          1205,
+          680
+        ],
+        [
+          665,
+          680
+        ]
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Primary path",
+      "items": [
+        "Capture is client-side; the API is contacted once, at Stop",
+        "POST /api/recordings stores the blob and enqueues a job",
+        "The API drains 8 of the 11 Redis streams in-process",
+        "SignalR RecordingStatusChanged pushes status to the browser"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Data and storage",
+      "items": [
+        "Segment embeddings vector(768), voiceprints vector(192)",
+        "Transcriptions are versioned per recording; renames survive",
+        "Summaries, minutes, actions, tags and formulas are LLM-written",
+        "MinIO holds original audio and uploaded attachments"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Trust boundaries and egress",
+      "items": [
+        "nginx is the only published surface; Redis and MinIO are not",
+        "Every user-scoped query filters by the JWT NameIdentifier claim",
+        "Worker callbacks authenticate with X-Worker-Secret, not JWT",
+        "Optional egress: Google/Outlook calendars, SMTP, GlitchTip"
+      ]
+    }
+  ]
+}

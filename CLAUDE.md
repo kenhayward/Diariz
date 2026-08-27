@@ -6,21 +6,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Diariz is a multi-user voice/meeting transcription platform: record audio → upload → transcribe
 server-side with **speaker diarization** + word-level timestamps → view speaker-labeled segments.
-Currently at **Milestone 1** (capture → transcribe → view). LLM summaries (M2), RAG chat over
-embeddings (M3), and packaging/TLS (M4) are scaffolded but not built — see `docs/Overall_Synopsis_of_Platform.md`
-and the roadmap in `README.md`.
+
+**Scope is well past the original M1.** Shipped: capture/transcribe/view (M1); multi-user auth +
+RBAC, LLM summaries, meeting minutes, action items, tags, export and re-transcribe (M2); chat across
+transcripts with **semantic (RAG) search** over pgvector fused with keyword search, and **speaker
+identification** from enrolled voiceprints (M3); and **integrations** in both directions - a scoped
+REST API with expiring personal tokens, an **MCP server** (with its own OAuth 2.1 server for the
+claude.ai web connector), outbound webhooks ("Automations") and Workflow Signals. **M4 is in
+progress**: the Windows desktop app has shipped and macOS is an unsigned beta; mobile, packaging and
+live streaming are not built. Treat any "milestone N is not built" claim in older notes as stale -
+see `README.md`'s roadmap and `docs/Overall_Synopsis_of_Platform.md` for the current truth.
+
+For a one-screen picture of the runtime - components, the primary request path, external
+dependencies and trust boundaries - open **`docs/Runtime_Architecture.html`** (generated from
+`docs/Runtime_Architecture.archify.json`; see "Architecture diagram" below).
 
 ## Architecture & data flow
 
-Four deployables that communicate across process/language boundaries:
+Four deployables, a shared domain library compiled into the API, and one published npm package -
+communicating across process/language boundaries:
 
 | Component | Stack | Path |
 |---|---|---|
-| API / auth / orchestration | ASP.NET Core (**.NET 10**) + EF Core + SignalR | `src/Diariz.Api` |
-| Domain model + migrations | EF Core + Postgres/pgvector | `src/Diariz.Domain` |
-| Transcription worker | Python: WhisperX (large-v3) + pyannote 3.1, GPU | `src/Diariz.Worker` |
+| API / auth / orchestration | ASP.NET Core (**.NET 10**) + EF Core + SignalR + OpenIddict | `src/Diariz.Api` |
+| Domain model + migrations (library) | EF Core + Postgres/pgvector | `src/Diariz.Domain` |
+| Transcription worker | Python: WhisperX (large-v3) + pyannote 3.1 + SpeechBrain ECAPA, GPU | `src/Diariz.Worker` |
 | Web UI | React 19 + TS + Vite + Tailwind v4 | `apps/web` |
 | Desktop shell | Electron (mic + system audio; Windows tray + macOS beta menu-bar) | `apps/desktop` |
+| n8n community node (published to npm, not deployed here) | TypeScript, zero runtime deps | `integrations/n8n-nodes-diariz` |
 
 **End-to-end flow:** client records → `POST /api/recordings` (multipart) → API stores the blob in
 MinIO and a `Recording` row in Postgres → API creates a `Transcription` row (versioned) and
@@ -31,8 +44,16 @@ API persists `Segment`s + seeds `Speaker` rows → notifies the browser over **S
 
 ### Cross-boundary contracts (the non-obvious glue)
 
-- **Redis Stream job queue.** Stream key `transcription-jobs`, consumer group `workers` (see
-  `worker/config.py` and `Api/Services/JobQueue.cs`). The job payload is JSON with **PascalCase**
+- **Redis Stream job queues - there are eleven, not one.** `RedisJobQueue` (`Api/Services/JobQueue.cs`)
+  enqueues onto **11** streams. **Three** are consumed by the Python worker, which reads all of them
+  under consumer group `workers`: `transcription-jobs`, `audio-merge-jobs` and `voiceprint-jobs`
+  (`worker/config.py`). The other **eight** are drained **in-process by the API's own
+  `BackgroundService`s** - summarization, meeting minutes, section summary, section minutes, actions,
+  tags, formula runs and embeddings (each `*Worker.cs` in `Api/Services` calls `StreamReadGroupAsync`).
+  So "the worker" in a stack trace may mean either process: check which stream the job is on.
+  `Program.cs` registers 15 `AddHostedService`s in total - the eight stream consumers plus backfills
+  (tag, embedding, storage), retention (audio, LLM usage) and the LLM usage writer.
+- **Transcription job payload.** The job payload is JSON with **PascalCase**
   keys (`TranscriptionId`, `BlobKey`, `Model`) — produced by .NET, consumed by Python. The worker's
   callback bodies are also PascalCase so .NET model binding works. Keep both sides in sync when
   changing `TranscriptionJob` / `TranscriptionResult` / `Segment` shapes.
@@ -46,9 +67,10 @@ API persists `Segment`s + seeds `Speaker` rows → notifies the browser over **S
   cosine distance ≤ `Identification:Threshold`) — but never overrides a manually-named speaker.
   Enrolment/reassignment/erasure live in `SpeakerProfilesController` + `RecordingsController` (the
   `vector(192)` cosine match is Postgres-only, so it's faked in unit tests and verified in integration).
-- **Summarisation queue (in-process).** A second Redis stream `summarization-jobs` (consumer group
-  `summarizers`) is **produced and consumed entirely within the API** — `RedisJobQueue.EnqueueSummarizationAsync`
-  enqueues, and `Services/SummarizationWorker` (a `BackgroundService`, the API's only stream consumer)
+- **Summarisation queue (in-process).** The archetype for all eight in-process streams above:
+  `summarization-jobs` (consumer group `summarizers`) is **produced and consumed entirely within the
+  API** — `RedisJobQueue.EnqueueSummarizationAsync`
+  enqueues, and `Services/SummarizationWorker` (a `BackgroundService`; one of the API's eight stream consumers)
   reads it, calls an OpenAI-compatible `/chat/completions` endpoint (`SummarizationClient`), and writes the
   `Summary` (+ an auto-generated `Name` when the recording has none). It is a singleton, so it opens a DI
   scope per job; it XACKs even on failure (records a `Failed` status) to avoid poison-message loops.
@@ -85,7 +107,10 @@ API persists `Segment`s + seeds `Speaker` rows → notifies the browser over **S
   (`SPEAKER_00`...); the callback seeds a `Speaker` row per new label with `DisplayName = label`,
   and the UI's rename updates `DisplayName` only.
 - **pgvector** column is `vector(768)` on `Segment.Embedding` (sized for `nomic-embed-text`).
-  Embeddings/RAG are unused in M1 — adjust the dimension via a migration if the embed model changes.
+  Embeddings/RAG are **live**, not dormant: `EmbeddingWorker` fills the column off the `embedding-jobs`
+  stream and chat/search read it (semantic results fused with keyword). Changing the embed model means
+  a migration to resize the column **and** a re-embed of existing rows - the dimension is server-pinned
+  (`Embedding__Dimension`) and must match the column, so a mismatch fails at query time, not at startup.
   `OnModelCreating` applies the pgvector extension + column **only when the provider is Npgsql**
   (`Database.IsNpgsql()`); under other providers (the in-memory test provider) the property is
   `Ignore`d. Keep new Postgres-only model config behind that same guard so unit tests can build the model.
@@ -115,6 +140,27 @@ API persists `Segment`s + seeds `Speaker` rows → notifies the browser over **S
   since a test proving only that *test-built* contexts get it would be a false positive.
 - All user-scoped queries filter by `UserId` from the JWT `NameIdentifier` claim — preserve this
   ownership check on every recording endpoint.
+
+### Architecture diagram
+
+`docs/Runtime_Architecture.html` is a standalone, self-contained page (open it in a browser - no build,
+no network) showing the 10 core runtime components, the primary capture → transcript path, external
+dependencies and the trust boundaries. It is **generated**, not hand-edited: the source of truth is
+`docs/Runtime_Architecture.archify.json`, rendered with the `archify` skill. To change it, edit the
+JSON and re-render - never edit the HTML:
+
+```bash
+node <archify>/bin/archify.mjs deliver architecture \
+  docs/Runtime_Architecture.archify.json docs/Runtime_Architecture.html \
+  --quality showcase --repo-root . --json
+```
+
+The spec pins a **commit SHA** in `meta.repository.revision` and cites source files per component;
+rendering **fails** if a cited path does not exist at that revision, so re-pin the revision when you
+regenerate. The diagram deliberately carries supporting detail in its cards rather than extra edges -
+add facts to a card, not a new arrow. It is a **reference doc, not a release-checklist target**: refresh
+it when the component topology actually changes (a new deployable, queue, datastore or external
+dependency), not for ordinary feature work.
 
 ## Test-driven development (required)
 
