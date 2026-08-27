@@ -1,6 +1,7 @@
 # Diariz
 
 ![Diariz](images/Diariz%20Intro.png)
+**[Overall Synopsis of Platform](docs/Overall_Synopsis_of_Platform.md)**   **[Architecture Navigator](https://htmlpreview.github.io/?https://github.com/kenhayward/Diariz/blob/main/docs/Runtime_Architecture.html)** 
 
 **Smart Meeting Transcription.** Personal, multi-user voice/meeting transcription platform: record audio
 (mic or system audio), transcribe it server-side with **speaker diarization** and word-level timestamps,
