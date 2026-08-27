@@ -2568,6 +2568,17 @@ holding a rejected sample - idempotent in effect rather than in selection (the s
 kept, so the same people are found each time and recomputing a converged centroid is a no-op), which is why it
 needs no run-once marker.
 
+**Audio a voiceprint was enrolled from is exempt from the retention sweep** (`Services/AudioRetention.cs`).
+`AudioRetentionSweep.WouldDelete` is the single predicate behind both the nightly sweep and the recording
+page's "will be deleted on" hint - they were two expressions of one rule, which is how a hint comes to
+promise a deletion that never happens. The exemption is derived from live `VoiceSample` rows rather than a
+flag on the recording, so dropping the last sample lets it rejoin the policy with nothing to clear. It covers
+the **automatic** sweep only: deleting audio by hand is unchanged. Measured before it existed, 47% of
+training samples sat behind already-deleted audio, which made the confirmation workflow - whose whole premise
+is that only listening settles identity - unusable for nearly half the queue. The attributions payload
+carries `AudioAvailable` so a row whose audio has already gone says so instead of offering playback that
+silently fails.
+
 **Diagnosis is directory-wide, not per person** (`Services/VoiceprintDiagnosis.cs`). It takes the whole
 training set and reports, per sample, both the nearest *sibling* ("does this have company?") and the nearest
 **impostor** - the closest sample belonging to anyone else, with who that was. The impostor verdict takes

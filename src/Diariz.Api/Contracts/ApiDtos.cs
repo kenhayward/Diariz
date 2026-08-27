@@ -572,7 +572,12 @@ public record PersonAttributionDto(
     long SpeechMs,
     bool CanAccessRecording,
     bool StillLinked,
-    bool CanReassign);
+    bool CanReassign,
+    /// <summary>False once the recording's audio has been deleted. The transcript survives, so the row still
+    /// lists what was said - but there is nothing left to play, and offering the control anyway produced a
+    /// button that silently did nothing. Audio behind a live sample is exempt from the retention sweep from
+    /// 0.257.0, so this only stays true for recordings already swept, or deleted by hand.</summary>
+    bool AudioAvailable = true);
 
 /// <summary>How well one enrolled sample resembles the rest of a person's training set.
 ///

@@ -488,7 +488,7 @@ public class PeopleController : ControllerBase
 
         var recordings = await _db.Recordings
             .Where(r => recIds.Contains(r.Id))
-            .Select(r => new { r.Id, r.UserId, Display = r.Name ?? r.Title })
+            .Select(r => new { r.Id, r.UserId, Display = r.Name ?? r.Title, r.AudioDeletedAt })
             .ToListAsync();
 
         // Cross-owner access is exactly what ManageVoiceprints grants. Without it the row is still listed -
@@ -502,6 +502,9 @@ public class PeopleController : ControllerBase
         // Narrower than access on purpose: AssignSpeaker requires ownership, so a reassign control on a
         // recording you merely have assessment access to would be a button that always fails.
         var owned = recordings.Where(r => r.UserId == UserId).Select(r => r.Id).ToHashSet();
+
+        // The transcript outlives the audio, so a row can list what was said with nothing left to play.
+        var withAudio = recordings.Where(r => r.AudioDeletedAt is null).Select(r => r.Id).ToHashSet();
 
         // Speech per speaker comes from the current transcription's segments, which the API already stores -
         // no worker involvement, and the same figure a minimum-duration gate would read.
@@ -535,7 +538,8 @@ public class PeopleController : ControllerBase
             samples,
             recordings.ToDictionary(r => r.Id, r => r.Display),
             accessible,
-            owned));
+            owned,
+            withAudio));
     }
 
     [HttpPut("{id:guid}/attributions/{speakerId:guid}/training")]

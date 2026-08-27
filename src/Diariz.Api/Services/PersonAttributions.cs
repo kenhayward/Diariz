@@ -28,7 +28,8 @@ public static class PersonAttributions
         IReadOnlyList<VoiceSample> samples,
         IReadOnlyDictionary<Guid, string> recordingNames,
         IReadOnlySet<Guid> accessibleRecordings,
-        IReadOnlySet<Guid> ownedRecordings)
+        IReadOnlySet<Guid> ownedRecordings,
+        IReadOnlySet<Guid> recordingsWithAudio)
     {
         // Keyed on the speaker, never the recording: one person can have a speaker in each of two recordings
         // and only one of them enrolled.
@@ -56,7 +57,8 @@ public static class PersonAttributions
                     s.SpeechMs,
                     accessibleRecordings.Contains(s.RecordingId),
                     s.StillLinked,
-                    ownedRecordings.Contains(s.RecordingId));
+                    ownedRecordings.Contains(s.RecordingId),
+                    recordingsWithAudio.Contains(s.RecordingId));
             })
             .OrderBy(r => r.RecordingName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.SpeakerLabel, StringComparer.OrdinalIgnoreCase)

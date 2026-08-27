@@ -65,6 +65,7 @@
   "attributionLinkedAuto": "Recognised automatically",
   "attributionLinkedManual": "Named by hand",
   "attributionNoAccess": "In a recording you cannot access.",
+  "attributionAudioDeleted": "Audio deleted - cannot be played",
   "attributionUnlinked": "No longer linked to this person",
   "attributionReassignAria": "Change who {{label}} is in {{recording}}",
   "errReassignFailed": "Could not change who this speaker is.",

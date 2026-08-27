@@ -37,6 +37,25 @@ public static class AudioRetentionSweep
     /// exists). Shared with the detail projection so the "will be deleted" hint matches the sweep exactly.</summary>
     public static bool IsTranscribedStatus(RecordingStatus status) => Transcribed.Contains(status);
 
+    /// <summary>Whether the nightly sweep would delete this recording's audio.
+    ///
+    /// <para>One predicate, called by the sweep and by the detail page's "will be deleted on" hint. They were
+    /// two expressions of the same rule, which is how a hint comes to promise a deletion that will not
+    /// happen.</para>
+    ///
+    /// <para><paramref name="trainsAVoiceprint"/> is the exemption: <b>audio a voiceprint was enrolled from
+    /// is kept</b>. Whether a recording really is the right person can only be settled by ear, so deleting it
+    /// makes that permanently unanswerable while the embedding it produced goes on being used. Found live:
+    /// 74 of 156 training samples were already past the window, so nearly half the review queue could not be
+    /// listened to.</para>
+    ///
+    /// <para>It covers the <b>automatic</b> policy only. Deleting audio by hand is an explicit act and stays
+    /// available - the objection is to a background job silently destroying the evidence, not to a person
+    /// deciding they no longer want it.</para></summary>
+    public static bool WouldDelete(
+        RecordingStatus status, bool hasAudio, bool isProtected, bool trainsAVoiceprint) =>
+        hasAudio && !isProtected && !trainsAVoiceprint && IsTranscribedStatus(status);
+
     public static async Task<int> RunAsync(
         DiarizDbContext db, IAudioStorage storage, DateTimeOffset nowUtc, int retentionDays,
         ILogger logger, CancellationToken ct = default)
@@ -46,7 +65,11 @@ public static class AudioRetentionSweep
             .Where(r => r.AudioDeletedAt == null
                 && r.AudioProtectedAt == null
                 && r.CreatedAt < cutoff
-                && Transcribed.Contains(r.Status))
+                && Transcribed.Contains(r.Status)
+                // Audio a voiceprint was enrolled from is kept - see WouldDelete. Derived from the samples
+                // rather than a flag on the recording, so dropping the last sample lets it rejoin the policy
+                // without anything having to remember to clear a marker.
+                && !db.VoiceSamples.Any(v => v.RecordingId == r.Id && v.ExcludedAt == null))
             .ToListAsync(ct);
         if (candidates.Count == 0) return 0;
 

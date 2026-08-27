@@ -70,6 +70,12 @@ it is them, use the name dropdown on the row to hand the recording over.
 This check needs something to compare against, so a person with only one recording is never marked this way,
 however close somebody else happens to sound.
 
+Some rows say **Audio deleted - cannot be played**. Recording audio is removed automatically once it passes
+the retention period your administrator sets, and the transcript is kept. From now on, recordings a
+voiceprint was enrolled from are left alone by that clean-up, so this only affects ones already removed. You
+can still read what was said and still confirm the recording if you are sure - you may remember the meeting -
+and the voiceprint itself is unaffected, since it was measured when the recording was transcribed.
+
 Once you have listened and you are happy a recording really is this person, tick **Confirmed as this
 person**. That takes it out of the review list and off the person's warning line in the People list. It is
 not the same as **Trains the voiceprint**: one says who it is, the other says whether the audio is good

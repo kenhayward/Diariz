@@ -196,6 +196,50 @@ describe("MoveToSectionModal", () => {
     expect(api.listSections).toHaveBeenCalledWith("eng-room");
   });
 
+  /// The picker used to be capped at a fixed 16rem list inside a `max-w-sm` dialog, so a room with more
+  /// than about seven folders scrolled a short window inside an otherwise mostly-empty screen. The cap now
+  /// comes from the viewport instead: the dialog grows until it has taken most of the vertical space, and
+  /// the folder list is the part that gives (it is the flex child that shrinks and scrolls), so the header
+  /// and the create-and-move form stay pinned.
+  ///
+  /// jsdom computes no geometry, so these assert the *mechanism* rather than the resulting pixels - what
+  /// they genuinely rule out is a silent return to the fixed 16rem cap, or the dialog losing the flex
+  /// column that makes the list (rather than the form) absorb the overflow. The pixel outcome was checked
+  /// in a real browser.
+  describe("sizing", () => {
+    it("caps the dialog against the viewport instead of the old fixed list height", async () => {
+      renderModal(null);
+      await screen.findByLabelText("Filter folders");
+
+      const dialog = screen.getByRole("dialog", { name: /move to folder/i });
+      expect(dialog.className).toMatch(/max-h-\[\d+vh\]/);
+      // A plain block box would size to its content and blow past that cap; the list can only be the part
+      // that shrinks if the dialog lays its children out as a column.
+      expect(dialog.className).toMatch(/\bflex\b/);
+      expect(dialog.className).toMatch(/\bflex-col\b/);
+    });
+
+    it("lets the folder list, not the create form, absorb the overflow", async () => {
+      renderModal(null);
+      await screen.findByLabelText("Filter folders");
+
+      const list = screen.getByRole("list", { name: "Folders" });
+      expect(list.className).not.toMatch(/max-h-64/); // the old fixed 16rem window
+      expect(list.className).toMatch(/\bflex-1\b/);
+      expect(list.className).toMatch(/\bmin-h-0\b/); // or it refuses to shrink below its content
+      expect(list.className).toMatch(/overflow-y-auto/);
+    });
+
+    it("is wider than the old max-w-sm dialog", async () => {
+      renderModal(null);
+      await screen.findByLabelText("Filter folders");
+
+      const dialog = screen.getByRole("dialog", { name: /move to folder/i });
+      expect(dialog.className).not.toMatch(/max-w-sm/);
+      expect(dialog.className).toMatch(/max-w-md/);
+    });
+  });
+
   /// The recording's detail page derives its folder breadcrumbs from the `["recording", id]` query. Moving
   /// the recording used to invalidate only the `["recordings"]` list, so the page you moved it *from* kept
   /// showing the old folder until a reload.

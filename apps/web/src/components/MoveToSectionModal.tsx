@@ -92,10 +92,14 @@ export default function MoveToSectionModal({
       <div
         role="dialog"
         aria-label={t("moveToSectionTitle")}
-        className="w-full max-w-sm rounded-lg border bg-white p-4 shadow-xl dark:border-gray-700 dark:bg-gray-900"
+        // A folder tree is usually taller than the old fixed window could show, so the dialog takes most of
+        // the viewport's height and stays centred where it always was, rather than sizing to a fixed list.
+        // It is a column so that the picker's list is the one part that shrinks and scrolls (`fillHeight`
+        // below): the title and the create-and-move form keep their content height and stay in view.
+        className="flex max-h-[85vh] w-full max-w-md flex-col rounded-lg border bg-white p-4 shadow-xl dark:border-gray-700 dark:bg-gray-900"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-2 text-base font-semibold dark:text-gray-100">{t("moveToSectionTitle")}</h2>
+        <h2 className="mb-2 shrink-0 text-base font-semibold dark:text-gray-100">{t("moveToSectionTitle")}</h2>
 
         <FolderPicker
           sections={sections}
@@ -104,10 +108,11 @@ export default function MoveToSectionModal({
             if (!busy) move(id);
           }}
           onDrillChange={setDrillId}
+          fillHeight
         />
 
         <form
-          className="mt-3 flex items-center gap-2 border-t pt-3 dark:border-gray-700"
+          className="mt-3 flex shrink-0 items-center gap-2 border-t pt-3 dark:border-gray-700"
           onSubmit={(e) => {
             e.preventDefault();
             createAndMove();
@@ -130,7 +135,7 @@ export default function MoveToSectionModal({
           </button>
         </form>
 
-        {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {error && <p className="mt-2 shrink-0 text-sm text-red-600 dark:text-red-400">{error}</p>}
       </div>
     </div>
   );

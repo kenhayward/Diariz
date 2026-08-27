@@ -65,6 +65,32 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.257.0",
+    date: "2026-08-26",
+    pr: 637,
+    headline: "Keep the audio a voiceprint was built from",
+    summary:
+      "Recording audio is deleted automatically once it passes the retention window your administrator sets. The transcript survives, which is the point - but it meant the recordings behind a voiceprint quietly lost the one thing needed to check them. On the platform this was found on, **47% of the recordings training a voiceprint could no longer be played**, and the figure grew every night.\n\nThat matters because confirming a recording really is the right person can only be done by ear. Nearly half the review list was asking for a judgement that had become impossible to make - and the **Play** buttons were still there, doing nothing when pressed.\n\n**Audio a voiceprint was enrolled from is no longer deleted automatically.** It is a small set - the recordings you actually enrolled someone from, not your library - and it is the evidence behind a biometric, so it is worth keeping. Deleting audio **by hand** is unchanged: the objection is to a background job removing it silently, not to you deciding you no longer want it.\n\nWhere the audio has already gone, the row now says **Audio deleted - cannot be played** and offers no play buttons. It still lists what was said, and you can still confirm the recording: you may well remember the meeting, and blocking it would leave those recordings permanently stuck in the review list.\n\nNothing here affects recognition. The voiceprints themselves were computed when the recording was transcribed and are unaffected - it is only listening back that the deleted audio prevents.",
+    changed: [
+      "Recordings that a voiceprint was enrolled from are now **exempt from automatic audio deletion**, so they can still be listened to when checking whether a voice really is that person. Deleting audio by hand is unchanged, and a recording stops being exempt once nothing trains from it.",
+      "The recording page's \"audio will be deleted on\" note now accounts for that exemption instead of promising a deletion that will not happen.",
+    ],
+    fixed: [
+      "A recording whose audio has already been deleted now says so on the person's Voiceprint tab, instead of offering **Play voice** and **Play segment** buttons that silently did nothing. It still lists what was said, and can still be confirmed.",
+    ],
+  },
+  {
+    version: "0.256.1",
+    date: "2026-08-26",
+    pr: 638,
+    headline: "The Move to folder dialog uses the screen it has",
+    summary:
+      "**Move to folder** showed its folder list through a fixed window a little over seven rows tall, inside a dialog narrower than the names it had to fit. Anyone with more than a handful of folders scrolled a short slot in the middle of a mostly empty screen, and longer folder names ran out of room sideways.\n\nThe dialog now sizes itself against the screen instead: it stays where it always opened, centred, and grows down to about **85% of the window's height**, so a long folder tree is browsed rather than peeped at. It is also slightly wider, which is what stops the longer names being cut short.\n\nThe filter box at the top and the **New folder name** row at the bottom stay put while the list itself scrolls - so however far you scroll, the way out is still on screen. With only a few folders the dialog is no bigger than it needs to be; it grows to the cap only when there is something to show.\n\nThis is the **Move to folder** dialog only. The **Choose a folder** dialog in Preferences, which scrolls its whole body rather than just the list, is unchanged.",
+    changed: [
+      "The **Move to folder** dialog now grows to around 85% of the window height and is slightly wider, instead of capping its folder list at a fixed height. The filter box and the create-a-folder row stay pinned while the list scrolls.",
+    ],
+  },
+  {
     version: "0.256.0",
     date: "2026-08-26",
     pr: 634,
