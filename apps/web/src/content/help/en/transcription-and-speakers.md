@@ -45,7 +45,7 @@ Answer **Yes** and the speaker is named and that voice is added to their voicepr
 recognised outright next time. Answer **No** and the speaker stays anonymous; Diariz remembers, and will not
 ask you about that pairing again.
 
-The same questions are gathered under **Voices to Confirm** in the account menu, just below Preferences,
+The same questions are gathered under **Review Voice Matches** in the account menu, just below Preferences,
 which is the easier place to work through several at once. It opens as a window over whatever you were
 reading, so you keep your place. The voices waiting are listed on the left; choosing one shows what that
 voice actually said on the right, a line per segment. Each line has a play button - press it to hear that
