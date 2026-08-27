@@ -734,7 +734,7 @@
   "suggestionYes": "Yes",
   "suggestionNo": "No",
   "suggestionFailed": "Could not save that answer.",
-  "suggestionsTitle": "Voices to Confirm",
+  "suggestionsTitle": "Review Voice Matches",
   "suggestionsIntro": "Diariz recognised these voices but was not confident enough to name them. Pick one to hear what they said, then confirm or decline. Confirming teaches the voiceprint; declining is remembered, so the same voice is not offered again.",
   "suggestionsNone": "Nothing waiting to be confirmed.",
   "suggestionsFailed": "Could not load the list.",
@@ -751,6 +751,5 @@
   "suggestionExcludedCount_one": "{{count}} segment excluded",
   "suggestionExcludedCount_other": "{{count}} segments excluded",
   "suggestionRestoreExcluded": "Restore",
-  "suggestionTrainsFrom": "Confirming trains from {{kept}} of {{total}} segments",
-  "voicesToConfirm": "Voices to Confirm"
+  "suggestionTrainsFrom": "Confirming trains from {{kept}} of {{total}} segments"
 }

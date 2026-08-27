@@ -198,7 +198,14 @@ export default function UserMenu() {
             {/* Directly below Preferences, and no permission gate: the queue only ever shows your
                 own recordings, and whoever can say a voice belongs to someone was in the meeting.
                 Deliberately not folded into People, which is gated on Manage people. */}
-            <MenuRow label={t("voicesToConfirm")} onSelect={run(() => setVoicesOpen(true))} />
+            {/* The modal's own title key, not a second one in this catalogue. This row read
+                "voicesToConfirm" in the live menu because the key it used lives in the workspace
+                catalogue while this menu translates against the account one - and sharing the key is
+                also what keeps the menu item and the panel heading saying the same thing. */}
+            <MenuRow
+              label={t("workspace:suggestionsTitle")}
+              onSelect={run(() => setVoicesOpen(true))}
+            />
             {isPlatformAdmin && <MenuRow label={t("settings")} onSelect={run(() => setSettingsOpen(true))} />}
             {isAdmin && <MenuRow label={t("manageUsers")} onSelect={run(() => setUsersOpen(true))} />}
             {canManageFormulas && (

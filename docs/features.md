@@ -290,8 +290,8 @@ renames, prunes training samples, merges duplicates, and erases voiceprints (GDP
 **When Diariz is nearly sure, it asks.** Identification used to run against a single strict cut-off: a match
 either cleared it and was applied silently, or fell short and vanished. Between the acceptance distance and a
 second, looser **confirmation band**, a match is now offered instead - **Might be Ada Lovelace - is it?** on
-the speaker in the transcript, where the words and the audio already are, and gathered under **Voices to
-Confirm** in the account menu for working through a backlog. That queue is a **two-panel window** opened over
+the speaker in the transcript, where the words and the audio already are, and gathered under **Review Voice
+Matches** in the account menu for working through a backlog. That queue is a **two-panel window** opened over
 whatever you were reading, directly below Preferences in the account menu: the waiting voices on the left,
 and on the right what the open voice actually said - a line per segment, each with a single play/stop button
 that cuts a clip of exactly that moment on the server. The answer is a tick and a cross beside the question,

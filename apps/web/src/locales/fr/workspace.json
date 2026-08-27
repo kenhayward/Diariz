@@ -734,7 +734,7 @@
   "suggestionYes": "Oui",
   "suggestionNo": "Non",
   "suggestionFailed": "Impossible d'enregistrer cette réponse.",
-  "suggestionsTitle": "Voix a confirmer",
+  "suggestionsTitle": "Verifier les correspondances vocales",
   "suggestionsIntro": "Diariz a reconnu ces voix sans etre assez sur pour les nommer. Choisissez-en une pour entendre ce qui a ete dit, puis confirmez ou refusez. Confirmer entraine l'empreinte vocale ; un refus est memorise, la meme voix n'est plus proposee.",
   "suggestionsNone": "Rien à confirmer.",
   "suggestionsFailed": "Impossible de charger la liste.",
@@ -751,6 +751,5 @@
   "suggestionExcludedCount_one": "{{count}} passage retire",
   "suggestionExcludedCount_other": "{{count}} passages retires",
   "suggestionRestoreExcluded": "Restaurer",
-  "suggestionTrainsFrom": "Confirmer entraine sur {{kept}} passages sur {{total}}",
-  "voicesToConfirm": "Voix a confirmer"
+  "suggestionTrainsFrom": "Confirmer entraine sur {{kept}} passages sur {{total}}"
 }
