@@ -934,8 +934,14 @@ export const api = {
     return data as Blob;
   },
 
-  async acceptSpeakerSuggestion(speakerId: string): Promise<void> {
-    await http.post(`/api/speaker-suggestions/${speakerId}/accept`);
+  /// `spans` narrows what the voiceprint is trained from, for when the reviewer excluded segments that are
+  /// somebody else. Omit it for the whole speaker - which is what every sample does by default, and what
+  /// almost every accept wants.
+  async acceptSpeakerSuggestion(
+    speakerId: string,
+    spans?: { startMs: number; endMs: number }[],
+  ): Promise<void> {
+    await http.post(`/api/speaker-suggestions/${speakerId}/accept`, spans ? { spans } : undefined);
   },
 
   async rejectSpeakerSuggestion(speakerId: string): Promise<void> {

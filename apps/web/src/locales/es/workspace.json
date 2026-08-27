@@ -742,5 +742,14 @@
   "suggestionPlay": "Reproducir",
   "suggestionStop": "Detener",
   "suggestionNoWords": "No hay palabras grabadas para esta voz.",
+  "suggestionConfirmVoice": "Confirmar esta voz",
+  "suggestionRejectVoice": "No es esta persona",
+  "suggestionSegmentYesHint": "Si - este fragmento es suyo",
+  "suggestionSegmentNoHint": "No - quitar este fragmento",
+  "suggestionPlayAll": "Reproducir todo",
+  "suggestionStopAll": "Detener todo",
+  "suggestionExcludedCount_one": "{{count}} fragmento excluido",
+  "suggestionExcludedCount_other": "{{count}} fragmentos excluidos",
+  "suggestionRestoreExcluded": "Restaurar",
   "voicesToConfirm": "Voces por confirmar"
 }

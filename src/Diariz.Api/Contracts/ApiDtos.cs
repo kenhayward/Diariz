@@ -534,6 +534,19 @@ public record VoiceSampleDto(
 /// speaker, which is what every sample does by default.</summary>
 public record SetVoiceSampleSpansRequest(IReadOnlyList<VoiceprintSpan> Spans);
 
+/// <summary>Optional body on accepting a suggestion: the spans of that speaker's audio the voiceprint
+/// should be trained from, when the reviewer excluded some of it.
+///
+/// <para><b>Omit the body entirely</b> for the ordinary case - the whole speaker, which is what every
+/// sample does by default. An empty list would mean "train on nothing", which is a different and
+/// useless thing, and is treated as the whole speaker for the same reason
+/// <see cref="VoiceprintSpans.Serialize"/> does.</para>
+///
+/// <para>Excluding audio narrows what the voiceprint learns from. It does <b>not</b> relabel those
+/// segments in the transcript - the speaker is one row, and splitting it is a different operation.</para>
+/// </summary>
+public record AcceptSuggestionRequest(IReadOnlyList<VoiceprintSpan>? Spans = null);
+
 /// <summary>A person with their voiceprint's training provenance and how many recording-speakers they
 /// currently label.</summary>
 public record PersonDetailDto(PersonDto Person, int IdentifiedCount, IReadOnlyList<VoiceSampleDto> Samples);

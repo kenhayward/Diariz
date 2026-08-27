@@ -26,9 +26,10 @@ public class SpeakerSuggestionsEndpointTests
 
     private static SpeakerSuggestionsController Build(
         DiarizDbContext db, Guid userId, FakeAudioClipper? clipper = null,
-        FakeAudioStorage? storage = null) =>
+        FakeAudioStorage? storage = null, FakeJobQueue? queue = null) =>
         new(db, new SpeakerAssignment(db, new PeopleDirectory(db)),
-            clipper ?? new FakeAudioClipper(), storage ?? new FakeAudioStorage())
+            clipper ?? new FakeAudioClipper(), storage ?? new FakeAudioStorage(),
+            queue ?? new FakeJobQueue())
         {
             ControllerContext = Http.Context(userId),
         };
@@ -375,5 +376,83 @@ public class SpeakerSuggestionsEndpointTests
         var s = Seed(db, userId, ownedByCaller: false);
 
         Assert.IsType<NotFoundResult>(await Build(db, userId).Clip(s.SpeakerId, 0, 1000));
+    }
+
+    // ---- Accepting only part of a speaker ----
+    //
+    // A diarization label is not always one human: two people on one microphone, or a crosstalk stretch,
+    // land under a single SPEAKER_nn. Saying yes to the voice while excluding the segments that are not
+    // them has to reach the voiceprint, or the exclusion is a control that lies - the enrolment would take
+    // in exactly the audio the user just said was somebody else.
+
+    [Fact]
+    public async Task Accept_trains_from_only_the_segments_that_were_kept()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var s = Seed(db, userId);
+        var queue = new FakeJobQueue();
+
+        await Build(db, userId, queue: queue)
+            .Accept(s.SpeakerId, new AcceptSuggestionRequest([new VoiceprintSpan(0, 10_000)]));
+
+        var sample = db.VoiceSamples.Single(v => v.SpeakerId == s.SpeakerId);
+        var spans = VoiceprintSpans.Parse(sample.SpansJson);
+        Assert.Equal((0L, 10_000L), (Assert.Single(spans).StartMs, Assert.Single(spans).EndMs));
+        // Re-embedded from what is left, not left carrying the embedding of the whole speaker.
+        Assert.Null(sample.UsedMs);
+        Assert.NotNull(sample.RecomputeQueuedAt);
+        Assert.Equal(sample.Id, Assert.Single(queue.VoiceprintJobs).VoiceSampleId);
+    }
+
+    [Fact]
+    public async Task Accept_with_nothing_excluded_still_trains_from_the_whole_speaker()
+    {
+        // The overwhelmingly common case. Null spans is "the whole speaker" - an empty array would mean
+        // "train on nothing" - and it must not queue a re-embed that changes nothing.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var s = Seed(db, userId);
+        var queue = new FakeJobQueue();
+
+        await Build(db, userId, queue: queue).Accept(s.SpeakerId);
+
+        Assert.Null(db.VoiceSamples.Single(v => v.SpeakerId == s.SpeakerId).SpansJson);
+        Assert.Empty(queue.VoiceprintJobs);
+    }
+
+    [Fact]
+    public async Task Accept_with_spans_still_names_the_speaker()
+    {
+        // Naming and training are separate decisions. Excluding some audio narrows what the voiceprint
+        // learns from; it does not make the answer to "is this that person?" any less of a yes.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var s = Seed(db, userId);
+
+        await Build(db, userId).Accept(s.SpeakerId, new AcceptSuggestionRequest([new VoiceprintSpan(0, 5_000)]));
+
+        var sp = db.Speakers.Single(x => x.Id == s.SpeakerId);
+        Assert.Equal(s.PersonId, sp.PersonId);
+        Assert.Equal("Alice", sp.DisplayName);
+        Assert.Null(sp.SuggestedPersonId);
+    }
+
+    [Fact]
+    public async Task Accept_with_spans_names_an_opted_out_person_without_enrolling_them()
+    {
+        // No sample exists to shape, and none must be created. Saying "that was Alice" is your assertion
+        // about the meeting; holding Alice's biometric after she asked you not to is what she opted out of.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var s = Seed(db, userId, optedOut: true);
+        var queue = new FakeJobQueue();
+
+        await Build(db, userId, queue: queue)
+            .Accept(s.SpeakerId, new AcceptSuggestionRequest([new VoiceprintSpan(0, 5_000)]));
+
+        Assert.Equal(s.PersonId, db.Speakers.Single(x => x.Id == s.SpeakerId).PersonId);
+        Assert.Empty(db.VoiceSamples.Where(v => v.SpeakerId == s.SpeakerId));
+        Assert.Empty(queue.VoiceprintJobs);
     }
 }

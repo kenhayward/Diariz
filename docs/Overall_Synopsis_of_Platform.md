@@ -2670,6 +2670,17 @@ It is a modal rather than a route (the standalone `/voices-to-confirm` page was 
 deliberately **separate from the People modal**, which is gated on `ManagePeople`: folding the ungated queue
 inside a gated surface would have removed it from everyone who cannot browse the directory.
 
+**Accepting can train from part of a speaker.** `POST {speakerId}/accept` takes an optional
+`AcceptSuggestionRequest` body carrying the spans the reviewer kept; omitting the body is the whole speaker,
+which is what every sample does by default. When spans are supplied, `TrainFromAsync` writes them to the
+`VoiceSample` the assignment just created and enqueues a `VoiceprintJob` — deliberately the **same**
+mechanism as the Voiceprint tab's span selection rather than a second way to express it. It is silent when
+there is no sample to shape (an opted-out person is named without being enrolled, and a speaker with no
+embedding was never enrolled). This exists because a diarization label is not always one human: without it,
+excluding a segment would be a control that lies, since the enrolment would take in exactly the audio the
+reviewer just marked as somebody else. It shapes the **voiceprint only** — the segments stay under that
+speaker in the transcript, and splitting a speaker into two people is a separate operation.
+
 Two further endpoints serve the evidence beside each question — `GET {speakerId}/segments` and
 `GET {speakerId}/clip?fromMs=&toMs=`. They exist rather than reusing `PeopleController`'s assessment
 endpoints because those resolve through `ResolveAssessmentTargetAsync`, which requires `Speaker.PersonId ==

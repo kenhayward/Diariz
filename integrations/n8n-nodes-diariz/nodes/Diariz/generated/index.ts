@@ -2825,7 +2825,7 @@ const GENERATED: GeneratedResource[] = [
           "speakerId"
         ],
         "queryParams": [],
-        "hasBody": false,
+        "hasBody": true,
         "returnsArray": false
       },
       {

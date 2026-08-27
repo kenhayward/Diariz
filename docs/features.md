@@ -295,7 +295,22 @@ Confirm** in the account menu for working through a backlog. That queue is a **t
 whatever you were reading, directly below Preferences in the account menu: the waiting voices on the left,
 and on the right what the open voice actually said - a line per segment, each with a single play/stop button
 that cuts a clip of exactly that moment on the server. The answer is a tick and a cross beside the question,
-so listening and deciding happen in one place without leaving the page you were on. It is deliberately **not**
+so listening and deciding happen in one place without leaving the page you were on. **Play all** runs through
+the segments in turn, highlighting each and scrolling it into view, so a long list can be followed rather
+than hunted through.
+
+**Every segment also carries its own yes and no, and the no reaches the voiceprint.** A diarization label is
+not always one human: two people on one microphone, or a stretch of crosstalk, arrive under a single
+`SPEAKER_nn`. Answering only for the whole list forces a reviewer who can hear that part of it is somebody
+else either to accept audio that is not this person, or to discard an identification they know is right.
+Saying no to a segment takes it out of the list, and accepting then trains from **only what is left** -
+carried as spans on the enrolled sample and re-embedded by the worker, the same mechanism the Voiceprint
+tab's span selection uses, rather than a second way of saying the same thing. Excluding nothing sends no
+spans at all, which means the whole speaker and queues no re-embed, because that is what almost every accept
+wants. Exclusions belong to the voice being judged and are cleared when another is opened, and a **Restore**
+puts back anything excluded by mistake - one click with no undo that shapes a biometric needs a way back.
+What it deliberately does **not** do is relabel those segments in the transcript: the speaker is one row, and
+splitting it into two people is a different operation. It is deliberately **not**
 a panel inside the People directory: the queue shows **your own recordings only** and needs no permission -
 the people who can answer whether a voice belongs to someone were in the meeting - whereas the directory is
 gated on Manage people, so folding one into the other would take the queue away from everyone who cannot

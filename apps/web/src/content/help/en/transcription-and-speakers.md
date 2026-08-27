@@ -49,8 +49,20 @@ The same questions are gathered under **Voices to Confirm** in the account menu,
 which is the easier place to work through several at once. It opens as a window over whatever you were
 reading, so you keep your place. The voices waiting are listed on the left; choosing one shows what that
 voice actually said on the right, a line per segment. Each line has a play button - press it to hear that
-moment, press it again to stop - and the tick and cross beside the question record your answer. Answering one
-moves you straight on to the next.
+moment, press it again to stop - and **Play all** runs through them in turn, highlighting each one and
+bringing it into view as it plays. The tick and cross beside the question answer for the whole voice, and
+answering one moves you straight on to the next.
+
+**Each segment has its own yes and no as well.** Sometimes a single speaker is not a single person: two
+people share a microphone, or they talk over each other, and the software puts it all under one label. Say
+**no** to a segment and it leaves the list; what remains is what the voiceprint is trained from, so a stretch
+that is somebody else is genuinely kept out rather than just hidden from you. Say **yes** to mark one you are
+sure of. **Restore** puts back anything you excluded by mistake, and starting on another voice clears your
+choices, since they belonged to the one before it.
+
+Excluding a segment shapes the **voiceprint**, not the transcript. Those segments stay under the same speaker
+and will carry that person's name once you confirm the voice. If a speaker really is two different people,
+re-transcribe with a minimum and maximum speaker hint instead.
 
 You only ever see suggestions for your own recordings, and no permission is needed: the person who can say
 whether a voice belongs to someone is whoever was in the meeting. Nothing is named until you say so - a

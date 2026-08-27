@@ -742,5 +742,14 @@
   "suggestionPlay": "Play",
   "suggestionStop": "Stop",
   "suggestionNoWords": "No words recorded for this voice.",
+  "suggestionConfirmVoice": "Confirm this voice",
+  "suggestionRejectVoice": "Not this person",
+  "suggestionSegmentYesHint": "Yes - this segment is them",
+  "suggestionSegmentNoHint": "No - take this segment out",
+  "suggestionPlayAll": "Play all",
+  "suggestionStopAll": "Stop all",
+  "suggestionExcludedCount_one": "{{count}} segment excluded",
+  "suggestionExcludedCount_other": "{{count}} segments excluded",
+  "suggestionRestoreExcluded": "Restore",
   "voicesToConfirm": "Voices to Confirm"
 }
