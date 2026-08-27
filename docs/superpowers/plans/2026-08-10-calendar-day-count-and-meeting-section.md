@@ -390,7 +390,7 @@ Add to `apps/web/src/components/detail/MeetingCard.test.tsx`, and add `onOpen: v
     // The invite's body is no longer inlined - that is the whole point of the change.
     expect(screen.queryByText("Apologies it is late for Europe.")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /QnR Competences merging to one/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Quarterly roadmap review/ }));
     expect(h.onOpen).toHaveBeenCalled();
   });
 

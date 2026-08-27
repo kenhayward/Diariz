@@ -15,7 +15,7 @@ public class PersonalRoomNameBackfillTests(ContainersFixture fx)
     public async Task Backfill_RenamesADriftedPersonalRoom_AndIsIdempotent()
     {
         await using var db = fx.CreateDbContext();
-        var user = await SeedUserAsync(db, "Ken Hayward");
+        var user = await SeedUserAsync(db, "Ada Lovelace");
         var room = new Room
         {
             Id = Guid.NewGuid(), Name = "Platform Administrator", Kind = RoomKind.Personal, OwnerUserId = user.Id,
@@ -28,14 +28,14 @@ public class PersonalRoomNameBackfillTests(ContainersFixture fx)
         await db.Database.ExecuteSqlRawAsync(PersonalRoomNameBackfill.Sql);
 
         db.ChangeTracker.Clear(); // the tracked entity still holds the pre-UPDATE name
-        Assert.Equal("Ken Hayward", (await db.Rooms.SingleAsync(r => r.Id == room.Id)).Name);
+        Assert.Equal("Ada Lovelace", (await db.Rooms.SingleAsync(r => r.Id == room.Id)).Name);
     }
 
     [Fact]
     public async Task Backfill_LeavesSharedRoomsAlone()
     {
         await using var db = fx.CreateDbContext();
-        var user = await SeedUserAsync(db, "Ken Hayward");
+        var user = await SeedUserAsync(db, "Ada Lovelace");
         var room = new Room
         {
             // Unique: Rooms.Name carries a filtered unique index for SHARED rooms, and every class in this

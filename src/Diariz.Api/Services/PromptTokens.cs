@@ -15,7 +15,7 @@ namespace Diariz.Api.Services;
 public static partial class PromptTokens
 {
     /// <summary>The word boundary is load-bearing: without it a literal <c>$USERNAMES</c> in someone's prompt
-    /// would silently become "Ken HaywardS". Case-sensitive, so ordinary prose containing "$username" is left
+    /// would silently become "Ada LovelaceS". Case-sensitive, so ordinary prose containing "$username" is left
     /// alone.</summary>
     [GeneratedRegex(@"\$USERNAME\b")]
     private static partial Regex UserNameToken();

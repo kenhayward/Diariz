@@ -50,7 +50,7 @@ public class RoomsIntegrationTests(ContainersFixture fx)
         await using var db = fx.CreateDbContext();
         var a = await NewUserAsync(db);
         var b = await NewUserAsync(db);
-        var name = $"Ken Hayward {Guid.NewGuid():N}";
+        var name = $"Ada Lovelace {Guid.NewGuid():N}";
 
         db.Rooms.Add(Personal(a, name));
         db.Rooms.Add(Personal(b, name));

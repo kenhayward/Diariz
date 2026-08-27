@@ -28,7 +28,7 @@ const JOIN_PATTERNS: RegExp[] = [
   /teams\.microsoft\.com\/meet\//i, // Teams, the short form it hands out today
   /teams\.microsoft\.us\/l\/meetup-join\//i, // Teams for US government tenants
   /teams\.live\.com\/meet\//i, // Teams on a personal account
-  /zoom\.us\/(j|w|s|my)\//i, // Zoom, including a vanity host like 3ds.zoom.us
+  /zoom\.us\/(j|w|s|my)\//i, // Zoom, including a vanity host like acme.zoom.us
   /meet\.google\.com\//i,
   /\.webex\.com\/(meet|join|m)\//i,
   /whereby\.com\//i,

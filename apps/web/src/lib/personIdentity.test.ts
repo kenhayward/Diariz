@@ -3,7 +3,7 @@ import { personIdentity } from "./personIdentity";
 import type { Person } from "./types";
 
 const base: Person = {
-  id: "p1", name: "Ken Hayward", title: null, companyName: null, email: null, phone: null,
+  id: "p1", name: "Ada Lovelace", title: null, companyName: null, email: null, phone: null,
   isInternal: true, voiceprintOptOut: false, hasVoiceprint: false, sampleCount: 0,
   linkedUserId: null, isSelf: false, canManageBiometrics: false,
   createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z",
@@ -11,8 +11,8 @@ const base: Person = {
 
 describe("personIdentity", () => {
   it("marks the signed-in user's own record", () => {
-    expect(personIdentity({ ...base, linkedUserId: "u1", isSelf: true, email: "ken@example.com" }))
-      .toEqual({ kind: "self", email: "ken@example.com", i18nKey: "identitySelf" });
+    expect(personIdentity({ ...base, linkedUserId: "u1", isSelf: true, email: "ada@example.com" }))
+      .toEqual({ kind: "self", email: "ada@example.com", i18nKey: "identitySelf" });
   });
 
   it("names the account for someone else's linked record", () => {

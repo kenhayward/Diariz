@@ -11,7 +11,7 @@ See [diariz.app](https://www.diariz.app) for more details, videos and screenshot
 [docs/Overall_Synopsis_of_Platform.md](docs/Overall_Synopsis_of_Platform.md) has the original brief and the
 architecture plan for the full design.
 
-[docs/Runtime_Architcture.html](https://htmlpreview.github.io/?https://github.com/kenhayward/Diariz/blob/main/docs/Runtime_Architecture.html) has a live visual navigation of how Diariz fits together.
+[docs/Runtime_Architecture.html](https://htmlpreview.github.io/?https://github.com/kenhayward/Diariz/blob/main/docs/Runtime_Architecture.html) has a live visual navigation of how Diariz fits together.
 
 Versioned per the rule in [CLAUDE.md](CLAUDE.md); the current version and per-release notes live in
 [`apps/web/src/lib/releases.ts`](apps/web/src/lib/releases.ts) (and [`/version.json`](version.json)) and on
@@ -69,7 +69,7 @@ See **[docs/features.md](docs/features.md)** for the full prose description of e
 
 ## Architecture
 
-[docs/Runtime_Architcture.html](https://htmlpreview.github.io/?https://github.com/kenhayward/Diariz/blob/main/docs/Runtime_Architecture.html) has a live visual navigation of how Diariz fits together.
+[docs/Runtime_Architecture.html](https://htmlpreview.github.io/?https://github.com/kenhayward/Diariz/blob/main/docs/Runtime_Architecture.html) has a live visual navigation of how Diariz fits together.
 
 | Component | Tech | Path |
 | :--- | :--- | :--- |

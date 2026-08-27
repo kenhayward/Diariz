@@ -10,8 +10,8 @@ public class PromptTokensTests
     public void Substitute_ReplacesTheToken()
     {
         Assert.Equal(
-            "What role did Ken Hayward play?",
-            PromptTokens.Substitute("What role did $USERNAME play?", "Ken Hayward"));
+            "What role did Ada Lovelace play?",
+            PromptTokens.Substitute("What role did $USERNAME play?", "Ada Lovelace"));
     }
 
     [Fact]
@@ -71,11 +71,11 @@ public class PromptTokensTests
             ]),
         ]);
 
-        var applied = PromptTokens.Apply(content, "Ken Hayward");
+        var applied = PromptTokens.Apply(content, "Ada Lovelace");
 
-        Assert.Equal("Notes for Ken Hayward", applied.Sections[0].Title);
-        Assert.Equal("What did Ken Hayward decide?", applied.Sections[0].Blocks[0].Text);
-        Assert.Equal("Prepared for Ken Hayward.", applied.Sections[0].Blocks[1].Text);
+        Assert.Equal("Notes for Ada Lovelace", applied.Sections[0].Title);
+        Assert.Equal("What did Ada Lovelace decide?", applied.Sections[0].Blocks[0].Text);
+        Assert.Equal("Prepared for Ada Lovelace.", applied.Sections[0].Blocks[1].Text);
         Assert.Equal("date", applied.Sections[0].Blocks[2].Field); // untouched
         Assert.Null(applied.Sections[0].Blocks[3].Text);           // hr carries no text
     }

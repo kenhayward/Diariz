@@ -144,11 +144,11 @@ describe("meetingJoinUrl - mirrored Outlook without a direct join link", () => {
       meetingJoinUrl(
         ev({
           calendarId: "outlook:2f1c...",
-          htmlLink: "https://3ds.zoom.us/j/84082224069",
+          htmlLink: "https://acme.zoom.us/j/55566677788",
           description: "https://teams.microsoft.com/l/meetup-join/19%3ameeting_abc",
         }),
       ),
-    ).toBe("https://3ds.zoom.us/j/84082224069");
+    ).toBe("https://acme.zoom.us/j/55566677788");
   });
 });
 
@@ -176,7 +176,7 @@ describe("meetingJoinUrl - providers the list does not know", () => {
 describe("meetingJoinUrl - the rest of the provider list", () => {
   const cases: [string, string][] = [
     ["Google Meet", "https://meet.google.com/abc-defg-hij"],
-    ["Zoom on a vanity host", "https://3ds.zoom.us/j/84082224069?pwd=y3tBMEPbw75Xso"],
+    ["Zoom on a vanity host", "https://acme.zoom.us/j/55566677788?pwd=ZyXwVuTsRqPoNm"],
     ["Zoom personal room", "https://zoom.us/my/jane.doe"],
     ["Zoom webinar", "https://zoom.us/w/81898223973"],
     ["Webex", "https://acme.webex.com/meet/jane.doe"],

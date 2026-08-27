@@ -8,7 +8,7 @@ import type { SectionDto } from "../../lib/types";
 const section = (id: string, name: string, parentId: string | null = null): SectionDto =>
   ({ id, name, parentId, position: 0 }) as SectionDto;
 
-const sections = [section("customers", "Customers"), section("ambu", "Ambu", "customers")];
+const sections = [section("customers", "Customers"), section("northwind", "Northwind", "customers")];
 
 function renderCrumb(sectionId: string | null, onDrill = vi.fn()) {
   render(
@@ -41,8 +41,8 @@ describe("DrillBreadcrumb", () => {
   });
 
   it("shows the current folder along with its parent", () => {
-    renderCrumb("ambu");
-    expect(screen.getByText("Ambu")).toBeTruthy();
+    renderCrumb("northwind");
+    expect(screen.getByText("Northwind")).toBeTruthy();
     expect(screen.getByText("Customers")).toBeTruthy();
   });
 
@@ -91,7 +91,7 @@ describe("DrillBreadcrumb", () => {
   });
 
   it("back pops to the parent", () => {
-    const onDrill = renderCrumb("ambu");
+    const onDrill = renderCrumb("northwind");
     fireEvent.click(screen.getByRole("button", { name: /back/i }));
     expect(onDrill).toHaveBeenCalledWith("customers");
   });
@@ -108,15 +108,15 @@ describe("DrillBreadcrumb", () => {
     const onDrill = vi.fn();
     let location = { pathname: "", search: "" };
     render(
-      <MemoryRouter initialEntries={["/?in=ambu"]}>
+      <MemoryRouter initialEntries={["/?in=northwind"]}>
         <LocationSpy onChange={(loc) => (location = loc)} />
-        <DrillBreadcrumb sections={sections} sectionId="ambu" basePath="" onDrill={onDrill} />
+        <DrillBreadcrumb sections={sections} sectionId="northwind" basePath="" onDrill={onDrill} />
       </MemoryRouter>,
     );
 
     await userEvent.click(screen.getByRole("link", { name: "View folder page" }));
 
-    expect(location.pathname).toBe("/sections/ambu");
+    expect(location.pathname).toBe("/sections/northwind");
     expect(onDrill).not.toHaveBeenCalled();
   });
 
@@ -126,36 +126,36 @@ describe("DrillBreadcrumb", () => {
   it("keeps the drill position when opening the folder page", async () => {
     let location = { pathname: "", search: "" };
     render(
-      <MemoryRouter initialEntries={["/?in=ambu"]}>
+      <MemoryRouter initialEntries={["/?in=northwind"]}>
         <LocationSpy onChange={(loc) => (location = loc)} />
-        <DrillBreadcrumb sections={sections} sectionId="ambu" basePath="" onDrill={vi.fn()} />
+        <DrillBreadcrumb sections={sections} sectionId="northwind" basePath="" onDrill={vi.fn()} />
       </MemoryRouter>,
     );
 
     await userEvent.click(screen.getByRole("link", { name: "View folder page" }));
 
-    expect(location.pathname + location.search).toBe("/sections/ambu?in=ambu");
+    expect(location.pathname + location.search).toBe("/sections/northwind?in=northwind");
   });
 
   it("keeps the room prefix on the folder page button in a shared room", () => {
     render(
-      <MemoryRouter initialEntries={["/?in=ambu"]}>
-        <DrillBreadcrumb sections={sections} sectionId="ambu" basePath="/rooms/r1" onDrill={vi.fn()} />
+      <MemoryRouter initialEntries={["/?in=northwind"]}>
+        <DrillBreadcrumb sections={sections} sectionId="northwind" basePath="/rooms/r1" onDrill={vi.fn()} />
       </MemoryRouter>,
     );
 
     const link = screen.getByRole("link", { name: "View folder page" });
-    expect(link.getAttribute("href")).toBe("/rooms/r1/sections/ambu?in=ambu");
+    expect(link.getAttribute("href")).toBe("/rooms/r1/sections/northwind?in=northwind");
   });
 
   // Promoting the button out of the menu means taking it OUT of the menu - one action, one control.
   it("leaves the menu as nothing but the ancestor chain", async () => {
-    renderCrumb("ambu");
+    renderCrumb("northwind");
 
     await userEvent.click(screen.getByLabelText("Show full folder path"));
 
     const items = screen.getAllByRole("menuitem").map((el) => el.textContent);
-    expect(items).toEqual(["Customers", "Ambu"]);
+    expect(items).toEqual(["Customers", "Northwind"]);
   });
 
   // Drilled into a folder that was deleted underneath us: don't crash, offer a way back out.

@@ -456,7 +456,7 @@ the DTO since voiceprints shipped, with a comment saying it exists so the UI can
 rendered nowhere - finally gets used.
 
 **Cross-owner rows.** The directory is platform-wide but recordings are ownership-filtered, and this is
-live, not theoretical: "Ken Hayward" already spans both users across 133 speakers. Today the expand
+live, not theoretical: "Ada Lovelace" already spans both users across 133 speakers. Today the expand
 fails silently. With `ManageVoiceprints` the clip endpoint serves the audio; without it, the row still
 appears (it is genuinely part of what trained the voiceprint) but is labelled as being in an
 inaccessible recording, with no play button and no segment list.

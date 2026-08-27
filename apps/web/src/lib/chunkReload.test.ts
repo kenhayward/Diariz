@@ -75,7 +75,7 @@ describe("chunkReload", () => {
     // The exact string the deployed bundle produced, from the reported bug.
     it("recognises the real Vite failure", () => {
       const real = new Error(
-        "Failed to fetch dynamically imported module: https://diariz.stocks-hayward.com/assets/LlmModels-CcQYuFEJ.js",
+        "Failed to fetch dynamically imported module: https://app.example.com/assets/LlmModels-CcQYuFEJ.js",
       );
       expect(isStaleChunkError(real)).toBe(true);
     });

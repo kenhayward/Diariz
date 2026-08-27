@@ -1308,10 +1308,10 @@ git commit -m "feat: build the recordings tree to any depth"
 In `apps/web/src/lib/drillView.test.ts`, first extend the fixture at the top. Replace lines `12-17`:
 
 ```ts
-// Customers ▸ Ambu, plus a loose recording at the root.
+// Customers ▸ Northwind, plus a loose recording at the root.
 const sections = [
   section("customers", "Customers"),
-  section("ambu", "Ambu", "customers"),
+  section("northwind", "Northwind", "customers"),
   section("podcasts", "Podcasts", null, 1),
 ];
 ```
@@ -1319,10 +1319,10 @@ const sections = [
 with:
 
 ```ts
-// Customers > Ambu, plus a loose recording at the root.
+// Customers > Northwind, plus a loose recording at the root.
 const sections = [
   section("customers", "Customers"),
-  section("ambu", "Ambu", "customers"),
+  section("northwind", "Northwind", "customers"),
   section("podcasts", "Podcasts", null, 1),
 ];
 
@@ -1345,7 +1345,7 @@ describe("depthOf", () => {
   it("counts the root as 0 and a top-level folder as 1", () => {
     expect(depthOf(sections, null)).toBe(0);
     expect(depthOf(sections, "customers")).toBe(1);
-    expect(depthOf(sections, "ambu")).toBe(2);
+    expect(depthOf(sections, "northwind")).toBe(2);
   });
 
   it("is 0 for an unknown id", () => {
@@ -1367,7 +1367,7 @@ describe("sectionCreateTarget", () => {
 
   // The cap is now 8 levels, not 1, so a sub-section is an ordinary parent.
   it("inside a sub-section: a sub-section of that", () => {
-    expect(sectionCreateTarget(sections, "ambu")).toEqual({
+    expect(sectionCreateTarget(sections, "northwind")).toEqual({
       kind: "child",
       parent: sections[1],
     });

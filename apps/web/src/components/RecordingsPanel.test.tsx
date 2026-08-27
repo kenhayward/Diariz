@@ -310,12 +310,12 @@ describe("RecordingsPanel", () => {
   describe("drill-in", () => {
     const drillSections = [
       { id: "customers", name: "Customers", parentId: null, position: 0 },
-      { id: "ambu", name: "Ambu", parentId: "customers", position: 0 },
+      { id: "northwind", name: "Northwind", parentId: "customers", position: 0 },
     ];
     const drillRecordings = [
       { ...rec, id: "root-r", name: "Loose one", sectionId: null, sectionName: null },
       { ...rec, id: "cust-r", name: "Account review", sectionId: "customers", sectionName: "Customers" },
-      { ...rec, id: "ambu-r", name: "Deep in ambu", sectionId: "ambu", sectionName: "Ambu" },
+      { ...rec, id: "northwind-r", name: "Deep in northwind", sectionId: "northwind", sectionName: "Northwind" },
     ];
     beforeEach(() => {
       (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue(drillSections);
@@ -328,7 +328,7 @@ describe("RecordingsPanel", () => {
       expect(await screen.findByText("Loose one")).toBeTruthy(); // ungrouped, directly at root
       expect(screen.getByText("Customers")).toBeTruthy(); // a folder row
       expect(screen.queryByText("Account review")).toBeNull();
-      expect(screen.queryByText("Deep in ambu")).toBeNull();
+      expect(screen.queryByText("Deep in northwind")).toBeNull();
     });
 
     it("drills into a folder when its row body is clicked", async () => {
@@ -336,14 +336,14 @@ describe("RecordingsPanel", () => {
       fireEvent.click(await screen.findByRole("button", { name: /open customers/i }));
 
       expect(await screen.findByText("Account review")).toBeTruthy();
-      expect(screen.getByText("Ambu")).toBeTruthy(); // the sub-folder, as a row
+      expect(screen.getByText("Northwind")).toBeTruthy(); // the sub-folder, as a row
       expect(screen.queryByText("Loose one")).toBeNull(); // the root level is gone
-      expect(screen.queryByText("Deep in ambu")).toBeNull(); // still one level down
+      expect(screen.queryByText("Deep in northwind")).toBeNull(); // still one level down
     });
 
     it("drills two levels deep", async () => {
-      renderList("/?in=ambu");
-      expect(await screen.findByText("Deep in ambu")).toBeTruthy();
+      renderList("/?in=northwind");
+      expect(await screen.findByText("Deep in northwind")).toBeTruthy();
       expect(screen.queryByText("Account review")).toBeNull();
     });
 
@@ -358,7 +358,7 @@ describe("RecordingsPanel", () => {
     });
 
     it("pops a level from the breadcrumb back button", async () => {
-      renderList("/?in=ambu");
+      renderList("/?in=northwind");
       fireEvent.click(await screen.findByRole("button", { name: /^back$/i }));
       expect(await screen.findByText("Account review")).toBeTruthy();
     });
@@ -412,7 +412,7 @@ describe("RecordingsPanel", () => {
 
     it("counts recordings underneath a folder, including its sub-folders", async () => {
       renderList();
-      // Customers holds one directly + one in Ambu.
+      // Customers holds one directly + one in Northwind.
       expect(await screen.findByText("2")).toBeTruthy();
     });
 
@@ -445,7 +445,7 @@ describe("RecordingsPanel", () => {
     // The cap is 8 levels deep, not 1, so a sub-section two levels in still has plenty of legal room -
     // the folder button stays enabled and keeps offering "New sub-section".
     it("keeps the folder button enabled inside a sub-section, well short of the depth cap", async () => {
-      renderList("/?in=ambu");
+      renderList("/?in=northwind");
       const btn = (await screen.findByRole("button", { name: /^new sub-folder$/i })) as HTMLButtonElement;
       expect(btn.disabled).toBe(false);
     });
@@ -488,17 +488,17 @@ describe("RecordingsPanel", () => {
     });
 
     // Goes through the real tree rather than feeding SectionRow a hand-built prop: drills into "customers"
-    // so its child "ambu" renders as a SectionRow, cuts it from there, and checks the source is the
-    // drilled-into parent ("customers") rather than the cut folder's own id ("ambu"). Those two ids must
+    // so its child "northwind" renders as a SectionRow, cuts it from there, and checks the source is the
+    // drilled-into parent ("customers") rather than the cut folder's own id ("northwind"). Those two ids must
     // differ in this fixture, or the assertion could pass even if RecordingsPanel wired the wrong one - this
     // is exactly what would catch a call site accidentally passing node.id instead of drill.sectionId.
     it("cuts a folder using the drilled-into level as its source, not the folder's own id", async () => {
       let cut: MoveClipboardCut | null = null;
       renderListWithClipboardSpy("/?in=customers", (c) => (cut = c));
-      await screen.findByText("Ambu"); // the child folder row, rendered as a SectionRow at this level
+      await screen.findByText("Northwind"); // the child folder row, rendered as a SectionRow at this level
       fireEvent.click(screen.getByRole("button", { name: /folder actions/i }));
       fireEvent.click(screen.getByRole("menuitem", { name: /^cut$/i }));
-      expect(cut).toEqual({ kind: "folders", ids: ["ambu"], sourceSectionId: "customers", sourceRoomId: null });
+      expect(cut).toEqual({ kind: "folders", ids: ["northwind"], sourceSectionId: "customers", sourceRoomId: null });
     });
 
     // Selection state is global while the drill position is local to a level: ticking rows at the root then
@@ -556,14 +556,14 @@ describe("RecordingsPanel", () => {
 
     it("greys out a cut folder's row with a dashed outline, without removing it", async () => {
       renderListWithClipboardSpy("/?in=customers", () => {});
-      await screen.findByText("Ambu");
-      const before = screen.getByText("Ambu").closest("div")!;
+      await screen.findByText("Northwind");
+      const before = screen.getByText("Northwind").closest("div")!;
       expect(before.className).not.toContain("opacity-50");
 
       fireEvent.click(screen.getByRole("button", { name: /folder actions/i }));
       fireEvent.click(screen.getByRole("menuitem", { name: /^cut$/i }));
 
-      const after = screen.getByText("Ambu").closest("div")!; // still rendered - not removed
+      const after = screen.getByText("Northwind").closest("div")!; // still rendered - not removed
       expect(after.className).toContain("opacity-50");
       expect(after.className).toContain("outline-dashed");
     });
@@ -700,13 +700,13 @@ describe("RecordingsPanel", () => {
     // recording at position 0 (the top) - dropping the same recording onto a folder row instead appends it.
     // One gesture must not have two behaviours.
     it("appends a recording dropped on a breadcrumb crumb, after what is already there", async () => {
-      renderList("/?in=ambu");
-      await screen.findByText("Deep in ambu");
+      renderList("/?in=northwind");
+      await screen.findByText("Deep in northwind");
       const crumb = screen.getByRole("button", { name: /^customers$/i });
-      fireEvent.drop(crumb, { dataTransfer: { getData: () => "ambu-r" } });
+      fireEvent.drop(crumb, { dataTransfer: { getData: () => "northwind-r" } });
 
       await waitFor(() =>
-        expect(api.reorderRecordings).toHaveBeenCalledWith("customers", ["cust-r", "ambu-r"], undefined),
+        expect(api.reorderRecordings).toHaveBeenCalledWith("customers", ["cust-r", "northwind-r"], undefined),
       );
     });
   });

@@ -102,7 +102,7 @@ import { personIdentity } from "./personIdentity";
 import type { Person } from "./types";
 
 const base: Person = {
-  id: "p1", name: "Ken Hayward", title: null, companyName: null, email: null, phone: null,
+  id: "p1", name: "Ada Lovelace", title: null, companyName: null, email: null, phone: null,
   isInternal: true, voiceprintOptOut: false, hasVoiceprint: false, sampleCount: 0,
   linkedUserId: null, isSelf: false, canManageBiometrics: false,
   createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z",
@@ -110,8 +110,8 @@ const base: Person = {
 
 describe("personIdentity", () => {
   it("marks the signed-in user's own record", () => {
-    expect(personIdentity({ ...base, linkedUserId: "u1", isSelf: true, email: "ken@example.com" }))
-      .toEqual({ kind: "self", email: "ken@example.com", i18nKey: "identitySelf" });
+    expect(personIdentity({ ...base, linkedUserId: "u1", isSelf: true, email: "ada@example.com" }))
+      .toEqual({ kind: "self", email: "ada@example.com", i18nKey: "identitySelf" });
   });
 
   it("names the account for someone else's linked record", () => {
@@ -192,19 +192,19 @@ Add to `apps/web/src/components/PeopleModal.test.tsx`, following the file's exis
 it("shows each person's account identity in the list", async () => {
   // Two people with the same name: the list is useless unless the rows differ.
   mockPeople([
-    { ...personFixture, id: "a", name: "Ken Hayward", linkedUserId: "u1", isSelf: true, email: "ken@example.com" },
-    { ...personFixture, id: "b", name: "Ken Hayward", linkedUserId: "u2", isSelf: false, email: "ken@acme.com" },
+    { ...personFixture, id: "a", name: "Ada Lovelace", linkedUserId: "u1", isSelf: true, email: "ada@example.com" },
+    { ...personFixture, id: "b", name: "Ada Lovelace", linkedUserId: "u2", isSelf: false, email: "ada@acme.com" },
   ]);
   render(<PeopleModal onClose={() => {}} />, { wrapper });
-  expect(await screen.findByText("ken@example.com - your account")).toBeTruthy();
-  expect(screen.getByText("ken@acme.com - Diariz account")).toBeTruthy();
+  expect(await screen.findByText("ada@example.com - your account")).toBeTruthy();
+  expect(screen.getByText("ada@acme.com - Diariz account")).toBeTruthy();
 });
 ```
 
 - [ ] **Step 7: Run it and verify it fails**
 
 Run: `cd apps/web && npx vitest run src/components/PeopleModal.test.tsx`
-Expected: FAIL - "Unable to find an element with the text: ken@example.com - your account".
+Expected: FAIL - "Unable to find an element with the text: ada@example.com - your account".
 
 - [ ] **Step 8: Render the identity line in the list row**
 
@@ -266,20 +266,20 @@ git commit -m "feat(people): show each person's account identity in the director
 ```tsx
 // apps/web/src/components/MergePeopleDialog.test.tsx
 it("names both accounts when it refuses a linked/linked merge", () => {
-  const a = { ...personFixture, id: "a", name: "Ken Hayward", linkedUserId: "u1", isSelf: true, email: "ken@example.com" };
-  const b = { ...personFixture, id: "b", name: "Ken Hayward", linkedUserId: "u2", isSelf: false, email: "ken@acme.com" };
+  const a = { ...personFixture, id: "a", name: "Ada Lovelace", linkedUserId: "u1", isSelf: true, email: "ada@example.com" };
+  const b = { ...personFixture, id: "b", name: "Ada Lovelace", linkedUserId: "u2", isSelf: false, email: "ada@acme.com" };
   render(<MergePeopleDialog people={[a, b]} reason="name" onMerge={async () => {}} onClose={() => {}} />);
 
   // The refusal is only actionable if it says which two accounts it means.
-  expect(screen.getByText("ken@example.com - your account")).toBeTruthy();
-  expect(screen.getByText("ken@acme.com - Diariz account")).toBeTruthy();
+  expect(screen.getByText("ada@example.com - your account")).toBeTruthy();
+  expect(screen.getByText("ada@acme.com - Diariz account")).toBeTruthy();
   // And it must still refuse.
   expect(screen.queryByRole("button", { name: /merge/i })).toBeNull();
 });
 
 it("shows the no-account state for an unlinked person", () => {
-  const a = { ...personFixture, id: "a", name: "Ken Hayward", linkedUserId: "u1", isSelf: true, email: "ken@example.com" };
-  const b = { ...personFixture, id: "b", name: "Ken Hayward", linkedUserId: null, isSelf: false, email: null };
+  const a = { ...personFixture, id: "a", name: "Ada Lovelace", linkedUserId: "u1", isSelf: true, email: "ada@example.com" };
+  const b = { ...personFixture, id: "b", name: "Ada Lovelace", linkedUserId: null, isSelf: false, email: null };
   render(<MergePeopleDialog people={[a, b]} reason="name" onMerge={async () => {}} onClose={() => {}} />);
   expect(screen.getByText("no Diariz account")).toBeTruthy();
 });
@@ -288,7 +288,7 @@ it("shows the no-account state for an unlinked person", () => {
 - [ ] **Step 2: Run it and verify it fails**
 
 Run: `cd apps/web && npx vitest run src/components/MergePeopleDialog.test.tsx`
-Expected: FAIL - "Unable to find an element with the text: ken@example.com - your account".
+Expected: FAIL - "Unable to find an element with the text: ada@example.com - your account".
 
 - [ ] **Step 3: Render identity under both names in the dialog**
 
@@ -320,12 +320,12 @@ Expected: PASS.
 // apps/web/src/components/PeopleModal.test.tsx
 it("lists each duplicate with its identity rather than joining bare names", async () => {
   mockDuplicates([{ reason: "name", people: [
-    { ...personFixture, id: "a", name: "Ken Hayward", linkedUserId: "u1", isSelf: true, email: "ken@example.com" },
-    { ...personFixture, id: "b", name: "Ken Hayward", linkedUserId: null, email: null },
+    { ...personFixture, id: "a", name: "Ada Lovelace", linkedUserId: "u1", isSelf: true, email: "ada@example.com" },
+    { ...personFixture, id: "b", name: "Ada Lovelace", linkedUserId: null, email: null },
   ]}]);
   render(<PeopleModal onClose={() => {}} />, { wrapper });
-  // The old banner rendered "Ken Hayward, Ken Hayward" and was undecidable.
-  expect(await screen.findByText(/ken@example\.com - your account/)).toBeTruthy();
+  // The old banner rendered "Ada Lovelace, Ada Lovelace" and was undecidable.
+  expect(await screen.findByText(/ada@example\.com - your account/)).toBeTruthy();
   expect(screen.getByText(/no Diariz account/)).toBeTruthy();
 });
 ```

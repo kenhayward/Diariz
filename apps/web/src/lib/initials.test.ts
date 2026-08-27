@@ -18,12 +18,12 @@ describe("initialsFromName", () => {
 describe("initialsFromEmail", () => {
   it("uses two name parts when present", () => {
     expect(initialsFromEmail("jane.doe@example.com")).toBe("JD");
-    expect(initialsFromEmail("ken_hayward@x.io")).toBe("KH");
+    expect(initialsFromEmail("ada_lovelace@x.io")).toBe("AL");
     expect(initialsFromEmail("a-b@x.io")).toBe("AB");
   });
 
   it("falls back to the first two letters of a single part", () => {
-    expect(initialsFromEmail("ken@stocks.com")).toBe("KE");
+    expect(initialsFromEmail("ada@lovelace.com")).toBe("AD");
     expect(initialsFromEmail("x@y.com")).toBe("X");
   });
 

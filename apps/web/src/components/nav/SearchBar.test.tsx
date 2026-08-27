@@ -104,9 +104,9 @@ describe("SearchBar", () => {
           name: "Quarterly review",
           createdAt: new Date("2026-06-26T12:00:00Z").toISOString(),
           durationMs: 9000,
-          sectionId: "ambu",
-          sectionName: "Ambu",
-          breadcrumb: ["Customers", "Ambu"],
+          sectionId: "northwind",
+          sectionName: "Northwind",
+          breadcrumb: ["Customers", "Northwind"],
           snippet: "we cut the budget in half",
           snippetStartMs: 4000,
           speakerName: "Alice",
@@ -119,7 +119,7 @@ describe("SearchBar", () => {
 
     expect(await screen.findByText("Quarterly review")).toBeTruthy();
     expect(screen.getByText(/we cut the/i)).toBeTruthy();
-    expect(screen.getByText(/Customers › Ambu/)).toBeTruthy();
+    expect(screen.getByText(/Customers › Northwind/)).toBeTruthy();
   });
 
   // The snippet is plain text and the query is highlighted client-side - the server never ships markup.
@@ -364,13 +364,13 @@ describe("SearchBar - grouped hit breadcrumbs", () => {
   it("keeps the breadcrumb when it names parents the group header does not", async () => {
     (api.search as ReturnType<typeof vi.fn>).mockResolvedValue({
       query: "x", scope: "everywhere", folders: [],
-      recordings: [{ ...base, sectionId: "ambu", sectionName: "Ambu", breadcrumb: ["Customers", "Ambu"] }],
+      recordings: [{ ...base, sectionId: "northwind", sectionName: "Northwind", breadcrumb: ["Customers", "Northwind"] }],
     });
     renderBar({});
     type("x");
     fireEvent.click(await screen.findByRole("button", { name: /search everywhere/i }));
 
-    expect(await screen.findByText(/Customers › Ambu/)).toBeTruthy();
+    expect(await screen.findByText(/Customers › Northwind/)).toBeTruthy();
   });
 
   // Scoped results are a flat list with no headers, so the path is the only thing saying where a hit lives.

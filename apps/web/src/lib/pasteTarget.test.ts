@@ -7,14 +7,14 @@ import type { SectionDto } from "./types";
 const section = (id: string, name: string, parentId: string | null = null, position = 0): SectionDto =>
   ({ id, name, parentId, position }) as SectionDto;
 
-// Customers > Ambu, a couple of loose top-level folders, and a chain exactly MAX_FOLDER_DEPTH deep for the
+// Customers > Northwind, a couple of loose top-level folders, and a chain exactly MAX_FOLDER_DEPTH deep for the
 // boundary cases (d0 top-level at depth 1 ... the last entry at depth MAX_FOLDER_DEPTH).
 const deepChain: SectionDto[] = Array.from({ length: MAX_FOLDER_DEPTH }, (_, i) =>
   section(`d${i}`, `L${i}`, i === 0 ? null : `d${i - 1}`),
 );
 const sections: SectionDto[] = [
   section("customers", "Customers"),
-  section("ambu", "Ambu", "customers"),
+  section("northwind", "Northwind", "customers"),
   section("podcasts", "Podcasts", null, 1),
   section("loose", "Loose", null, 2),
   ...deepChain,
@@ -36,7 +36,7 @@ const folderCut = (id: string, sourceSectionId: string | null, sourceRoomId: str
 
 describe("pasteTarget", () => {
   it("blocks with 'empty' when nothing has been cut", () => {
-    expect(pasteTarget({ cut: null, sections, destSectionId: "ambu", destRoomId: null })).toEqual({
+    expect(pasteTarget({ cut: null, sections, destSectionId: "northwind", destRoomId: null })).toEqual({
       kind: "blocked",
       reason: "empty",
     });
@@ -45,7 +45,7 @@ describe("pasteTarget", () => {
   // Defensive: the clipboard context never produces an empty-ids cut, but the rule must stay total.
   it("blocks with 'empty' for a cut with no ids", () => {
     const cut: MoveClipboardCut = { kind: "recordings", ids: [], sourceSectionId: null, sourceRoomId: null };
-    expect(pasteTarget({ cut, sections, destSectionId: "ambu", destRoomId: null })).toEqual({
+    expect(pasteTarget({ cut, sections, destSectionId: "northwind", destRoomId: null })).toEqual({
       kind: "blocked",
       reason: "empty",
     });
@@ -53,7 +53,7 @@ describe("pasteTarget", () => {
 
   it("blocks with 'shared-room' when browsing a shared room, regardless of anything else", () => {
     const cut = recordingsCut("customers");
-    expect(pasteTarget({ cut, sections, destSectionId: "ambu", destRoomId: "room-2" })).toEqual({
+    expect(pasteTarget({ cut, sections, destSectionId: "northwind", destRoomId: "room-2" })).toEqual({
       kind: "blocked",
       reason: "shared-room",
     });
@@ -88,7 +88,7 @@ describe("pasteTarget", () => {
 
   it("allows recordings into a different folder", () => {
     const cut = recordingsCut("customers");
-    expect(pasteTarget({ cut, sections, destSectionId: "ambu", destRoomId: null })).toEqual({ kind: "ok" });
+    expect(pasteTarget({ cut, sections, destSectionId: "northwind", destRoomId: null })).toEqual({ kind: "ok" });
   });
 
   it("allows recordings into root", () => {
@@ -111,7 +111,7 @@ describe("pasteTarget", () => {
 
   it("blocks with 'into-itself' when pasting a folder into its own descendant", () => {
     const cut = folderCut("customers", null);
-    expect(pasteTarget({ cut, sections, destSectionId: "ambu", destRoomId: null })).toEqual({
+    expect(pasteTarget({ cut, sections, destSectionId: "northwind", destRoomId: null })).toEqual({
       kind: "blocked",
       reason: "into-itself",
     });
@@ -144,7 +144,7 @@ describe("pasteTarget", () => {
   });
 
   it("blocks with 'too-deep' for a tall branch even though the target itself is shallow", () => {
-    // "customers" has height 2 (itself + ambu). d6 is depth 7, so 7 + 2 = 9 > 8.
+    // "customers" has height 2 (itself + northwind). d6 is depth 7, so 7 + 2 = 9 > 8.
     const cut = folderCut("customers", null);
     expect(pasteTarget({ cut, sections, destSectionId: "d6", destRoomId: null })).toEqual({
       kind: "blocked",
@@ -167,7 +167,7 @@ describe("pasteTarget", () => {
   describe("cross-room", () => {
     it("blocks with 'cross-room' when a cut from a shared room is pasted into the personal room", () => {
       const cut = recordingsCut("customers", "room-2");
-      expect(pasteTarget({ cut, sections, destSectionId: "ambu", destRoomId: null })).toEqual({
+      expect(pasteTarget({ cut, sections, destSectionId: "northwind", destRoomId: null })).toEqual({
         kind: "blocked",
         reason: "cross-room",
       });
@@ -184,7 +184,7 @@ describe("pasteTarget", () => {
     // Two nulls mean the same room (personal to personal) and must stay allowed.
     it("allows a personal-room cut pasted into the personal room (both sides null)", () => {
       const cut = recordingsCut("customers", null);
-      expect(pasteTarget({ cut, sections, destSectionId: "ambu", destRoomId: null })).toEqual({ kind: "ok" });
+      expect(pasteTarget({ cut, sections, destSectionId: "northwind", destRoomId: null })).toEqual({ kind: "ok" });
     });
 
     // The other direction: pasting a personal-room cut while browsing a shared room. Deliberate choice -
@@ -194,7 +194,7 @@ describe("pasteTarget", () => {
     // blanket rule does not cover: a null (personal) destination.
     it("blocks with 'shared-room', not 'cross-room', when a personal cut is pasted into a shared room", () => {
       const cut = recordingsCut("customers", null);
-      expect(pasteTarget({ cut, sections, destSectionId: "ambu", destRoomId: "room-2" })).toEqual({
+      expect(pasteTarget({ cut, sections, destSectionId: "northwind", destRoomId: "room-2" })).toEqual({
         kind: "blocked",
         reason: "shared-room",
       });
@@ -206,7 +206,7 @@ describe("pasteTarget", () => {
     // source and destination room ids happen to match.
     it("blocks with 'shared-room' when a shared-room cut is pasted back into that same shared room", () => {
       const cut = recordingsCut("customers", "room-2");
-      expect(pasteTarget({ cut, sections, destSectionId: "ambu", destRoomId: "room-2" })).toEqual({
+      expect(pasteTarget({ cut, sections, destSectionId: "northwind", destRoomId: "room-2" })).toEqual({
         kind: "blocked",
         reason: "shared-room",
       });
