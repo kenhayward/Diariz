@@ -67,7 +67,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.259.4",
     date: "2026-08-27",
-    pr: 649,
+    pr: 651,
     headline: "Two hardening fixes around uploaded filenames and worker logs",
     summary:
       "Two hardening fixes, from a static-analysis warning and the review it prompted. Neither exposes anything or lets anyone do something they could not already do; both are worth closing.\n\n**The name a file is stored under no longer trusts what the file was called.** Diariz works out what an upload actually is by decoding it, never by its name - but the name it filed the bytes under was still built from the client's filename, whatever characters that contained. That value also shows up in the download header when you save a recording. An extension that is not an ordinary one is now dropped; nothing needs it. This covers recordings, meeting attachments and folder attachments alike, since all three were built the same way.\n\n**A failure message from the transcription worker is cleaned before it reaches the log.** Everywhere else that logs text from outside already did this; this one place did not, so line breaks in such a message could add entries that read like Diariz's own.\n\nNothing already stored changes, and no file becomes unreachable: existing keys are kept as they are.",
