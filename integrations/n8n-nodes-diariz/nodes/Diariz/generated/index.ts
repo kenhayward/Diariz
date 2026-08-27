@@ -2851,6 +2851,43 @@ const GENERATED: GeneratedResource[] = [
         "queryParams": [],
         "hasBody": false,
         "returnsArray": true
+      },
+      {
+        "value": "listWhatASuggestedSpeakerSaid",
+        "displayName": "List what a suggested speaker said",
+        "description": "The segments this speaker spoke in the recording's current transcription - the evidence behind one pending suggestion, so it can be judged without opening the recording.",
+        "method": "GET",
+        "path": "/api/speaker-suggestions/{speakerId}/segments",
+        "pathParams": [
+          "speakerId"
+        ],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": true
+      },
+      {
+        "value": "playAClipOfASuggestedSpeaker",
+        "displayName": "Play a clip of a suggested speaker",
+        "description": "Serves a short WAV clip of one span, so the voice can be judged by ear - the only way the question can honestly be answered.",
+        "method": "GET",
+        "path": "/api/speaker-suggestions/{speakerId}/clip",
+        "pathParams": [
+          "speakerId"
+        ],
+        "queryParams": [
+          {
+            "name": "fromMs",
+            "required": false,
+            "description": "fromMs"
+          },
+          {
+            "name": "toMs",
+            "required": false,
+            "description": "toMs"
+          }
+        ],
+        "hasBody": false,
+        "returnsArray": false
       }
     ]
   },

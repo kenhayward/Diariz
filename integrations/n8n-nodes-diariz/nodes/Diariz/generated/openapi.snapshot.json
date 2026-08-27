@@ -14540,6 +14540,58 @@
         ]
       }
     },
+    "/api/speaker-suggestions/{speakerId}/clip": {
+      "get": {
+        "description": "Serves a short WAV clip of one span, so the voice can be judged by ear - the only way the question can honestly be answered.\n\nThe span **must fall inside a segment this speaker spoke** in the current transcription; arbitrary offsets are refused with 404. Your own recordings only. Clips are capped at two minutes.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "speakerId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "fromMs",
+            "schema": {
+              "format": "int64",
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "toMs",
+            "schema": {
+              "format": "int64",
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "audio/wav": {}
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Play a clip of a suggested speaker",
+        "tags": [
+          "SpeakerSuggestions"
+        ]
+      }
+    },
     "/api/speaker-suggestions/{speakerId}/reject": {
       "post": {
         "description": "Leaves the speaker anonymous and records that this voice is **not** that person, so the same pair is never suggested again.\n\nThe rejection is kept as evidence: it is the only kind of labelled negative Diariz has, and calibrating how confident identification should be depends on it. A later outright match is still allowed to apply - that is new evidence, not the same question asked twice.",
@@ -14560,6 +14612,57 @@
           }
         },
         "summary": "Decline a suggested identity",
+        "tags": [
+          "SpeakerSuggestions"
+        ]
+      }
+    },
+    "/api/speaker-suggestions/{speakerId}/segments": {
+      "get": {
+        "description": "The segments this speaker spoke in the recording's current transcription - the evidence behind one pending suggestion, so it can be judged without opening the recording.\n\n**Only that speaker's segments**, never the recording's transcript: the suggestion names one speaker, and everybody else in the meeting stays out of reach. Your own recordings only, and only while a suggestion is actually pending.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "speakerId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AttributionSegmentDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AttributionSegmentDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AttributionSegmentDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List what a suggested speaker said",
         "tags": [
           "SpeakerSuggestions"
         ]
