@@ -63,4 +63,48 @@ public class ActionsIntegrationTests(ContainersFixture fx)
             Assert.Null(reopened.CompletedAt);
         }
     }
+
+    [Fact]
+    public async Task Pin_ThenListPinned_RoundTripsThroughRealDb()
+    {
+        Guid userId, pinnedId, plainId;
+        await using (var db = fx.CreateDbContext())
+        {
+            var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test", Email = "u@x.test" };
+            var rec = new Recording { Id = Guid.NewGuid(), UserId = user.Id, BlobKey = "k1", Title = "Standup" };
+            var a1 = new RecordingAction { Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Book the room", Ordinal = 0 };
+            var a2 = new RecordingAction { Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Chase the invoice", Ordinal = 1 };
+            db.AddRange(user, rec, a1, a2);
+            await db.SaveChangesAsync();
+            (userId, pinnedId, plainId) = (user.Id, a1.Id, a2.Id);
+        }
+
+        await using (var db = fx.CreateDbContext())
+            Assert.IsType<NoContentResult>(await Build(db, userId).Pin(new PinActionsRequest([pinnedId], true)));
+
+        await using (var db = fx.CreateDbContext())
+        {
+            var pinnedOnly = (await Build(db, userId).List(pinned: true)).Value!;
+            Assert.Single(pinnedOnly);
+            Assert.Equal(pinnedId, pinnedOnly[0].Id);
+            Assert.True(pinnedOnly[0].Pinned);
+
+            // The endpoint's own default is unchanged - both come back when the filter is omitted. This is
+            // the contract the published API and the n8n node depend on.
+            var everything = (await Build(db, userId).List()).Value!;
+            Assert.Equal(2, everything.Count);
+            Assert.Contains(everything, d => d.Id == plainId && !d.Pinned);
+
+            // And pinned=false is a real filter, not just an absent one.
+            var unpinnedOnly = (await Build(db, userId).List(pinned: false)).Value!;
+            Assert.Single(unpinnedOnly);
+            Assert.Equal(plainId, unpinnedOnly[0].Id);
+        }
+
+        await using (var db = fx.CreateDbContext())
+            await Build(db, userId).Pin(new PinActionsRequest([pinnedId], false));
+
+        await using (var verify = fx.CreateDbContext())
+            Assert.False((await verify.RecordingActions.FindAsync(pinnedId))!.Pinned);
+    }
 }
