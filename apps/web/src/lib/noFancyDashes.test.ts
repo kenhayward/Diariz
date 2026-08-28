@@ -89,7 +89,9 @@ describe("no em or en dashes in user-facing text", () => {
     const offenders: string[] = [];
     for (const [path, src] of Object.entries(sources)) {
       if (path.includes(".test.")) continue;
-      for (const line of offendingLines(stripComments(src))) offenders.push(`${path.replace("../", "")} ${line}`);
+      // Anchored, not a bare string replace: `"../"` strips the first occurrence wherever it falls, which
+      // CodeQL flags as incomplete escaping and which gatedApi.test.ts already avoids the same way.
+      for (const line of offendingLines(stripComments(src))) offenders.push(`${path.replace(/^\.\.?\//, "")} ${line}`);
     }
 
     expect(offenders, "use a plain hyphen in user-facing text (CLAUDE.md)").toEqual([]);
