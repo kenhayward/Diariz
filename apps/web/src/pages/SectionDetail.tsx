@@ -81,7 +81,9 @@ export default function SectionDetail() {
       return gen ? 2500 : false;
     },
   });
-  const { data: actions } = useQuery({ queryKey: ["section-actions", id], queryFn: () => api.listSectionActions(id!), enabled: !!id });
+  // Pinned only, the same rule as the main Actions tab - a folder is an aggregation of recordings, and the
+  // recording page stays the only place an unpinned action appears.
+  const { data: actions } = useQuery({ queryKey: ["section-actions", id], queryFn: () => api.listSectionActions(id!, true), enabled: !!id });
   const { data: notes } = useQuery({ queryKey: ["section-notes", id], queryFn: () => api.listSectionNotes(id!), enabled: !!id });
   const { data: attachments } = useQuery({ queryKey: ["section-attachments", id], queryFn: () => api.listSectionAttachments(id!), enabled: !!id });
   const { data: folderAttachments } = useQuery({ queryKey: ["folder-attachments", id], queryFn: () => api.listFolderAttachments(id!), enabled: !!id });
@@ -288,6 +290,7 @@ export default function SectionDetail() {
         myUserId={myId}
         onUpdate={(recId, actionId, patch) => run(() => api.updateAction(recId, actionId, patch), "workspace:errUpdateAction", ["section-actions", id])}
         onToggleComplete={(actionId, completed) => run(() => api.completeActions([actionId], completed), "workspace:errUpdateAction", ["section-actions", id])}
+        onTogglePin={(actionId, pinned) => run(() => api.pinActions([actionId], pinned), "workspace:errUpdateAction", ["section-actions", id])}
         onDelete={(recId, actionId) => run(() => api.deleteAction(recId, actionId), "workspace:errRemoveAction", ["section-actions", id])}
       />
     ),

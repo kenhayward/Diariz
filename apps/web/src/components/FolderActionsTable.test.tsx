@@ -1,4 +1,5 @@
 import { render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { I18nextProvider } from "react-i18next";
@@ -18,6 +19,8 @@ const item: ActionListItem = {
   id: "a1", recordingId: "r1", recordingName: "Kickoff", text: "Ship it", actor: "Ana",
   deadline: "Fri", ordinal: 0, completed: false, completedAt: null, createdAt: "2026-07-01T00:00:00Z",
   recordedByUserId: "u1",
+  // Every row this table receives is pinned by definition - the folder page asks for pinned actions only.
+  pinned: true,
 };
 
 function renderTable(props: Partial<React.ComponentProps<typeof FolderActionsTable>> = {}) {
@@ -29,6 +32,7 @@ function renderTable(props: Partial<React.ComponentProps<typeof FolderActionsTab
           myUserId="u1"
           onUpdate={vi.fn()}
           onToggleComplete={vi.fn()}
+          onTogglePin={vi.fn()}
           onDelete={vi.fn()}
           {...props}
         />
@@ -102,5 +106,24 @@ describe("FolderActionsTable ownership gating", () => {
     renderTable({ items: [mine, theirs], onToggleComplete });
     fireEvent.click(screen.getByLabelText("Mark action 2 complete"));
     expect(onToggleComplete).not.toHaveBeenCalled();
+  });
+
+  it("unpins my own row through onTogglePin", async () => {
+    const onTogglePin = vi.fn();
+    renderTable({ items: [mine], onTogglePin });
+    await userEvent.click(screen.getByLabelText("Unpin action 1"));
+    expect(onTogglePin).toHaveBeenCalledWith("a1", false);
+  });
+
+  it("disables the pin control on another user's row", async () => {
+    // Consistent with the Done checkbox and the editable cells in this same table: a co-viewer's row from
+    // someone else's recording is read-only, because the API silently ignores writes to it.
+    // userEvent, not fireEvent: fireEvent.click fires handlers on disabled elements.
+    const onTogglePin = vi.fn();
+    renderTable({ items: [mine, theirs], onTogglePin });
+    const control = screen.getByLabelText("Unpin action 2") as HTMLButtonElement;
+    expect(control.disabled).toBe(true);
+    await userEvent.click(control);
+    expect(onTogglePin).not.toHaveBeenCalled();
   });
 });

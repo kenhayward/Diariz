@@ -820,9 +820,14 @@ export const api = {
   },
 
   /// Every action across the recordings the user can see (the "Actions" tab). With a roomId it is scoped to
-  /// that shared room's recordings; without one, the user's own library.
-  async listAllActions(roomId?: string | null): Promise<ActionListItem[]> {
-    const { data } = await http.get<ActionListItem[]>(`/api/actions`, { params: roomId ? { roomId } : undefined });
+  /// that shared room's recordings; without one, the user's own library. `pinned` filters to the actions
+  /// someone has pinned - the app always passes true, but the endpoint's own default is every action, which
+  /// is what the published API and the n8n node rely on.
+  async listAllActions(roomId?: string | null, pinned?: boolean): Promise<ActionListItem[]> {
+    const params: Record<string, string | boolean> = {};
+    if (roomId) params.roomId = roomId;
+    if (pinned !== undefined) params.pinned = pinned;
+    const { data } = await http.get<ActionListItem[]>(`/api/actions`, { params });
     return data;
   },
 
@@ -852,6 +857,12 @@ export const api = {
   /// Mark a set of actions complete (or not) in one call — works across recordings. Ids not owned are ignored.
   async completeActions(ids: string[], completed: boolean): Promise<void> {
     await http.post(`/api/actions/complete`, { ids, completed });
+  },
+
+  /// Pin a set of actions into the cross-meeting Actions views, or unpin them. Works across recordings;
+  /// ids not owned are ignored, exactly like completeActions.
+  async pinActions(ids: string[], pinned: boolean): Promise<void> {
+    await http.post(`/api/actions/pin`, { ids, pinned });
   },
 
   // ---- People directory (and their optional voiceprints) ----
@@ -1083,8 +1094,12 @@ export const api = {
     const { data } = await http.get<SectionDetail>(`/api/sections/${id}`);
     return data;
   },
-  async listSectionActions(id: string): Promise<ActionListItem[]> {
-    const { data } = await http.get<ActionListItem[]>(`/api/sections/${id}/actions`);
+  /// The folder's aggregated actions. `pinned` mirrors listAllActions: the app passes true, the endpoint's
+  /// own default is every action in the folder.
+  async listSectionActions(id: string, pinned?: boolean): Promise<ActionListItem[]> {
+    const { data } = await http.get<ActionListItem[]>(`/api/sections/${id}/actions`, {
+      params: pinned === undefined ? undefined : { pinned },
+    });
     return data;
   },
   async listSectionNotes(id: string): Promise<SectionNoteItem[]> {

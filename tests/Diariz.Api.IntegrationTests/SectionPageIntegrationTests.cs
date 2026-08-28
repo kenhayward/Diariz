@@ -131,6 +131,45 @@ public class SectionPageIntegrationTests(ContainersFixture fx)
         Assert.Equal("R", items[0].RecordingName);
     }
 
+    /// <summary>The pinned filter sits inside the folder aggregation's join over RoomRecordings and the
+    /// sub-folder id set - a shape the in-memory provider does not reproduce - so it is pinned here rather
+    /// than trusted from the unit test alone.</summary>
+    [Fact]
+    public async Task Actions_pinned_filter_translates_under_postgres_across_sub_folders()
+    {
+        var userId = await SeedUser();
+        var parentId = Guid.NewGuid();
+        var childId = Guid.NewGuid();
+        var recParent = Guid.NewGuid();
+        var recChild = Guid.NewGuid();
+        await using (var db = fx.CreateDbContext())
+        {
+            var roomId = await RoomOf(db, userId);
+            db.Sections.Add(new Section { Id = parentId, UserId = userId, RoomId = roomId, Name = "P" });
+            db.Sections.Add(new Section { Id = childId, UserId = userId, RoomId = roomId, Name = "C", ParentId = parentId });
+            db.Recordings.Add(new Recording { Id = recParent, UserId = userId, Title = "Kickoff", BlobKey = "k" });
+            db.Recordings.Add(new Recording { Id = recChild, UserId = userId, Title = "Review", BlobKey = "k" });
+            db.RecordingActions.AddRange(
+                new RecordingAction { Id = Guid.NewGuid(), RecordingId = recParent, Text = "Book the room", Ordinal = 0, Pinned = true },
+                new RecordingAction { Id = Guid.NewGuid(), RecordingId = recParent, Text = "Chase the invoice", Ordinal = 1 },
+                new RecordingAction { Id = Guid.NewGuid(), RecordingId = recChild, Text = "Draft the brief", Ordinal = 0, Pinned = true },
+                new RecordingAction { Id = Guid.NewGuid(), RecordingId = recChild, Text = "Tidy the notes", Ordinal = 1 });
+            await db.SaveChangesAsync();
+            await new RoomScope(db).PlaceInMainRoomAsync(recParent, userId, parentId);
+            await new RoomScope(db).PlaceInMainRoomAsync(recChild, userId, childId);
+        }
+
+        await using var db2 = fx.CreateDbContext();
+        var pinnedOnly = (await Build(db2, userId).Actions(parentId, pinned: true)).Value!;
+        var everything = (await Build(db2, userId).Actions(parentId)).Value!;
+
+        Assert.Equal(2, pinnedOnly.Count); // one from the folder, one from the sub-folder
+        Assert.All(pinnedOnly, i => Assert.True(i.Pinned));
+        Assert.Contains(pinnedOnly, i => i.Text == "Book the room");
+        Assert.Contains(pinnedOnly, i => i.Text == "Draft the brief");
+        Assert.Equal(4, everything.Count); // the endpoint's own default stays unchanged
+    }
+
     /// <summary>The Notes aggregation join (MeetingNotes + Recordings + RoomRecordings) must translate under
     /// real Postgres, and its projected <c>RecordedByUserId</c> must be the RECORDING's owner - what
     /// <c>MeetingNotesController.OwnsAsync</c> actually gates mutation on - not the note's own denormalized

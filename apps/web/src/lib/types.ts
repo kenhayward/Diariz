@@ -460,6 +460,9 @@ export interface RecordingAction {
   ordinal: number;
   completed: boolean;
   completedAt: string | null;
+  /// Whether this action is pinned into the cross-meeting Actions views. It is always visible here, on its
+  /// own recording; pinning is what promotes it into the Actions tab and the folder Actions tab.
+  pinned: boolean;
 }
 
 /// One line of the user's own meeting notes. capturedAtMs = offset into the recording clock
@@ -528,6 +531,9 @@ export interface ActionListItem {
   completedAt: string | null;
   createdAt: string;
   recordedByUserId: string;
+  /// Whether this action is pinned. Every row in the cross-meeting views is pinned by definition; the flag
+  /// travels so the pin control can render its state and unpinning is possible from there.
+  pinned: boolean;
 }
 
 export interface RecordingDetail {

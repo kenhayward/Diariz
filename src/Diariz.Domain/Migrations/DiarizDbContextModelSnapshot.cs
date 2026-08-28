@@ -1391,6 +1391,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<int>("Ordinal")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("Pinned")
+                        .HasColumnType("boolean");
+
                     b.Property<Guid>("RecordingId")
                         .HasColumnType("uuid");
 

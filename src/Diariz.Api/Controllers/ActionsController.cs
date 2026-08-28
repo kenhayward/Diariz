@@ -39,8 +39,11 @@ public class ActionsController : ControllerBase
         "Newest meeting first, each item tagged with the recording it came from so you can link back to the " +
         "moment it was agreed, and carrying its owner, deadline, and completion state for filtering.\n\n" +
         "With no `roomId` this covers your own library; with one it covers the recordings placed in that room " +
-        "(404 if you are not a member). For the actions on a single recording, use its own endpoint.")]
-    public async Task<ActionResult<IReadOnlyList<ActionListItemDto>>> List([FromQuery] Guid? roomId = null)
+        "(404 if you are not a member). For the actions on a single recording, use its own endpoint.\n\n" +
+        "Pass `pinned=true` to get only the actions someone has pinned into the Actions views, which is what " +
+        "the app itself shows. Omit it and you get every action, pinned or not - the default is unchanged.")]
+    public async Task<ActionResult<IReadOnlyList<ActionListItemDto>>> List(
+        [FromQuery] Guid? roomId = null, [FromQuery] bool? pinned = null)
     {
         IQueryable<Recording> recs;
         if (roomId is { } rid)
@@ -56,10 +59,12 @@ public class ActionsController : ControllerBase
         var actions = await (
             from a in _db.RecordingActions
             join r in recs on a.RecordingId equals r.Id
+            // Opt-in filter. Omitted means every action - the published default the n8n node relies on.
+            where !pinned.HasValue || a.Pinned == pinned.Value
             orderby r.CreatedAt descending, a.Ordinal
             select new ActionListItemDto(
                 a.Id, a.RecordingId, r.Name ?? r.Title, a.Text, a.Actor, a.Deadline,
-                a.Ordinal, a.Completed, a.CompletedAt, a.CreatedAt, r.UserId)).ToListAsync();
+                a.Ordinal, a.Completed, a.CompletedAt, a.CreatedAt, r.UserId, a.Pinned)).ToListAsync();
         return actions;
     }
 
@@ -90,6 +95,33 @@ public class ActionsController : ControllerBase
             a.Completed = req.Completed;
             a.CompletedAt = req.Completed ? now : null;
         }
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// <summary>Pin the given actions into the cross-meeting Actions views (or unpin them). Ids the caller
+    /// doesn't own are silently ignored - deliberately identical to <see cref="Complete"/>, since both set
+    /// state that governs how an action appears outside its own recording.</summary>
+    [HttpPost("pin")]
+    [EndpointSummary("Pin or unpin action items")]
+    [EndpointDescription(
+        "Pins several actions at once so they appear in the cross-meeting Actions views, or unpins them with " +
+        "`pinned: false`. An action is always visible on its own recording's page - pinning is what promotes " +
+        "it into the Actions tab and the folder Actions tab, which show pinned items only.\n\n" +
+        "Ids that are not yours are silently skipped rather than failing the call, so a mixed selection still " +
+        "works; an empty list succeeds without doing anything.")]
+    public async Task<IActionResult> Pin(PinActionsRequest req)
+    {
+        var ids = req.Ids?.ToHashSet() ?? new HashSet<Guid>();
+        if (ids.Count == 0) return NoContent();
+
+        var owned = await (
+            from a in _db.RecordingActions
+            join r in _db.Recordings on a.RecordingId equals r.Id
+            where ids.Contains(a.Id) && r.UserId == UserId
+            select a).ToListAsync();
+
+        foreach (var a in owned) a.Pinned = req.Pinned;
         await _db.SaveChangesAsync();
         return NoContent();
     }

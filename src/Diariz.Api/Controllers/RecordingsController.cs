@@ -207,7 +207,7 @@ public class RecordingsController : ControllerBase
         var names = rec.Speakers.ToDictionary(s => s.Label, s => s.DisplayName);
         var actions = rec.Actions
             .OrderBy(a => a.Ordinal)
-            .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal, a.Completed, a.CompletedAt))
+            .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal, a.Completed, a.CompletedAt, a.Pinned))
             .ToList();
         // Both the people speakers are identified as and the people they are only suspected to be - the
         // transcript renders a pending suggestion by name, and a second round trip per speaker to resolve it
@@ -1919,6 +1919,10 @@ public class RecordingsController : ControllerBase
             {
                 Id = Guid.NewGuid(), RecordingId = survivor.Id,
                 Text = a.Text, Actor = a.Actor, Deadline = a.Deadline, Ordinal = nextActionOrdinal++,
+                // A pinned action stays pinned on the survivor - merging is a filing operation, and losing
+                // the pin would silently drop it out of the Actions tab. (Completed/CompletedAt are also
+                // dropped here; that is issue #676, a separate pre-existing bug, deliberately not fixed here.)
+                Pinned = a.Pinned,
             });
             mergedAnyAction = true;
         }

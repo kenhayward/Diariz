@@ -9,6 +9,21 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.261.0",
+    date: "2026-08-28",
+    pr: 677,
+    headline: "The Actions tab is now a list you choose, not one you inherit",
+    summary:
+      "Every action item Diariz found was going straight into the Actions tab, across every meeting you have ever recorded. That made it a list of hundreds, most of it minor and much of it somebody else's, and no amount of filtering fixed it - the problem was that things arrived there on their own.\n\nNow they arrive because you put them there. Every action is still pulled out of every meeting and still sits on that meeting's page exactly as before, with nothing hidden and nothing lost. Each one has gained a pin, and pinning is what promotes it into the Actions tab and into a folder's Actions tab. Unpin it and it goes back to living on its meeting.\n\nThat means both of those views start empty, which is the point. They fill up with the handful of things you have actually decided to track.",
+    added: [
+      "A **pin** on every action item, on its meeting's page and in the Actions tab itself. Pinned actions appear in the cross-meeting Actions views; everything else stays on the meeting it came from.",
+    ],
+    changed: [
+      "The **Actions** tab and a folder's **Actions** tab now list pinned actions only. Every action is still on its own meeting's page, unchanged - nothing has been deleted or hidden at source.",
+      "For anyone using the API or the n8n node, the action list is unchanged by default, so existing automations keep seeing everything. Ask for `pinned=true` if you want just the pinned ones.",
+    ],
+  },
+  {
     version: "0.260.0",
     date: "2026-08-28",
     pr: 675,

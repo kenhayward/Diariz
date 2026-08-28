@@ -9,11 +9,14 @@ const action = (over: Partial<RecordingAction> = {}): RecordingAction => ({
   actor: "Bob",
   deadline: "Friday",
   ordinal: 0,
+  pinned: false,
   ...over,
 });
 
 function build(actions: RecordingAction[]) {
-  const handlers = { onAdd: vi.fn(), onUpdate: vi.fn(), onDelete: vi.fn(), onToggleComplete: vi.fn() };
+  const handlers = {
+    onAdd: vi.fn(), onUpdate: vi.fn(), onDelete: vi.fn(), onToggleComplete: vi.fn(), onTogglePin: vi.fn(),
+  };
   render(<ActionsTable actions={actions} {...handlers} />);
   return handlers;
 }
@@ -63,6 +66,39 @@ describe("ActionsTable", () => {
     const h = build([action()]);
     fireEvent.click(screen.getByRole("button", { name: /add action/i }));
     expect(h.onAdd).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows an unpinned action's pin control as the pin affordance", () => {
+    build([action()]);
+    expect(screen.getByLabelText("Pin action 1")).toBeTruthy();
+  });
+
+  it("shows a pinned action's control as the unpin affordance", () => {
+    build([action({ pinned: true })]);
+    expect(screen.getByLabelText("Unpin action 1")).toBeTruthy();
+  });
+
+  it("pins an unpinned action through onTogglePin", () => {
+    const h = build([action()]);
+    fireEvent.click(screen.getByLabelText("Pin action 1"));
+    expect(h.onTogglePin).toHaveBeenCalledWith("a1", true);
+  });
+
+  it("unpins a pinned action through onTogglePin", () => {
+    const h = build([action({ pinned: true })]);
+    fireEvent.click(screen.getByLabelText("Unpin action 1"));
+    expect(h.onTogglePin).toHaveBeenCalledWith("a1", false);
+  });
+
+  it("still lists unpinned actions - the recording page shows everything", () => {
+    // The whole design rests on this: pinning changes the cross-meeting views, never this one. If this
+    // fails, the filter has leaked down to the recording page and actions have gone missing at source.
+    build([
+      action({ id: "a1", text: "Book the room", pinned: true }),
+      action({ id: "a2", text: "Chase the invoice" }),
+    ]);
+    expect((screen.getByLabelText("Action 1") as HTMLInputElement).value).toBe("Book the room");
+    expect((screen.getByLabelText("Action 2") as HTMLInputElement).value).toBe("Chase the invoice");
   });
 
   it("shows an empty state but still offers Add when there are no actions", () => {

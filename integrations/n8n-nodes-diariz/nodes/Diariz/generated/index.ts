@@ -32,10 +32,26 @@ const GENERATED: GeneratedResource[] = [
             "name": "roomId",
             "required": false,
             "description": "roomId"
+          },
+          {
+            "name": "pinned",
+            "required": false,
+            "description": "pinned"
           }
         ],
         "hasBody": false,
         "returnsArray": true
+      },
+      {
+        "value": "pinOrUnpinActionItems",
+        "displayName": "Pin or unpin action items",
+        "description": "Pins several actions at once so they appear in the cross-meeting Actions views, or unpins them with pinned: false. An action is always visible on its own recording's page - pinning is what promotes it into the Actions tab and the folder Actions tab, which show pinned items only.",
+        "method": "POST",
+        "path": "/api/actions/pin",
+        "pathParams": [],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": false
       }
     ]
   },
@@ -2752,7 +2768,13 @@ const GENERATED: GeneratedResource[] = [
         "pathParams": [
           "id"
         ],
-        "queryParams": [],
+        "queryParams": [
+          {
+            "name": "pinned",
+            "required": false,
+            "description": "pinned"
+          }
+        ],
         "hasBody": false,
         "returnsArray": true
       },

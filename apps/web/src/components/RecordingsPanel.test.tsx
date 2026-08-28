@@ -42,6 +42,9 @@ vi.mock("../lib/uploadContext", () => ({
 vi.mock("../lib/calendarSync", () => ({
   useCalendarSync: () => ({ syncing: null, busy: false, sync: vi.fn() }),
 }));
+// The Actions tab needs the signed-in user's id to tell my rows from a co-viewer's (pinning is owner-only);
+// this harness renders the panel without an AuthProvider. Same stub as SectionDetail.test.tsx.
+vi.mock("../auth", () => ({ useAuth: () => ({ id: "u1", fullName: "Test User", email: "t@x.test" }) }));
 
 vi.mock("../lib/api", () => ({
   api: {
@@ -71,6 +74,7 @@ vi.mock("../lib/api", () => ({
     listAllActions: vi.fn().mockResolvedValue([]),
     listTags: vi.fn().mockResolvedValue([]),
     completeActions: vi.fn().mockResolvedValue(undefined),
+    pinActions: vi.fn().mockResolvedValue(undefined),
     getProfile: vi.fn().mockResolvedValue(null), // Calendar overlay disabled unless googleCalendar is set
     getCalendarEvents: vi.fn().mockResolvedValue([]),
   },
@@ -276,7 +280,9 @@ describe("RecordingsPanel", () => {
     await screen.findByText("Weekly Standup");
 
     fireEvent.click(screen.getByRole("tab", { name: "Actions" }));
-    await waitFor(() => expect(api.listAllActions).toHaveBeenCalledWith("eng-room"));
+    // The tab is opt-in: it asks for pinned actions only. Without this the tab would silently go back to
+    // listing every action in the library, and every other test in this file would still pass.
+    await waitFor(() => expect(api.listAllActions).toHaveBeenCalledWith("eng-room", true));
 
     fireEvent.click(screen.getByRole("tab", { name: "Tags" }));
     await waitFor(() => expect(api.listTags).toHaveBeenCalledWith("eng-room"));
@@ -288,7 +294,7 @@ describe("RecordingsPanel", () => {
     await screen.findByText("Weekly Standup");
 
     fireEvent.click(screen.getByRole("tab", { name: "Actions" }));
-    await waitFor(() => expect(api.listAllActions).toHaveBeenCalledWith(undefined));
+    await waitFor(() => expect(api.listAllActions).toHaveBeenCalledWith(undefined, true));
   });
 
   it("keeps the room in a recording link so opening one stays in the shared room", async () => {
@@ -1021,7 +1027,9 @@ describe("RecordingsPanel", () => {
     renderList();
     await screen.findByText("Weekly Standup");
     fireEvent.click(screen.getByRole("tab", { name: "Actions" }));
-    expect(await screen.findByText(/no action items yet/i)).toBeTruthy();
+    // The empty state is load-bearing here: this tab is opt-in, so it is empty for everyone until they
+    // pin something, and the copy has to say how to fill it rather than implying nothing was extracted.
+    expect(await screen.findByText(/no pinned actions yet/i)).toBeTruthy();
   });
 
   it("hides the status pill for settled states but shows in-flight ones", async () => {

@@ -446,7 +446,7 @@ public record UpdateAttachmentContentRequest(string Content);
 // the detail + actions-list projections pass the real values.
 public record RecordingActionDto(
     Guid Id, string Text, string Actor, string Deadline, int Ordinal,
-    bool Completed = false, DateTimeOffset? CompletedAt = null);
+    bool Completed = false, DateTimeOffset? CompletedAt = null, bool Pinned = false);
 public record CreateRecordingActionRequest(string? Text, string? Actor, string? Deadline);
 public record UpdateRecordingActionRequest(string? Text, string? Actor, string? Deadline);
 
@@ -483,9 +483,13 @@ public record UpdateMeetingNoteRequest(string Text);
 /// hide edit/delete/complete for rows belonging to someone else's recording.</summary>
 public record ActionListItemDto(
     Guid Id, Guid RecordingId, string RecordingName, string Text, string Actor, string Deadline,
-    int Ordinal, bool Completed, DateTimeOffset? CompletedAt, DateTimeOffset CreatedAt, Guid RecordedByUserId);
+    int Ordinal, bool Completed, DateTimeOffset? CompletedAt, DateTimeOffset CreatedAt, Guid RecordedByUserId,
+    bool Pinned);
 /// <summary>Mark a set of actions complete (or not). Ids not owned by the caller are ignored.</summary>
 public record CompleteActionsRequest(IReadOnlyList<Guid> Ids, bool Completed);
+/// <summary>Pin a set of actions into the cross-meeting Actions views, or unpin them. Ids not owned by the
+/// caller are ignored - same contract as <see cref="CompleteActionsRequest"/>.</summary>
+public record PinActionsRequest(IReadOnlyList<Guid> Ids, bool Pinned);
 
 // ---- People directory (and their optional voiceprints) ----
 

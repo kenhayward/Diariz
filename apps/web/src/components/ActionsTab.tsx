@@ -12,12 +12,19 @@ export default function ActionsTab({
   persons,
   person,
   onPerson,
+  myUserId,
+  onTogglePin,
 }: {
-  /// Already filtered (person + hide-complete applied upstream).
+  /// Already filtered (person + hide-complete applied upstream), and already pinned-only: this tab asks the
+  /// API for pinned actions, so an unpinned one never reaches here.
   actions: ActionListItem[];
   persons: string[];
   person: string | null;
   onPerson: (p: string | null) => void;
+  /// The signed-in user's id, compared against each row's `recordedByUserId`. Pinning is owner-only, so a
+  /// row from someone else's recording (possible in a shared room) gets a disabled control.
+  myUserId: string | null;
+  onTogglePin: (id: string, pinned: boolean) => void;
 }) {
   const { t, i18n } = useTranslation("workspace");
   const { selectMode, selectedIds, toggle, set } = useSelection();
@@ -52,6 +59,7 @@ export default function ActionsTab({
             const completedDate = a.completedAt
               ? new Date(a.completedAt).toLocaleDateString(i18n.language)
               : null;
+            const isOwner = myUserId != null && a.recordedByUserId === myUserId;
             return (
               <li
                 key={a.id}
@@ -61,6 +69,25 @@ export default function ActionsTab({
                 }`}
               >
                 <div className="flex items-start gap-2">
+                  {/* Unpinning is how a row leaves this list. stopPropagation because the row's own click
+                      selects it, and pinning must not also change the selection. */}
+                  <button
+                    type="button"
+                    disabled={!isOwner}
+                    aria-label={a.pinned ? t("unpinActionAria", { row: a.text }) : t("pinActionAria", { row: a.text })}
+                    aria-pressed={a.pinned}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (isOwner) onTogglePin(a.id, !a.pinned);
+                    }}
+                    className={`mt-0.5 shrink-0 rounded px-0.5 ${
+                      isOwner
+                        ? "text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200"
+                        : "cursor-default text-gray-300 dark:text-gray-600"
+                    }`}
+                  >
+                    <PinGlyph />
+                  </button>
                   {selectMode && (
                     <input
                       type="checkbox"
@@ -103,5 +130,15 @@ export default function ActionsTab({
         </ul>
       )}
     </div>
+  );
+}
+
+/// A solid pin. Every row in this list is pinned by definition, so there is no outline state to draw here -
+/// the control's only job is to take a row back out.
+function PinGlyph() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1Z" />
+    </svg>
   );
 }

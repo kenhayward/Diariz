@@ -3,6 +3,7 @@ import { dayKey } from "../lib/calendar";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { useAuth } from "../auth";
 import { usePanelTab, setPanelTab } from "../lib/panelTab";
 import { createHub } from "../lib/signalr";
 import { useSelection } from "../lib/selection";
@@ -40,6 +41,9 @@ import { RoomPermission } from "../lib/types";
 export default function RecordingsPanel() {
   const { t } = useTranslation("workspace");
   const qc = useQueryClient();
+  // Pinning is owner-only, so the Actions tab needs to know whose rows are whose - in a shared room its
+  // list spans other people's recordings.
+  const { id: myId } = useAuth();
   // The room being browsed (the switcher's current room). The recordings + folders lists are scoped to it;
   // the personal room keeps its folders/drag-drop, a shared room shows the recordings shared into it.
   const { currentRoom, can } = useRoom();
@@ -155,7 +159,8 @@ export default function RecordingsPanel() {
   // Actions tab: all actions in the current room, filtered by person + hide-complete, with one open editor.
   const { data: allActions = [] } = useQuery({
     queryKey: ["actions", "all", aggRoomId ?? null],
-    queryFn: () => api.listAllActions(aggRoomId),
+    // Pinned only: this tab is an opt-in list, not an inventory. Unpinned actions stay on their recording.
+    queryFn: () => api.listAllActions(aggRoomId, true),
     enabled: tab === "actions",
   });
   const [personFilter, setPersonFilter] = useState<string | null>(null);
@@ -427,7 +432,18 @@ export default function RecordingsPanel() {
           // Actions: a flat, cross-transcript list with its own filter/select/complete toolbar above.
           <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
             {opError && <p className="px-3 py-1 text-xs text-red-600 dark:text-red-400">{opError}</p>}
-            <ActionsTab actions={visibleActions} persons={persons} person={personFilter} onPerson={setPersonFilter} />
+            <ActionsTab
+              actions={visibleActions}
+              persons={persons}
+              person={personFilter}
+              onPerson={setPersonFilter}
+              myUserId={myId}
+              onTogglePin={async (actionId, pinned) => {
+                await api.pinActions([actionId], pinned);
+                qc.invalidateQueries({ queryKey: ["actions", "all"] });
+                qc.invalidateQueries({ queryKey: ["recording"] }); // an open transcript reflects the change
+              }}
+            />
           </div>
         ) : (
           <TagsTab recordings={recordings} roomId={aggRoomId} />

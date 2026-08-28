@@ -142,6 +142,34 @@ public class SectionPageControllerTests
     }
 
     [Fact]
+    public async Task Actions_WithPinnedTrue_ReturnsOnlyPinnedActionsAcrossTheFolderAndItsChildren()
+    {
+        // Same rule as the main Actions tab: the recording page is the only place an unpinned action appears
+        // anywhere. A folder is an aggregation of recordings, so it follows that rule too.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var parent = await Section(db, userId);
+        var child = await Section(db, userId, parent.Id);
+        var recA = await Recording(db, userId, parent.Id, name: "Kickoff");
+        var recB = await Recording(db, userId, child.Id, name: "Review");
+        db.RecordingActions.AddRange(
+            new RecordingAction { Id = Guid.NewGuid(), RecordingId = recA.Id, Text = "Book the room", Ordinal = 0, Pinned = true },
+            new RecordingAction { Id = Guid.NewGuid(), RecordingId = recA.Id, Text = "Chase the invoice", Ordinal = 1 },
+            new RecordingAction { Id = Guid.NewGuid(), RecordingId = recB.Id, Text = "Draft the brief", Ordinal = 0, Pinned = true },
+            new RecordingAction { Id = Guid.NewGuid(), RecordingId = recB.Id, Text = "Tidy the notes", Ordinal = 1 });
+        await db.SaveChangesAsync();
+
+        var pinnedOnly = (await Build(db, userId).Actions(parent.Id, pinned: true)).Value!;
+        var everything = (await Build(db, userId).Actions(parent.Id)).Value!;
+
+        Assert.Equal(2, pinnedOnly.Count); // one from the folder, one from the sub-folder
+        Assert.All(pinnedOnly, i => Assert.True(i.Pinned));
+        Assert.Contains(pinnedOnly, i => i.Text == "Book the room");
+        Assert.Contains(pinnedOnly, i => i.Text == "Draft the brief");
+        Assert.Equal(4, everything.Count); // the endpoint's own default stays unchanged
+    }
+
+    [Fact]
     public async Task Notes_and_attachments_aggregate_with_meeting_name()
     {
         using var db = TestDb.Create();

@@ -49,6 +49,9 @@
               "string"
             ]
           },
+          "pinned": {
+            "type": "boolean"
+          },
           "recordedByUserId": {
             "format": "uuid",
             "type": "string"
@@ -75,7 +78,8 @@
           "completed",
           "completedAt",
           "createdAt",
-          "recordedByUserId"
+          "recordedByUserId",
+          "pinned"
         ],
         "type": "object"
       },
@@ -2850,6 +2854,25 @@
         ],
         "type": "object"
       },
+      "PinActionsRequest": {
+        "properties": {
+          "ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "pinned": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ids",
+          "pinned"
+        ],
+        "type": "object"
+      },
       "PlatformPermission": {
         "type": "integer"
       },
@@ -2883,6 +2906,10 @@
               "integer",
               "string"
             ]
+          },
+          "pinned": {
+            "default": false,
+            "type": "boolean"
           },
           "text": {
             "type": "string"
@@ -5913,7 +5940,7 @@
   "paths": {
     "/api/actions": {
       "get": {
-        "description": "Every action item in one flat list rather than per recording - the view behind the Actions tab. Newest meeting first, each item tagged with the recording it came from so you can link back to the moment it was agreed, and carrying its owner, deadline, and completion state for filtering.\n\nWith no `roomId` this covers your own library; with one it covers the recordings placed in that room (404 if you are not a member). For the actions on a single recording, use its own endpoint.",
+        "description": "Every action item in one flat list rather than per recording - the view behind the Actions tab. Newest meeting first, each item tagged with the recording it came from so you can link back to the moment it was agreed, and carrying its owner, deadline, and completion state for filtering.\n\nWith no `roomId` this covers your own library; with one it covers the recordings placed in that room (404 if you are not a member). For the actions on a single recording, use its own endpoint.\n\nPass `pinned=true` to get only the actions someone has pinned into the Actions views, which is what the app itself shows. Omit it and you get every action, pinned or not - the default is unchanged.",
         "parameters": [
           {
             "in": "query",
@@ -5921,6 +5948,13 @@
             "schema": {
               "format": "uuid",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pinned",
+            "schema": {
+              "type": "boolean"
             }
           }
         ],
@@ -5990,6 +6024,40 @@
           }
         },
         "summary": "Complete or reopen action items",
+        "tags": [
+          "Actions"
+        ]
+      }
+    },
+    "/api/actions/pin": {
+      "post": {
+        "description": "Pins several actions at once so they appear in the cross-meeting Actions views, or unpins them with `pinned: false`. An action is always visible on its own recording's page - pinning is what promotes it into the Actions tab and the folder Actions tab, which show pinned items only.\n\nIds that are not yours are silently skipped rather than failing the call, so a mixed selection still works; an empty list succeeds without doing anything.",
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinActionsRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinActionsRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinActionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Pin or unpin action items",
         "tags": [
           "Actions"
         ]
@@ -13426,7 +13494,7 @@
     },
     "/api/sections/{id}/actions": {
       "get": {
-        "description": "Every action item from every recording in the folder **and its sub-folders**, newest meeting first, each carrying the recording it came from so you can link back. Read-only aggregation - create, edit, and complete them through the per-recording and Actions endpoints.",
+        "description": "Every action item from every recording in the folder **and its sub-folders**, newest meeting first, each carrying the recording it came from so you can link back. Read-only aggregation - create, edit, and complete them through the per-recording and Actions endpoints.\n\nPass `pinned=true` for only the pinned actions, which is what the folder's Actions tab shows; omit it for every action in the folder.",
         "parameters": [
           {
             "in": "path",
@@ -13435,6 +13503,13 @@
             "schema": {
               "format": "uuid",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pinned",
+            "schema": {
+              "type": "boolean"
             }
           }
         ],

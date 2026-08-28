@@ -4074,6 +4074,32 @@ public class RecordingsControllerTests
     }
 
     [Fact]
+    public async Task Merge_CarriesThePinnedFlagOntoTheSurvivor()
+    {
+        // A pinned action must not vanish from the Actions tab because the user merged two halves of one
+        // meeting. Merging is a filing operation, not a reason to reopen curation.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var early = await SeedMergeable(db, userId, DateTimeOffset.UtcNow.AddMinutes(-5), 1000, "Hello");
+        var later = await SeedMergeable(db, userId, DateTimeOffset.UtcNow, 2000, "World");
+        db.RecordingActions.Add(new RecordingAction
+        {
+            Id = Guid.NewGuid(), RecordingId = later.Id, Text = "Book the room", Ordinal = 0, Pinned = true,
+        });
+        db.RecordingActions.Add(new RecordingAction
+        {
+            Id = Guid.NewGuid(), RecordingId = later.Id, Text = "Chase the invoice", Ordinal = 1,
+        });
+        await db.SaveChangesAsync();
+
+        await Build(db, userId, new FakeJobQueue()).Merge(new MergeRecordingsRequest([later.Id, early.Id]));
+
+        var moved = await db.RecordingActions.Where(a => a.RecordingId == early.Id).ToListAsync();
+        Assert.True(moved.Single(a => a.Text == "Book the room").Pinned);
+        Assert.False(moved.Single(a => a.Text == "Chase the invoice").Pinned);
+    }
+
+    [Fact]
     public async Task Merge_IntoEarliest_BuildsMergedTranscript_SetsMerging_AndEnqueuesJob()
     {
         using var db = TestDb.Create();
