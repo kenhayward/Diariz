@@ -39,8 +39,11 @@ public class ActionsController : ControllerBase
         "Newest meeting first, each item tagged with the recording it came from so you can link back to the " +
         "moment it was agreed, and carrying its owner, deadline, and completion state for filtering.\n\n" +
         "With no `roomId` this covers your own library; with one it covers the recordings placed in that room " +
-        "(404 if you are not a member). For the actions on a single recording, use its own endpoint.")]
-    public async Task<ActionResult<IReadOnlyList<ActionListItemDto>>> List([FromQuery] Guid? roomId = null)
+        "(404 if you are not a member). For the actions on a single recording, use its own endpoint.\n\n" +
+        "Pass `pinned=true` to get only the actions someone has pinned into the Actions views, which is what " +
+        "the app itself shows. Omit it and you get every action, pinned or not - the default is unchanged.")]
+    public async Task<ActionResult<IReadOnlyList<ActionListItemDto>>> List(
+        [FromQuery] Guid? roomId = null, [FromQuery] bool? pinned = null)
     {
         IQueryable<Recording> recs;
         if (roomId is { } rid)
@@ -56,10 +59,12 @@ public class ActionsController : ControllerBase
         var actions = await (
             from a in _db.RecordingActions
             join r in recs on a.RecordingId equals r.Id
+            // Opt-in filter. Omitted means every action - the published default the n8n node relies on.
+            where !pinned.HasValue || a.Pinned == pinned.Value
             orderby r.CreatedAt descending, a.Ordinal
             select new ActionListItemDto(
                 a.Id, a.RecordingId, r.Name ?? r.Title, a.Text, a.Actor, a.Deadline,
-                a.Ordinal, a.Completed, a.CompletedAt, a.CreatedAt, r.UserId)).ToListAsync();
+                a.Ordinal, a.Completed, a.CompletedAt, a.CreatedAt, r.UserId, a.Pinned)).ToListAsync();
         return actions;
     }
 

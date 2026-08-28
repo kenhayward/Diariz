@@ -25,4 +25,10 @@ public class RecordingAction
     public bool Completed { get; set; }
     /// <summary>When it was marked done (null = not done). Set on complete, cleared on un-complete.</summary>
     public DateTimeOffset? CompletedAt { get; set; }
+
+    /// <summary>Whether the user has pinned this action into the cross-meeting Actions views. Defaults to
+    /// false: an action is visible on its own recording's page from the moment it is extracted, and reaches
+    /// the Actions tab and the folder Actions tab only once someone pins it. Reversible, and owner-only to
+    /// set (see <c>ActionsController.Pin</c>), exactly like <see cref="Completed"/>.</summary>
+    public bool Pinned { get; set; }
 }

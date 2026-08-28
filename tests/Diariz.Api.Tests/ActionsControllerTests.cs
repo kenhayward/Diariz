@@ -46,6 +46,45 @@ public class ActionsControllerTests
     }
 
     [Fact]
+    public async Task List_WithPinnedTrue_ReturnsOnlyPinnedActions()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var rec = AddRecording(db, me, "Standup");
+        db.RecordingActions.AddRange(
+            new RecordingAction { Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Book the room", Ordinal = 0, Pinned = true },
+            new RecordingAction { Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Chase the invoice", Ordinal = 1 });
+        await db.SaveChangesAsync();
+
+        var dtos = (await Build(db, me).List(pinned: true)).Value!;
+
+        Assert.Single(dtos);
+        Assert.Equal("Book the room", dtos[0].Text);
+        Assert.True(dtos[0].Pinned);
+    }
+
+    [Fact]
+    public async Task List_WithNoPinnedParameter_StillReturnsEveryAction()
+    {
+        // The published default, deliberately unchanged. GET /api/actions is in the OpenAPI document and is
+        // what the n8n community node calls as "List action items across meetings". Narrowing it to
+        // pinned-only would break live workflows silently, and an npm-published node cannot be corrected
+        // after the fact. This test is the guard on that decision.
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var rec = AddRecording(db, me, "Standup");
+        db.RecordingActions.AddRange(
+            new RecordingAction { Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Book the room", Ordinal = 0, Pinned = true },
+            new RecordingAction { Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Chase the invoice", Ordinal = 1 });
+        await db.SaveChangesAsync();
+
+        var dtos = (await Build(db, me).List()).Value!;
+
+        Assert.Equal(2, dtos.Count);
+        Assert.Contains(dtos, d => d.Text == "Chase the invoice" && !d.Pinned);
+    }
+
+    [Fact]
     public async Task List_ByRoom_ReturnsActionsSharedIntoThatRoom_ExcludesPersonalOnes()
     {
         using var db = TestDb.Create();

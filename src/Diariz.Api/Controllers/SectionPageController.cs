@@ -121,7 +121,7 @@ public class SectionPageController : ControllerBase
             orderby r.CreatedAt descending, a.Ordinal
             select new ActionListItemDto(
                 a.Id, a.RecordingId, r.Name ?? r.Title, a.Text, a.Actor, a.Deadline,
-                a.Ordinal, a.Completed, a.CompletedAt, a.CreatedAt, r.UserId)).ToListAsync();
+                a.Ordinal, a.Completed, a.CompletedAt, a.CreatedAt, r.UserId, a.Pinned)).ToListAsync();
     }
 
     [HttpGet("{id:guid}/notes")]

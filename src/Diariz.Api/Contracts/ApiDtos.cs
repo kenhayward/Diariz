@@ -483,7 +483,8 @@ public record UpdateMeetingNoteRequest(string Text);
 /// hide edit/delete/complete for rows belonging to someone else's recording.</summary>
 public record ActionListItemDto(
     Guid Id, Guid RecordingId, string RecordingName, string Text, string Actor, string Deadline,
-    int Ordinal, bool Completed, DateTimeOffset? CompletedAt, DateTimeOffset CreatedAt, Guid RecordedByUserId);
+    int Ordinal, bool Completed, DateTimeOffset? CompletedAt, DateTimeOffset CreatedAt, Guid RecordedByUserId,
+    bool Pinned);
 /// <summary>Mark a set of actions complete (or not). Ids not owned by the caller are ignored.</summary>
 public record CompleteActionsRequest(IReadOnlyList<Guid> Ids, bool Completed);
 
