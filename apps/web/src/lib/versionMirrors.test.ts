@@ -42,8 +42,15 @@ describe("version mirrors", () => {
   ///
   /// Both copies are checked: npm writes the version at the top level AND in `packages[""]`, and syncing
   /// only one by hand is the obvious way to half-fix this.
-  it("the web package-lock mirrors version.json, in both places npm writes it", () => {
-    const lock = JSON.parse(read("apps/web/package-lock.json")) as {
+  /// All three lock files, not just the web one. The web lock was pinned first and the other two were left
+  /// unasserted, which let them sit at 0.197.4 while their package.json tracked the release - roughly sixty
+  /// releases of drift, and precisely the failure this test exists to catch (issue #593).
+  it.each([
+    ["apps/web/package-lock.json"],
+    ["apps/desktop/package-lock.json"],
+    ["integrations/n8n-nodes-diariz/package-lock.json"],
+  ])("%s mirrors version.json, in both places npm writes it", (path) => {
+    const lock = JSON.parse(read(path)) as {
       version: string;
       packages: Record<string, { version?: string }>;
     };

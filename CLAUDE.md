@@ -235,13 +235,17 @@ is **Major.Minor.Build** (currently `0.x`).
 - **Bump rule:** a **functional enhancement** bumps **Minor +1 and resets Build to 0** (e.g. `0.1.2`
   → `0.2.0`); any other PR (fix / chore / docs / refactor) bumps **Build +1** (e.g. `0.2.0` → `0.2.1`).
   **Only bump Major when the user explicitly asks.**
-- **The canonical version is `/version.json`.** Bump it in lockstep with its mirrors:
-  `apps/web/package.json`, `apps/desktop/package.json`, `src/Diariz.Api/Diariz.Api.csproj`
-  (`<Version>`), and `integrations/n8n-nodes-diariz/package.json` (which is what npm publishes under, so a
-  stale one cannot be corrected after the fact). The web build injects it (`__APP_VERSION__` via
-  `vite.config.ts`/`vitest.config.ts`) and the API reports it at `GET /health`. `RELEASES[0].version` in
-  `apps/web/src/lib/releases.ts` **must equal** `version.json` (asserted by `releases.test.ts`), and
-  `versionMirrors.test.ts` asserts every mirror.
+- **The canonical version is `/version.json`, and seven files repeat it.** Bump them in lockstep:
+  `apps/web/package.json`, `apps/desktop/package.json`, `src/Diariz.Api/Diariz.Api.csproj` (`<Version>`),
+  `integrations/n8n-nodes-diariz/package.json` (which is what npm publishes under, so a stale one cannot be
+  corrected after the fact), **and all three `package-lock.json` files** - web, desktop and n8n - each of
+  which carries the version **twice**, at the top level and again in `packages[""]`. The lock files are the
+  easy ones to forget: nothing reads them at runtime, so a stale value breaks nothing until `npm install`
+  rewrites it and turns an unrelated dependency bump into a surprise version diff. Two of them sat at
+  `0.197.4` for roughly sixty releases because the guard covered only the web one (issue #593).
+  The web build injects the version (`__APP_VERSION__` via `vite.config.ts`/`vitest.config.ts`) and the API
+  reports it at `GET /health`. `RELEASES[0].version` in `apps/web/src/lib/releases.ts` **must equal**
+  `version.json` (asserted by `releases.test.ts`), and `versionMirrors.test.ts` asserts every mirror above.
 - **Add a release entry** to the top of `RELEASES` in `apps/web/src/lib/releases.ts` with: `version`,
   `date`, `pr` (the GitHub PR number), `headline`, a **PR-level prose `summary`** (enough for a user to
   understand the impact), and `added`/`changed`/`fixed` bullet lists as applicable.
@@ -293,8 +297,10 @@ is **Major.Minor.Build** (currently `0.x`).
 
 - **Release checklist (run this for every user-facing PR).** Update all of these **in lockstep, in the same
   PR** (details for each are in the bullets above):
-  1. `version.json` **and** its four mirrors (`apps/web/package.json`, `apps/desktop/package.json`,
-     `src/Diariz.Api/Diariz.Api.csproj`, `integrations/n8n-nodes-diariz/package.json`).
+  1. `version.json` **and** its seven mirrors: `apps/web/package.json`, `apps/desktop/package.json`,
+     `src/Diariz.Api/Diariz.Api.csproj`, `integrations/n8n-nodes-diariz/package.json`, and the three
+     `package-lock.json` files (web, desktop, n8n - **two `version` fields in each**). Edit the lock files
+     by hand rather than regenerating them; regenerating churns dependency resolution for no reason.
      `apps/web/src/lib/versionMirrors.test.ts` fails the build if any of them drifts - it exists because the
      n8n node silently sat at `0.1.0` for ~70 releases, and an npm version cannot be corrected once published.
   2. The `RELEASES[0]` entry in `apps/web/src/lib/releases.ts` (must equal `version.json`).
