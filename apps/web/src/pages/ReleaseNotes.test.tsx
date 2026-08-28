@@ -1,41 +1,55 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect } from "vitest";
 import ReleaseNotes from "./ReleaseNotes";
-import { RELEASES } from "../lib/releases";
+import { EPOCHS, ARCHIVED_SPINE } from "../lib/releaseNotes/epochs";
+import { RECENT } from "../lib/releaseNotes";
+import { epochSpan } from "../lib/releaseNotes/epochSpan";
+
+const renderPage = () =>
+  render(
+    <MemoryRouter>
+      <ReleaseNotes />
+    </MemoryRouter>,
+  );
 
 describe("ReleaseNotes", () => {
-  it("renders the fixed header, lists releases, and shows the newest by default", () => {
-    render(<ReleaseNotes />);
-
+  it("renders the fixed header", () => {
+    renderPage();
     expect(screen.getByRole("heading", { name: /release notes/i })).toBeTruthy();
     expect(screen.getByText("Diariz")).toBeTruthy();
     expect(screen.getByText(/smart meeting transcription/i)).toBeTruthy();
-
-    const newest = RELEASES[0];
-    // The list shows every release version + headline; the detail also shows the newest's headline.
-    //
-    // Collect the rendered versions in ONE DOM traversal, then check membership. This used to call
-    // getAllByText once per release, and since each of those walks the whole tree - a tree that itself
-    // grows by one entry per release - the cost was quadratic in the number of releases shipped. It had
-    // reached ~5s locally and was intermittently blowing CI's 20s per-test timeout, which would only have
-    // got worse with every release. Same guarantee, linear cost.
-    const rendered = new Set(screen.getAllByText(/^v\d+\.\d+\.\d+$/).map((el) => el.textContent));
-    for (const r of RELEASES) expect(rendered).toContain(`v${r.version}`);
-    expect(screen.getAllByText(newest.headline).length).toBeGreaterThan(0);
   });
 
-  it("selecting a release shows its notes (with a PR link when present)", () => {
-    render(<ReleaseNotes />);
-    const target = RELEASES[0];
+  it("leads with the current releases rather than an epoch", () => {
+    renderPage();
+    const latest = screen.getByRole("link", { name: /latest releases/i });
+    expect(latest.getAttribute("href")).toBe("/release-notes/current");
+    // The newest release's headline is the first thing a reader should see.
+    expect(screen.getAllByText(RECENT[0].headline).length).toBeGreaterThan(0);
+  });
 
-    // Click the list entry (first matching button) to select it.
-    fireEvent.click(screen.getAllByText(`v${target.version}`)[0]);
-    expect(screen.getAllByText(target.headline).length).toBeGreaterThan(0);
+  it("shows every epoch as a card linking to its own page", () => {
+    renderPage();
+    // One traversal, then membership - the same reason the old flat list stopped querying per entry:
+    // a query per epoch walks a tree that grows with every epoch shipped.
+    const hrefs = new Set(
+      screen
+        .getAllByRole("link")
+        .map((a) => a.getAttribute("href"))
+        .filter((h): h is string => h != null),
+    );
+    for (const e of EPOCHS) expect(hrefs).toContain(`/release-notes/${e.id}`);
+    expect(hrefs.size).toBe(EPOCHS.length + 1); // + the current-releases card
+  });
 
-    if (target.pr != null) {
-      const link = screen.getByRole("link", { name: `#${target.pr}` });
-      expect(link.getAttribute("href")).toContain(`/pull/${target.pr}`);
-      expect(link.getAttribute("target")).toBe("_blank");
+  it("tells the reader how big each epoch is, without loading the archive", () => {
+    renderPage();
+    for (const e of EPOCHS) {
+      const span = epochSpan(e, ARCHIVED_SPINE);
+      expect(span).not.toBeNull();
+      expect(screen.getAllByText(e.title).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(new RegExp(`${span!.count} releases`)).length).toBeGreaterThan(0);
     }
   });
 });

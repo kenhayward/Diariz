@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { renderMarkdown } from "../lib/markdown";
 import { APP_VERSION, BUILD_COMMIT } from "../lib/version";
-import { TAGLINE, GITHUB_URL, COPYRIGHT, LICENSE, CAPABILITIES } from "../lib/releases";
+import { TAGLINE, GITHUB_URL, COPYRIGHT, LICENSE, CAPABILITIES } from "../lib/appInfo";
 
 /// About box: app identity, version, what it does, links, third-party disclaimers, and copyright.
 export default function AboutModal({ onClose }: { onClose: () => void }) {

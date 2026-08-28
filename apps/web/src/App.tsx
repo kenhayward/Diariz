@@ -9,12 +9,16 @@ import GoogleCallback from "./pages/GoogleCallback";
 import OAuthConsent from "./pages/OAuthConsent";
 import RequestAccess from "./pages/RequestAccess";
 import Setup from "./pages/Setup";
-import ReleaseNotes from "./pages/ReleaseNotes";
 import Help from "./pages/Help";
 import NotesPopout from "./pages/NotesPopout";
 import RecordingDetail from "./pages/RecordingDetail";
 import SectionDetail from "./pages/SectionDetail";
 import CalendarEventDetail from "./pages/CalendarEventDetail";
+// Lazy-loaded: the release-notes pages are public but rarely opened, and EpochDetail in particular
+// carries the whole release archive - the bulk of the release history, which has no business in the
+// initial bundle when almost nobody opens it and everybody would pay for it.
+const ReleaseNotes = lazy(() => import("./pages/ReleaseNotes"));
+const EpochDetail = lazy(() => import("./pages/EpochDetail"));
 // Lazy-loaded: the Scalar API reference is a large bundle, only needed on /developers/api.
 const ApiReference = lazy(() => import("./pages/ApiReference"));
 // Lazy-loaded: a Platform-Administrator-only page, no reason to ship it in the main bundle.
@@ -63,7 +67,22 @@ export default function App() {
       <Route path="/oauth/consent" element={<OAuthConsent />} />
       <Route path="/request-access" element={<RequestAccess />} />
       <Route path="/setup" element={<Setup />} />
-      <Route path="/release-notes" element={<ReleaseNotes />} />
+      <Route
+        path="/release-notes"
+        element={
+          <Suspense fallback={null}>
+            <ReleaseNotes />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/release-notes/:epochId"
+        element={
+          <Suspense fallback={null}>
+            <EpochDetail />
+          </Suspense>
+        }
+      />
       {/* Public, like the release notes: help is useful before signing in, and the contextual `?`
           popovers deep link into it from anywhere. */}
       <Route path="/help" element={<Help />} />
