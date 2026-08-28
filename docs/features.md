@@ -708,10 +708,17 @@ default, with a refresh button to re-extract). The automatic pass runs once and 
 you've added or edited. The **meeting minutes are generated from that same action set**, so the minutes' Action
 Items table and the Actions panel always match. The actions also travel with the transcript — included in the
 downloads (Text/Markdown/RTF), the emailed transcript, and the chat context.
-- **Manage actions across all your meetings** in a dedicated **Actions** tab (the left panel is now
-**Meetings**): every action item in one list, **filter by person**, mark items **done** with a completion
-date (individually or in bulk, reversible), **hide completed**, and click an action to jump to the transcript
-it came from. The per-transcript table gains the same Done checkbox + Completed date.
+- **Manage the actions you choose to track across all your meetings** in a dedicated **Actions** tab (the
+left panel is now **Meetings**). The tab is **opt-in**: an action reaches it only once someone **pins** it,
+via the pin control on the action's own meeting page or on the row in the tab itself. Everything else stays
+on the meeting it came from, so the recording page remains the one place that shows every extracted action.
+A folder's Actions tab follows the same rule. Within that pinned list you can **filter by person**, mark
+items **done** with a completion date (individually or in bulk, reversible), **hide completed**, and click
+an action to jump to the transcript it came from. Pinning is owner-only, so in a shared room the recording's
+owner decides what the room sees pinned. Re-extracting a meeting's actions replaces the list and clears its
+pins, the same way it already clears completion. The per-transcript table carries the pin alongside the Done
+checkbox and Completed date. The REST API's action list is unfiltered by default (so existing automations
+are unaffected) and takes `pinned=true` for the pinned subset.
 - **Translate** a transcript into your chosen language with that same LLM — the whole recording (segments,
 summary, and actions) or a single segment. Translations are stored as **revisions** over the model's
 original words (so you can always flip back), and exports/email/chat use them.

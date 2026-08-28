@@ -126,6 +126,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddSpeakerSuggestion` | `Speakers.SuggestedProfileId` (FK, set null) / `SuggestedDistance` / `SuggestedAt`, all nullable and always null-together. Additive - **no `CurrentFormat` bump** |
 | `AddVoiceSampleRecomputeState` | `ProfileContributions.RecomputeQueuedAt` / `RecomputeFailedAt` (both timestamptz, nullable). Whether a re-embed is in flight and whether the last one failed, recorded rather than inferred from `SpansJson`/`UsedMs` - which could not express either, so pressing **Re-measure** reported nothing at all whenever the whole speaker was selected. Null on every existing row means "nothing queued, nothing failed", which is what they all are - **no `CurrentFormat` bump** |
 | `AddVoiceSampleConfirmation` | `ProfileContributions.ConfirmedAt` (timestamptz, nullable) + `ConfirmedByUserId` (uuid, nullable, **no FK**). Records a human vouching that a recording really is that person - the gate multi-template voiceprints will seed from, since distance cannot separate a second microphone from a second person enrolled under one name. Null on every existing row means "nobody has vouched", which is what they all are - **no `CurrentFormat` bump** |
+| `AddActionPinned` | `RecordingActions.Pinned` (bool, NOT NULL, default false). An action reaches the cross-meeting Actions views only once someone pins it; it is visible on its own recording's page from the moment it is extracted either way. False on every existing row means "nothing pinned yet", which is the intended starting state - the tab is empty by design on the day this ships. Additive with a column default, so an older backup restores and migrates up cleanly with its actions unpinned - **no `CurrentFormat` bump** |
 
 ### Entity-relationship overview
 
@@ -319,9 +320,14 @@ Extracted/hand-edited action items.
 | `CreatedAt` | timestamptz | |
 | `Completed` | bool | user-set done flag (default false; reversible) |
 | `CompletedAt` | timestamptz null | when marked done; null = not done |
+| `Pinned` | bool | whether the action appears in the cross-meeting Actions views (default false; reversible) |
 
 Index: `(RecordingId, Ordinal)`. The cross-meeting Actions list (`GET /api/actions`) joins to `Recordings`
-for ownership + display name; bulk complete/un-complete via `POST /api/actions/complete`.
+for ownership + display name; bulk complete/un-complete via `POST /api/actions/complete`, bulk pin/unpin via
+`POST /api/actions/pin`. `Pinned` is what promotes an action out of its own recording's page and into the
+Actions tab and the folder Actions tab - both of those pass `?pinned=true`, while the endpoints themselves
+default to returning every action so the published API stays as it was. Extraction replaces the whole row
+set, so a re-extract clears `Pinned` along with `Completed`; a recording merge copies `Pinned` across.
 
 #### `RecordingTags`
 A tag on a recording, either typed by hand or extracted by the LLM as a suggestion. `Status` is what makes

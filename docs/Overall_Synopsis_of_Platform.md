@@ -930,12 +930,23 @@ large folders silently rolled up only their first ~18 meetings. The old per-work
   via a single `IPromptTemplateProvider` (`prompts/<name>.md`) **on each use** so edits (or a volume mount) apply
   without an API restart; each falls back to a built-in default (`*Prompt.DefaultTemplate`) if the file is
   missing/unreadable. The files ship in the published image (`Diariz.Api.csproj` copies `prompts/**`).
-- **Action management (cross-meeting).** `ActionsController` exposes a library-wide view: `GET /api/actions`
-  lists every action on the caller's recordings (joined to `Recordings` for ownership + display name, newest
-  recording first), and `POST /api/actions/complete { ids, completed }` bulk-marks actions done/undone (sets/
-  clears `RecordingAction.CompletedAt`; ignores ids the caller doesn't own). Both the new **Actions tab** in
-  the left **Meetings** panel (filter by person, Select-mode multi-complete, Hide-completed, edit, link back to
-  the source transcript) and the per-transcript Actions table's inline **Done** toggle drive this endpoint.
+- **Action management (cross-meeting), and why it is opt-in.** `ActionsController` exposes a library-wide
+  view: `GET /api/actions` lists actions on the caller's recordings (joined to `Recordings` for ownership +
+  display name, newest recording first), `POST /api/actions/complete { ids, completed }` bulk-marks actions
+  done/undone (sets/clears `RecordingAction.CompletedAt`), and `POST /api/actions/pin { ids, pinned }` sets
+  `RecordingAction.Pinned`. Both writes ignore ids the caller doesn't own, so pinning is **owner-only** -
+  which means that in a Shared Room the recording's owner decides what the room sees pinned.
+  The **Actions tab** in the left **Meetings** panel and a folder's Actions tab
+  (`GET /api/sections/{id}/actions`) show **pinned actions only**; the recording's own page is the one place
+  every extracted action appears. That is a property of the *clients*, not the endpoints: both list endpoints
+  take an optional `?pinned=` filter and **default to returning everything**, deliberately, because
+  `GET /api/actions` is published in the OpenAPI document and is what the `n8n-nodes-diariz` node calls -
+  narrowing the default would silently break live workflows, and an npm-published node cannot be corrected
+  after the fact. `ActionsControllerTests.List_WithNoPinnedParameter_StillReturnsEveryAction` guards it.
+  The MCP `list_action_items` tool is likewise unfiltered: it is queried by a model answering a question
+  rather than browsed by a person, so hiding unpinned actions would just make the assistant wrong.
+  Extraction replaces a recording's whole action list, so a re-extract clears pins exactly as it already
+  clears completion; `RecordingsController.Merge` does carry `Pinned` onto the survivor.
 - **Translate (sync).** `POST /api/recordings/{id}/translate { language? }` translates the current
   transcript into a target language (the request's, else the caller's `NativeLanguage`; 400 if neither, or no
   endpoint) via `TranslationClient` → `TranslationPrompt`. It batches segment **Originals** by a char budget,
