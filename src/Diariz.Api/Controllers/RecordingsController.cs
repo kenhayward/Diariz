@@ -1919,6 +1919,10 @@ public class RecordingsController : ControllerBase
             {
                 Id = Guid.NewGuid(), RecordingId = survivor.Id,
                 Text = a.Text, Actor = a.Actor, Deadline = a.Deadline, Ordinal = nextActionOrdinal++,
+                // A pinned action stays pinned on the survivor - merging is a filing operation, and losing
+                // the pin would silently drop it out of the Actions tab. (Completed/CompletedAt are also
+                // dropped here; that is issue #676, a separate pre-existing bug, deliberately not fixed here.)
+                Pinned = a.Pinned,
             });
             mergedAnyAction = true;
         }
