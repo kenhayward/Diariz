@@ -80,8 +80,9 @@ async function ready(name = /Ada Lovelace/) {
 }
 
 const seg = (text: string) => evidence().getByText(text).closest("li") as HTMLElement;
-const decide = (text: string, answer: "Yes" | "No") =>
-  userEvent.click(within(seg(text)).getByRole("button", { name: new RegExp("^" + answer + "$") }));
+/// Take one segment out of the list. There is no opposite: a segment is in unless it is removed.
+const remove = (text: string) =>
+  userEvent.click(within(seg(text)).getByRole("button", { name: /take this segment out/i }));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -249,7 +250,7 @@ describe("VoicesToConfirmModal", () => {
     setup();
     await ready();
 
-    await decide("Two", "No");
+    await remove("Two");
 
     expect(evidence().queryByText("Two")).toBeNull();
     expect(evidence().getByText("One")).toBeTruthy();
@@ -259,7 +260,7 @@ describe("VoicesToConfirmModal", () => {
   it("trains the voiceprint from only the segments that were kept", async () => {
     setup();
     await ready();
-    await decide("Two", "No");
+    await remove("Two");
 
     await userEvent.click(evidence().getByRole("button", { name: /Confirm this voice/ }));
 
@@ -286,26 +287,32 @@ describe("VoicesToConfirmModal", () => {
     // One click, no undo, and it shapes a biometric. Reopening the modal is not a recovery path.
     setup();
     await ready();
-    await decide("Two", "No");
+    await remove("Two");
 
     await userEvent.click(evidence().getByRole("button", { name: /Restore/ }));
 
     expect(await evidence().findByText("Two")).toBeTruthy();
   });
 
-  it("acknowledges a segment you confirm", async () => {
-    // Without feedback, Yes looks like a button that does nothing - the row was already in the list.
+  it("offers no per-segment tick, because there was nothing for it to do", async () => {
+    // It rendered pressed and filled when clicked, next to a same-sized cross, so it read as choosing what
+    // would be used. It changed nothing: a segment trains unless it is removed, and a ticked segment and an
+    // untouched one were identical. Two controls that look like opposites, one of them inert.
     setup();
     await ready();
 
-    await decide("Two", "Yes");
+    const row = within(seg("Two"));
+    expect(row.getByRole("button", { name: /take this segment out/i })).toBeTruthy();
+    expect(row.queryByRole("button", { name: /^Yes$/ })).toBeNull();
+  });
 
-    expect(
-      within(seg("Two")).getByRole("button", { name: /^Yes$/ }).getAttribute("aria-pressed"),
-    ).toBe("true");
-    expect(
-      within(seg("One")).getByRole("button", { name: /^Yes$/ }).getAttribute("aria-pressed"),
-    ).toBe("false");
+  it("says what confirming will train from, before anything is excluded", async () => {
+    // The count used to appear only once something had been removed, so the commonest case - look, decide,
+    // confirm - was the one the panel said nothing about. That silence is what made the tick misleading.
+    setup();
+    await ready();
+
+    expect(evidence().getByText(/3 of 3 segments/)).toBeTruthy();
   });
 
   it("does not carry one voice's marks to another", async () => {
@@ -317,7 +324,7 @@ describe("VoicesToConfirmModal", () => {
     ]);
     setup();
     await ready();
-    await decide("Two", "No");
+    await remove("Two");
 
     await userEvent.click(screen.getByRole("button", { name: /Grace Hopper/ }));
 
@@ -334,8 +341,7 @@ describe("VoicesToConfirmModal", () => {
     ]);
     setup();
     await ready();
-    await decide("Two", "No");
-    await decide("Three", "Yes");
+    await remove("Two");
 
     await userEvent.click(screen.getByRole("button", { name: /Grace Hopper/ }));
     await evidence().findByText("Two");
@@ -343,9 +349,7 @@ describe("VoicesToConfirmModal", () => {
     await evidence().findByText("One");
 
     expect(evidence().queryByText("Two")).toBeNull();
-    expect(
-      within(seg("Three")).getByRole("button", { name: /^Yes$/ }).getAttribute("aria-pressed"),
-    ).toBe("true");
+    expect(evidence().getByText(/2 of 3 segments/)).toBeTruthy();
   });
 
   it("still trains from the kept segments after switching away and back", async () => {
@@ -356,7 +360,7 @@ describe("VoicesToConfirmModal", () => {
     ]);
     setup();
     await ready();
-    await decide("Two", "No");
+    await remove("Two");
     await userEvent.click(screen.getByRole("button", { name: /Grace Hopper/ }));
     await evidence().findByText("Two");
     await userEvent.click(screen.getByRole("button", { name: /Ada Lovelace/ }));
@@ -387,7 +391,7 @@ describe("VoicesToConfirmModal", () => {
     setup();
     await ready();
 
-    await decide("Two", "No");
+    await remove("Two");
 
     expect(await evidence().findByText(/2 of 3 segments/)).toBeTruthy();
   });
@@ -399,10 +403,12 @@ describe("VoicesToConfirmModal", () => {
     await ready();
 
     const parts = [...seg("One").children];
-    const at = (label: string) => parts.findIndex((el) => el.getAttribute("aria-label") === label);
+    const at = (label: string) =>
+      parts.findIndex((el) =>
+        (el.getAttribute("aria-label") ?? "").toLowerCase().includes(label.toLowerCase()),
+      );
 
-    expect(at("Yes")).toBe(at("Play") + 1);
-    expect(at("No")).toBe(at("Yes") + 1);
+    expect(at("take this segment out")).toBe(at("Play") + 1);
     // The words still come first, so the three controls sit together at the end of the row.
     expect(parts.findIndex((el) => el.textContent === "One")).toBeLessThan(at("Play"));
   });
@@ -425,7 +431,7 @@ describe("VoicesToConfirmModal", () => {
   it("skips a segment that was excluded", async () => {
     setup();
     await ready();
-    await decide("Two", "No");
+    await remove("Two");
 
     await userEvent.click(evidence().getByRole("button", { name: /Play all/ }));
 

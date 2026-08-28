@@ -34,7 +34,11 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
   const [done, setDone] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
-  /// Segments the reviewer said are not this person, and ones they explicitly vouched for - **per voice**.
+  /// Segments the reviewer took out because they are not this person - **per voice**.
+  ///
+  /// There is no matching "yes" set. A segment trains unless it is removed, so a tick would have had
+  /// nothing to record: ticked and untouched were the same state, while the control looked like the
+  /// opposite of the cross beside it.
   ///
   /// Keyed by speaker rather than held as one set and cleared on every switch. Both properties are needed
   /// and they are not in tension: one voice's marks must never reach another's voiceprint, *and* glancing
@@ -44,7 +48,6 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
   /// In memory for this sitting only. Nothing is written until the voice itself is confirmed, which is
   /// what makes the marks mean anything.
   const [excluded, setExcluded] = useState<Record<string, Set<string>>>({});
-  const [confirmed, setConfirmed] = useState<Record<string, Set<string>>>({});
   /// Whether the current playback came from Play all, so that one button can say Stop all while the
   /// per-segment buttons keep saying Play.
   const [playingAll, setPlayingAll] = useState(false);
@@ -89,7 +92,6 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
   });
 
   const myExcluded = (openSpeakerId && excluded[openSpeakerId]) || NONE;
-  const myConfirmed = (openSpeakerId && confirmed[openSpeakerId]) || NONE;
   const kept = segments.filter((g) => !myExcluded.has(g.id));
 
   /// Adds or removes one segment id in the open voice's set, leaving every other voice untouched.
@@ -137,7 +139,6 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
     // Stop first if it is the one playing: the row is about to leave the list, and its Stop button with it.
     if (playingSegmentId === g.id) stop();
     mark(setExcluded, g.id, true);
-    mark(setConfirmed, g.id, false);
   }
 
   async function decide(s: SpeakerSuggestion, accept: boolean) {
@@ -161,7 +162,6 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
         return rest;
       };
       setExcluded(forget);
-      setConfirmed(forget);
     } catch (e) {
       setError(apiErrorMessage(e, t("workspace:suggestionFailed")));
     } finally {
@@ -192,27 +192,20 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
     </button>
   );
 
-  /// The answer for **one segment**, at the same height as the words beside it. A diarization label is not
-  /// always one human, so a reviewer can vouch for the voice while excluding the stretches that are not it;
-  /// the exclusions narrow what the voiceprint is trained from.
-  const segmentButton = (g: AttributionSegment, accept: boolean) => (
+  /// Taking one segment out. There is no opposite control: a segment trains unless it is removed, so a
+  /// tick would have recorded nothing while sitting next to this one looking like its counterpart.
+  ///
+  /// A diarization label is not always one human, so a reviewer can vouch for the voice while removing the
+  /// stretches that are not it; what is left is what the voiceprint is trained from.
+  const removeButton = (g: AttributionSegment) => (
     <button
       type="button"
-      onClick={() =>
-        accept ? mark(setConfirmed, g.id, true) : exclude(g)
-      }
-      aria-pressed={accept ? myConfirmed.has(g.id) : false}
-      aria-label={accept ? t("workspace:suggestionYes") : t("workspace:suggestionNo")}
-      title={accept ? t("workspace:suggestionSegmentYesHint") : t("workspace:suggestionSegmentNoHint")}
-      className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
-        accept
-          ? myConfirmed.has(g.id)
-            ? "border-green-600 bg-green-600 text-white dark:border-green-500 dark:bg-green-600"
-            : "border-gray-300 text-green-700 hover:bg-green-50 dark:border-gray-600 dark:text-green-400 dark:hover:bg-green-900/30"
-          : "border-gray-300 text-red-700 hover:bg-red-50 dark:border-gray-600 dark:text-red-400 dark:hover:bg-red-900/30"
-      }`}
+      onClick={() => exclude(g)}
+      aria-label={t("workspace:suggestionSegmentNoHint")}
+      title={t("workspace:suggestionSegmentNoHint")}
+      className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-gray-300 text-red-700 hover:bg-red-50 dark:border-gray-600 dark:text-red-400 dark:hover:bg-red-900/30"
     >
-      {accept ? <CheckIcon size={11} /> : <XIcon size={11} />}
+      <XIcon size={11} />
     </button>
   );
 
@@ -292,7 +285,10 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
                     </span>
                     {/* The consequence of the exclusions, stated before they are committed rather than
                         discovered afterwards on the person's Voiceprint tab. */}
-                    {myExcluded.size > 0 && (
+                    {/* Always, not only once something has been removed. The commonest path - look,
+                        decide, confirm - was the one the panel said nothing about, which is what let a
+                        segment mark look like it had changed the outcome. */}
+                    {segments.length > 0 && (
                       <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
                         {t("workspace:suggestionTrainsFrom", {
                           kept: kept.length,
@@ -384,8 +380,7 @@ export default function VoicesToConfirmModal({ onClose }: { onClose: () => void 
                           >
                             {playing ? <StopIcon size={11} /> : <PlayIcon size={11} />}
                           </button>
-                          {segmentButton(g, true)}
-                          {segmentButton(g, false)}
+                          {removeButton(g)}
                         </li>
                       );
                     })
