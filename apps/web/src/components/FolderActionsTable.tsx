@@ -17,6 +17,7 @@ export default function FolderActionsTable({
   myUserId,
   onUpdate,
   onToggleComplete,
+  onTogglePin,
   onDelete,
 }: {
   items: ActionListItem[];
@@ -25,6 +26,8 @@ export default function FolderActionsTable({
   myUserId: string | null;
   onUpdate: (recordingId: string, id: string, patch: Patch) => void;
   onToggleComplete: (id: string, completed: boolean) => void;
+  /// Take a row back out of the cross-meeting views. Owner-only, like every other write in this table.
+  onTogglePin: (id: string, pinned: boolean) => void;
   onDelete: (recordingId: string, id: string) => void;
 }) {
   const { t } = useTranslation("workspace");
@@ -38,10 +41,11 @@ export default function FolderActionsTable({
       <table className="w-full table-fixed text-sm">
         <thead>
           <tr className="text-left text-xs font-medium text-gray-400 dark:text-gray-500">
-            <th className="w-[18%] pb-1 pr-2 font-medium">{t("colMeeting")}</th>
+            <th className="w-[16%] pb-1 pr-2 font-medium">{t("colMeeting")}</th>
+            <th className="w-[5%] pb-1 pr-1 text-center font-medium">{t("colPin")}</th>
             <th className="w-[6%] pb-1 pr-1 text-center font-medium">{t("colDone")}</th>
-            <th className="w-[34%] pb-1 pr-2 font-medium">{t("colAction")}</th>
-            <th className="w-[14%] pb-1 pr-2 font-medium">{t("colActor")}</th>
+            <th className="w-[32%] pb-1 pr-2 font-medium">{t("colAction")}</th>
+            <th className="w-[13%] pb-1 pr-2 font-medium">{t("colActor")}</th>
             <th className="w-[16%] pb-1 pr-2 font-medium">{t("colDeadline")}</th>
             <th className="w-[7%] pb-1 pr-2 font-medium">{t("colCompletedDate")}</th>
             <th className="w-[5%] pb-1" aria-hidden />
@@ -57,6 +61,7 @@ export default function FolderActionsTable({
               isOwner={myUserId != null && a.recordedByUserId === myUserId}
               onUpdate={onUpdate}
               onToggleComplete={onToggleComplete}
+              onTogglePin={onTogglePin}
               onDelete={onDelete}
             />
           ))}
@@ -67,7 +72,7 @@ export default function FolderActionsTable({
 }
 
 function Row({
-  action, row, basePath, isOwner, onUpdate, onToggleComplete, onDelete,
+  action, row, basePath, isOwner, onUpdate, onToggleComplete, onTogglePin, onDelete,
 }: {
   action: ActionListItem;
   row: number;
@@ -75,6 +80,7 @@ function Row({
   isOwner: boolean;
   onUpdate: (recordingId: string, id: string, patch: Patch) => void;
   onToggleComplete: (id: string, completed: boolean) => void;
+  onTogglePin: (id: string, pinned: boolean) => void;
   onDelete: (recordingId: string, id: string) => void;
 }) {
   const { t, i18n } = useTranslation("workspace");
@@ -85,6 +91,22 @@ function Row({
         <NavLink to={`${basePath}/recordings/${action.recordingId}`} className="text-blue-600 hover:underline dark:text-blue-400" title={action.recordingName}>
           {action.recordingName}
         </NavLink>
+      </td>
+      <td className="py-1 pr-1 text-center">
+        <button
+          type="button"
+          disabled={!isOwner}
+          aria-label={action.pinned ? t("unpinActionAria", { row }) : t("pinActionAria", { row })}
+          aria-pressed={action.pinned}
+          onClick={() => isOwner && onTogglePin(action.id, !action.pinned)}
+          className={`mt-1 rounded px-1 ${
+            isOwner ? "text-blue-600 dark:text-blue-400" : "cursor-default text-gray-300 dark:text-gray-600"
+          }`}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1Z" />
+          </svg>
+        </button>
       </td>
       <td className="py-1 pr-1 text-center">
         <input
