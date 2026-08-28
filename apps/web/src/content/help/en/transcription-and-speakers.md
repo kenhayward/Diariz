@@ -53,11 +53,15 @@ moment, press it again to stop - and **Play all** runs through them in turn, hig
 bringing it into view as it plays. The tick and cross beside the question answer for the whole voice, and
 answering one moves you straight on to the next.
 
-**Each segment has its own yes and no as well.** Sometimes a single speaker is not a single person: two
-people share a microphone, or they talk over each other, and the software puts it all under one label. Say
-**no** to a segment and it leaves the list; what remains is what the voiceprint is trained from, so a stretch
-that is somebody else is genuinely kept out rather than just hidden from you. Say **yes** to mark one you are
-sure of, and **Restore** puts back anything you excluded by mistake.
+**You can also take single segments out.** Sometimes a single speaker is not a single person: two people
+share a microphone, or they talk over each other, and the software puts it all under one label. Press the
+cross on a segment and it leaves the list; what remains is what the voiceprint is trained from, so a stretch
+that is somebody else is genuinely kept out rather than just hidden from you. **Restore** puts back anything
+you removed by mistake.
+
+There is no tick to go with it, because there would be nothing for it to do: a segment counts unless you
+take it out. Instead the panel tells you what confirming will train from - **Confirming trains from 28 of 30
+segments** - so you can see where you stand without marking anything.
 
 **Confirming the voice is what makes those marks count.** There is no separate save: pressing **Confirm this
 voice** answers the question and trains the voiceprint from whatever is still in the list. While anything is

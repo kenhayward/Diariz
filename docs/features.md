@@ -299,11 +299,11 @@ so listening and deciding happen in one place without leaving the page you were 
 the segments in turn, highlighting each and scrolling it into view, so a long list can be followed rather
 than hunted through.
 
-**Every segment also carries its own yes and no, and the no reaches the voiceprint.** A diarization label is
+**Every segment can be taken out on its own, and doing so reaches the voiceprint.** A diarization label is
 not always one human: two people on one microphone, or a stretch of crosstalk, arrive under a single
 `SPEAKER_nn`. Answering only for the whole list forces a reviewer who can hear that part of it is somebody
 else either to accept audio that is not this person, or to discard an identification they know is right.
-Saying no to a segment takes it out of the list, and accepting then trains from **only what is left** -
+Taking a segment out drops it from the list, and accepting then trains from **only what is left** -
 carried as spans on the enrolled sample and re-embedded by the worker, the same mechanism the Voiceprint
 tab's span selection uses, rather than a second way of saying the same thing. Excluding nothing sends no
 spans at all, which means the whole speaker and queues no re-embed, because that is what almost every accept
@@ -314,6 +314,14 @@ found within a day. Nothing is written until the voice itself is confirmed, whic
 commits, so the button says **Confirm this voice** in words and the panel states what it will train from
 while anything is excluded. A **Restore** puts back anything excluded by mistake - one click with no undo
 that shapes a biometric needs a way back.
+
+**There is deliberately no matching tick.** One shipped in 0.259.0 and was removed in 0.259.6: a segment
+trains unless it is removed, so ticked and untouched were the same state and the control recorded nothing -
+while sitting beside the cross, same size, rendering pressed and filled, reading as a choice of what would
+be used. Two controls that look like opposites, one of them inert. What replaced it is a statement rather
+than a control: the panel says what confirming will train from **at all times**, not only once something
+has been excluded, which was the other half of the confusion - the commonest path, look-decide-confirm, was
+the one it said nothing about.
 What it deliberately does **not** do is relabel those segments in the transcript: the speaker is one row, and
 splitting it into two people is a different operation. It is deliberately **not**
 a panel inside the People directory: the queue shows **your own recordings only** and needs no permission -
