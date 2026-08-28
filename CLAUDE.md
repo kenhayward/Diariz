@@ -197,12 +197,14 @@ release. A test that provokes an error on purpose declares it with `expectsConso
 same file rather than spying on `console.error` - a spy would take the console away from that guard for
 the length of the test.
 
-The catch: **`vitest` prints nothing a test logs to `console.log`/`console.error` on the Windows dev box**
-(all three pools, even a config-free scratch project - see issue #667). A clean local run is therefore not
-evidence that the output is clean; it only ever shows the guard's own failures. To see what CI sees, run
-the suite on Linux - mount the repo read-only into `node:24`, `tar` everything except `node_modules` into
-the container, `npm ci`, then `npx vitest run`. The counts match CI exactly. This is how 143 `act()`
-warnings survived unnoticed long enough to become issue #665.
+A local run now shows that output, but only because `vitest.config.ts` names its reporter explicitly.
+Left implicit, vitest printed **nothing** a test logged on the Windows dev box while the identical run on
+Linux printed all of it (issue #667) - which is how 143 `act()` warnings survived long enough to become
+issue #665, with every local run looking pristine. **Do not remove `reporters: ["default"]`**, and treat a
+silent local run with suspicion if you ever do: the failure mode is invisible by construction.
+
+To reproduce exactly what CI sees, run the suite on Linux - mount the repo read-only into `node:24`, `tar`
+everything except `node_modules` into the container, `npm ci`, then `npx vitest run`. The counts match CI.
 
 ## Versioning & release notes (required)
 

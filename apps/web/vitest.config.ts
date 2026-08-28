@@ -19,6 +19,13 @@ export default defineConfig({
     environment: "jsdom", // provides window / localStorage for the api + token helpers
     globals: true, // enables @testing-library/react's automatic cleanup between tests
     setupFiles: ["./src/test-setup.ts"], // initialise i18next once for component tests
+    // Name the reporter explicitly rather than letting vitest choose. Left implicit, a run on the Windows
+    // dev machine prints NOTHING a test logs through console.log/console.error - not the act warnings, not
+    // a react-query complaint, not a stray error - while the identical run on Linux prints all of it. That
+    // made a clean local run worthless as evidence and is how 143 act(...) warnings went unnoticed long
+    // enough to become issue #665. Naming "default" restores the `stdout | file > test` blocks on Windows
+    // and changes nothing on Linux, which was already choosing it. See issue #667.
+    reporters: ["default"],
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     // CI is resource-constrained next to a dev machine, so the 5s default per-test timeout flakes under
     // contention. Raise the ceiling well above any real render time; a genuine hang still fails, just

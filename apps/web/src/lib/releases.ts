@@ -65,6 +65,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.259.11",
+    date: "2026-08-28",
+    pr: 671,
+    headline: "Make a local test run tell the truth",
+    summary:
+      "A developer-facing fix, but the one behind the last two releases. On the Windows development machine `vitest` printed **nothing** a test logged - no warnings, no stray errors, nothing - while the identical run on Linux printed all of it. A local test run therefore proved nothing about whether the output was clean, and it was not: 143 React warnings accumulated over a fortnight behind that blind spot, every local run looking perfectly quiet the whole time.\n\nThe cause was leaving the reporter for vitest to choose. Named explicitly it prints on both platforms, and Linux was already choosing the same one, so nothing about the CI output changes. The suite is silent on both now, and for the first time that can be checked without pushing.\n\nNothing about how Diariz behaves has changed - this is test-tooling only.",
+    fixed: [
+      "`vitest` printed nothing a test logged to the console on the Windows dev machine, so a clean local run was not evidence that the output was clean. The reporter is now named explicitly, which restores it on Windows and leaves Linux and CI exactly as they were.",
+    ],
+  },
+  {
     version: "0.259.10",
     date: "2026-08-28",
     pr: 670,
