@@ -1021,7 +1021,9 @@ describe("RecordingsPanel", () => {
     renderList();
     await screen.findByText("Weekly Standup");
     fireEvent.click(screen.getByRole("tab", { name: "Actions" }));
-    expect(await screen.findByText(/no action items yet/i)).toBeTruthy();
+    // The empty state is load-bearing here: this tab is opt-in, so it is empty for everyone until they
+    // pin something, and the copy has to say how to fill it rather than implying nothing was extracted.
+    expect(await screen.findByText(/no pinned actions yet/i)).toBeTruthy();
   });
 
   it("hides the status pill for settled states but shows in-flight ones", async () => {
