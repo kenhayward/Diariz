@@ -207,7 +207,7 @@ public class RecordingsController : ControllerBase
         var names = rec.Speakers.ToDictionary(s => s.Label, s => s.DisplayName);
         var actions = rec.Actions
             .OrderBy(a => a.Ordinal)
-            .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal, a.Completed, a.CompletedAt))
+            .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal, a.Completed, a.CompletedAt, a.Pinned))
             .ToList();
         // Both the people speakers are identified as and the people they are only suspected to be - the
         // transcript renders a pending suggestion by name, and a second round trip per speaker to resolve it

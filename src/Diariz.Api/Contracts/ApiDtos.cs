@@ -446,7 +446,7 @@ public record UpdateAttachmentContentRequest(string Content);
 // the detail + actions-list projections pass the real values.
 public record RecordingActionDto(
     Guid Id, string Text, string Actor, string Deadline, int Ordinal,
-    bool Completed = false, DateTimeOffset? CompletedAt = null);
+    bool Completed = false, DateTimeOffset? CompletedAt = null, bool Pinned = false);
 public record CreateRecordingActionRequest(string? Text, string? Actor, string? Deadline);
 public record UpdateRecordingActionRequest(string? Text, string? Actor, string? Deadline);
 

@@ -81,6 +81,48 @@ public class RecordingActionsControllerTests
     }
 
     [Fact]
+    public async Task List_CarriesThePinnedFlag()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribed(db, userId);
+        db.RecordingActions.AddRange(
+            new RecordingAction { Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Book the room", Ordinal = 0, Pinned = true },
+            new RecordingAction { Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Chase the invoice", Ordinal = 1 });
+        await db.SaveChangesAsync();
+
+        // The recording's own page shows every action regardless of pin - that is the whole point of the
+        // design, so this also guards against the filter leaking down to the per-recording endpoint.
+        var dtos = (await Build(db, userId, new FakeActionsClient()).List(rec.Id)).Value!;
+
+        Assert.Equal(2, dtos.Count);
+        Assert.True(dtos.Single(d => d.Text == "Book the room").Pinned);
+        Assert.False(dtos.Single(d => d.Text == "Chase the invoice").Pinned);
+    }
+
+    [Fact]
+    public async Task Extract_LeavesTheReplacementActionsUnpinned()
+    {
+        // Accepted by design: extraction replaces the whole list with new rows, and pins go the same way
+        // completion already does. Asserted so that changing it later is a deliberate act, not a drift.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribed(db, userId);
+        db.RecordingActions.Add(new RecordingAction
+        {
+            Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Book the room", Ordinal = 0, Pinned = true,
+        });
+        await db.SaveChangesAsync();
+        var client = new FakeActionsClient { Result = { new ExtractedAction("Book the room", "", "") } };
+
+        var fresh = (await Build(db, userId, client).Extract(rec.Id)).Value!;
+
+        Assert.All(fresh, a => Assert.False(a.Pinned));
+        Assert.All(await db.RecordingActions.Where(a => a.RecordingId == rec.Id).ToListAsync(),
+            a => Assert.False(a.Pinned));
+    }
+
+    [Fact]
     public async Task Extract_NoActionsFound_StillSetsFlag_AndReturnsEmpty()
     {
         using var db = TestDb.Create();
