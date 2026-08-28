@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Two Queues, One Voiceprint - Diariz</title>
+  <!-- Standalone copy of the reference published at
+       https://claude.ai/code/artifact/0f548020-41b1-4a14-8336-0d55ae28005c
+       Fonts load from Google Fonts; every family declares a real fallback stack, so this reads
+       correctly offline too. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:wght@600;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  
+  <style>
+    :root {
+      --ground: #fbfcfe;
+      --surface: #eef1f6;
+      --surface-2: #e3e7ef;
+      --line: #d3d9e4;
+      --ink: #14171e;
+      --ink-2: #5c6473;
+      --signal: #0e7c86;
+      --signal-soft: #d9edee;
+      --attention: #8d5900;
+      --attention-soft: #f6ecd8;
+      --flag: #a03a38;
+      --flag-soft: #f7e6e5;
+  
+      --display: "Chivo", "Helvetica Neue", Arial, sans-serif;
+      --body: "Newsreader", Georgia, "Times New Roman", serif;
+      --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+  
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --ground: #101319;
+        --surface: #181c24;
+        --surface-2: #212632;
+        --line: #2c323f;
+        --ink: #e6e9f0;
+        --ink-2: #99a1b2;
+        --signal: #5cbcc2;
+        --signal-soft: #14343a;
+        --attention: #d5a24a;
+        --attention-soft: #2a2318;
+        --flag: #e08c88;
+        --flag-soft: #2b1c1c;
+      }
+    }
+  
+    :root[data-theme="dark"] {
+      --ground: #101319;
+      --surface: #181c24;
+      --surface-2: #212632;
+      --line: #2c323f;
+      --ink: #e6e9f0;
+      --ink-2: #99a1b2;
+      --signal: #5cbcc2;
+      --signal-soft: #14343a;
+      --attention: #d5a24a;
+      --attention-soft: #2a2318;
+      --flag: #e08c88;
+      --flag-soft: #2b1c1c;
+    }
+  
+    * { box-sizing: border-box; }
+  
+    body {
+      margin: 0;
+      background: var(--ground);
+      color: var(--ink);
+      font-family: var(--body);
+      font-size: 1.0625rem;
+      line-height: 1.62;
+      -webkit-font-smoothing: antialiased;
+    }
+  
+    .wrap {
+      max-width: 78rem;
+      margin: 0 auto;
+      padding: clamp(2rem, 5vw, 4.5rem) clamp(1.1rem, 4vw, 3rem) 6rem;
+      display: flex;
+      flex-direction: column;
+      gap: clamp(2.5rem, 5vw, 4rem);
+    }
+  
+    .col { max-width: 40rem; }
+  
+    h1, h2, h3 {
+      font-family: var(--display);
+      font-weight: 800;
+      line-height: 1.1;
+      text-wrap: balance;
+      margin: 0;
+      letter-spacing: -0.018em;
+    }
+    h1 { font-size: clamp(2.1rem, 5.4vw, 3.3rem); }
+    h2 { font-size: clamp(1.4rem, 3vw, 1.85rem); font-weight: 700; }
+    h3 { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.005em; }
+  
+    p { margin: 0; }
+    .col > * + * { margin-top: 1.05rem; }
+  
+    .eyebrow {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--signal);
+    }
+  
+    .lede {
+      font-size: clamp(1.15rem, 2.2vw, 1.35rem);
+      line-height: 1.5;
+      color: var(--ink-2);
+    }
+  
+    code, .mono { font-family: var(--mono); font-size: 0.86em; }
+    code {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      padding: 0.08em 0.34em;
+      color: var(--ink);
+    }
+  
+    strong { font-weight: 600; color: var(--ink); }
+  
+    section { display: flex; flex-direction: column; gap: 1.4rem; }
+  
+    .rule {
+      height: 1px;
+      background: var(--line);
+      border: 0;
+      margin: 0;
+    }
+  
+    /* ---- diagram ---- */
+    .figure {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: clamp(1.1rem, 3vw, 2rem);
+      overflow-x: auto;
+    }
+    .figure svg { display: block; min-width: 40rem; width: 100%; height: auto; }
+    .figure figcaption {
+      margin-top: 1rem;
+      font-size: 0.92rem;
+      color: var(--ink-2);
+      max-width: 44rem;
+    }
+  
+    .svg-label { font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.06em; }
+    .svg-title { font-family: var(--display); font-size: 15px; font-weight: 700; }
+    .svg-note  { font-family: var(--body); font-size: 12.5px; }
+  
+    /* ---- two-surface comparison ---- */
+    .compare {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+      gap: 1.1rem;
+    }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      padding: 1.3rem 1.4rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+    }
+    .panel-head { display: flex; flex-direction: column; gap: 0.3rem; }
+    .panel dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 0.55rem 1rem; font-size: 0.94rem; }
+    .panel dt {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-2);
+      padding-top: 0.3em;
+    }
+    .panel dd { margin: 0; }
+  
+    /* ---- tables ---- */
+    .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.95rem; min-width: 34rem; }
+    caption { text-align: left; padding: 0 0 0.7rem; color: var(--ink-2); font-size: 0.92rem; }
+    th, td { text-align: left; padding: 0.7rem 0.95rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+    thead th {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-2);
+      background: var(--surface);
+    }
+    tbody tr:last-child th, tbody tr:last-child td { border-bottom: 0; }
+    tbody th { font-family: var(--body); font-weight: 600; width: 12rem; }
+  
+    /* ---- defect callouts ---- */
+    .defect {
+      border-left: 3px solid var(--flag);
+      background: var(--flag-soft);
+      padding: 1.05rem 1.3rem 1.15rem;
+      border-radius: 0 5px 5px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+    }
+    .defect .eyebrow { color: var(--flag); }
+    .defect a { color: var(--flag); }
+  
+    .use {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+      gap: 1.1rem;
+    }
+    .use > div {
+      border-top: 2px solid var(--signal);
+      padding-top: 0.9rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .use h3 { font-family: var(--display); }
+  
+    a { color: var(--signal); text-underline-offset: 2px; }
+    a:focus-visible, :focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+  
+    footer {
+      font-size: 0.88rem;
+      color: var(--ink-2);
+      border-top: 1px solid var(--line);
+      padding-top: 1.2rem;
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="col">
+    <p class="eyebrow">Diariz &middot; speaker identification</p>
+    <h1>Two Queues, One Voiceprint</h1>
+    <p class="lede">Review Voice Matches and the Voiceprint tab look like two views of the same list. They are not. They are two stages of one lifecycle, and they never hold the same speaker at the same time.</p>
+  </header>
+
+  <hr class="rule">
+
+  <section>
+    <div class="col">
+      <h2>Where speakers come from</h2>
+      <p>Every speaker gets exactly one verdict when its recording is transcribed. That verdict decides which surface it appears on &mdash; and a speaker can only ever be on one of them.</p>
+    </div>
+
+    <figure class="figure">
+      <svg viewBox="0 0 900 330" role="img" aria-label="At transcription a speaker takes one of three branches: a confident match sets PersonId and goes to the Voiceprint tab without enrolling; a borderline match sets SuggestedPersonId and goes to Review Voice Matches; no match writes nothing. Confirming in Review Voice Matches moves the speaker to the Voiceprint tab.">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+          </marker>
+        </defs>
+
+        <g color="var(--ink-2)">
+          <text x="0" y="16" class="svg-label" fill="var(--ink-2)">TRANSCRIPTION</text>
+          <rect x="0" y="30" width="150" height="52" rx="4" fill="var(--surface-2)" stroke="var(--line)"></rect>
+          <text x="16" y="62" class="svg-title" fill="var(--ink)">Speaker</text>
+
+          <path d="M 150 56 L 205 56" stroke="var(--ink-2)" stroke-width="1.5" marker-end="url(#ar)" fill="none"></path>
+          <text x="212" y="52" class="svg-label" fill="var(--ink-2)">IDENTIFICATION</text>
+          <text x="212" y="68" class="svg-note" fill="var(--ink-2)">one of three</text>
+        </g>
+
+        <!-- confident -->
+        <g>
+          <rect x="360" y="8" width="215" height="86" rx="4" fill="var(--ground)" stroke="var(--signal)" stroke-width="1.5"></rect>
+          <text x="376" y="32" class="svg-label" fill="var(--signal)">CONFIDENT MATCH</text>
+          <text x="376" y="54" class="svg-note" fill="var(--ink)">sets PersonId</text>
+          <text x="376" y="74" class="svg-note" fill="var(--ink-2)">no sample &mdash; does not train</text>
+          <path d="M 575 51 L 700 51" stroke="var(--ink-2)" stroke-width="1.5" marker-end="url(#ar)" fill="none"></path>
+        </g>
+
+        <!-- borderline -->
+        <g>
+          <rect x="360" y="118" width="215" height="86" rx="4" fill="var(--ground)" stroke="var(--attention)" stroke-width="1.5"></rect>
+          <text x="376" y="142" class="svg-label" fill="var(--attention)">BORDERLINE</text>
+          <text x="376" y="164" class="svg-note" fill="var(--ink)">sets SuggestedPersonId</text>
+          <text x="376" y="184" class="svg-note" fill="var(--ink-2)">stays anonymous</text>
+          <path d="M 575 161 L 700 161" stroke="var(--ink-2)" stroke-width="1.5" marker-end="url(#ar)" fill="none"></path>
+        </g>
+
+        <!-- nothing -->
+        <g>
+          <rect x="360" y="228" width="215" height="66" rx="4" fill="var(--ground)" stroke="var(--line)" stroke-width="1.5"></rect>
+          <text x="376" y="252" class="svg-label" fill="var(--ink-2)">NO MATCH</text>
+          <text x="376" y="274" class="svg-note" fill="var(--ink-2)">nothing written</text>
+        </g>
+
+        <path d="M 305 56 L 330 56 L 330 51 L 360 51" stroke="var(--signal)" stroke-width="1.5" fill="none"></path>
+        <path d="M 305 56 L 330 56 L 330 161 L 360 161" stroke="var(--attention)" stroke-width="1.5" fill="none"></path>
+        <path d="M 305 56 L 330 56 L 330 261 L 360 261" stroke="var(--line)" stroke-width="1.5" fill="none"></path>
+
+        <!-- destinations -->
+        <g>
+          <rect x="700" y="18" width="200" height="66" rx="4" fill="var(--surface-2)" stroke="var(--line)"></rect>
+          <text x="716" y="42" class="svg-title" fill="var(--ink)">Voiceprint tab</text>
+          <text x="716" y="64" class="svg-note" fill="var(--ink-2)">the ledger</text>
+
+          <rect x="700" y="128" width="200" height="66" rx="4" fill="var(--surface-2)" stroke="var(--line)"></rect>
+          <text x="716" y="152" class="svg-title" fill="var(--ink)">Review Voice Matches</text>
+          <text x="716" y="174" class="svg-note" fill="var(--ink-2)">the inbox</text>
+        </g>
+
+        <!-- confirm moves it up -->
+        <path d="M 800 128 L 800 84" stroke="var(--signal)" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#ar)" fill="none" color="var(--signal)"></path>
+        <text x="812" y="112" class="svg-label" fill="var(--signal)">CONFIRM</text>
+      </svg>
+      <figcaption>A confident match never passes through the inbox &mdash; and deliberately does not train the voiceprint, since identification learning from its own guesses would compound its mistakes. Only confirming a borderline match enrols a sample.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="col">
+      <h2>What each surface is for</h2>
+      <p>The permission split is the design, not an accident. Whoever was in the meeting can say whether a voice is a given person. Only a directory manager should be reshaping other people&rsquo;s biometrics.</p>
+    </div>
+
+    <div class="compare">
+      <div class="panel">
+        <div class="panel-head">
+          <p class="eyebrow">The inbox</p>
+          <h3>Review Voice Matches</h3>
+        </div>
+        <dl>
+          <dt>Holds</dt><dd>Unanswered questions</dd>
+          <dt>Lifetime</dt><dd>Transient &mdash; a row leaves once answered, permanently</dd>
+          <dt>Scope</dt><dd>Your own recordings only</dd>
+          <dt>Permission</dt><dd>None. Signed in is enough</dd>
+          <dt>No audio</dt><dd>Withheld &mdash; the question is unanswerable</dd>
+          <dt>Asks</dt><dd>Is this anonymous speaker that person?</dd>
+        </dl>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <p class="eyebrow">The ledger</p>
+          <h3>Voiceprint tab</h3>
+        </div>
+        <dl>
+          <dt>Holds</dt><dd>Everything already attributed to the person</dd>
+          <dt>Lifetime</dt><dd>Permanent record</dd>
+          <dt>Scope</dt><dd>Every recording they appear in, any owner</dd>
+          <dt>Permission</dt><dd>Manage people, plus Manage voiceprints to hear others&rsquo; audio</dd>
+          <dt>No audio</dt><dd>Still listed, marked, still actionable</dd>
+          <dt>Asks</dt><dd>Is this attribution right, and should it train?</dd>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="col">
+      <h2>Why &ldquo;confirm&rdquo; feels ambiguous</h2>
+      <p>Three separate assertions live in this system, and two of them are called some form of <em>confirm</em>. They are kept apart on purpose &mdash; a recording can genuinely be the right person and still be too noisy to learn from &mdash; but the naming does not say so.</p>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th scope="col">Control</th><th scope="col">Records</th><th scope="col">The question it answers</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">Confirm this voice</th>
+            <td class="mono">SpeakerIdentityDecision<br>Speaker.PersonId<br>new VoiceSample</td>
+            <td>Identity. Names the speaker and enrols the sample.</td>
+          </tr>
+          <tr>
+            <th scope="row">Confirmed as this person</th>
+            <td class="mono">VoiceSample.ConfirmedAt<br>ConfirmedByUserId</td>
+            <td>Vouching. A named human listened. Changes nothing about attribution or training.</td>
+          </tr>
+          <tr>
+            <th scope="row">Trains the voiceprint</th>
+            <td class="mono">VoiceSample.ExcludedAt</td>
+            <td>Quality. Is this audio worth learning from.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p><strong>&ldquo;Review queue&rdquo; also names two different lists</strong> &mdash; the suggestions inbox, and the Voiceprint tab&rsquo;s <em>worth checking</em> set (the impostor, alone and unlinked verdicts). Same phrase, different populations, different questions.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="col">
+      <h2>The one real overlap</h2>
+      <p>Both surfaces can change which audio trains a voiceprint, and they do it through the same field and the same mechanism: write <code>SpansJson</code>, clear <code>UsedMs</code>, stamp <code>RecomputeQueuedAt</code>, queue a re-embed. That is deliberate &mdash; one way of saying it, not two.</p>
+      <p>They differ in one way that matters. In the inbox the segment marks are <strong>one-way and provisional</strong>: remove only, and nothing is written unless you confirm. On the Voiceprint tab they are <strong>two-way and stored</strong>, seeded from what is already saved. So the inbox can only narrow a first enrolment; the tab is the only place to widen one back out, or reset to the whole speaker.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="col">
+      <h2>Two defects found in review</h2>
+    </div>
+
+    <div class="col defect">
+      <p class="eyebrow">Open &middot; issue 662</p>
+      <h3>Confirming a voice does not record that a human listened</h3>
+      <p>Answering in the inbox is premised on having listened &mdash; that is why it plays audio, and why voices with no audio are withheld. But accepting writes no <code>ConfirmedAt</code>. The recording lands on the Voiceprint tab unconfirmed and immediately joins that tab&rsquo;s <em>worth checking</em> list, asking a directory manager to listen to audio that was just listened to.</p>
+    </div>
+
+    <div class="col defect">
+      <p class="eyebrow">Fixed &middot; 0.259.7</p>
+      <h3>Nothing said that removing a segment shapes the voiceprint</h3>
+      <p>Taking a segment out decides what the voiceprint learns from. The control said &ldquo;Take this segment out&rdquo; &mdash; out of what unstated; the count said &ldquo;1 segment excluded&rdquo; &mdash; from what unstated; and the introduction never mentioned segments at all. Every control that removes one now names the voiceprint, and the panel says that nothing is saved until you answer.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="col">
+      <h2>How to use them</h2>
+    </div>
+    <div class="use">
+      <div>
+        <p class="eyebrow">Routine &middot; everyone</p>
+        <h3>Work the inbox</h3>
+        <p>Open Review Voice Matches, listen, take out any segments that are somebody else, then confirm or decline. Your own recordings, no permission needed. Nothing else needs doing here.</p>
+      </div>
+      <div>
+        <p class="eyebrow">Occasional &middot; directory managers</p>
+        <h3>Repair a drifting voiceprint</h3>
+        <p>When Diariz starts naming the wrong person, go to the Voiceprint tab. It is the only place that shows the impostor and alone verdicts, spans other people&rsquo;s recordings, and can reassign a misattributed speaker or drop bad audio from training.</p>
+      </div>
+    </div>
+    <div class="col">
+      <p><strong>The short version:</strong> the inbox is where identities get decided; the tab is where a voiceprint gets repaired.</p>
+    </div>
+  </section>
+
+  <footer class="col">
+    <p>Written against Diariz 0.259.7. Behaviour traced from <span class="mono">SpeakerLabeling</span>, <span class="mono">SpeakerAssignment</span>, <span class="mono">SpeakerSuggestionsController</span> and <span class="mono">PeopleController</span>.</p>
+  </footer>
+
+</div>
+</body>
+</html>
