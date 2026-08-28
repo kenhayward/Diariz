@@ -65,6 +65,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.259.8",
+    date: "2026-08-28",
+    pr: 664,
+    headline: "Say that a voiceprint is shared by everyone",
+    summary:
+      "A question worth answering in the help: **a voiceprint is shared, and what you do to it affects everyone.** There is one record per person across the whole platform rather than one per colleague - which is why erasing somebody is a single deletion - so the voice Diariz has learned is the average of every recording behind that person, whoever made them.\n\nThat means naming a speaker on your own transcript, or confirming one in Review Voice Matches, teaches a voiceprint your colleagues rely on too. It is the intended trade: only somebody who was in the meeting can say who a voice is, so it is not something to reserve for administrators. It is still worth knowing that it is what you are doing - listening before you answer is the whole of the discipline, because a voice confirmed unheard is how a voiceprint learns the wrong person and starts naming them in other people's recordings.\n\nThe help now says so, along with the two guarantees that go with it: nobody can enrol a person who has opted out, and anything dropped from training is set aside rather than thrown away.",
+    changed: [
+      "The people help now explains that **a voiceprint is one shared record**, that naming or confirming a voice teaches the one your colleagues rely on, and why that is deliberate rather than an oversight. Documentation only - nothing about how Diariz behaves has changed.",
+    ],
+  },
+  {
     version: "0.259.7",
     date: "2026-08-28",
     pr: 663,

@@ -25,6 +25,22 @@ removing the person.
 Selecting someone opens their record: **Profile** for their details, and **Voiceprint** for the audio behind
 their biometric.
 
+**A voiceprint is shared, and what you do to it affects everyone.** There is one record per person on the
+whole platform, not one per colleague - which is why erasing someone is a single deletion rather than a hunt
+through everybody's private copies. It also means the voice Diariz has learned is the average of every
+recording behind that person, whoever made them, and that recognition is matched against every person in the
+directory.
+
+So when you name a speaker on your own transcript, or confirm a voice in **Review Voice Matches**, you are
+teaching a voiceprint your colleagues rely on too. That is the intended trade: only somebody who was in the
+meeting can say who a voice is, so it is not something to reserve for administrators. It is worth knowing
+that it is what you are doing. Listening before you answer is the whole of the discipline here - confirming a
+voice you have not heard is how a voiceprint learns the wrong person, and how it then starts naming them in
+other people's recordings.
+
+Nobody can enrol a person who has opted out of voice-printing, and nothing you drop from training is thrown
+away - it is set aside, so a mistake can be undone.
+
 The Voiceprint tab lists every recording this person appears in - not only the ones you enrolled by hand.
 Each row says how they came to be attributed there (**Recognised automatically** or **Named by hand**), how
 much they speak in it, and whether that recording trains the voiceprint. This is where to look when Diariz

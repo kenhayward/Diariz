@@ -287,6 +287,29 @@ recording's speaker and Diariz recognises that voice automatically in later reco
 voiceprints in pgvector, cosine matching), with manual reassignment. The **Voice Prints** tab (Preferences)
 renames, prunes training samples, merges duplicates, and erases voiceprints (GDPR — biometric data).
 
+**One person is one voiceprint, shared by everyone on the platform - and anyone can change it.** The
+directory holds a single record per human, so a colleague's enrolment names that person in your recordings
+too, and an erasure request is one deletion rather than a hunt through five private copies. Recognition
+matches against **every** enrolled person, and a person's voiceprint is the average of **every** sample
+behind them, whoever recorded it. Neither has an owner filter.
+
+That means a user with no permission at all changes recognition for everyone, every time they name a speaker
+on their own transcript or confirm one in Review Voice Matches - both enrol a sample and rebuild the shared
+centroid. It is deliberate: only someone who was in the meeting can say who a voice is, so gating it on
+Manage people would ask the question of exactly the people who cannot answer it. Confirming through the
+review queue is the safer of the two routes, since it puts the audio in front of you first and withholds
+questions whose audio has been deleted; naming a speaker on a transcript asks for none of that and has always
+been ungated.
+
+The counterweights are real but passive. Automatic matches never enrol, so only a deliberate human act can
+teach a voiceprint. Someone who has opted out can never be enrolled by anyone. Dropping a sample excludes
+rather than deletes it, so a wrong enrolment is reversible and stays visible. And a directory manager sees
+every sample across every owner on the Voiceprint tab, with the impostor and alone verdicts built to surface
+exactly the case where somebody was enrolled under the wrong name. What none of that provides is a push
+signal: nothing announces that a shared voiceprint changed, and the person enrolling cannot see the other
+samples, so they cannot tell they are adding an outlier - the diagnostics that would show it sit behind a
+permission they do not have.
+
 **When Diariz is nearly sure, it asks.** Identification used to run against a single strict cut-off: a match
 either cleared it and was applied silently, or fell short and vanished. Between the acceptance distance and a
 second, looser **confirmation band**, a match is now offered instead - **Might be Ada Lovelace - is it?** on
