@@ -2672,6 +2672,11 @@ to someone was in the meeting, and a platform-wide queue would disclose who appe
 instance. Accepting delegates to `ISpeakerAssignment` — the single place a speaker becomes a person — so the
 opt-out guard, the enrolment and the centroid rebuild cannot diverge from a manual assignment.
 
+**How the queue and the Voiceprint tab fit together is written up in
+`docs/Voiceprint_Review_Surfaces.html`** — the lifecycle that decides which surface a speaker lands on, the
+three separate assertions that are all called some form of *confirm*, the one place the two surfaces genuinely
+overlap, and what each can do that the other cannot. Open it in a browser; it is a standalone page.
+
 It is a modal rather than a route (the standalone `/voices-to-confirm` page was removed in 0.258.0), and
 deliberately **separate from the People modal**, which is gated on `ManagePeople`: folding the ungated queue
 inside a gated surface would have removed it from everyone who cannot browse the directory.
