@@ -18,13 +18,14 @@ const sources = import.meta.glob("../../**/*.{ts,tsx}", {
 const ARCHIVE_MODULE = "./archive.ts";
 const BARREL = "./index.ts";
 const APP = "../../App.tsx";
-const DRILL_DOWN_PAGE = "../../pages/ReleaseNotes.tsx";
+const DRILL_DOWN_PAGE = "../../pages/EpochDetail.tsx";
+const SUMMARY_PAGE = "../../pages/ReleaseNotes.tsx";
 
 describe("the release archive stays out of the initial bundle", () => {
   it("scans the files it claims to check", () => {
     // Every assertion below is a negative or a filter over `sources`. If the scan silently missed a
     // file, or keyed one differently than expected, they would all pass while checking nothing.
-    for (const key of [ARCHIVE_MODULE, BARREL, APP, DRILL_DOWN_PAGE]) {
+    for (const key of [ARCHIVE_MODULE, BARREL, APP, DRILL_DOWN_PAGE, SUMMARY_PAGE]) {
       expect(sources[key], `${key} was not picked up by the source scan`).toBeDefined();
     }
     expect(ARCHIVE.length).toBeGreaterThan(100);
@@ -48,10 +49,18 @@ describe("the release archive stays out of the initial bundle", () => {
     expect(sources[BARREL]).not.toMatch(/from\s+"\.\/archive"/);
   });
 
-  it("hangs off a lazy route rather than a static page import", () => {
-    expect(sources[APP]).toMatch(/const ReleaseNotes = lazy\(\(\) => import\("\.\/pages\/ReleaseNotes"\)\)/);
-    expect(sources[APP], "a static page import would drag the archive back into the main bundle").not.toMatch(
-      /^import ReleaseNotes from/m,
-    );
+  it("is not reachable from the summary page, which is the one people actually open", () => {
+    // The epoch list derives its counts and date spans from ARCHIVED_SPINE for exactly this reason.
+    // Reaching for the archive here instead would work, look tidier, and undo the whole split.
+    expect(sources[SUMMARY_PAGE]).not.toMatch(/from\s+"[^"]*archive"/);
+  });
+
+  it("hangs off lazy routes rather than static page imports", () => {
+    for (const page of ["ReleaseNotes", "EpochDetail"]) {
+      expect(sources[APP]).toMatch(new RegExp(`const ${page} = lazy\\(\\(\\) => import\\("\\./pages/${page}"\\)\\)`));
+      expect(sources[APP], `a static import of ${page} would put its chunk in the main bundle`).not.toMatch(
+        new RegExp(`^import ${page} from`, "m"),
+      );
+    }
   });
 });

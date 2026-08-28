@@ -14,9 +14,11 @@ import NotesPopout from "./pages/NotesPopout";
 import RecordingDetail from "./pages/RecordingDetail";
 import SectionDetail from "./pages/SectionDetail";
 import CalendarEventDetail from "./pages/CalendarEventDetail";
-// Lazy-loaded: carries the whole release archive, which is the bulk of the release history and has no
-// business in the initial bundle - almost nobody opens this page, and everybody pays for it otherwise.
+// Lazy-loaded: the release-notes pages are public but rarely opened, and EpochDetail in particular
+// carries the whole release archive - the bulk of the release history, which has no business in the
+// initial bundle when almost nobody opens it and everybody would pay for it.
 const ReleaseNotes = lazy(() => import("./pages/ReleaseNotes"));
+const EpochDetail = lazy(() => import("./pages/EpochDetail"));
 // Lazy-loaded: the Scalar API reference is a large bundle, only needed on /developers/api.
 const ApiReference = lazy(() => import("./pages/ApiReference"));
 // Lazy-loaded: a Platform-Administrator-only page, no reason to ship it in the main bundle.
@@ -70,6 +72,14 @@ export default function App() {
         element={
           <Suspense fallback={null}>
             <ReleaseNotes />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/release-notes/:epochId"
+        element={
+          <Suspense fallback={null}>
+            <EpochDetail />
           </Suspense>
         }
       />

@@ -1,7 +1,8 @@
 # Release notes: epoch summaries over an archived history
 
 **Date:** 2026-08-28
-**Status:** approved, ready to plan
+**Status:** implemented in 0.260.0. See "Changed during implementation" at the end for the four places
+the built thing differs from what is described below.
 **Deployment surface:** server redeploy only (web app). No desktop release, no API change.
 **Version:** 0.259.13 -> 0.260.0 (functional enhancement: Minor +1, Build reset)
 **Issue:** none. CLAUDE.md requires an issue for *fixes*; this is a refactor plus a new view.
@@ -284,3 +285,44 @@ because there is no schema change. Help articles are unchanged - no behaviour a 
   epochs, then corrected by hand. Going forward, one paragraph written at each rollover. Generating them
   at build time was rejected: non-deterministic, unverifiable, and it re-derives content that never
   changes.
+
+## Changed during implementation
+
+Four things differ from the design above. All four were found by building it.
+
+1. **The directory is `lib/releaseNotes/`, not `lib/releases/`.** `.gitignore` carries the Visual Studio
+   build-output rule `[Rr]eleases/`, which silently ignored the entire source directory - it would have
+   been absent from the commit and broken CI with a module-not-found while looking correct locally. A
+   negation rule would have fixed git alone; renaming avoids the whole class, since npm, Docker and other
+   tools apply similar conventions.
+
+2. **No `loadArchive()` helper.** Making the *route* lazy achieves the same boundary using React Router,
+   and gives a crisper rule: only the drill-down page (`pages/EpochDetail.tsx`) may import the archive,
+   and it is itself behind `lazy()`. The barrel exports no archive accessor at all.
+
+3. **The `noFancyDashes` risk was overstated.** That file's last case already globs every
+   `src/**/*.{ts,tsx}`, so modules under `lib/releaseNotes/` are covered automatically; the explicit
+   `it("releases.ts")` case was redundant with it and was removed rather than repointed. The real gap was
+   different and is now covered: nothing asserted the *scan itself* reaches the files it claims to check,
+   which is why `bundleBoundary.test.ts` opens by asserting its own glob keys resolve.
+
+4. **`current` is a reserved epoch id.** The open epoch is served at `/release-notes/current` by the same
+   detail page, so there is one drill-down component rather than two. `epochs.test.ts` stops a real epoch
+   from claiming that id, since the only symptom would be the newest releases quietly becoming
+   unreachable.
+
+### Measured result
+
+Built at the base commit and again after, the main `index` chunk went from 2,918.02 kB raw / 893.46 kB
+gzip to 2,309.58 kB / 695.86 kB - **197.60 kB gzip (22%) off what every visitor downloads before the app
+starts**. The moved content accounts for it exactly: the `EpochDetail` chunk is 172.62 kB gzip and the
+shared `epochs` chunk 23.9 kB, and neither the epoch summaries nor any release version appears in the
+main chunk.
+
+### Known trade-off, not fixed
+
+The drill-down chunk is 535 kB raw, and the route renders `Suspense fallback={null}` - matching every
+other lazy route in this app - so there is a brief blank while it loads. That is new: the page used to be
+in the main bundle and appeared instantly, at the cost of everyone paying for it on every page load. A
+small loading state would be an improvement; it is left alone here because changing it is a judgement
+about an app-wide convention rather than part of this change.

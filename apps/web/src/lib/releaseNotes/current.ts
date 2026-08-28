@@ -9,6 +9,21 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.260.0",
+    date: "2026-08-28",
+    pr: 675,
+    headline: "The release notes open on the story, not on 496 rows",
+    summary:
+      "The release notes were one long list of every version ever shipped - 496 of them, newest first, which is a lot of scrolling to find out when a feature arrived.\n\nThey now open on the story instead: thirty named chapters, newest first, each covering a stretch of work with a short description of what changed in it and how many releases it took. Rooms, Formulas, connecting Claude over MCP, People, the calendar work - each is one card you can read rather than twenty rows you have to piece together. Click one and you get every individual release inside it, exactly as before: the same list, the same notes, the same links to the pull request behind each one. Nothing was rewritten or thrown away.\n\nThe other half of this is speed, and it applies whether or not you ever open the page. All of that history used to be loaded by every visitor on every page, because it travelled with the app itself. It now loads only when you go looking for it, which takes about a fifth off what your browser downloads before Diariz can start.",
+    added: [
+      "The release notes now open on **thirty named chapters** covering the history so far, newest first - each with a summary, its version range, and how many releases it covers.",
+      "Opening a chapter lists **every release in it**, unchanged: the same notes, and the same link to the pull request behind each one.",
+    ],
+    changed: [
+      "Diariz downloads about **a fifth less** before it can start. The release history used to travel with the app and load for everyone on every page; it now loads only when you open it.",
+    ],
+  },
+  {
     version: "0.259.13",
     date: "2026-08-28",
     pr: 674,

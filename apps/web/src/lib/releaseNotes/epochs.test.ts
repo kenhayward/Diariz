@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { EPOCHS, ARCHIVED_SPINE } from "./epochs";
 import { ARCHIVE } from "./archive";
 import { RECENT } from "./current";
+import { OPEN_EPOCH_ID } from "../../pages/EpochDetail";
 
 /// Epochs are the default view of the release-notes page: ~30 named spans standing in for ~470
 /// individual releases. The whole design rests on them **tiling** the archive - every archived release
@@ -39,6 +40,12 @@ describe("release epochs", () => {
     const ids = EPOCHS.map((e) => e.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids.filter((id) => !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id))).toEqual([]);
+  });
+
+  it("leaves the reserved id for the open epoch alone", () => {
+    // `/release-notes/current` serves the releases that have no epoch yet. An epoch taking that id
+    // would shadow it, and the only symptom would be the newest releases quietly becoming unreachable.
+    expect(EPOCHS.map((e) => e.id)).not.toContain(OPEN_EPOCH_ID);
   });
 
   it("gives every epoch a title and a summary", () => {
