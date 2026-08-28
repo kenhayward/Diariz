@@ -65,6 +65,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.259.12",
+    date: "2026-08-28",
+    pr: 672,
+    headline: "Pin the last two version mirrors",
+    summary:
+      "Housekeeping with a real edge to it. The desktop and n8n `package-lock.json` files had been left on `0.197.4` while everything else tracked the release - about sixty versions of drift - because the test that pins the version across files only ever checked the web one.\n\nNothing shipped wrong: npm publishes from `package.json`, not the lock file. But this is the same drift the test exists to catch, and the n8n node has form here - it sat at `0.1.0` for roughly seventy releases, and an npm version cannot be corrected once it is out.\n\nAll three lock files are now pinned, in both places npm writes the version, and each assertion was checked by breaking it on purpose to be sure it can actually fail. The contributor notes were wrong too - they named four mirrors and no lock files, so following them exactly still left these behind. They now name all seven.\n\nNothing about how Diariz behaves has changed.",
+    fixed: [
+      "The **desktop and n8n `package-lock.json`** versions had drifted about sixty releases behind `version.json`. Both are now pinned, in both places npm writes the version.",
+    ],
+    changed: [
+      "`versionMirrors.test.ts` now asserts **all three** lock files rather than only the web one, so this cannot drift again unnoticed. The release checklist in the contributor notes names all seven mirrors, and says to edit lock files by hand rather than regenerate them.",
+    ],
+  },
+  {
     version: "0.259.11",
     date: "2026-08-28",
     pr: 671,
