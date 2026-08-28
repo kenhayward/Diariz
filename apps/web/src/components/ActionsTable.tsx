@@ -14,12 +14,16 @@ export default function ActionsTable({
   onAdd,
   onUpdate,
   onToggleComplete,
+  onTogglePin,
   onDelete,
 }: {
   actions: RecordingAction[];
   onAdd: () => void;
   onUpdate: (id: string, patch: Patch) => void;
   onToggleComplete: (id: string, completed: boolean) => void;
+  /// Promote an action into the cross-meeting Actions views, or take it back out. This table always shows
+  /// every action regardless - pinning only governs where else it appears.
+  onTogglePin: (id: string, pinned: boolean) => void;
   onDelete: (id: string) => void;
 }) {
   const { t } = useTranslation("workspace");
@@ -31,9 +35,10 @@ export default function ActionsTable({
         <table className="mb-3 w-full table-fixed text-sm">
           <thead>
             <tr className="text-left text-xs font-medium text-gray-400 dark:text-gray-500">
+              <th className="w-[5%] pb-1 pr-1 font-medium text-center">{t("colPin")}</th>
               <th className="w-[6%] pb-1 pr-1 font-medium text-center">{t("colDone")}</th>
-              <th className="w-[40%] pb-1 pr-2 font-medium">{t("colAction")}</th>
-              <th className="w-[16%] pb-1 pr-2 font-medium">{t("colActor")}</th>
+              <th className="w-[36%] pb-1 pr-2 font-medium">{t("colAction")}</th>
+              <th className="w-[15%] pb-1 pr-2 font-medium">{t("colActor")}</th>
               <th className="w-[18%] pb-1 pr-2 font-medium">{t("colDeadline")}</th>
               <th className="w-[15%] pb-1 pr-2 font-medium">{t("colCompletedDate")}</th>
               <th className="w-[5%] pb-1" aria-hidden />
@@ -47,6 +52,7 @@ export default function ActionsTable({
                 row={i + 1}
                 onUpdate={onUpdate}
                 onToggleComplete={onToggleComplete}
+                onTogglePin={onTogglePin}
                 onDelete={onDelete}
               />
             ))}
@@ -70,12 +76,14 @@ function ActionRow({
   row,
   onUpdate,
   onToggleComplete,
+  onTogglePin,
   onDelete,
 }: {
   action: RecordingAction;
   row: number;
   onUpdate: (id: string, patch: Patch) => void;
   onToggleComplete: (id: string, completed: boolean) => void;
+  onTogglePin: (id: string, pinned: boolean) => void;
   onDelete: (id: string) => void;
 }) {
   const { t, i18n } = useTranslation("workspace");
@@ -84,6 +92,22 @@ function ActionRow({
     : "";
   return (
     <tr className="align-top">
+      {/* Pin leads the row: this is where the user decides what to track, so it is the first thing on it. */}
+      <td className="py-1 pr-1 text-center">
+        <button
+          type="button"
+          aria-label={action.pinned ? t("unpinActionAria", { row }) : t("pinActionAria", { row })}
+          aria-pressed={action.pinned}
+          onClick={() => onTogglePin(action.id, !action.pinned)}
+          className={`mt-1 rounded px-1 ${
+            action.pinned
+              ? "text-blue-600 dark:text-blue-400"
+              : "text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400"
+          }`}
+        >
+          <PinIcon filled={action.pinned} />
+        </button>
+      </td>
       <td className="py-1 pr-1 text-center">
         <input
           type="checkbox"
@@ -120,6 +144,27 @@ function ActionRow({
         </button>
       </td>
     </tr>
+  );
+}
+
+/// A pin glyph, solid when pinned and outline when not - so the two states differ by shape as well as
+/// colour, which colour alone would not carry.
+function PinIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M12 17v5" />
+      <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1Z" />
+    </svg>
   );
 }
 

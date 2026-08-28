@@ -778,6 +778,18 @@ export default function RecordingDetail() {
     }
   }
 
+  async function toggleActionPin(actionId: string, pinned: boolean) {
+    setActionError(null);
+    try {
+      await api.pinActions([actionId], pinned);
+      qc.invalidateQueries({ queryKey: ["recording", id] });
+      // Promoting into (or out of) the Actions tab is the whole point of pinning, so refresh it too.
+      qc.invalidateQueries({ queryKey: ["actions", "all"] });
+    } catch (e) {
+      setActionError(apiErrorMessage(e, t("workspace:errUpdateAction")));
+    }
+  }
+
   // ---- Notes tab handlers (the user's own note lines) ----
   async function addNote(text: string) {
     setActionError(null);
@@ -1298,6 +1310,7 @@ export default function RecordingDetail() {
           onAdd={addAction}
           onUpdate={updateAction}
           onToggleComplete={toggleActionComplete}
+          onTogglePin={toggleActionPin}
           onDelete={removeAction}
         />
       ),
