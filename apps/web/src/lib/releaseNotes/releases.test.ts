@@ -43,6 +43,12 @@ describe("release history", () => {
     expect(both.map((r) => r.version)).toEqual([]);
   });
 
+  it("keeps the eager half small enough to be worth loading eagerly", () => {
+    // A safety net, not the trigger: an epoch is closed when an arc finishes, and the historical epochs
+    // average 16 releases. This only fires if closing one is forgotten for months.
+    expect(RECENT.length).toBeLessThanOrEqual(80);
+  });
+
   it("gives every entry a version, date, headline and summary", () => {
     const malformed = ALL.filter(
       (r) =>
