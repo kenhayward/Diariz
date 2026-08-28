@@ -519,9 +519,13 @@ out the `deploy.resources` GPU block and set `WORKER_DEVICE=cpu WORKER_COMPUTE_T
 
 ## Conventions & gotchas
 
-- **No em/en dashes in user-facing text.** Use a plain hyphen `-` (not `—` or `–`) in all UI strings,
+- **No em/en dashes in user-facing text.** Use a plain hyphen `-` (not the long ones) in all UI strings,
   i18n catalogs (`apps/web/src/locales/**`, `src/Diariz.Api/locales/**`), release notes, and user-visible
-  copy — user feedback on fancy dashes is negative. (Code, comments, and internal docs are unaffected.)
+  copy - user feedback on fancy dashes is negative. **Code, comments, and internal docs are exempt**, this
+  file included. `apps/web/src/lib/noFancyDashes.test.ts` enforces it across all four surfaces and strips
+  comments first, so a dash in a comment is fine and one in a string is not. It was previously enforced
+  only for help articles (as a side effect of their ASCII rule), which is how seven reached the About box
+  and the chat `/help` output (issue #673).
 - **Never put production data in the repo or anywhere public.** Real people's names, email addresses,
   company names, recording titles, and transcript text from the running instance must not appear in code,
   comments, **test fixtures**, docs, commit messages, GitHub issues, or pull requests. The repo is public,

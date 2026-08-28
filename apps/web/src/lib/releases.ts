@@ -65,6 +65,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.259.13",
+    date: "2026-08-28",
+    pr: 674,
+    headline: "Plain hyphens everywhere a reader can see",
+    summary:
+      "The About box described Diariz as built on open-source software using a long dash, and the chat `/help` list separated each command from its description with another. Small, but the house style is a plain hyphen, because feedback on the fancier ones has been consistently negative.\n\nSeven of them had crept in across three screens. They are gone, and a test now covers the rule everywhere it applies - the interface catalogues in every language, the release notes you are reading, and the source itself - rather than only the help articles, which was the one place anything checked. Comments written for developers are left alone, as they always were.\n\nNothing about how Diariz behaves has changed.",
+    fixed: [
+      "Long dashes appeared in the **About box** disclaimers, the chat **`/help`** command list, and the context dial placeholder. All seven are now plain hyphens.",
+    ],
+    added: [
+      "A test that fails the build on an em or en dash in **any** user-facing text - interface catalogues (both the web and API ones), release notes, and source strings - not just help articles.",
+    ],
+  },
+  {
     version: "0.259.12",
     date: "2026-08-28",
     pr: 672,

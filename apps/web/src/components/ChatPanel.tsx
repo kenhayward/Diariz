@@ -568,7 +568,7 @@ ${text}`;
       return bulletList(t("cmdContextHeading"), [
         t("cmdContextScope", { scope: contextLabel }),
         t("cmdContextCount", { count: contextCount }),
-        t("cmdContextModel", { model: dialModel || "—" }),
+        t("cmdContextModel", { model: dialModel || "-" }),
         t("cmdContextUsage", { used: dialUsed.toLocaleString(), total: dialTotal.toLocaleString() }),
       ]);
     return buildHelpOutput(commandInfos, t("cmdHelpHeading"));
