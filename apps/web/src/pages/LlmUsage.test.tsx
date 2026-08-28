@@ -559,6 +559,10 @@ describe("LlmUsage", () => {
       confirmSpy.mockReturnValue(true);
       fireEvent.click(screen.getByRole("button", { name: "Delete filtered rows" }));
       expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("9999"));
+
+      // The delete carries on after the prompt: it resets the page, invalidates the three queries and
+      // clears its deleting flag. Wait for the button to come back so those updates land inside the test.
+      await waitFor(() => expect(deleteButton().disabled).toBe(false));
     });
   });
 

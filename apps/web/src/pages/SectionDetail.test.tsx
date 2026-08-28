@@ -106,6 +106,10 @@ function renderPage(
         {opts.onLocation && <LocationSpy onChange={opts.onLocation} />}
         <Routes>
           <Route path="/sections/:id" element={<SectionDetail />} />
+          {/* The room-aware links navigate to /rooms/:roomId/..., and a test that asserts where a click
+              lands still has to have somewhere to land: without this, React Router logs that no route
+              matched. Nothing renders it - only the resulting location is under test. */}
+          <Route path="/rooms/:roomId/sections/:id" element={<SectionDetail />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,

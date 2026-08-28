@@ -187,6 +187,19 @@ fix (green). Exceptions (throwaway spikes, generated code, pure config) need a h
 
 Keep test output pristine — a passing run has no errors or warnings.
 
+**The web suite enforces that, and you cannot check it locally on Windows.** `src/test-setup.ts` hooks
+`console.error` and **fails any test that lets a React state update escape `act(...)`**, naming the source
+line that updated. A test that provokes an error on purpose declares it with `expectsConsoleError(/.../)`
+from the same file rather than spying on `console.error` - a spy would take the console away from that
+guard for the length of the test.
+
+The catch: **`vitest` prints nothing a test logs to `console.log`/`console.error` on the Windows dev box**
+(all three pools, even a config-free scratch project - see issue #667). A clean local run is therefore not
+evidence that the output is clean; it only ever shows the guard's own failures. To see what CI sees, run
+the suite on Linux - mount the repo read-only into `node:24`, `tar` everything except `node_modules` into
+the container, `npm ci`, then `npx vitest run`. The counts match CI exactly. This is how 143 `act()`
+warnings survived unnoticed long enough to become issue #665.
+
 ## Versioning & release notes (required)
 
 **`main` is branch-protected: every change lands through a Pull Request that passes CI - never commit or

@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor, within, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
+import { expectsConsoleError } from "../test-setup";
 
 // A JWT-shaped token whose payload decodes to { sub: "u1" } (used for the per-user pending key).
 const TOKEN = `h.${btoa(JSON.stringify({ sub: "u1" }))}.s`;
@@ -230,6 +231,7 @@ describe("Recorder recovery", () => {
   });
 
   it("does not show a false error banner when recovering a pending upload hits a storage hiccup in the attach step", async () => {
+    expectsConsoleError(/Attaching (notes|screenshots) failed unexpectedly/);
     // Milder sibling of the duplicate-offer bug (see "live screenshots" below): here setPending(null) has
     // already run by the time the attach/recovery step throws, so the audio can't be re-offered - but an
     // unguarded throw would still surface a spurious error banner for an upload that actually succeeded.
@@ -665,6 +667,7 @@ describe("Recorder source selection", () => {
 
   it("reports a capture failure to the status bar in the error tone", async () => {
     (getStream as Mock).mockRejectedValue(new Error("boom"));
+    expectsConsoleError(/Audio capture failed/);
     render(<Recorder onUploaded={() => {}} />);
 
     fireEvent.click(await screen.findByRole("button", { name: /^record$/i }));
@@ -677,6 +680,7 @@ describe("Recorder source selection", () => {
 
   it("clears its status-bar message once the condition passes", async () => {
     (getStream as Mock).mockRejectedValueOnce(new Error("boom")).mockResolvedValue(fakeSession);
+    expectsConsoleError(/Audio capture failed/);
     render(<Recorder onUploaded={() => {}} />);
 
     fireEvent.click(await screen.findByRole("button", { name: /^record$/i }));
@@ -1060,6 +1064,7 @@ describe("live notes", () => {
   });
 
   it("does not re-offer the already-uploaded audio when a storage hiccup breaks note-attach recovery", async () => {
+    expectsConsoleError(/Attaching (notes|screenshots) failed unexpectedly/);
     // A pathological double failure: the notes attach API call fails, AND the durable-stash write inside
     // attachNotes' own catch block also throws (e.g. keyedStash's openDb() escaping - see keyedStash.test.ts).
     // The audio itself uploaded fine; a storage hiccup two steps downstream of that must never be mistaken
@@ -1119,14 +1124,17 @@ describe("live screenshots", () => {
       },
     };
   }
-  const capture = (overrides: Partial<{ width: number; height: number }> = {}) =>
-    emit!({
-      full: new Uint8Array([1, 2, 3]),
-      thumb: new Uint8Array([4]),
-      width: 800,
-      height: 600,
-      ...overrides,
+  const capture = (overrides: Partial<{ width: number; height: number }> = {}) => {
+    act(() => {
+      emit!({
+        full: new Uint8Array([1, 2, 3]),
+        thumb: new Uint8Array([4]),
+        width: 800,
+        height: 600,
+        ...overrides,
+      });
     });
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -1465,8 +1473,11 @@ describe("screenshot attach progress feedback", () => {
       },
     };
   }
-  const capture = (overrides: Partial<{ width: number; height: number }> = {}) =>
-    emit!({ full: new Uint8Array([1]), thumb: new Uint8Array([2]), width: 800, height: 600, ...overrides });
+  const capture = (overrides: Partial<{ width: number; height: number }> = {}) => {
+    act(() => {
+      emit!({ full: new Uint8Array([1]), thumb: new Uint8Array([2]), width: 800, height: 600, ...overrides });
+    });
+  };
 
   function deferred<T>() {
     let resolve!: (value: T) => void;
@@ -1654,7 +1665,9 @@ describe("upload progress in the status bar", () => {
     render(<Recorder onUploaded={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
     await screen.findByRole("button", { name: /^stop$/i });
-    emit!({ full: new Uint8Array([1]), thumb: new Uint8Array([2]), width: 800, height: 600 });
+    act(() => {
+      emit!({ full: new Uint8Array([1]), thumb: new Uint8Array([2]), width: 800, height: 600 });
+    });
     await waitFor(() => expect(addPendingScreenshot).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
@@ -1742,7 +1755,9 @@ describe("recording started from a calendar event", () => {
 
   /// Drive the same channel the Join button uses.
   async function joinAndRecord(event: typeof EVENT | undefined = EVENT) {
-    requestRecording(event ? { calendarEvent: event } : {});
+    await act(async () => {
+      requestRecording(event ? { calendarEvent: event } : {});
+    });
     await screen.findByRole("button", { name: /^stop$/i });
   }
 
@@ -1779,6 +1794,7 @@ describe("recording started from a calendar event", () => {
     // No calendar connected, the event since deleted, a flaky call - none of that may look like a lost
     // recording. The audio is already uploaded by this point.
     (api.putCalendarLink as Mock).mockRejectedValue(new Error("no calendar connected"));
+    expectsConsoleError(/Linking the recording to its calendar event failed/);
     const onUploaded = vi.fn();
     render(<Recorder onUploaded={onUploaded} />);
     await screen.findByRole("button", { name: /record/i });
@@ -1928,7 +1944,9 @@ describe("recording started from a calendar event", () => {
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
     await screen.findByRole("button", { name: /^stop$/i });
 
-    requestRecording({ calendarEvent: EVENT });
+    await act(async () => {
+      requestRecording({ calendarEvent: EVENT });
+    });
     await waitFor(() => expect(api.upload).toHaveBeenCalledTimes(1));
 
     // The first upload is still in flight, so the second recording has NOT begun.
@@ -1983,7 +2001,9 @@ describe("extending a meeting that overruns", () => {
     await act(async () => {
       await vi.runOnlyPendingTimersAsync();
     });
-    requestRecording({ calendarEvent: EVENT });
+    await act(async () => {
+      requestRecording({ calendarEvent: EVENT });
+    });
     await act(async () => {
       await vi.runOnlyPendingTimersAsync();
     });
@@ -2073,7 +2093,9 @@ describe("extending a meeting that overruns", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /^auto-stop$/i }));
     fireEvent.click(screen.getByRole("button", { name: /stop in 15 minutes/i }));
-    requestRecording({ calendarEvent: EVENT });
+    await act(async () => {
+      requestRecording({ calendarEvent: EVENT });
+    });
     await act(async () => {
       await vi.runOnlyPendingTimersAsync();
     });
@@ -2236,7 +2258,9 @@ describe("extending a meeting that overruns", () => {
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
     await tick(1_000);
 
-    requestRecording({ calendarEvent: EVENT });
+    await act(async () => {
+      requestRecording({ calendarEvent: EVENT });
+    });
     await act(async () => {
       await vi.runOnlyPendingTimersAsync();
     });

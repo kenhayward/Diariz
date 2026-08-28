@@ -65,6 +65,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.259.9",
+    date: "2026-08-28",
+    pr: 668,
+    headline: "A silent test suite, and a guard to keep it silent",
+    summary:
+      "Every passing build was printing 143 React `act(...)` warnings. Each one is a piece of asynchronous work finishing outside the window the test around it was watching, so nothing was wrong with Diariz itself: the tests were starting work and then not waiting for it, and the updates landed after the test had already ended. That is the raw material a flaky test is made from, and the count had grown from 94 to 143 in a fortnight because nothing was stopping it.\n\nThey came from a handful of shared test helpers rather than from many separate mistakes: one that asked the recorder to start, one that delivered a screenshot from the desktop shell, and several that opened a panel which fetches as it mounts. Fixing those cleared most of them at a stroke.\n\nA guard now fails any test that lets an update escape, naming the line that updated, so the count cannot climb back. The rest of the noise a passing run produced has gone too, and a test that provokes an error on purpose now declares it instead of printing it.\n\nNothing about how Diariz behaves has changed - this is test-suite work only.",
+    fixed: [
+      "The web test suite emitted **143 React act(...) warnings** on a passing run. They were tests that did not await asynchronous work they had started, so state updates arrived after the test had finished.",
+      "A passing run is silent again: query mocks that resolved `undefined`, an upload mock that returned nothing where the real call returns a recording, and a route the test router never defined.",
+    ],
+    added: [
+      "A guard in the test setup **fails any test that lets a React update escape `act(...)`**, naming the source line responsible, so the warnings cannot creep back in.",
+    ],
+  },
+  {
     version: "0.259.8",
     date: "2026-08-28",
     pr: 664,

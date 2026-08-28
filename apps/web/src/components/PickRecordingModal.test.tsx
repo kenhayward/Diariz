@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import PickRecordingModal from "./PickRecordingModal";
 import type { AttachmentDraft } from "../lib/types";
@@ -19,20 +19,26 @@ describe("PickRecordingModal", () => {
     expect(screen.getByText("Retro")).toBeTruthy();
   });
 
-  it("adds to the chosen transcript", () => {
+  it("adds to the chosen transcript", async () => {
     const onPick = vi.fn();
     render(<PickRecordingModal draft={draft} onCancel={() => {}} onPick={onPick} />);
 
     fireEvent.click(screen.getByRole("radio", { name: /retro/i }));
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
 
+    // confirm() clears its busy flag after awaiting onPick, which re-enables the button. Without waiting
+    // for that the flag lands after the test has returned.
+    await waitFor(() => expect((screen.getByRole("button", { name: "Add" }) as HTMLButtonElement).disabled).toBe(false));
     expect(onPick).toHaveBeenCalledWith("rec-2");
   });
 
-  it("defaults to the first transcript when none is re-picked", () => {
+  it("defaults to the first transcript when none is re-picked", async () => {
     const onPick = vi.fn();
     render(<PickRecordingModal draft={draft} onCancel={() => {}} onPick={onPick} />);
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    // confirm() clears its busy flag after awaiting onPick, which re-enables the button. Without waiting
+    // for that the flag lands after the test has returned.
+    await waitFor(() => expect((screen.getByRole("button", { name: "Add" }) as HTMLButtonElement).disabled).toBe(false));
     expect(onPick).toHaveBeenCalledWith("rec-1");
   });
 

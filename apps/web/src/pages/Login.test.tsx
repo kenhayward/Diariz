@@ -24,12 +24,16 @@ vi.mock("react-i18next", () => ({
 
 import Login from "./Login";
 
-function renderLogin(entry = "/login") {
-  return render(
+async function renderLogin(entry = "/login") {
+  const result = render(
     <MemoryRouter initialEntries={[entry]}>
       <Login />
     </MemoryRouter>,
   );
+  // Login asks the server which sign-in providers are configured as it mounts. Let that resolve inside
+  // act, so it cannot update the component after the test has finished.
+  await act(async () => {});
+  return result;
 }
 
 describe("Login (Electron)", () => {
@@ -40,7 +44,7 @@ describe("Login (Electron)", () => {
   });
 
   it("shows the Google button in the desktop shell and starts sign-in via IPC", async () => {
-    renderLogin();
+    await renderLogin();
     const btn = await screen.findByRole("button", { name: /signInWithGoogle/i });
     fireEvent.click(btn);
     await waitFor(() =>
@@ -56,27 +60,27 @@ describe("Login redirect when authenticated", () => {
     (window as unknown as { diariz?: unknown }).diariz = undefined;
   });
 
-  it("leaves /login as soon as auth state is true (e.g. the desktop app delivered the Google token over IPC)", () => {
+  it("leaves /login as soon as auth state is true (e.g. the desktop app delivered the Google token over IPC)", async () => {
     authState = { login: vi.fn(), isAuthed: true };
-    renderLogin("/login");
+    await renderLogin("/login");
     expect(navigateSpy).toHaveBeenCalledWith("/", { replace: true });
   });
 
-  it("honours an internal ?returnTo= when redirecting an authed user", () => {
+  it("honours an internal ?returnTo= when redirecting an authed user", async () => {
     authState = { login: vi.fn(), isAuthed: true };
-    renderLogin("/login?returnTo=/oauth/consent");
+    await renderLogin("/login?returnTo=/oauth/consent");
     expect(navigateSpy).toHaveBeenCalledWith("/oauth/consent", { replace: true });
   });
 
-  it("ignores an external returnTo (open-redirect guard)", () => {
+  it("ignores an external returnTo (open-redirect guard)", async () => {
     authState = { login: vi.fn(), isAuthed: true };
-    renderLogin("/login?returnTo=//evil.example.com");
+    await renderLogin("/login?returnTo=//evil.example.com");
     expect(navigateSpy).toHaveBeenCalledWith("/", { replace: true });
   });
 
-  it("does not redirect while unauthenticated", () => {
+  it("does not redirect while unauthenticated", async () => {
     authState = { login: vi.fn(), isAuthed: false };
-    renderLogin("/login");
+    await renderLogin("/login");
     expect(navigateSpy).not.toHaveBeenCalled();
   });
 });
@@ -86,7 +90,7 @@ describe("Login surfaces desktop sign-in failures", () => {
     authState = { login: vi.fn(), isAuthed: false };
   });
 
-  it("shows the reason the desktop shell reports (instead of the old silent failure)", () => {
+  it("shows the reason the desktop shell reports (instead of the old silent failure)", async () => {
     let handler: ((reason: string) => void) | undefined;
     (window as unknown as { diariz: unknown }).diariz = {
       startGoogleSignIn: vi.fn(),
@@ -95,7 +99,7 @@ describe("Login surfaces desktop sign-in failures", () => {
         return () => {};
       },
     };
-    renderLogin("/login");
+    await renderLogin("/login");
     act(() => handler?.("network"));
     expect(screen.getByText("desktopSignInNetwork")).toBeTruthy();
 

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import SpeakerSuggestionPrompt from "./SpeakerSuggestionPrompt";
@@ -98,6 +98,10 @@ describe("SpeakerSuggestionPrompt", () => {
     await userEvent.click(yes);
 
     expect(mock(api.acceptSpeakerSuggestion).mock.calls).toHaveLength(1);
-    release?.();
+    // Let the held answer finish inside act: decide() calls onDecided and clears its busy flag once the
+    // request resolves, and those updates would otherwise land after this test has returned.
+    await act(async () => {
+      release?.();
+    });
   });
 });

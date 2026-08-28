@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -36,9 +36,9 @@ const OK_RESULT = {
 /// The application defaults, as the page hands them over - the bottom of the layer stack.
 const DEFAULTS = { ModelBase: '{"temperature":0.3,"timeout_seconds":120}' };
 
-function open(model: LlmModel | null = MODELS[0], props: Record<string, unknown> = {}) {
+async function open(model: LlmModel | null = MODELS[0], props: Record<string, unknown> = {}) {
   // Inside a router, as it always is in the app: the result card deep-links into the usage log.
-  return render(
+  const result = render(
     <MemoryRouter>
       <ModelEditorDrawer
         model={model}
@@ -52,6 +52,23 @@ function open(model: LlmModel | null = MODELS[0], props: Record<string, unknown>
       />
     </MemoryRouter>,
   );
+  // The drawer asks for the remembered test recording on mount. Let that resolve here, inside act, so
+  // its state update cannot land after the test body has returned.
+  await act(async () => {});
+  return result;
+}
+
+/// Wait for a save to finish - not merely to have been sent. save() clears the saving flag in a finally,
+/// after the request resolves, and that flag is what re-enables the button.
+///
+/// Deliberately testing-library waitFor rather than vi.waitFor: only the former is act-aware, so only it
+/// keeps the tail of save() under React supervision. vi.waitFor returns between polls with the update
+/// still pending, which is how these updates were escaping act in the first place.
+async function saveSettled() {
+  await waitFor(() =>
+    expect((screen.getByRole("button", { name: /^save$/i }) as HTMLButtonElement).disabled).toBe(false),
+  );
+  expect(api.updateModel).toHaveBeenCalled();
 }
 
 describe("ModelEditorDrawer", () => {
@@ -64,8 +81,8 @@ describe("ModelEditorDrawer", () => {
     api.setTestRecording.mockResolvedValue(undefined);
   });
 
-  it("offers one tab per parameter group, starting on Defaults", () => {
-    open();
+  it("offers one tab per parameter group, starting on Defaults", async () => {
+    await open();
 
     const tabs = screen.getAllByRole("tab").map((t) => t.textContent);
     // Defaults plus one per call group.
@@ -74,8 +91,8 @@ describe("ModelEditorDrawer", () => {
     expect(screen.getByRole("tab", { selected: true }).textContent).toMatch(/Defaults/);
   });
 
-  it("counts the overrides on each tab, and says nothing when there are none", () => {
-    open(MODELS[1]);
+  it("counts the overrides on each tab, and says nothing when there are none", async () => {
+    await open(MODELS[1]);
 
     // ModelBase carries temperature and top_k; Translation carries temperature; the rest carry nothing.
     expect(screen.getByRole("tab", { name: /Defaults/ }).textContent).toMatch(/2/);
@@ -83,8 +100,8 @@ describe("ModelEditorDrawer", () => {
     expect(screen.getByRole("tab", { name: /Tags/ }).textContent).not.toMatch(/\d/);
   });
 
-  it("scopes the parameter list to the open tab", () => {
-    open(MODELS[1]);
+  it("scopes the parameter list to the open tab", async () => {
+    await open(MODELS[1]);
 
     expect((screen.getByTestId("param-ModelBase-temperature") as HTMLInputElement).value).toBe("0.9");
 
@@ -93,24 +110,24 @@ describe("ModelEditorDrawer", () => {
     expect((screen.getByTestId("param-Translation-temperature") as HTMLInputElement).value).toBe("0.1");
   });
 
-  it("shows what a group inherits from the model's own Defaults rather than leaving it blank", () => {
-    open(MODELS[1]);
+  it("shows what a group inherits from the model's own Defaults rather than leaving it blank", async () => {
+    await open(MODELS[1]);
     fireEvent.click(screen.getByRole("tab", { name: /Summaries/ }));
 
     // top_k is set on the model's Defaults and nowhere else, so Summaries inherits 40.
     expect(screen.getByText(/from Defaults · 40/)).toBeTruthy();
   });
 
-  it("shows the application default on the Defaults tab, which has no model layer below it", () => {
-    open(MODELS[0]);
+  it("shows the application default on the Defaults tab, which has no model layer below it", async () => {
+    await open(MODELS[0]);
 
     // temperature is overridden on this tab, so the row that proves the point is one the model leaves
     // alone: the timeout comes from the application defaults and nowhere else.
     expect(screen.getByText(/app default · 120/)).toBeTruthy();
   });
 
-  it("previews the request body for the open tab, and follows what is typed", () => {
-    open(MODELS[1]);
+  it("previews the request body for the open tab, and follows what is typed", async () => {
+    await open(MODELS[1]);
     fireEvent.click(screen.getByRole("tab", { name: /Summaries/ }));
 
     const preview = () => screen.getByTestId("request-preview").textContent ?? "";
@@ -121,10 +138,10 @@ describe("ModelEditorDrawer", () => {
     expect(preview()).toMatch(/"temperature": 0\.2/);
   });
 
-  it("keeps the behaviour flags out of the previewed body", () => {
+  it("keeps the behaviour flags out of the previewed body", async () => {
     // timeout_seconds governs the client, not the request. A preview that lists it sends the admin
     // hunting through their server logs for a field no endpoint ever received.
-    open(MODELS[1]);
+    await open(MODELS[1]);
 
     expect(screen.getByTestId("request-preview").textContent).not.toMatch(/timeout_seconds/);
   });
@@ -133,23 +150,23 @@ describe("ModelEditorDrawer", () => {
     // An empty layer would create a row that decides nothing while looking, in the database, exactly like
     // a deliberate set of overrides.
     api.updateModel.mockResolvedValue(MODELS[1]);
-    open(MODELS[1]);
+    await open(MODELS[1]);
 
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
-    await vi.waitFor(() => expect(api.updateModel).toHaveBeenCalled());
+    await saveSettled();
     expect(Object.keys(api.updateModel.mock.calls[0][1].parameters).sort()).toEqual(["ModelBase", "Translation"]);
   });
 
   it("drops a group from the payload once its last override is returned to inherit", async () => {
     api.updateModel.mockResolvedValue(MODELS[1]);
-    open(MODELS[1]);
+    await open(MODELS[1]);
     fireEvent.click(screen.getByRole("tab", { name: /Translation/ }));
 
     fireEvent.click(screen.getAllByRole("button", { name: /back to inherited/i })[0]);
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
-    await vi.waitFor(() => expect(api.updateModel).toHaveBeenCalled());
+    await saveSettled();
     expect(Object.keys(api.updateModel.mock.calls[0][1].parameters)).toEqual(["ModelBase"]);
   });
 
@@ -157,42 +174,42 @@ describe("ModelEditorDrawer", () => {
     // The drawer is never given the stored key, so it must omit it rather than send an empty string -
     // empty means "clear the key" to the API.
     api.updateModel.mockResolvedValue(MODELS[0]);
-    open(MODELS[0]);
+    await open(MODELS[0]);
 
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
-    await vi.waitFor(() => expect(api.updateModel).toHaveBeenCalled());
+    await saveSettled();
     expect(api.updateModel.mock.calls[0][1].apiKey).toBeUndefined();
   });
 
   it("saves a display name from the connection panel", async () => {
     api.updateModel.mockResolvedValue(MODELS[0]);
-    open(MODELS[0]);
+    await open(MODELS[0]);
 
     fireEvent.change(screen.getByLabelText(/display name/i), { target: { value: "QWEN 3.8" } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
-    await vi.waitFor(() => expect(api.updateModel).toHaveBeenCalled());
+    await saveSettled();
     expect(api.updateModel.mock.calls[0][1].displayName).toBe("QWEN 3.8");
   });
 
   it("sends a blank display name as null, so the slug shows through", async () => {
     // "" and null would be two spellings of the same state; the server stores one, so the client sends one.
     api.updateModel.mockResolvedValue(MODELS[0]);
-    open({ ...MODELS[0], displayName: "Old Label" });
+    await open({ ...MODELS[0], displayName: "Old Label" });
 
     fireEvent.change(screen.getByLabelText(/display name/i), { target: { value: "   " } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
-    await vi.waitFor(() => expect(api.updateModel).toHaveBeenCalled());
+    await saveSettled();
     expect(api.updateModel.mock.calls[0][1].displayName).toBeNull();
   });
 
-  it("counts a display-name edit as an unsaved change", () => {
+  it("counts a display-name edit as an unsaved change", async () => {
     // `dirty` does not gate Save - it drives the status line and the discard prompt on close. A field
     // missing from that check makes the drawer report "no unsaved changes" while holding an edit, and
     // then throw it away on close without asking.
-    open(MODELS[0]);
+    await open(MODELS[0]);
     expect(screen.getByText(/override\(s\) on/).textContent).not.toContain("unsaved");
 
     fireEvent.change(screen.getByLabelText(/display name/i), { target: { value: "QWEN 3.8" } });
@@ -202,12 +219,12 @@ describe("ModelEditorDrawer", () => {
 
   it("saves a description from the connection panel", async () => {
     api.updateModel.mockResolvedValue(MODELS[0]);
-    open(MODELS[0]);
+    await open(MODELS[0]);
 
     fireEvent.change(screen.getByLabelText(/description/i), { target: { value: "Use this for most chats" } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
-    await vi.waitFor(() => expect(api.updateModel).toHaveBeenCalled());
+    await saveSettled();
     expect(api.updateModel.mock.calls[0][1].description).toBe("Use this for most chats");
   });
 
@@ -215,19 +232,19 @@ describe("ModelEditorDrawer", () => {
     // Same rule as the display name: "" and null would be two spellings of one state, and a stored empty
     // string would render in the picker as a gap nobody asked for.
     api.updateModel.mockResolvedValue(MODELS[0]);
-    open({ ...MODELS[0], description: "Fast" });
+    await open({ ...MODELS[0], description: "Fast" });
 
     fireEvent.change(screen.getByLabelText(/description/i), { target: { value: "   " } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
-    await vi.waitFor(() => expect(api.updateModel).toHaveBeenCalled());
+    await saveSettled();
     expect(api.updateModel.mock.calls[0][1].description).toBeNull();
   });
 
-  it("counts a description edit as an unsaved change", () => {
+  it("counts a description edit as an unsaved change", async () => {
     // A field missing from `dirty` makes the drawer report "no unsaved changes" while holding an edit,
     // and then throw it away on close without asking.
-    open(MODELS[0]);
+    await open(MODELS[0]);
     expect(screen.getByText(/override\(s\) on/).textContent).not.toContain("unsaved");
 
     fireEvent.change(screen.getByLabelText(/description/i), { target: { value: "Fast" } });
@@ -235,8 +252,8 @@ describe("ModelEditorDrawer", () => {
     expect(screen.getByText(/override\(s\) on/).textContent).toContain("unsaved");
   });
 
-  it("copies another model's parameters into the open drawer without saving", () => {
-    open(MODELS[0]);
+  it("copies another model's parameters into the open drawer without saving", async () => {
+    await open(MODELS[0]);
 
     fireEvent.change(screen.getByLabelText(/copy parameters from/i), { target: { value: "b" } });
 
@@ -244,8 +261,8 @@ describe("ModelEditorDrawer", () => {
     expect(api.updateModel).not.toHaveBeenCalled();
   });
 
-  it("copies a group override the target model does not have", () => {
-    open(MODELS[0]);
+  it("copies a group override the target model does not have", async () => {
+    await open(MODELS[0]);
 
     fireEvent.change(screen.getByLabelText(/copy parameters from/i), { target: { value: "b" } });
     fireEvent.click(screen.getByRole("tab", { name: /Translation/ }));
@@ -253,8 +270,8 @@ describe("ModelEditorDrawer", () => {
     expect((screen.getByTestId("param-Translation-temperature") as HTMLInputElement).value).toBe("0.1");
   });
 
-  it("never copies name, endpoint or key", () => {
-    open(MODELS[0]);
+  it("never copies name, endpoint or key", async () => {
+    await open(MODELS[0]);
     fireEvent.change(screen.getByLabelText(/copy parameters from/i), { target: { value: "b" } });
 
 
@@ -263,8 +280,8 @@ describe("ModelEditorDrawer", () => {
     expect((screen.getByLabelText(/endpoint/i) as HTMLInputElement).value).toBe("http://a/v1");
   });
 
-  it("does not offer the model being edited as a copy source", () => {
-    open(MODELS[0]);
+  it("does not offer the model being edited as a copy source", async () => {
+    await open(MODELS[0]);
     const options = Array.from(
       (screen.getByLabelText(/copy parameters from/i) as HTMLSelectElement).options,
     ).map((o) => o.value);
@@ -273,9 +290,9 @@ describe("ModelEditorDrawer", () => {
     expect(options).toContain("b");
   });
 
-  it("returns every override on the open tab to inherit at once", () => {
+  it("returns every override on the open tab to inherit at once", async () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
-    open(MODELS[1]);
+    await open(MODELS[1]);
 
     fireEvent.click(screen.getByRole("button", { name: /reset all to inherit/i }));
     confirm.mockRestore();
@@ -285,10 +302,10 @@ describe("ModelEditorDrawer", () => {
     expect(screen.getByRole("tab", { name: /Translation/ }).textContent).toMatch(/1/);
   });
 
-  it("does not carry a half-typed value across to another tab", () => {
+  it("does not carry a half-typed value across to another tab", async () => {
     // The rows are one component per parameter; without a per-group identity, switching tabs reuses the
     // same input and whatever was mid-edit would appear to belong to the call type just opened.
-    open(MODELS[1]);
+    await open(MODELS[1]);
     fireEvent.change(screen.getByTestId("param-ModelBase-temperature"), { target: { value: "0." } });
 
     fireEvent.click(screen.getByRole("tab", { name: /Translation/ }));
@@ -296,10 +313,10 @@ describe("ModelEditorDrawer", () => {
     expect((screen.getByTestId("param-Translation-temperature") as HTMLInputElement).value).toBe("0.1");
   });
 
-  it("warns before discarding unsaved overrides", () => {
+  it("warns before discarding unsaved overrides", async () => {
     const onClose = vi.fn();
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    open(MODELS[0], { onClose });
+    await open(MODELS[0], { onClose });
 
     fireEvent.change(screen.getByTestId("param-ModelBase-temperature"), { target: { value: "0.8" } });
     fireEvent.click(screen.getByRole("button", { name: /close/i }));
@@ -309,10 +326,10 @@ describe("ModelEditorDrawer", () => {
     confirm.mockRestore();
   });
 
-  it("closes without a prompt when nothing was changed", () => {
+  it("closes without a prompt when nothing was changed", async () => {
     const onClose = vi.fn();
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
-    open(MODELS[0], { onClose });
+    await open(MODELS[0], { onClose });
 
     fireEvent.click(screen.getByRole("button", { name: /close/i }));
 
@@ -321,10 +338,10 @@ describe("ModelEditorDrawer", () => {
     confirm.mockRestore();
   });
 
-  it("runs the test against the layers on screen, not the ones on the server", () => {
+  it("runs the test against the layers on screen, not the ones on the server", async () => {
     // Testing before saving is the whole reason the endpoint takes parameters at all.
     api.testModel.mockResolvedValue(OK_RESULT);
-    open(MODELS[1]);
+    await open(MODELS[1]);
     // Translation, not a content group: those run against a real recording, which this test neither has nor
     // is about. Translation is still a non-base group, so group-over-base layering is exercised the same.
     fireEvent.click(screen.getByRole("tab", { name: /Translation/ }));
@@ -341,13 +358,17 @@ describe("ModelEditorDrawer", () => {
         Translation: '{"temperature":0.2}',
       },
     });
+
+    // Let the run finish. The card only appears once the result is in, and without waiting for it the
+    // "done" state update lands after this test has returned.
+    await screen.findByText(/0\.31 s/);
   });
 
   it("keeps each tab's result so switching back does not lose it", async () => {
     // The results are not comparable across tabs - different parameters - so one shared slot would make
     // the rail show a number that belongs to a call type the admin is no longer looking at.
     api.testModel.mockResolvedValue(OK_RESULT);
-    open(MODELS[1]);
+    await open(MODELS[1]);
 
     fireEvent.click(screen.getByRole("button", { name: /run test/i }));
     await screen.findByText(/0\.31 s/);
@@ -364,7 +385,7 @@ describe("ModelEditorDrawer", () => {
       ...OK_RESULT, ok: false, httpStatus: 400, errorKind: "Http400",
       message: "top_k is not supported", offendingParameter: "top_k", ttftMs: null,
     });
-    open(MODELS[1]);
+    await open(MODELS[1]);
     // Translation, not a content group: those need a recording to run at all, and this test is about where
     // a one-click fix lands, not about which call type ran.
     fireEvent.click(screen.getByRole("tab", { name: /Translation/ }));
@@ -385,30 +406,30 @@ describe("ModelEditorDrawer", () => {
       ...OK_RESULT, ok: false, errorKind: "Http400", offendingParameter: "top_k", ttftMs: null,
     });
     api.updateModel.mockResolvedValue(MODELS[1]);
-    open(MODELS[1]);
+    await open(MODELS[1]);
     fireEvent.click(screen.getByRole("tab", { name: /Translation/ }));
 
     fireEvent.click(screen.getByRole("button", { name: /run test/i }));
     fireEvent.click(await screen.findByRole("button", { name: /omit top k here/i }));
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
-    await vi.waitFor(() => expect(api.updateModel).toHaveBeenCalled());
+    await saveSettled();
     expect(JSON.parse(api.updateModel.mock.calls[0][1].parameters.Translation)).toEqual({
       temperature: 0.1, top_k: null,
     });
   });
 
-  it("will not test a model that does not exist yet", () => {
+  it("will not test a model that does not exist yet", async () => {
     // The endpoint is keyed by id and takes the endpoint and key from the stored row, so there is nothing
     // to test against until the model is saved. Saying why beats a button that fails.
-    open(null);
+    await open(null);
 
     expect(screen.queryByRole("button", { name: /run test/i })).toBeNull();
     expect(screen.getByText(/save the model before running a test/i)).toBeTruthy();
   });
 
   it("asks for a recording on a content tab and will not run without one", async () => {
-    open();
+    await open();
 
     await userEvent.click(screen.getByRole("tab", { name: /Tags/ }));
 
@@ -419,7 +440,7 @@ describe("ModelEditorDrawer", () => {
   });
 
   it("keeps the built-in sample on a tab that has no real prompt", async () => {
-    open();
+    await open();
 
     await userEvent.click(screen.getByRole("tab", { name: /Chat/ }));
 
@@ -430,7 +451,7 @@ describe("ModelEditorDrawer", () => {
   it("sends the remembered recording with the test call", async () => {
     api.getTestRecording.mockResolvedValue({ recordingId: "r1", title: "Quarterly planning" });
     api.testModel.mockResolvedValue(OK_RESULT);
-    open();
+    await open();
 
     await userEvent.click(screen.getByRole("tab", { name: /Tags/ }));
     await screen.findByText("Quarterly planning");
@@ -453,7 +474,7 @@ describe("ModelEditorDrawer", () => {
         hasActions: false, hasAudio: true, calendarEventId: null,
       },
     ]);
-    open();
+    await open();
 
     await userEvent.click(screen.getByRole("tab", { name: /Tags/ }));
     await userEvent.click(screen.getByRole("button", { name: /choose a recording/i }));
@@ -465,7 +486,7 @@ describe("ModelEditorDrawer", () => {
   it("does not send a recording for a sample-transcript group", async () => {
     api.getTestRecording.mockResolvedValue({ recordingId: "r1", title: "Quarterly planning" });
     api.testModel.mockResolvedValue(OK_RESULT);
-    open();
+    await open();
 
     await userEvent.click(screen.getByRole("tab", { name: /Chat/ }));
     await userEvent.click(screen.getByRole("button", { name: /run test/i }));
@@ -479,7 +500,7 @@ describe("ModelEditorDrawer", () => {
   it("opens with the connection panel already expanded", async () => {
     // The endpoint and context window are what an admin most often opens the drawer to check; hiding them
     // behind a disclosure made the first action on every visit the same click.
-    open();
+    await open();
 
     expect((screen.getByLabelText(/endpoint/i) as HTMLInputElement).value).toBe("http://a/v1");
   });
