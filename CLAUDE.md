@@ -188,10 +188,14 @@ fix (green). Exceptions (throwaway spikes, generated code, pure config) need a h
 Keep test output pristine — a passing run has no errors or warnings.
 
 **The web suite enforces that, and you cannot check it locally on Windows.** `src/test-setup.ts` hooks
-`console.error` and **fails any test that lets a React state update escape `act(...)`**, naming the source
-line that updated. A test that provokes an error on purpose declares it with `expectsConsoleError(/.../)`
-from the same file rather than spying on `console.error` - a spy would take the console away from that
-guard for the length of the test.
+`console.error` and **fails any test that breaks the `act(...)` contract**, naming the source line. It
+catches both of React's messages, which are the same defect wearing different clothes: *not wrapped in
+act* (an update with no scope around it) and *not configured to support act* (a scope running while the
+act environment is off, which is what awaiting a testing-library query **inside** an `act` scope does -
+resolve the element first, then act on it). The second is intermittent, so it hid behind the first for a
+release. A test that provokes an error on purpose declares it with `expectsConsoleError(/.../)` from the
+same file rather than spying on `console.error` - a spy would take the console away from that guard for
+the length of the test.
 
 The catch: **`vitest` prints nothing a test logs to `console.log`/`console.error` on the Windows dev box**
 (all three pools, even a config-free scratch project - see issue #667). A clean local run is therefore not

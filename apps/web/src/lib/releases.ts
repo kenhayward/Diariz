@@ -65,6 +65,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.259.10",
+    date: "2026-08-28",
+    pr: 670,
+    headline: "Close the last gap in the test suite's silence",
+    summary:
+      "The last line of noise from the web test suite, and the one the previous release's guard could not catch. A passing run occasionally printed `The current testing environment is not configured to support act(...)` from one chat test - about one run in six, always the same test.\n\nIt is a different fault from the 143 warnings fixed in 0.259.9, which is why the guard added there passed over it: those were updates escaping an `act(...)` scope, this was a scope finishing with the act environment switched off underneath it. The cause was a testing-library query awaited *inside* `act`. Those queries turn the act environment off while they poll, so nesting one leaves the scope to close against a different environment than it opened with - and only sometimes, depending on whether the query had to poll at all.\n\nThe five places doing that now resolve the element first and act on it second, through one shared helper that carries the explanation. The guard has been widened to this second message as well, so neither form can return.\n\nNothing about how Diariz behaves has changed - this is test-suite work only.",
+    fixed: [
+      "A chat test intermittently logged **The current testing environment is not configured to support act(...)** on an otherwise passing run. Five places awaited a testing-library query inside an `act(...)` scope, which switches the act environment off while it polls; they now resolve the element first.",
+    ],
+    changed: [
+      "The act guard added in 0.259.9 now catches **both** forms - an update escaping a scope, and a scope running without the environment - so a passing run stays silent either way.",
+    ],
+  },
+  {
     version: "0.259.9",
     date: "2026-08-28",
     pr: 668,

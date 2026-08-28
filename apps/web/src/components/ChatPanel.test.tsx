@@ -106,6 +106,21 @@ const CHAT_MODELS = [
   { id: "b", label: "QWEN 3.8", name: "qwen3.8-27b@q4_k_xl", contextLength: 200000, isDefault: false, supportsImages: true, supportsTools: false, description: null },
 ];
 
+/// Click a button that has to be waited for.
+///
+/// The query is resolved BEFORE the act scope, never inside it. `findBy*` polls through
+/// testing-library's asyncWrapper, which turns `IS_REACT_ACT_ENVIRONMENT` off for the duration of the
+/// wait and back on afterwards. Awaiting one inside `act` therefore lets the scope be entered with the
+/// environment on and finish with it off, which React reports as "The current testing environment is not
+/// configured to support act(...)" - intermittently, depending on whether the query resolved on its first
+/// synchronous check or had to poll.
+async function clickWhenReady(name: RegExp | string) {
+  const button = await screen.findByRole("button", { name });
+  await act(async () => {
+    fireEvent.click(button);
+  });
+}
+
 describe("ChatPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -245,8 +260,8 @@ describe("ChatPanel", () => {
     });
     renderPanelInRoom("/rooms/room-s/recordings/rec-1");
 
-    await act(async () => fireEvent.click(await screen.findByRole("button", { name: /saved conversations/i })));
-    await act(async () => fireEvent.click(await screen.findByRole("button", { name: "Folder chat" })));
+    await clickWhenReady(/saved conversations/i);
+    await clickWhenReady("Folder chat");
 
     await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/rooms/room-s/sections/sec-9"));
   });
@@ -293,7 +308,7 @@ describe("ChatPanel", () => {
     ]);
     renderPanel("/recordings/rec-1");
 
-    await act(async () => fireEvent.click(await screen.findByRole("button", { name: /saved conversations/i })));
+    await clickWhenReady(/saved conversations/i);
     expect(await screen.findByRole("button", { name: "Old Chat" })).toBeTruthy();
 
     fireEvent.mouseDown(document.body); // click outside the dropdown
@@ -338,8 +353,8 @@ describe("ChatPanel", () => {
     });
     renderPanel("/recordings/rec-1"); // start somewhere else
 
-    await act(async () => fireEvent.click(await screen.findByRole("button", { name: /saved conversations/i })));
-    await act(async () => fireEvent.click(await screen.findByRole("button", { name: "Folder Chat" })));
+    await clickWhenReady(/saved conversations/i);
+    await clickWhenReady("Folder Chat");
 
     expect(await screen.findByRole("button", { name: /current folder/i })).toBeTruthy();
     await ask("And the action items?");
