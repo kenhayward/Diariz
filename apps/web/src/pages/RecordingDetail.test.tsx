@@ -104,7 +104,7 @@ vi.mock("../lib/api", () => ({
     listFormulaResults: vi.fn().mockResolvedValue([]),
     listFormulas: vi.fn().mockResolvedValue([]),
     runFormula: vi.fn(),
-    getFormulaResultText: vi.fn(),
+    getFormulaResultText: vi.fn().mockResolvedValue(null),
     updateFormulaResult: vi.fn(),
     deleteFormulaResult: vi.fn(),
     emailFormulaResult: vi.fn(),

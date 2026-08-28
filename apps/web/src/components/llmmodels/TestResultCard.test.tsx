@@ -131,7 +131,10 @@ describe("TestResultCard actions", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /curl/i }));
 
-    await vi.waitFor(() => expect(writeText).toHaveBeenCalled());
+    // The button says "Copied" only once the write has resolved and the card has re-rendered. Waiting for
+    // it (rather than for the mock call) keeps that update inside the test.
+    await screen.findByRole("button", { name: /copied/i });
+    expect(writeText).toHaveBeenCalled();
     const command = writeText.mock.calls[0][0] as string;
     expect(command).toContain("http://llm.test/v1/chat/completions");
     expect(command).toContain('{"model":"m"}');
@@ -145,7 +148,10 @@ describe("TestResultCard actions", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /curl/i }));
 
-    await vi.waitFor(() => expect(writeText).toHaveBeenCalled());
+    // The button says "Copied" only once the write has resolved and the card has re-rendered. Waiting for
+    // it (rather than for the mock call) keeps that update inside the test.
+    await screen.findByRole("button", { name: /copied/i });
+    expect(writeText).toHaveBeenCalled();
     const command = writeText.mock.calls[0][0] as string;
     expect(command).toMatch(/\$LLM_API_KEY/);
     expect(command).not.toMatch(/sk-|Bearer [a-z0-9]{8}/i);
@@ -156,7 +162,10 @@ describe("TestResultCard actions", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /raw json/i }));
 
-    await vi.waitFor(() => expect(writeText).toHaveBeenCalled());
+    // The button says "Copied" only once the write has resolved and the card has re-rendered. Waiting for
+    // it (rather than for the mock call) keeps that update inside the test.
+    await screen.findByRole("button", { name: /copied/i });
+    expect(writeText).toHaveBeenCalled();
     expect(JSON.parse(writeText.mock.calls[0][0] as string).durationMs).toBe(1420);
   });
 

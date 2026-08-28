@@ -69,8 +69,12 @@ const authState = {
 vi.mock("../../auth", () => ({ useAuth: () => authState }));
 vi.mock("../../lib/api", () => ({
   api: {
-    upload: vi.fn(),
+    // Resolves a real recording, as the server would: the attach steps read created.id straight after.
+    upload: vi.fn().mockResolvedValue({ id: "rec-hub" }),
     createNotes: vi.fn(),
+    // The hub tree reads user settings. Left out, the query has no queryFn and react-query logs for
+    // every render; an empty object is what the consumers already fall back to.
+    getUserSettings: vi.fn().mockResolvedValue({}),
     getUserStorage: vi
       .fn()
       .mockResolvedValue({ usedBytes: 1024 ** 3, quotaBytes: 5 * 1024 ** 3, totalTranscriptionMs: 0 }),

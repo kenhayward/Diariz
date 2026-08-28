@@ -16,7 +16,7 @@ vi.mock("../lib/api", () => ({
     updateUserSettings: vi.fn(),
     listChatModels: vi.fn(),
     screenshotThumbUrl: (r: string, sid: string) => `/thumb/${r}/${sid}`,
-    getSection: vi.fn(),
+    getSection: vi.fn().mockResolvedValue(null),
     chatStream: vi.fn(),
     uploadChatAttachment: vi.fn(),
     listChatConversations: vi.fn(),

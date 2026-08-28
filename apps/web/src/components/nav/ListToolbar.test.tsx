@@ -13,7 +13,8 @@ vi.mock("../../lib/api", () => ({
     getUserSettings: vi.fn().mockResolvedValue({ outlookSyncEnabled: false }),
     getCalendarEvents: vi.fn().mockResolvedValue([]),
     listRecordings: vi.fn().mockResolvedValue([]),
-    getUserStorage: vi.fn().mockResolvedValue(undefined),
+    // null, not undefined: react-query rejects an undefined resolution as a failed query and logs it.
+    getUserStorage: vi.fn().mockResolvedValue(null),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }));
@@ -112,7 +113,12 @@ describe("ListToolbar calendar sync", () => {
     const { qc } = renderToolbar({ calendarMode: true, listMode: false });
     const invalidate = vi.spyOn(qc, "invalidateQueries");
 
-    fireEvent.click(await screen.findByRole("button", { name: /sync calendar/i }));
+    // The Outlook path is gated on two answers that arrive asynchronously: the user-settings query and the
+    // shell availability check. The button renders before either lands, so a click that beats them quietly
+    // takes the plain-refresh path and the shell is never asked at all.
+    const syncButton = await screen.findByRole("button", { name: /sync calendar/i });
+    await act(async () => {});
+    fireEvent.click(syncButton);
 
     await waitFor(() =>
       expect(invalidate).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["calendar-events"] })),
@@ -126,7 +132,12 @@ describe("ListToolbar calendar sync", () => {
     const { qc } = renderToolbar({ calendarMode: true, listMode: false });
     const invalidate = vi.spyOn(qc, "invalidateQueries");
 
-    fireEvent.click(await screen.findByRole("button", { name: /sync calendar/i }));
+    // The Outlook path is gated on two answers that arrive asynchronously: the user-settings query and the
+    // shell availability check. The button renders before either lands, so a click that beats them quietly
+    // takes the plain-refresh path and the shell is never asked at all.
+    const syncButton = await screen.findByRole("button", { name: /sync calendar/i });
+    await act(async () => {});
+    fireEvent.click(syncButton);
 
     await waitFor(() =>
       expect(invalidate).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["calendar-events"] })),
@@ -139,13 +150,22 @@ describe("ListToolbar calendar sync", () => {
     const { syncOutlookNow, emit } = fakeShell();
     renderToolbar({ calendarMode: true, listMode: false });
 
-    fireEvent.click(await screen.findByRole("button", { name: /sync selected day/i }));
+    // The Outlook path is gated on two answers that arrive asynchronously: the user-settings query and the
+    // shell availability check. The button renders before either lands, so a click that beats them quietly
+    // takes the plain-refresh path and the shell is never asked at all.
+    const syncButton = await screen.findByRole("button", { name: /sync selected day/i });
+    await act(async () => {});
+    fireEvent.click(syncButton);
 
     await waitFor(() =>
       expect(syncOutlookNow).toHaveBeenCalledWith({ scope: "today", date: undefined }),
     );
     emit("reading");
     emit("idle");
+    // The sync started above is still unwinding: its promise chain sets the status and then clears the
+    // syncing flag. Let those land here rather than after the test has returned. (emit itself is
+    // already act-wrapped in fakeShell, so it needs nothing further.)
+    await act(async () => {});
   });
 
   // The bug this fixes: with a day picked in the calendar, the button used to re-read TODAY and leave the
@@ -155,13 +175,22 @@ describe("ListToolbar calendar sync", () => {
     const { syncOutlookNow, emit } = fakeShell();
     renderToolbar({ calendarMode: true, listMode: false, selectedDay: "2026-08-20" });
 
-    fireEvent.click(await screen.findByRole("button", { name: /sync selected day/i }));
+    // The Outlook path is gated on two answers that arrive asynchronously: the user-settings query and the
+    // shell availability check. The button renders before either lands, so a click that beats them quietly
+    // takes the plain-refresh path and the shell is never asked at all.
+    const syncButton = await screen.findByRole("button", { name: /sync selected day/i });
+    await act(async () => {});
+    fireEvent.click(syncButton);
 
     await waitFor(() =>
       expect(syncOutlookNow).toHaveBeenCalledWith({ scope: "today", date: "2026-08-20" }),
     );
     emit("reading");
     emit("idle");
+    // The sync started above is still unwinding: its promise chain sets the status and then clears the
+    // syncing flag. Let those land here rather than after the test has returned. (emit itself is
+    // already act-wrapped in fakeShell, so it needs nothing further.)
+    await act(async () => {});
   });
 
   // "Refreshing" with no date named was the other half of the problem - the message said "today" whatever
@@ -171,11 +200,20 @@ describe("ListToolbar calendar sync", () => {
     const { emit } = fakeShell();
     renderToolbar({ calendarMode: true, listMode: false, selectedDay: "2026-08-20" });
 
-    fireEvent.click(await screen.findByRole("button", { name: /sync selected day/i }));
+    // The Outlook path is gated on two answers that arrive asynchronously: the user-settings query and the
+    // shell availability check. The button renders before either lands, so a click that beats them quietly
+    // takes the plain-refresh path and the shell is never asked at all.
+    const syncButton = await screen.findByRole("button", { name: /sync selected day/i });
+    await act(async () => {});
+    fireEvent.click(syncButton);
 
     expect(await screen.findByText(/syncing calendar for 20th august 2026 0s/i)).toBeTruthy();
     emit("reading");
     emit("idle");
+    // The sync started above is still unwinding: its promise chain sets the status and then clears the
+    // syncing flag. Let those land here rather than after the test has returned. (emit itself is
+    // already act-wrapped in fakeShell, so it needs nothing further.)
+    await act(async () => {});
   });
 
   // The whole point of the status line: a 30-second sync with no feedback is indistinguishable from a button
@@ -185,7 +223,12 @@ describe("ListToolbar calendar sync", () => {
     const { emit } = fakeShell();
     renderToolbar({ calendarMode: true, listMode: false });
 
-    fireEvent.click(await screen.findByRole("button", { name: /sync calendar/i }));
+    // The Outlook path is gated on two answers that arrive asynchronously: the user-settings query and the
+    // shell availability check. The button renders before either lands, so a click that beats them quietly
+    // takes the plain-refresh path and the shell is never asked at all.
+    const syncButton = await screen.findByRole("button", { name: /sync calendar/i });
+    await act(async () => {});
+    fireEvent.click(syncButton);
 
     expect(await screen.findByText(/syncing calendar 0s/i)).toBeTruthy();
     emit("reading");
@@ -255,7 +298,12 @@ describe("ListToolbar calendar sync", () => {
     fakeShell({ started: false, reason: "new-outlook" });
     renderToolbar({ calendarMode: true, listMode: false });
 
-    fireEvent.click(await screen.findByRole("button", { name: /sync calendar/i }));
+    // The Outlook path is gated on two answers that arrive asynchronously: the user-settings query and the
+    // shell availability check. The button renders before either lands, so a click that beats them quietly
+    // takes the plain-refresh path and the shell is never asked at all.
+    const syncButton = await screen.findByRole("button", { name: /sync calendar/i });
+    await act(async () => {});
+    fireEvent.click(syncButton);
 
     expect(await screen.findByText(/cannot reach Outlook/i)).toBeTruthy();
   });
@@ -265,11 +313,20 @@ describe("ListToolbar calendar sync", () => {
     const { emit } = fakeShell();
     renderToolbar({ calendarMode: true, listMode: false });
 
-    fireEvent.click(await screen.findByRole("button", { name: /sync selected day/i }));
+    // The Outlook path is gated on two answers that arrive asynchronously: the user-settings query and the
+    // shell availability check. The button renders before either lands, so a click that beats them quietly
+    // takes the plain-refresh path and the shell is never asked at all.
+    const syncButton = await screen.findByRole("button", { name: /sync selected day/i });
+    await act(async () => {});
+    fireEvent.click(syncButton);
 
     expect(await screen.findByText(/syncing calendar for .+ 0s/i)).toBeTruthy();
     emit("reading");
     emit("idle");
+    // The sync started above is still unwinding: its promise chain sets the status and then clears the
+    // syncing flag. Let those land here rather than after the test has returned. (emit itself is
+    // already act-wrapped in fakeShell, so it needs nothing further.)
+    await act(async () => {});
   });
 });
 
@@ -305,7 +362,12 @@ describe("ListToolbar refresh button", () => {
     const { qc } = renderToolbar({ calendarMode: true, listMode: false });
     const invalidate = vi.spyOn(qc, "invalidateQueries");
 
-    fireEvent.click(await screen.findByRole("button", { name: /sync calendar/i }));
+    // The Outlook path is gated on two answers that arrive asynchronously: the user-settings query and the
+    // shell availability check. The button renders before either lands, so a click that beats them quietly
+    // takes the plain-refresh path and the shell is never asked at all.
+    const syncButton = await screen.findByRole("button", { name: /sync calendar/i });
+    await act(async () => {});
+    fireEvent.click(syncButton);
 
     await waitFor(() =>
       expect(invalidate).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["calendar-events"] })),
