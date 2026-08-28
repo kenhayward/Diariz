@@ -63,10 +63,26 @@ API persists `Segment`s + seeds `Speaker` rows → notifies the browser over **S
   (SpeechBrain `spkrec-ecapa-voxceleb`, 192-d) in the callback's `Speakers: [{Speaker, Embedding}]`
   (gated by `ENABLE_SPEAKER_EMBEDDINGS`; `pipeline._speaker_embeddings` pools each speaker's segment audio
   and L2-normalises). `WorkerCallbackController` stores it on `Speaker.Embedding` (`vector(192)`) and
-  **auto-identifies** against the owner's enrolled `SpeakerProfile`s via `ISpeakerIdentifier` (pgvector
-  cosine distance ≤ `Identification:Threshold`) — but never overrides a manually-named speaker.
-  Enrolment/reassignment/erasure live in `SpeakerProfilesController` + `RecordingsController` (the
-  `vector(192)` cosine match is Postgres-only, so it's faked in unit tests and verified in integration).
+  **auto-identifies** via `ISpeakerIdentifier` — but never overrides a manually-named speaker.
+  Enrolment/reassignment/erasure live in `PeopleController` + `RecordingsController` (the `vector(192)`
+  cosine match is Postgres-only, so it's faked in unit tests and verified in integration).
+- **Identification is platform-wide, and so is every voiceprint.** `ISpeakerIdentifier.RankAsync` takes an
+  embedding and nothing else: it scans **every** `Person` with an embedding who has not opted out, with no
+  owner filter, and `PeopleDirectory.RecomputeVoiceprintAsync` averages **every** `VoiceSample` for that
+  person, again with no owner filter. One person is one record and one centroid, however many colleagues
+  contributed to it — which is what makes an erasure request a single deletion.
+  The consequence is load-bearing and easy to miss: **an ordinary user, with no permission at all, changes
+  recognition for the whole platform** whenever they name a speaker on their own transcript or confirm one
+  in Review Voice Matches (both go through `ISpeakerAssignment.AssignAsync`, which enrols a sample and
+  rebuilds the shared centroid). That is deliberate — only someone who was in the meeting can answer
+  who a voice is — but it means any change to enrolment, exclusion or centroid maths is a change to
+  everyone's recognition, not one user's. The counterweights are that automatic matches never enrol, an
+  opted-out person can never be enrolled, and dropping a sample excludes rather than deletes it.
+- **The four identification settings live on `PlatformSettings`**, not config: `IdentificationThreshold`
+  (accept at or below), `IdentificationConfirmBand` (ask up to), `IdentificationMargin` (clear air over the
+  runner-up) and `IdentificationMinSpeechMs`. They replace the compiled `Identification:Threshold`, and the
+  decision is three-way — accept / suggest / ignore, per `IdentificationRules.Decide` — not a single
+  cut-off. `Identification:Enabled` remains a server-level master switch.
 - **Summarisation queue (in-process).** The archetype for all eight in-process streams above:
   `summarization-jobs` (consumer group `summarizers`) is **produced and consumed entirely within the
   API** — `RedisJobQueue.EnqueueSummarizationAsync`
