@@ -74,11 +74,6 @@ describe("no em or en dashes in user-facing text", () => {
     expect(offendingLines(read(path))).toEqual([]);
   });
 
-  /// Release notes and the About-box capabilities table.
-  it("releases.ts", () => {
-    expect(offendingLines(stripComments(read("apps/web/src/lib/releases.ts")))).toEqual([]);
-  });
-
   /// Every source file's strings and JSX text. Comments are stripped first, per the rule.
   it("no source file renders a fancy dash", () => {
     const sources = import.meta.glob("../**/*.{ts,tsx}", { eager: true, query: "?raw", import: "default" }) as Record<

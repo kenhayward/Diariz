@@ -2,7 +2,13 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { renderMarkdown } from "../lib/markdown";
 import { useResizableWidth } from "../lib/useResizableWidth";
-import { RELEASES, TAGLINE, GITHUB_URL, type Release } from "../lib/releases";
+import { TAGLINE, GITHUB_URL } from "../lib/appInfo";
+import { RECENT, type Release } from "../lib/releaseNotes";
+import { ARCHIVE } from "../lib/releaseNotes/archive";
+
+/// The full history, newest first. This page is the one place allowed to import the archive, and it is
+/// behind a lazy route, so the archive lands in this chunk rather than the initial bundle.
+const RELEASES: Release[] = [...RECENT, ...ARCHIVE];
 
 /// Public page (new-tab friendly): a fixed header, a left list of releases, and the selected
 /// release's notes on the right. The two panels scroll independently; the header stays put.

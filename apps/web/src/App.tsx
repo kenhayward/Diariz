@@ -9,12 +9,14 @@ import GoogleCallback from "./pages/GoogleCallback";
 import OAuthConsent from "./pages/OAuthConsent";
 import RequestAccess from "./pages/RequestAccess";
 import Setup from "./pages/Setup";
-import ReleaseNotes from "./pages/ReleaseNotes";
 import Help from "./pages/Help";
 import NotesPopout from "./pages/NotesPopout";
 import RecordingDetail from "./pages/RecordingDetail";
 import SectionDetail from "./pages/SectionDetail";
 import CalendarEventDetail from "./pages/CalendarEventDetail";
+// Lazy-loaded: carries the whole release archive, which is the bulk of the release history and has no
+// business in the initial bundle - almost nobody opens this page, and everybody pays for it otherwise.
+const ReleaseNotes = lazy(() => import("./pages/ReleaseNotes"));
 // Lazy-loaded: the Scalar API reference is a large bundle, only needed on /developers/api.
 const ApiReference = lazy(() => import("./pages/ApiReference"));
 // Lazy-loaded: a Platform-Administrator-only page, no reason to ship it in the main bundle.
@@ -63,7 +65,14 @@ export default function App() {
       <Route path="/oauth/consent" element={<OAuthConsent />} />
       <Route path="/request-access" element={<RequestAccess />} />
       <Route path="/setup" element={<Setup />} />
-      <Route path="/release-notes" element={<ReleaseNotes />} />
+      <Route
+        path="/release-notes"
+        element={
+          <Suspense fallback={null}>
+            <ReleaseNotes />
+          </Suspense>
+        }
+      />
       {/* Public, like the release notes: help is useful before signing in, and the contextual `?`
           popovers deep link into it from anywhere. */}
       <Route path="/help" element={<Help />} />

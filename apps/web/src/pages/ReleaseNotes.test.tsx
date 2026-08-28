@@ -1,7 +1,10 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
 import ReleaseNotes from "./ReleaseNotes";
-import { RELEASES } from "../lib/releases";
+import { RECENT } from "../lib/releaseNotes";
+import { ARCHIVE } from "../lib/releaseNotes/archive";
+
+const RELEASES = [...RECENT, ...ARCHIVE];
 
 describe("ReleaseNotes", () => {
   it("renders the fixed header, lists releases, and shows the newest by default", () => {

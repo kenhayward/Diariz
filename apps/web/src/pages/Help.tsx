@@ -5,7 +5,7 @@ import { renderMarkdown } from "../lib/markdown";
 import { useResizableWidth } from "../lib/useResizableWidth";
 import { HELP_INDEX, articleBody, articleTree, findArticle } from "../lib/help/content";
 import { searchArticles } from "../lib/help/search";
-import { TAGLINE } from "../lib/releases";
+import { TAGLINE } from "../lib/appInfo";
 
 /// Public, new-tab-friendly help browser: a fixed header, a searchable article tree on the left, and the
 /// selected article on the right. Deliberately the same shape as `/release-notes` so the two long-form
