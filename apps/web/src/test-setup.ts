@@ -58,12 +58,17 @@ export function expectsConsoleError(pattern: RegExp): void {
   expectedErrors.push(pattern);
 }
 
-const ACT_WARNING = "not wrapped in act";
+// React reports a broken act contract two different ways, and both are the same class of defect:
+//   - "not wrapped in act" - a state update happened with no act scope around it;
+//   - "not configured to support act" - act ran while IS_REACT_ACT_ENVIRONMENT was false, which is what
+//     awaiting a testing-library query *inside* an act scope does (the query turns the environment off
+//     while it polls). That one is intermittent, so it hid behind the first for a release.
+const ACT_MESSAGES = ["not wrapped in act", "not configured to support act"];
 const escapedActUpdates: string[] = [];
 const passThroughError = console.error;
 
 console.error = (...args: unknown[]) => {
-  if (typeof args[0] === "string" && args[0].includes(ACT_WARNING)) {
+  if (typeof args[0] === "string" && ACT_MESSAGES.some((m) => (args[0] as string).includes(m))) {
     const origin = (new Error().stack || "")
       .split("\n")
       .map((line) => line.trim())
@@ -84,7 +89,7 @@ afterEach(() => {
   if (escapedActUpdates.length === 0) return;
   const escaped = escapedActUpdates.splice(0, escapedActUpdates.length);
   throw new Error(
-    `${escaped.length} React state update(s) escaped act(...):\n  ${escaped.join("\n  ")}\n\n` +
-      "Wrap whatever triggered the update in act(), or await the work before the test ends.",
+    `${escaped.length} act(...) violation(s):\n  ${escaped.join("\n  ")}\n\n` +
+      "Wrap whatever triggered the update in act(), await the work before the test ends, or - if a testing-library query is being awaited inside an act scope - resolve it before the scope.",
   );
 });
