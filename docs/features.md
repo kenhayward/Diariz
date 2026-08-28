@@ -307,7 +307,12 @@ Taking a segment out drops it from the list, and accepting then trains from **on
 carried as spans on the enrolled sample and re-embedded by the worker, the same mechanism the Voiceprint
 tab's span selection uses, rather than a second way of saying the same thing. Excluding nothing sends no
 spans at all, which means the whole speaker and queues no re-embed, because that is what almost every accept
-wants. Exclusions are held **per voice** for the sitting: one voice's marks never reach another's voiceprint, and
+wants. The removals are **provisional until the voice is confirmed** - nothing is written while the reviewer is
+choosing, and declining or closing the window discards them - which is why every control that removes one
+now names the voiceprint rather than the list. Saying only "take this segment out" left a reader to conclude
+the control tidied the screen, which is what happened.
+
+Exclusions are held **per voice** for the sitting: one voice's marks never reach another's voiceprint, and
 switching away and back leaves them as they were. Those are two requirements rather than one, and the first
 implementation conflated them - it got the isolation by discarding the marks on every switch, which live use
 found within a day. Nothing is written until the voice itself is confirmed, which is also the only thing that

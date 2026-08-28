@@ -65,6 +65,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.259.7",
+    date: "2026-08-28",
+    pr: 663,
+    headline: "Say that removing a segment shapes the voiceprint",
+    summary:
+      "Taking a segment out in Review Voice Matches decides what the voiceprint learns from - the segments you leave in are the audio Diariz measures the voice from. Nothing on the panel said so. The control said **Take this segment out**, out of what unstated; the count said **1 segment excluded**, excluded from what unstated; and the paragraph at the top said confirming teaches the voiceprint without mentioning segments at all, so it read as though the whole recording was used whatever you did.\n\nA user asked outright whether removing segments did anything to voiceprints, having concluded from the panel that it did not. It does.\n\nThe wording now names the consequence wherever the choice is made, and says the other half too: **nothing is written while you are choosing.** Removals take effect only when you confirm the voice, and declining or closing the window discards them.",
+    fixed: [
+      "Nothing in **Review Voice Matches** said that taking a segment out changes what the voiceprint is trained from. The control now reads **Not them - leave this segment out of the voiceprint**, the count reads **1 segment left out of the voiceprint**, and the introduction says confirming teaches the voiceprint **from the segments you leave in** - and that nothing is saved until you answer.",
+    ],
+  },
+  {
     version: "0.259.6",
     date: "2026-08-28",
     pr: 660,

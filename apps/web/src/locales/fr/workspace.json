@@ -735,7 +735,7 @@
   "suggestionNo": "Non",
   "suggestionFailed": "Impossible d'enregistrer cette réponse.",
   "suggestionsTitle": "Verifier les correspondances vocales",
-  "suggestionsIntro": "Diariz a reconnu ces voix sans etre assez sur pour les nommer. Choisissez-en une pour entendre ce qui a ete dit, puis confirmez ou refusez. Confirmer entraine l'empreinte vocale ; un refus est memorise, la meme voix n'est plus proposee.",
+  "suggestionsIntro": "Diariz a reconnu ces voix sans etre assez sur pour les nommer. Choisissez-en une pour entendre ce qui a ete dit, puis confirmez ou refusez. Confirmer nomme la personne et entraine l'empreinte vocale sur les passages que vous laissez ; un refus est memorise, la meme voix n'est plus proposee. Rien n'est enregistre tant que vous n'avez pas repondu.",
   "suggestionsNone": "Rien à confirmer.",
   "suggestionsFailed": "Impossible de charger la liste.",
   "suggestionEvidence": "Extraits",
@@ -744,11 +744,11 @@
   "suggestionNoWords": "Aucune parole enregistree pour cette voix.",
   "suggestionConfirmVoice": "Confirmer cette voix",
   "suggestionRejectVoice": "Pas cette personne",
-  "suggestionSegmentNoHint": "Retirer ce passage",
+  "suggestionSegmentNoHint": "Pas cette personne - exclure ce passage de l'empreinte vocale",
   "suggestionPlayAll": "Tout lire",
   "suggestionStopAll": "Tout arreter",
-  "suggestionExcludedCount_one": "{{count}} passage retire",
-  "suggestionExcludedCount_other": "{{count}} passages retires",
+  "suggestionExcludedCount_one": "{{count}} passage exclu de l'empreinte vocale",
+  "suggestionExcludedCount_other": "{{count}} passages exclus de l'empreinte vocale",
   "suggestionRestoreExcluded": "Restaurer",
   "suggestionTrainsFrom": "Confirmer entraine sur {{kept}} passages sur {{total}}"
 }

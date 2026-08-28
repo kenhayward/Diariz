@@ -82,7 +82,7 @@ async function ready(name = /Ada Lovelace/) {
 const seg = (text: string) => evidence().getByText(text).closest("li") as HTMLElement;
 /// Take one segment out of the list. There is no opposite: a segment is in unless it is removed.
 const remove = (text: string) =>
-  userEvent.click(within(seg(text)).getByRole("button", { name: /take this segment out/i }));
+  userEvent.click(within(seg(text)).getByRole("button", { name: /voiceprint/i }));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -302,7 +302,7 @@ describe("VoicesToConfirmModal", () => {
     await ready();
 
     const row = within(seg("Two"));
-    expect(row.getByRole("button", { name: /take this segment out/i })).toBeTruthy();
+    expect(row.getByRole("button", { name: /voiceprint/i })).toBeTruthy();
     expect(row.queryByRole("button", { name: /^Yes$/ })).toBeNull();
   });
 
@@ -408,9 +408,44 @@ describe("VoicesToConfirmModal", () => {
         (el.getAttribute("aria-label") ?? "").toLowerCase().includes(label.toLowerCase()),
       );
 
-    expect(at("take this segment out")).toBe(at("Play") + 1);
+    expect(at("voiceprint")).toBe(at("Play") + 1);
     // The words still come first, so the three controls sit together at the end of the row.
     expect(parts.findIndex((el) => el.textContent === "One")).toBeLessThan(at("Play"));
+  });
+
+  // ---- Saying what a removal actually does ----
+  //
+  // Taking a segment out shapes a biometric: the segments left in are sent as spans on confirm and the
+  // worker re-embeds from exactly those. A user asked outright whether it did anything to voiceprints,
+  // having concluded from the panel that it did not - every control around it described the list rather
+  // than the consequence.
+
+  it("says on the control itself that a removed segment is left out of the voiceprint", async () => {
+    setup();
+    await ready();
+
+    const control = within(seg("Two")).getByRole("button", { name: /voiceprint/i });
+
+    expect(control.getAttribute("title")).toMatch(/voiceprint/i);
+  });
+
+  it("says what the removed segments are excluded from", async () => {
+    setup();
+    await ready();
+
+    await remove("Two");
+
+    // Not a bare "1 segment excluded", which never said excluded from what.
+    expect(evidence().getByText(/1 segment .*voiceprint/i)).toBeTruthy();
+  });
+
+  it("tells you up front that confirming trains from the segments you leave in", async () => {
+    // The intro said "Confirming teaches the voiceprint" and nothing about segments, so it read as though
+    // the whole recording was used whatever you did to the list.
+    setup();
+    await ready();
+
+    expect(screen.getByText(/segments you leave in/i)).toBeTruthy();
   });
 
   // ---- Playing the whole voice through ----

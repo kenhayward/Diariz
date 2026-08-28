@@ -735,7 +735,7 @@
   "suggestionNo": "Nein",
   "suggestionFailed": "Diese Antwort konnte nicht gespeichert werden.",
   "suggestionsTitle": "Stimmzuordnungen pruefen",
-  "suggestionsIntro": "Diariz hat diese Stimmen erkannt, war sich aber nicht sicher genug, um sie zu benennen. Waehlen Sie eine aus, um zu hoeren, was gesagt wurde, und bestaetigen oder lehnen Sie ab. Bestaetigen schult den Stimmabdruck; eine Ablehnung wird gemerkt, dieselbe Stimme wird nicht erneut vorgeschlagen.",
+  "suggestionsIntro": "Diariz hat diese Stimmen erkannt, war sich aber nicht sicher genug, um sie zu benennen. Waehlen Sie eine aus, um zu hoeren, was gesagt wurde, und bestaetigen oder lehnen Sie ab. Bestaetigen benennt die Sprecherin oder den Sprecher und schult den Stimmabdruck mit den Abschnitten, die Sie stehen lassen; eine Ablehnung wird gemerkt, dieselbe Stimme wird nicht erneut vorgeschlagen. Bis Sie antworten, wird nichts gespeichert.",
   "suggestionsNone": "Nichts zu bestätigen.",
   "suggestionsFailed": "Die Liste konnte nicht geladen werden.",
   "suggestionEvidence": "Belege",
@@ -744,11 +744,11 @@
   "suggestionNoWords": "Fuer diese Stimme sind keine Woerter aufgezeichnet.",
   "suggestionConfirmVoice": "Diese Stimme bestaetigen",
   "suggestionRejectVoice": "Nicht diese Person",
-  "suggestionSegmentNoHint": "Diesen Abschnitt entfernen",
+  "suggestionSegmentNoHint": "Nicht sie - diesen Abschnitt nicht in den Stimmabdruck aufnehmen",
   "suggestionPlayAll": "Alle abspielen",
   "suggestionStopAll": "Alle stoppen",
-  "suggestionExcludedCount_one": "{{count}} Abschnitt entfernt",
-  "suggestionExcludedCount_other": "{{count}} Abschnitte entfernt",
+  "suggestionExcludedCount_one": "{{count}} Abschnitt nicht im Stimmabdruck",
+  "suggestionExcludedCount_other": "{{count}} Abschnitte nicht im Stimmabdruck",
   "suggestionRestoreExcluded": "Wiederherstellen",
   "suggestionTrainsFrom": "Bestaetigen schult mit {{kept}} von {{total}} Abschnitten"
 }
