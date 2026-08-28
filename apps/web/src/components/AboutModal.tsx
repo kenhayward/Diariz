@@ -72,22 +72,22 @@ export default function AboutModal({ onClose }: { onClose: () => void }) {
         {/* Disclaimers */}
         <div className="mt-4 border-t pt-3 text-xs leading-relaxed text-gray-500 dark:border-gray-700 dark:text-gray-400">
           <p>
-            Diariz is built on open-source software — including ASP.NET Core, React, react-i18next,
+            Diariz is built on open-source software - including ASP.NET Core, React, react-i18next,
             @sentry/react, WhisperX, pyannote.audio, SpeechBrain, mediabunny, PostgreSQL/pgvector, Redis, MinIO/S3, MailKit/MimeKit,
             PdfPig, Open XML SDK, Markdig, Ical.Net, SkiaSharp, TipTap/ProseMirror, marked, DOMPurify, OpenIddict, and
-            the Model Context Protocol C# SDK — each under its own licence.
+            the Model Context Protocol C# SDK - each under its own licence.
           </p>
           <p className="mt-2">
             Speaker diarization uses the <strong>gated</strong> pyannote models
             (<code>speaker-diarization-3.1</code>, <code>segmentation-3.0</code>): they are
-            <strong> MIT-licensed</strong> but gated — you must accept the model terms on Hugging Face and
+            <strong> MIT-licensed</strong> but gated - you must accept the model terms on Hugging Face and
             supply an access token (<code>HF_TOKEN</code>).
           </p>
           <p className="mt-2">
-            Speaker identification stores <strong>voiceprints</strong> (SpeechBrain ECAPA embeddings) —
+            Speaker identification stores <strong>voiceprints</strong> (SpeechBrain ECAPA embeddings) -
             biometric data. Only enrol people with their consent, and use “delete person” to erase a
             voiceprint when required. The ECAPA model is Apache-2.0 but trained on <strong>VoxCeleb</strong>,
-            which is published for <strong>research / non-commercial</strong> use — review those terms before
+            which is published for <strong>research / non-commercial</strong> use - review those terms before
             any commercial deployment.
           </p>
           <p className="mt-2">

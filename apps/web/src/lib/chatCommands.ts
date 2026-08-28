@@ -72,7 +72,7 @@ export function buildToolsOutput(
 
 /// Markdown for "/help": the available slash commands.
 export function buildHelpOutput(commands: { command: string; description: string }[], heading: string): string {
-  return `**${heading}**\n\n` + commands.map((c) => `- \`${c.command}\` — ${c.description}`).join("\n");
+  return `**${heading}**\n\n` + commands.map((c) => `- \`${c.command}\` - ${c.description}`).join("\n");
 }
 
 /// A simple "**heading**\n\n- item\n- item" Markdown block (used by "/context").
