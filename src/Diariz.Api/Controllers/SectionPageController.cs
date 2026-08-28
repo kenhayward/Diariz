@@ -106,8 +106,10 @@ public class SectionPageController : ControllerBase
     [EndpointDescription(
         "Every action item from every recording in the folder **and its sub-folders**, newest meeting first, " +
         "each carrying the recording it came from so you can link back. Read-only aggregation - create, edit, " +
-        "and complete them through the per-recording and Actions endpoints.")]
-    public async Task<ActionResult<IReadOnlyList<ActionListItemDto>>> Actions(Guid id)
+        "and complete them through the per-recording and Actions endpoints.\n\n" +
+        "Pass `pinned=true` for only the pinned actions, which is what the folder's Actions tab shows; omit " +
+        "it for every action in the folder.")]
+    public async Task<ActionResult<IReadOnlyList<ActionListItemDto>>> Actions(Guid id, [FromQuery] bool? pinned = null)
     {
         var section = await _rooms.ViewableSectionAsync(UserId, id);
         if (section is null) return NotFound();
@@ -118,6 +120,8 @@ public class SectionPageController : ControllerBase
             join r in _db.Recordings on a.RecordingId equals r.Id
             join p in _db.RoomRecordings on r.Id equals p.RecordingId
             where p.RoomId == roomId && p.SectionId.HasValue && allIds.Contains(p.SectionId.Value)
+                  // Opt-in filter, same contract as GET /api/actions: omitted means every action.
+                  && (!pinned.HasValue || a.Pinned == pinned.Value)
             orderby r.CreatedAt descending, a.Ordinal
             select new ActionListItemDto(
                 a.Id, a.RecordingId, r.Name ?? r.Title, a.Text, a.Actor, a.Deadline,
