@@ -55,9 +55,13 @@ answering one moves you straight on to the next.
 
 **You can also take single segments out.** Sometimes a single speaker is not a single person: two people
 share a microphone, or they talk over each other, and the software puts it all under one label. Press the
-cross on a segment and it leaves the list; what remains is what the voiceprint is trained from, so a stretch
-that is somebody else is genuinely kept out rather than just hidden from you. **Restore** puts back anything
-you removed by mistake.
+cross on a segment and it leaves the list.
+
+**That is not just tidying the list - it decides what the voiceprint learns from.** Whatever is still there
+when you confirm is the audio Diariz measures the voice from, so a stretch that is somebody else is genuinely
+kept out. Nothing is written while you are choosing: taking segments out changes nothing until you press
+**Confirm this voice**, and if you decline or close the window your choices are discarded. **Restore** puts
+back anything you removed by mistake.
 
 There is no tick to go with it, because there would be nothing for it to do: a segment counts unless you
 take it out. Instead the panel tells you what confirming will train from - **Confirming trains from 28 of 30

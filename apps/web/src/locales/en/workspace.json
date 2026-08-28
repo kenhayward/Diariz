@@ -735,7 +735,7 @@
   "suggestionNo": "No",
   "suggestionFailed": "Could not save that answer.",
   "suggestionsTitle": "Review Voice Matches",
-  "suggestionsIntro": "Diariz recognised these voices but was not confident enough to name them. Pick one to hear what they said, then confirm or decline. Confirming teaches the voiceprint; declining is remembered, so the same voice is not offered again.",
+  "suggestionsIntro": "Diariz recognised these voices but was not confident enough to name them. Pick one to hear what they said, then confirm or decline. Confirming names the speaker and teaches the voiceprint from the segments you leave in; declining is remembered, so the same voice is not offered again. Nothing is saved until you answer.",
   "suggestionsNone": "Nothing waiting to be confirmed.",
   "suggestionsFailed": "Could not load the list.",
   "suggestionEvidence": "Evidence",
@@ -744,11 +744,11 @@
   "suggestionNoWords": "No words recorded for this voice.",
   "suggestionConfirmVoice": "Confirm this voice",
   "suggestionRejectVoice": "Not this person",
-  "suggestionSegmentNoHint": "Take this segment out",
+  "suggestionSegmentNoHint": "Not them - leave this segment out of the voiceprint",
   "suggestionPlayAll": "Play all",
   "suggestionStopAll": "Stop all",
-  "suggestionExcludedCount_one": "{{count}} segment excluded",
-  "suggestionExcludedCount_other": "{{count}} segments excluded",
+  "suggestionExcludedCount_one": "{{count}} segment left out of the voiceprint",
+  "suggestionExcludedCount_other": "{{count}} segments left out of the voiceprint",
   "suggestionRestoreExcluded": "Restore",
   "suggestionTrainsFrom": "Confirming trains from {{kept}} of {{total}} segments"
 }
