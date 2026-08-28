@@ -98,4 +98,31 @@ public class ActionsController : ControllerBase
         await _db.SaveChangesAsync();
         return NoContent();
     }
+
+    /// <summary>Pin the given actions into the cross-meeting Actions views (or unpin them). Ids the caller
+    /// doesn't own are silently ignored - deliberately identical to <see cref="Complete"/>, since both set
+    /// state that governs how an action appears outside its own recording.</summary>
+    [HttpPost("pin")]
+    [EndpointSummary("Pin or unpin action items")]
+    [EndpointDescription(
+        "Pins several actions at once so they appear in the cross-meeting Actions views, or unpins them with " +
+        "`pinned: false`. An action is always visible on its own recording's page - pinning is what promotes " +
+        "it into the Actions tab and the folder Actions tab, which show pinned items only.\n\n" +
+        "Ids that are not yours are silently skipped rather than failing the call, so a mixed selection still " +
+        "works; an empty list succeeds without doing anything.")]
+    public async Task<IActionResult> Pin(PinActionsRequest req)
+    {
+        var ids = req.Ids?.ToHashSet() ?? new HashSet<Guid>();
+        if (ids.Count == 0) return NoContent();
+
+        var owned = await (
+            from a in _db.RecordingActions
+            join r in _db.Recordings on a.RecordingId equals r.Id
+            where ids.Contains(a.Id) && r.UserId == UserId
+            select a).ToListAsync();
+
+        foreach (var a in owned) a.Pinned = req.Pinned;
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
 }

@@ -145,6 +145,53 @@ public class ActionsControllerTests
     }
 
     [Fact]
+    public async Task Pin_SetsAndClearsTheFlag()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var rec = AddRecording(db, me, "Standup");
+        var action = new RecordingAction { Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Book the room", Ordinal = 0 };
+        db.RecordingActions.Add(action);
+        await db.SaveChangesAsync();
+
+        await Build(db, me).Pin(new PinActionsRequest(new[] { action.Id }, true));
+        Assert.True((await db.RecordingActions.FindAsync(action.Id))!.Pinned);
+
+        await Build(db, me).Pin(new PinActionsRequest(new[] { action.Id }, false));
+        Assert.False((await db.RecordingActions.FindAsync(action.Id))!.Pinned);
+    }
+
+    [Fact]
+    public async Task Pin_IgnoresActionsBelongingToAnotherUser()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var mine = AddRecording(db, me, "Standup");
+        var theirs = AddRecording(db, Guid.NewGuid(), "Their meeting");
+        var ours = new RecordingAction { Id = Guid.NewGuid(), RecordingId = mine.Id, Text = "Mine", Ordinal = 0 };
+        var hers = new RecordingAction { Id = Guid.NewGuid(), RecordingId = theirs.Id, Text = "Not mine", Ordinal = 0 };
+        db.RecordingActions.AddRange(ours, hers);
+        await db.SaveChangesAsync();
+
+        // A mixed selection still works: the owned id is pinned, the other silently skipped rather than 403.
+        await Build(db, me).Pin(new PinActionsRequest(new[] { ours.Id, hers.Id }, true));
+
+        Assert.True((await db.RecordingActions.FindAsync(ours.Id))!.Pinned);
+        Assert.False((await db.RecordingActions.FindAsync(hers.Id))!.Pinned);
+    }
+
+    [Fact]
+    public async Task Pin_WithEmptyIdList_SucceedsWithoutDoingAnything()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+
+        var result = await Build(db, me).Pin(new PinActionsRequest(Array.Empty<Guid>(), true));
+
+        Assert.IsType<NoContentResult>(result);
+    }
+
+    [Fact]
     public async Task Complete_False_ClearsCompletedAt()
     {
         using var db = TestDb.Create();
