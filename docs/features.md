@@ -118,6 +118,18 @@ stays separate. Your notes then **shape the meeting minutes** (every section wei
 and a template can include an **Enhanced notes** section where each line is expanded from the transcript — your
 words kept verbatim in bold beside the expansion, with links to the exact transcript moments (anything the meeting
 never covered is kept and marked "not discussed", never silently dropped).
+- **Spelling and editing on right-click (desktop app).** Text boxes in the desktop app underline
+misspelled words the way a browser does, and right-clicking one now opens the corrections: pick a
+suggestion and it replaces the word, or choose **Add to dictionary** for a name or piece of jargon that is
+spelled correctly but unknown, which stops it being flagged from then on. The word goes into the
+machine's own dictionary on both Windows and macOS, so it is remembered across restarts and other apps
+learn it too.
+The same menu carries **Cut**, **Copy**, **Paste** and **Select all** for editable text, greyed out
+individually when they would do nothing, and **Copy** alone when you right-click a selection you cannot
+edit, such as a passage of transcript. On Windows this is the only cut/copy/paste in the app, which runs
+without a menu bar; macOS also has them on its **Edit** menu. It covers the main window, the popped-out
+notes window and the first-run connect window.
+
 - **Meeting screenshots (desktop app).** Capture the screen while a recording is running, from a
 **configurable global hotkey**, the **tray menu**, or a button in the app itself. The first capture of each
 meeting opens a picker overlay so you choose **a whole monitor or a dragged rectangle**; every later capture

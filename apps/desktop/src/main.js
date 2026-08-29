@@ -29,6 +29,7 @@ const { cropRectFor, resizeDims, clampRect, sourceForDisplay } = require("./capt
 const { reconcilePool } = require("./pickerPool");
 const { RENDERER_INVALIDATING_EVENTS } = require("./rendererReadiness");
 const { notesWindowBounds } = require("./notesWindowState");
+const { contextMenuItems } = require("./contextMenu");
 const {
   SYNC_DEFAULTS,
   windowForScope,
@@ -85,6 +86,42 @@ let pendingVerifier = null;
 /// The origin the web app is loaded from (dev server, or the configured server).
 function targetUrl() {
   return DEV_URL || store.get("serverUrl") || null;
+}
+
+// ---- Right-click context menu ----
+
+/// Give a window the right-click menu Electron does not ship: spelling suggestions for the word under
+/// the cursor, "Add to dictionary", and the edit roles. Chromium's spellchecker is on by default (hence
+/// the red underlines), but its context menu belongs to Chrome's browser UI rather than the content
+/// layer Electron embeds, so without this a right-click on an underlined word does nothing at all
+/// (issue #678). On Windows this is also the only cut/copy/paste in the app, which runs menu-less.
+///
+/// `contextMenuItems` decides the shape; this only maps its descriptors onto Electron calls. An empty
+/// array means pop nothing - see that module for why.
+function attachContextMenu(win) {
+  win.webContents.on("context-menu", (_e, params) => {
+    const items = contextMenuItems(params);
+    if (items.length === 0) return;
+
+    const template = items.map((item) => {
+      switch (item.action) {
+        case "replace-misspelling":
+          return { label: item.label, click: () => win.webContents.replaceMisspelling(item.replacement) };
+        case "add-to-dictionary":
+          return {
+            label: item.label,
+            click: () => win.webContents.session.addWordToSpellCheckerDictionary(item.word),
+          };
+        default:
+          return item;
+      }
+    });
+
+    // The window may have gone between the right-click and this popup (a reload, a close-to-tray)
+    // - popup() on a destroyed window throws.
+    if (win.isDestroyed()) return;
+    Menu.buildFromTemplate(template).popup({ window: win });
+  });
 }
 
 // ---- Main window (loads the web app from the server origin) ----
@@ -182,6 +219,8 @@ function createMainWindow(url) {
       shell.openExternal(target);
     }
   });
+
+  attachContextMenu(mainWindow);
 
   // Close to tray/menu bar rather than quitting (this is a tray-resident app).
   mainWindow.on("close", (e) => {
@@ -287,6 +326,8 @@ function showNotesPopout() {
     }
   });
 
+  attachContextMenu(notesWindow);
+
   // Bounds are tracked in memory as the window is dragged and resized, then written once when it has
   // gone. Writing the store on every drag frame would be pure churn, and writing it from "close" turned
   // out not to be reliable when the renderer closes itself - "closed" always arrives (it is what drives
@@ -339,6 +380,7 @@ function showSetupWindow() {
     },
   });
   setupWindow.setMenuBarVisibility(false);
+  attachContextMenu(setupWindow);
   setupWindow.loadFile(path.join(__dirname, "setup.html"));
   setupWindow.on("closed", () => {
     setupWindow = null;
