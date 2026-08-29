@@ -9,6 +9,21 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.262.0",
+    date: "2026-08-29",
+    pr: 679,
+    headline: "Right-click a misspelled word in the desktop app and fix it",
+    summary:
+      "The desktop app has always underlined misspelled words in red, the way a browser does. Right-clicking one did nothing at all, so the underline told you something was wrong and then left you to work out what.\n\nRight-click now opens a menu with the spelling suggestions, and picking one replaces the word. If the word is right and Diariz simply does not know it - a name, a piece of jargon - **Add to dictionary** teaches it and the underline goes away for good.\n\nThe same menu carries **Cut**, **Copy**, **Paste** and **Select all**, which on Windows the desktop app did not offer anywhere before, and **Copy** on its own when you right-click text you have selected but cannot edit, such as a transcript.\n\nThis is a desktop app change, so it arrives with the next installer rather than the next time you refresh.",
+    added: [
+      "A **right-click menu** in the desktop app: spelling suggestions for the word under the cursor, and **Add to dictionary** for words Diariz does not know.",
+      "**Cut**, **Copy**, **Paste** and **Select all** on right-click in any text box, and **Copy** on selected text you cannot edit. On Windows these were not available anywhere in the app before.",
+    ],
+    fixed: [
+      "Right-clicking a word underlined as misspelled did nothing. The underlines came from the browser engine the desktop app is built on, but its menu of corrections is part of a browser's own window furniture, which the app does not include - so the suggestions existed and had nowhere to appear.",
+    ],
+  },
+  {
     version: "0.261.0",
     date: "2026-08-28",
     pr: 677,
