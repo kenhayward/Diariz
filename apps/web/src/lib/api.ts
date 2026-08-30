@@ -24,6 +24,7 @@ import type {
   CalendarLink,
   IcsFeed,
   IcsFeedInput,
+  LiveRecording,
   OutlookSource,
   OutlookSourceInput,
   OutlookSyncRequest,
@@ -394,6 +395,64 @@ export const api = {
     if (times.endedAt) form.append("endedAt", new Date(times.endedAt).toISOString());
     const { data } = await http.post<RecordingSummary>("/api/recordings", form);
     return data;
+  },
+
+  // ---- live capture ----
+  //
+  // The recording exists server-side from the moment Record is pressed and grows as chunks arrive,
+  // so a closed lid or a crashed tab costs at most the last chunk rather than the whole meeting.
+  // See docs/Streaming_Capture_and_Live_Transcript.md.
+
+  /// Create the recording before any audio exists. `sessionId` identifies this device; every chunk
+  /// must present it, so a second device is refused rather than interleaving its audio.
+  async beginLive(req: {
+    title: string;
+    source: RecordingSource;
+    sessionId: string;
+    expectedDurationMs: number;
+    sectionId?: string | null;
+    roomId?: string | null;
+    startedAt?: number;
+  }): Promise<LiveRecording> {
+    const { data } = await http.post<LiveRecording>("/api/recordings/live", {
+      title: req.title,
+      source: req.source,
+      sessionId: req.sessionId,
+      expectedDurationMs: Math.round(req.expectedDurationMs),
+      sectionId: req.sectionId ?? null,
+      roomId: req.roomId ?? null,
+      startedAt: req.startedAt ? new Date(req.startedAt).toISOString() : null,
+    });
+    return data;
+  },
+
+  /// Send one chunk. Idempotent on (recording, sequence): re-sending replaces rather than duplicates,
+  /// so a chunk whose upload failed is simply retried.
+  async putChunk(
+    recordingId: string,
+    sequence: number,
+    blob: Blob,
+    sessionId: string,
+    startMs: number,
+    endMs: number,
+  ): Promise<void> {
+    const form = new FormData();
+    form.append("chunk", blob, `${String(sequence).padStart(5, "0")}.webm`);
+    form.append("sessionId", sessionId);
+    form.append("startMs", String(Math.round(startMs)));
+    form.append("endMs", String(Math.round(endMs)));
+    await http.put(`/api/recordings/${recordingId}/chunks/${sequence}`, form);
+  },
+
+  /// Stop capturing and concatenate. Throws on 409 with the missing sequences when a chunk never
+  /// arrived - retry those and call again rather than accepting a recording with holes in it.
+  async finalizeLive(recordingId: string): Promise<void> {
+    await http.post(`/api/recordings/${recordingId}/live/finalize`);
+  },
+
+  /// Abandon a live capture and discard whatever arrived.
+  async discardLive(recordingId: string): Promise<void> {
+    await http.delete(`/api/recordings/${recordingId}/live`);
   },
 
   /// Upload an existing audio file for transcription (the "Upload" button). The worker backfills the
