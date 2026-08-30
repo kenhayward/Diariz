@@ -546,6 +546,18 @@ public class RecordingsController : ControllerBase
 
         var existing = await _db.RecordingChunks
             .FirstOrDefaultAsync(c => c.RecordingId == id && c.Sequence == sequence);
+
+        // Quota is enforced per chunk, not only at begin. The begin check is a pre-flight estimate
+        // against a duration the client declares, so without this a capture could run past the
+        // owner's quota indefinitely - and several captures started at once can each pass their own
+        // estimate while collectively exceeding it. Checked before anything is written, so a refused
+        // chunk leaves no blob and no row.
+        var quota = await _db.Users.Where(u => u.Id == UserId).Select(u => u.QuotaBytes).FirstOrDefaultAsync();
+        var used = await _db.Recordings.Where(r => r.UserId == UserId).SumAsync(r => r.SizeBytes);
+        if (used - (existing?.SizeBytes ?? 0) + chunk.Length > quota)
+            return StatusCode(413,
+                "Storage quota exceeded. Delete some recordings or ask an administrator to raise your quota.");
+
         var blobKey = $"{UserId}/{id}/chunks/{sequence:D5}.webm";
 
         // Blob first, row second, and the order is load-bearing. A crash between the two leaves an

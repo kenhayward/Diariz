@@ -58,4 +58,13 @@ internal static class LiveTestSupport
             ControllerContext = Http.Context(userId),
         };
     }
+
+    /// <summary>The worker merge callback, wired to the same fakes as the controller under test.</summary>
+    public static WorkerMergeCallbackController MergeCallback(
+        DiarizDbContext db, FakeAudioStorage storage, FakeJobQueue queue, string secret = "s3cret") =>
+        new(db, new FakeHubContext(), storage, queue,
+            Options.Create(new WorkerOptions { CallbackSecret = secret }))
+        {
+            ControllerContext = Http.Context(Guid.NewGuid(), ("X-Worker-Secret", secret)),
+        };
 }
