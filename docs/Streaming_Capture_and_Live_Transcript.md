@@ -591,24 +591,34 @@ bullet and the About-box `CAPABILITIES` row in lockstep. PR 1 and PR 2 both touc
 
 ## 16. Appendix - measurement method
 
-Reproducible without any production data.
+The harness is checked in at **`tools/transcription-bench/`** with its own README; what follows is
+the method and the caveats that belong with the numbers in §3. Reproducible without any production
+data.
 
 **Test audio.** A synthetic two-speaker "meeting" generated with Windows TTS (two English voices,
-varied speaking rate, invented content), rendered to 16 kHz mono 16-bit WAV, then sliced with Python's
-stdlib `wave` module into a contiguous ladder of 5, 10, 15, 20, 30, 45, 60, 90, 120, 180 and 240 s
-clips from a common 2 s offset. Only the length varies across the ladder.
+varied speaking rate, invented content) by `make-audio.ps1`, rendered to 16 kHz mono 16-bit WAV, then
+sliced by `slice.py` with Python's stdlib `wave` module into a contiguous ladder of 5, 10, 15, 20, 30,
+45, 60, 90, 120, 180 and 240 s clips from a common 2 s offset. Only the length varies across the ladder.
+Benchmark material is synthesised rather than sampled precisely so it can never be production audio.
 
 **Two harnesses:**
 
-- *In-container, per-stage.* Replicates `pipeline.transcribe()` stage by stage with a timer around each
-  call, run inside the worker image with the models warm. Must apply `rocm_env.clean_gfx_override()` and
+- *In-container, per-stage* (`chunk_floor.py`, driven by `run-local.ps1`). Replicates
+  `pipeline.transcribe()` stage by stage with a timer around each call, run inside the worker image with
+  the models warm. Must apply `rocm_env.clean_gfx_override()` and
   `torch_compat.restore_legacy_torch_load()` before importing `pipeline` - `worker.py` does this and a
   script that imports `pipeline` directly does not, so the pyannote VAD checkpoint fails to load on
-  torch >= 2.6 without it.
-- *Via the REST API, end-to-end.* Uploads each clip, polls until transcribed, and reads
+  torch >= 2.6 without it. Touches no queue and writes nothing back.
+- *Via the REST API, end-to-end* (`api_floor.py`). Uploads each clip, polls until transcribed, and reads
   `RecordingDetailDto.Current.ProcessingMs` (note: the field is `current`, not `transcription`). Needs
   only a `dz_api_` token, so it works against any instance without shell access. It reports queue wait
   separately from processing time so contention is visible rather than silently inflating results.
+
+**Supporting tools.** `speakers.py` confirms diarization actually ran on both boxes rather than being
+silently skipped - without which a cross-box timing comparison is meaningless, since diarization is
+75-80% of the cost. `validate.py` produced §3.2 and is the only tool in the set that reads production
+data; it emits counts, ratios and percentiles only. `cleanup.py` removes whatever an interrupted run
+left behind.
 
 **Hygiene.** Benchmark recordings are titled `floor-bench <n>s`. Cleanup matches on `Recording.Title`,
 never `Name` - the summariser overwrites `Name` and would defeat a name-based filter, while `Title` is
@@ -623,3 +633,9 @@ afterwards and the instance was verified back to its prior count.
   audio is cheaper, not dearer.
 - Each API-route upload also triggers the owner's summary/actions/tags jobs, so a re-run spends LLM
   calls. Use the in-container harness where that matters.
+- **A straight-line fit is not always valid.** Both harnesses fit `total = floor + slope * seconds`,
+  which holds only where the curve has no regime change. The 4070 ladder steps at 20 s, and fitting
+  one line across that step returns a *negative* intercept - an artefact, not a floor. Both tools now
+  say so when the intercept comes out below zero. Prefer a measured row over the fit generally: the
+  fit is least accurate mid-ladder, which is exactly where the live chunk sizes are (it predicts 2.1 s
+  for a 30 s clip on the 5090 against 2.67 s measured).

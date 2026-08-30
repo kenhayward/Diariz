@@ -30,3 +30,9 @@ deploy/postgres-init/*.sql text eol=lf
 # snapshot change is the thing you are actually inspecting.
 src/Diariz.Domain/Migrations/*.Designer.cs linguist-generated=true
 src/Diariz.Domain/Migrations/DiarizDbContextModelSnapshot.cs linguist-generated=true
+
+# tools/transcription-bench/chunk_floor.py is bind-mounted into the Linux worker container and
+# run there. Python 3 reads CRLF source fine, so nothing breaks today - this is the same
+# precaution as the shell scripts above: keep what a Windows clone mounts byte-identical to what
+# a Linux host mounts, so a future shebang or `sh -c` wrapper does not fail only on a fresh clone.
+tools/transcription-bench/*.py text eol=lf
