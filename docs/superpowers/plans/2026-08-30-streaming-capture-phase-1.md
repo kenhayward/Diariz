@@ -4,13 +4,15 @@
 
 **Goal:** A recording exists server-side from the moment Record is pressed and grows as the meeting runs, instead of arriving in one multipart POST at Stop. No live transcript in this phase - the canonical blob is assembled at Stop and the existing transcription pipeline runs on it, unchanged.
 
-**Architecture:** One additive entity (`RecordingChunk`) and one appended `RecordingStatus`. Three new endpoints begin, extend and finalise a live recording; chunks land in MinIO as they arrive. Finalise reuses the existing `audio-merge-jobs` stream and the Python worker's `handle_merge` to concatenate them, distinguished from a recordings-merge by a new `Kind` field echoed through the callback. A background reaper finalises sessions whose client vanished. The web recorder gains two pure modules (a boundary chooser and a durable upload queue) and keeps its existing single `MediaRecorder`.
+**Architecture:** One additive entity (`RecordingChunk`) and one appended `RecordingStatus`. Three new endpoints begin, extend and finalise a live recording; chunks land in MinIO as they arrive. Finalise reuses the existing `audio-merge-jobs` stream and the Python worker's `handle_merge`, distinguished from a recordings-merge by a new `Kind` field - which the worker uses to byte-join the fragments before handing ffmpeg a single input, because the existing concat command cannot open a headerless fragment (spec §5.1 findings). A background reaper finalises sessions whose client vanished. The web recorder gains three pure modules (a boundary chooser, a durable upload queue, and a framing probe) and keeps its existing single `MediaRecorder`.
 
 **Tech Stack:** ASP.NET Core 10 + EF Core (Npgsql), xUnit + Testcontainers, Python 3.10 + pytest, React 19 + TypeScript + Vite, vitest + @testing-library/react, i18next.
 
 **Spec:** [docs/Streaming_Capture_and_Live_Transcript.md](../../Streaming_Capture_and_Live_Transcript.md) - this plan implements **PR 1 of §15** plus the **S0 spike of §5.1**.
 
-**Out of scope, deliberately.** PR 2-4 (live transcript, cross-chunk speaker identity, chat over the live transcript) get their own plans. They are not planned here because Task 1 can still change D1, which changes what a chunk *is* - and because §15 makes PR 1 independently shippable. Planning three dependent PRs against an unresolved spike would be writing fiction.
+**Out of scope, deliberately.** PR 2-4 (live transcript, cross-chunk speaker identity, chat over the live transcript) get their own plans, written once PR 1 has landed and its shape is real rather than predicted. §15 makes PR 1 independently shippable, so nothing here waits on them.
+
+**Task 1 is complete.** The S0 spike ran on 2026-08-30 and adopted option A, with two amendments already folded into Tasks 5 and 11. Its findings are in spec §5.1. Start at Task 2.
 
 ## Global Constraints
 
@@ -45,6 +47,10 @@ cd src/Diariz.Worker && python -m pytest tests/test_worker.py -k merge
 
 ### Task 1: S0 spike - does fragment concatenation survive a round trip?
 
+> **DONE 2026-08-30.** Verdict: **option A adopted**, with two amendments - Task 5 gains a worker-side
+> byte-join (the existing concat command cannot open raw fragments), and Task 11 gains a runtime framing
+> probe (Firefox and Safari could not be tested). Full findings in spec §5.1.
+
 **Spike, not TDD.** Produces no production code and no test. It produces a findings section appended to the spec, and a decision. **Get a human's sign-off before starting and before recording the verdict.**
 
 The question, from spec §5.1: `MediaRecorder.start(timeslice)` emits fragments where only the first carries the EBML header and Opus codec-private data. Two things must hold for **option A** (which keeps the canonical audio byte-identical to today):
@@ -55,11 +61,11 @@ The question, from spec §5.1: `MediaRecorder.start(timeslice)` emits fragments 
 **Files:**
 - Create: `tools/streaming-spike/` (scratch; **deleted in Task 2**, not shipped)
 
-- [ ] **Step 1: Build the capture page**
+- [x] **Step 1: Build the capture page**
 
 A single self-contained HTML page that records ~60 s from the microphone twice over: once with `recorder.start()` (today's behaviour, one blob) and once with `recorder.start(20000)`, keeping every fragment separately. Download all of it.
 
-- [ ] **Step 2: Compare, per browser**
+- [x] **Step 2: Compare, per browser**
 
 For each of Chrome, Firefox and the Electron shell (`cd apps/desktop && npm run dev`), and Safari if a Mac is to hand:
 
@@ -79,7 +85,7 @@ ffmpeg -v error -i concatenated.webm -f s16le -ar 16000 -ac 1 - | sha256sum
 
 Record: duration, decoded sample count, and whether the hashes match. Then repeat for `fragment[0] + fragment[2..n]` (expect a shorter but clean decode, no errors on stderr).
 
-- [ ] **Step 3: Record the verdict in the spec**
+- [x] **Step 3: Record the verdict in the spec**
 
 Append a `### 5.1 findings` subsection to `docs/Streaming_Capture_and_Live_Transcript.md` with a per-browser table and the decision. Then:
 
@@ -88,7 +94,7 @@ Append a `### 5.1 findings` subsection to `docs/Streaming_Capture_and_Live_Trans
 
 Everything downstream of this task is identical either way; only what the browser hands the queue in Task 11 changes.
 
-- [ ] **Step 4: Commit the findings, delete the spike**
+- [x] **Step 4: Commit the findings, delete the spike**
 
 ```bash
 git add docs/Streaming_Capture_and_Live_Transcript.md && git commit -m "docs: record the S0 chunk-framing spike findings"
@@ -237,19 +243,28 @@ Change the upsert to an unconditional `Add`, watch `PutChunk_Twice_IsIdempotent`
 
 ### Task 5: `POST /api/recordings/{id}/live/finalize` - concatenate and transcribe
 
-This is the task with a cross-boundary contract change. Read spec §6.1 first.
+This is the task with a cross-boundary contract change. Read spec §6.1 **and the §5.1 findings** first.
+
+> **Amended after the S0 spike.** The original plan said the worker needed no change beyond echoing a
+> `Kind` field. That is wrong: `build_concat_command` opens each input independently and dies on the
+> second fragment with *"EBML header parsing failed"*, because only fragment 0 carries the header. The
+> worker must **byte-join the chunk blobs into one file, then pass that single file** to the existing
+> command. Verified in the spike - the output decodes to 12.00 s and `probe_duration_ms` returns a
+> proper duration, so nothing downstream changes.
 
 **Files:**
 - Modify: `src/Diariz.Api/Controllers/RecordingsController.cs`
 - Modify: `src/Diariz.Api/Contracts/WorkerContracts.cs` (`AudioMergeJob`, `AudioMergeResult`)
 - Modify: `src/Diariz.Api/Controllers/WorkerMergeCallbackController.cs`
-- Modify: `src/Diariz.Worker/worker.py` (`handle_merge` echoes `Kind`)
+- Modify: `src/Diariz.Worker/audio_merge.py` (new `join_then_concat`)
+- Modify: `src/Diariz.Worker/worker.py` (`handle_merge` branches on `Kind`, echoes it back)
 - Modify: `src/Diariz.Worker/callback.py` (`post_merge_result` carries `Kind`)
 - Test: `tests/Diariz.Api.Tests/LiveRecordingControllerTests.cs`, `tests/Diariz.Api.Tests/WorkerMergeCallbackTests.cs`
-- Test: `src/Diariz.Worker/tests/test_worker.py`
+- Test: `src/Diariz.Worker/tests/test_audio_merge.py`, `src/Diariz.Worker/tests/test_worker.py`
 
 **Interfaces:**
-- Changes: `AudioMergeJob` and `AudioMergeResult` each gain a trailing `string Kind = "recordings"`. `"live-chunks"` selects the new callback branch.
+- Changes: `AudioMergeJob` and `AudioMergeResult` each gain a trailing `string Kind = "recordings"`. `"live-chunks"` selects the byte-join path in the worker **and** the new callback branch in the API.
+- Produces: `audio_merge.join_then_concat(paths) -> (output_path, duration_ms, size_bytes)` - byte-joins in order to a temp file, then delegates to the existing `concat([joined])`. Pure enough to unit-test the joining separately from ffmpeg.
 
 - [ ] **Step 1: Write the failing API tests**
 
@@ -266,9 +281,23 @@ This is the task with a cross-boundary contract change. Read spec §6.1 first.
 
 That second test is the one that stops this task breaking `RecordingsController.Merge`, which has been in production since long before this feature.
 
-- [ ] **Step 3: Write the failing worker test**
+- [ ] **Step 3: Write the failing worker tests**
 
-`test_handle_merge_echoes_kind` in `src/Diariz.Worker/tests/test_worker.py`. The worker does not interpret `Kind`; it echoes it. Keeping the routing decision in the API means the worker stays a dumb concatenator.
+In `src/Diariz.Worker/tests/test_audio_merge.py`:
+
+- `test_join_then_concat_byte_joins_in_order` - the joined temp file is the inputs concatenated in the
+  order given, byte for byte. Assert on bytes, not on a duration: the whole point is that the fragments
+  are not individually parseable, so anything that opens them to check has already failed.
+- `test_join_then_concat_passes_one_input_to_ffmpeg` - patch `build_concat_command` and assert it was
+  called with a **single** path. This is the regression guard for the exact mistake the spike caught, so
+  mutation-verify it by passing the raw list through and watching it fail.
+
+In `src/Diariz.Worker/tests/test_worker.py`:
+
+- `test_handle_merge_live_chunks_uses_join_then_concat`
+- `test_handle_merge_recordings_still_uses_concat` - the existing path, unchanged.
+- `test_handle_merge_echoes_kind` - the worker branches on `Kind` for the join, but does not otherwise
+  interpret it; the callback carries it straight back so the API decides what happens next.
 
 - [ ] **Step 4: Watch all three fail, then implement**
 
@@ -425,13 +454,29 @@ Reuse `SILENCE_LEVEL` / `nextSilenceMs` from `audioLevel.ts` rather than inventi
 
 That fallback is the single most important test in this task, and the one most likely to be skipped because it is the unhappy path.
 
-- [ ] **Step 2: Watch them fail, then implement**
+- [ ] **Step 2: Add the framing probe (required by the S0 findings)**
 
-What the browser hands the queue depends on Task 1's verdict: `start(timeslice)` fragments (option A) or a stop/restart cycle per chunk (option B, the `createServerEngine` pattern). Nothing else in this plan changes between them.
+S0 verified option A on Chromium 148 and Electron 43 only. Firefox and Safari were unavailable, and
+neither shares the tested muxer, so the recorder **must not assume A holds**. Write the failing test
+first, in a new pure module `apps/web/src/lib/chunkFraming.ts`:
+
+- `probeFraming(recordFn, decodeFn)` records two short fragments, byte-joins them, attempts a decode,
+  and resolves `"fragments"` or `"restart"`.
+- A decode failure resolves `"restart"`, not a rejection - an unknown browser degrades to the option B
+  path, it does not lose the recording.
+- The result is cached per session; the probe costs about a second and must not run per chunk.
+
+Mutation-verify by making the decode always throw and asserting the recorder still records, via option B.
+
+- [ ] **Step 3: Watch the component tests fail, then implement**
+
+What the browser hands the queue is whatever the probe decided: `start(timeslice)` fragments, or a
+stop/restart cycle per chunk (option B, the `createServerEngine` pattern in `dictationEngine.ts`).
+Nothing else in this plan changes between them - which is what makes the probe cheap to add.
 
 Keep `chunksRef` for the fallback path only. Once streaming is working it no longer accumulates the whole meeting, which is the ~170 MB-per-three-hours problem from spec §2.
 
-- [ ] **Step 3: Green, run the suite on Linux, commit**
+- [ ] **Step 4: Green, run the suite on Linux, commit**
 
 ---
 
