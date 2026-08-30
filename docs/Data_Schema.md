@@ -20,6 +20,8 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 - **Migrations** live in `src/Diariz.Domain/Migrations`. The API **auto-applies migrations on startup**
   (`Program.cs`) and seeds the default user, roles, the `PlatformSettings` singleton, and ensures the MinIO
   bucket — you do not run `database update` by hand for normal dev.
+  For why that folder is 225,000 lines and the one condition under which squashing it is worth doing,
+  see [`EF_Migrations_Size_Review.md`](EF_Migrations_Size_Review.md).
 - **pgvector is Postgres-only.** The `vector` extension and the `vector(n)` columns are mapped **only when
   `Database.IsNpgsql()`**; under the EF in-memory provider (unit tests) those properties are `Ignore`d. Keep
   any new Postgres-only model config behind the same guard.
