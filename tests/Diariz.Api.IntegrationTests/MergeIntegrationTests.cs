@@ -15,7 +15,7 @@ namespace Diariz.Api.IntegrationTests;
 public class MergeIntegrationTests(ContainersFixture fx)
 {
     private static WorkerMergeCallbackController BuildCallback(Diariz.Domain.DiarizDbContext db) =>
-        new(db, new FakeHubContext(), new FakeAudioStorage(),
+        new(db, new FakeHubContext(), new FakeAudioStorage(), new FakeJobQueue(),
             Options.Create(new WorkerOptions { CallbackSecret = "s" }))
         {
             ControllerContext = WithSecret(Http.Context(Guid.NewGuid()), "s"),
