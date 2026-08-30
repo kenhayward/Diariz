@@ -3131,6 +3131,16 @@ diarization and embeddings all on the GPU, at 95-98% GPU utilisation. Indicative
 ~1.3-1.7x realtime for `large-v3`, untuned. Note that Strix Halo is an APU with a *dynamic* unified-memory
 carve-out, so a point-in-time "VRAM %" reading is not a headroom figure — the allocation grows on demand.
 
+**That 1.3-1.7x figure is ROCm-only and must not be used to reason about the CUDA deployment.** It is the
+`openai-whisper` (pure PyTorch, unbatched) backend on an APU. The CUDA path — faster-whisper/CTranslate2,
+`float16`, batch 16 — measured **~49x realtime (median)** on an RTX 5090 across 58 real recordings totalling
+73.5 h, worst observed ~21x; so an hour of audio is roughly **75 seconds** of worker time there, not 37-46
+minutes. Short clips are dominated by a fixed **~1.26 s** per-job floor (a 30 s clip costs ~2.7 s), of which
+**75-80% is pyannote diarization** — ASR is about a quarter, alignment and ECAPA are rounding errors. The
+same measurement found an 8 GB card (RTX 4070 Laptop) unable to sustain realtime at all: 95% VRAM, crossing
+1.0x at ~150 s and settling at 1.06x. Method, full ladder and caveats:
+`docs/Streaming_Capture_and_Live_Transcript.md` §3 and §16.
+
 **Both obvious tuning levers measured as dead ends**, and the noise floor is the reason to be sceptical of
 any further micro-tuning: repeated runs of the same 269 s file span **123-200 s (±25%)**. Against that,
 `HSA_OVERRIDE_GFX_VERSION=11.0.0` was within noise on warm runs and **2.3x slower cold** (MIOpen rebuilding

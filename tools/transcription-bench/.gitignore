@@ -1,0 +1,8 @@
+# Generated benchmark material and output. The audio is synthesised on demand by
+# make-audio.ps1 and sliced by slice.py, so there is nothing to preserve here - and
+# checking in WAVs would put tens of MB of binary into a repo that has no need of it.
+base.wav
+clips/
+clips-*/
+*.json
+*.log
