@@ -185,6 +185,60 @@ sub-second scattered gaps.
 Option B is known to work - it is in production for dictation - so the spike is about whether A's
 better canonical audio is available, not about whether the feature is possible.
 
+#### 5.1 findings (S0, run 2026-08-30)
+
+**Verdict: adopt option A**, with one amendment to §6.1 that the spike turned up (see "the finding that
+changes the design" below).
+
+Method: a 12 s signal synthesised in Web Audio and routed through a `MediaStreamAudioDestinationNode`
+rather than captured from a microphone - no permission prompt, and a deterministic input, so any
+difference in the output is the container's doing. Recorded twice per engine: once with `start()` and
+once with `start(2000)`. Decoded with ffmpeg 9.0.1 to 48 kHz mono `s16le` and measured; the browser's
+own `decodeAudioData` agreed with ffmpeg exactly in every case.
+
+| Artefact | Bytes | ffmpeg decode | Verdict |
+|---|---:|---|---|
+| `single.webm` (today's path) | 192,530 | 11.94 s, clean | baseline |
+| 6 fragments byte-concatenated | 193,441 | **12.00 s, clean** | **A works** |
+| `fragment[0] + fragment[2..5]` | 160,581 | **9.96 s, clean** | **later windows work** |
+| `fragment[1]` alone | 32,860 | *EBML header parsing failed* | as expected |
+
+The last row matters: a bare fragment genuinely does not decode, so the first three rows are not
+passing vacuously.
+
+**Engines tested:** Chromium 148.0.7778.280 and Electron 43.2.0 (the version `apps/desktop` ships).
+Both produced **byte-identical fragment sizes** (32040, 32860, 32860, 32860, 32860, 29961) and
+identical decodes, which is unsurprising given the shared media stack but is now measured rather than
+assumed.
+
+**Not tested: Firefox and Safari.** Neither was available on the machine (no Firefox installed, no Mac).
+This is a real coverage gap, not a pass. Both are Gecko/WebKit rather than Chromium and neither shares
+the tested muxer, so **the recorder must feature-detect at runtime rather than assume A holds
+everywhere**: on first use, byte-concatenate the first two fragments, attempt a decode, and fall back
+to option B for that session if it fails. That check is cheap and removes the need to re-run this spike
+per browser release. Carry it into the implementation as an explicit task.
+
+**The finding that changes the design.** `audio_merge.build_concat_command` **cannot be reused over raw
+fragments.** It uses the concat *filter* with one `-i` per input, so ffmpeg opens every input
+independently and dies on the second one:
+
+```
+[in#1] EBML header parsing failed
+[in#1] Error opening input: Invalid data found when processing input
+```
+
+The fix is small and stays inside the worker: **byte-join the chunk blobs into a single file first, then
+pass that one file** to the existing command. Verified - the re-encoded output decodes to 12.00 s and
+`ffprobe` reports a proper `11.999` duration, so `probe_duration_ms` keeps working unchanged. §6.1's
+"reuse the existing `audio-merge-jobs` path" therefore needs a new worker-side entry point that byte-joins
+before concatenating, not merely a `Kind` flag routed in the API.
+
+Related and worth knowing, though not a problem in itself: `ffprobe` reports `duration=N/A` for a
+*raw* byte-concatenation, because the streaming muxer never writes a Duration element. Nothing in the
+pipeline probes a raw chunk today - `probe_duration_ms` only ever sees the re-encoded output - but any
+future code that probes a chunk directly will get `N/A` rather than an error, which is the kind of thing
+that fails silently.
+
 ### 5.2 D2 - overlap is a property of the decode window, not of the stored chunks
 
 Whisper on a clip that starts or ends mid-sentence produces noise at the seams. The fix is overlapping
