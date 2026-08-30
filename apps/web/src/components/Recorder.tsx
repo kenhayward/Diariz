@@ -37,6 +37,8 @@ import {
   RECENT_SOUND_MS,
 } from "../lib/calendarRecording";
 import { startSilenceWatcher, type SilenceWatcher } from "../lib/silenceWatcher";
+import { startLiveSession, type LiveSession } from "../lib/liveSession";
+import { indexedDbChunkStore } from "../lib/liveChunkQueue";
 import { useCalendarRecordingSettings } from "../lib/calendarRecordingSettings";
 import { useStatus } from "../lib/status";
 import { useElapsedSeconds } from "../lib/elapsedSeconds";
@@ -348,6 +350,21 @@ export default function Recorder({
   // whenever the rule doesn't apply. Owns its own AudioContext so it doesn't depend on the meter being
   // mounted - see silenceWatcher.ts.
   const silenceRef = useRef<SilenceWatcher | null>(null);
+  // The live capture for this take, or null when the server could not be reached at start - in which
+  // case everything below behaves exactly as it did before chunked upload existed.
+  const liveRef = useRef<LiveSession | null>(null);
+  // Routes the MediaRecorder's final ondataavailable to finish() rather than to another chunk.
+  const liveStoppingRef = useRef(false);
+  // How many of chunksRef's fragments the live session has already taken. The tail sent at stop is
+  // only what came after the last chunk boundary.
+  const liveFragmentsSentRef = useRef(0);
+
+  /// Feeds the live session's chunk boundary decision. A no-op until a session exists, so it is safe
+  /// to hand to a watcher armed before the server answered.
+  const feedChunker = useCallback(
+    (level: number, dtMs: number, isPaused: boolean) => liveRef.current?.tick(dtMs, level, isPaused),
+    [],
+  );
   // The in-flight upload of the PREVIOUS take, so a start that replaces a running recording can wait for it.
   // upload() reads pendingRoomRef/pendingSectionRef and the live notes/screenshots AFTER its first await, so
   // starting a new take underneath it would file the finished recording into the new take's folder and steal
@@ -965,7 +982,16 @@ export default function Recorder({
       streamRef.current = session.stream; // exposed so the level meter can tap it while recording
       const recorder = new MediaRecorder(session.stream, { mimeType: "audio/webm" });
       chunksRef.current = [];
-      recorder.ondataavailable = (e) => e.data.size > 0 && chunksRef.current.push(e.data);
+      recorder.ondataavailable = (e) => {
+        if (e.data.size === 0) return;
+        // Always buffer locally: this is what the fallback upload sends, and what the crash stash
+        // holds. Live capture is additive - it never becomes the only copy.
+        chunksRef.current.push(e.data);
+        const live = liveRef.current;
+        if (!live || liveStoppingRef.current) return;
+        liveFragmentsSentRef.current = chunksRef.current.length;
+        void live.offerFragment(e.data, timing.elapsedMs(timingRef.current, Date.now()));
+      };
       recorder.onstop = () => {
         sessionRef.current?.stop();
         sessionRef.current = null;
@@ -980,6 +1006,65 @@ export default function Recorder({
       };
       recorder.start();
       recorderRef.current = recorder;
+      liveRef.current = null;
+      liveStoppingRef.current = false;
+      liveFragmentsSentRef.current = 0;
+
+      // Begin the server-side recording. Deliberately NOT awaited into the start path: the capture is
+      // already running, and making the user wait on a round trip to press Record would be a
+      // regression. If it fails, liveRef stays null and this take behaves exactly as it did before
+      // chunked upload existed - buffered locally, uploaded at stop.
+      const liveSource: RecordingSource =
+        coarse === "both" ? "Combined" : coarse === "system" ? "System" : "Microphone";
+      const liveTitle = calendarEvent?.summary?.trim() || `${t("recTitlePrefixMic")} ${new Date().toLocaleString()}`;
+      void startLiveSession({
+        begin: () =>
+          api.beginLive({
+            title: liveTitle,
+            source: liveSource,
+            sessionId: crypto.randomUUID(),
+            // Only used to charge a provisional quota estimate; the real size is reconciled at
+            // finalise. An hour is a reasonable guess for a meeting nobody has told us about.
+            expectedDurationMs: 60 * 60 * 1000,
+            sectionId: pendingSectionRef.current,
+            roomId: pendingRoomRef.current,
+            startedAt: startedAtRef.current ?? Date.now(),
+          }),
+        upload: (recordingId, sessionId, chunk) =>
+          api.putChunk(recordingId, chunk.sequence, chunk.blob, sessionId, chunk.startMs, chunk.endMs),
+        finalize: (recordingId) => api.finalizeLive(recordingId),
+        requestFragment: () => {
+          try {
+            recorderRef.current?.requestData();
+          } catch {
+            // A recorder that has already stopped. The tail is flushed by stop() anyway.
+          }
+        },
+        store: indexedDbChunkStore,
+        onTrouble: (message) => setNotice(message),
+      }).then((live) => {
+        // A take that was stopped while begin was in flight must not adopt a session nobody will
+        // finish - the reaper would collect it, but the user would see a stray recording first.
+        if (!live) return;
+        if (!recordingRef.current) {
+          // Stopped while begin was in flight. The reaper would collect it eventually, but the user
+          // would see a stray recording first.
+          void api.discardLive(live.recordingId).catch(() => {});
+          return;
+        }
+        liveRef.current = live;
+        // Chunk boundaries need level readings, and only now do we know they are wanted - a take with
+        // no live session must not pay for an analyser it never reads. A calendar take already has a
+        // watcher (armed above, and already feeding this same callback), so reuse it rather than
+        // opening a second AudioContext on the same stream.
+        //
+        // Deliberately this watcher rather than the on-screen meter: the meter runs on rAF, which
+        // stalls in a backgrounded tab, and a chunker that stopped whenever the tab lost focus would
+        // stop for most of a meeting. A 0 threshold observes the room without ever auto-stopping.
+        if (!silenceRef.current) {
+          silenceRef.current = startSilenceWatcher(session.stream, 0, () => stop("silence"), feedChunker);
+        }
+      });
       activeSourceRef.current = coarse;
       // Always assign, so a plain Record-button take can never inherit the last meeting's name - and for the
       // same reason, always clear the meeting's stop target and its extension count.
@@ -1004,6 +1089,7 @@ export default function Recorder({
             session.stream,
             calendarSettingsRef.current.silenceSeconds * 1000,
             () => stop("silence"),
+            feedChunker,
           );
         }
       }
@@ -1098,9 +1184,36 @@ export default function Recorder({
     if (reason) showToast(t(STOP_TOAST[reason]));
   }
 
+  /// Finish a live capture: hand the server the tail and ask it to concatenate. Returns false when
+  /// there was no live session, or when finalising failed - in both cases the caller falls back to
+  /// uploading the whole blob, which it has buffered all along.
+  async function finishLive(): Promise<boolean> {
+    const live = liveRef.current;
+    if (!live) return false;
+    liveRef.current = null;
+    try {
+      const tail = new Blob(chunksRef.current.slice(liveFragmentsSentRef.current), { type: "audio/webm" });
+      await live.finish(timing.elapsedMs(timingRef.current, Date.now()), tail);
+      // Anything still queued means the server does not have the whole recording, so the concatenated
+      // audio would have holes. Fall back rather than ship a damaged take.
+      return (await live.pending()).length === 0;
+    } catch {
+      return false;
+    }
+  }
+
   async function upload() {
     setBusy(true);
     report({ phase: "uploading" });
+    if (await finishLive()) {
+      // The server already has the audio and has queued the transcription. Nothing to upload.
+      if (userId) await clearPendingRecording(userId);
+      chunksRef.current = [];
+      setBusy(false);
+      report({ phase: "idle" });
+      onUploaded?.();
+      return;
+    }
     const blob = new Blob(chunksRef.current, { type: "audio/webm" });
     // Recorded time only (pauses excluded); stop() has already folded the final running segment.
     const durationMs = timing.elapsedMs(timingRef.current, Date.now());

@@ -41,6 +41,15 @@ export function startSilenceWatcher(
   stream: MediaStream,
   thresholdMs: number,
   onSilent: () => void,
+  /// Every level reading, for a caller that needs to know how loud the room is rather than only when
+  /// it has been quiet for long enough. Live capture drives its chunk boundaries off this.
+  ///
+  /// Deliberately hung here rather than off HubLevelMeter: that meter runs on rAF, which stalls in a
+  /// backgrounded tab - and a chunker that stops while the tab is in the background would stop
+  /// chunking for most of a meeting. This loop is a plain interval and keeps running. It also
+  /// reports while paused (with `paused: true`) rather than going silent, so a chunker can tell "no
+  /// audio because paused" from "no audio because quiet".
+  onLevel?: (level: number, dtMs: number, paused: boolean) => void,
 ): SilenceWatcher | null {
   const w = window as unknown as { AudioContext?: AudioContextCtor; webkitAudioContext?: AudioContextCtor };
   const Ctx = w.AudioContext ?? w.webkitAudioContext;
@@ -66,9 +75,15 @@ export function startSilenceWatcher(
   let paused = false;
   let fired = false;
   let timer: number | null = window.setInterval(() => {
-    if (paused || fired) return;
+    if (paused) {
+      onLevel?.(0, TICK_MS, true);
+      return;
+    }
+    if (fired) return;
     analyser.getByteTimeDomainData(time);
-    state = nextSilenceState(state, normalizeLevel(rms(time)), TICK_MS);
+    const level = normalizeLevel(rms(time));
+    onLevel?.(level, TICK_MS, false);
+    state = nextSilenceState(state, level, TICK_MS);
     if (shouldStopForSilence(state, thresholdMs)) {
       fired = true;
       onSilent();
