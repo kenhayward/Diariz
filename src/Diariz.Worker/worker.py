@@ -158,17 +158,24 @@ def handle_merge(job: dict) -> None:
     blob_keys = job["BlobKeys"]
     output_key = job["OutputKey"]
     delete_ids = job.get("DeleteRecordingIds", [])
-    log.info("Merging %d audio files into recording %s", len(blob_keys), recording_id)
+    # "recordings" (the default) merges whole recordings, each independently decodable.
+    # "live-chunks" merges slices of ONE MediaRecorder stream, where only the first carries the WebM
+    # header - those must be byte-joined before ffmpeg sees them or it fails on the second input.
+    # The worker branches only on how to concatenate; what happens afterwards is the API's decision,
+    # so the kind is handed straight back rather than interpreted further.
+    kind = job.get("Kind") or "recordings"
+    log.info("Merging %d audio files into recording %s (kind=%s)", len(blob_keys), recording_id, kind)
 
     sources: list[str] = []
     output_path = None
     try:
         with telemetry.transaction("audio-merge"):
             sources = [storage.download(k) for k in blob_keys]
-            output_path, duration_ms, size_bytes = audio_merge.concat(sources)
+            combine = audio_merge.join_then_concat if kind == "live-chunks" else audio_merge.concat
+            output_path, duration_ms, size_bytes = combine(sources)
             storage.upload(output_key, output_path, audio_merge.OUTPUT_CONTENT_TYPE)
             callback.post_merge_result(recording_id, output_key, audio_merge.OUTPUT_CONTENT_TYPE,
-                                       size_bytes, duration_ms, delete_ids)
+                                       size_bytes, duration_ms, delete_ids, kind)
     except Exception as e:  # noqa: BLE001 - report and continue
         log.exception("Audio merge failed for recording %s", recording_id)
         telemetry.capture_exception(e)

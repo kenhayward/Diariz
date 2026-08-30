@@ -39,8 +39,14 @@ def post_failure(transcription_id: str, error: str) -> None:
 
 
 def post_merge_result(recording_id: str, blob_key: str, content_type: str,
-                      size_bytes: int, duration_ms: int, delete_recording_ids: list[str]) -> None:
-    """Report a finished audio-merge: the combined blob + the source ids the API should now delete."""
+                      size_bytes: int, duration_ms: int, delete_recording_ids: list[str],
+                      kind: str = "recordings") -> None:
+    """Report a finished audio-merge: the combined blob + the source ids the API should now delete.
+
+    `kind` is echoed back from the job unchanged. The API uses it to decide what the merge meant -
+    fold several recordings into one, or finalise a live capture - which keeps that decision on the
+    side that has the database.
+    """
     url = f"{config.API_BASE_URL}/internal/recordings/merge-result"
     body = {
         "RecordingId": recording_id,
@@ -49,6 +55,7 @@ def post_merge_result(recording_id: str, blob_key: str, content_type: str,
         "SizeBytes": size_bytes,
         "DurationMs": duration_ms,
         "DeleteRecordingIds": delete_recording_ids,
+        "Kind": kind,
     }
     resp = requests.post(url, json=body, headers=_HEADERS, timeout=60)
     resp.raise_for_status()

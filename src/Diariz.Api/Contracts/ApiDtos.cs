@@ -339,6 +339,11 @@ public record BeginLiveRecordingRequest(
 /// that lost its own copy can recover it rather than being locked out of its own capture.</summary>
 public record LiveRecordingDto(Guid Id, Guid SessionId, RecordingStatus Status);
 
+/// <summary>Why a finalise was refused: these sequences never arrived, so concatenating now would
+/// silently produce a recording with holes in it. The client still holds them in its own queue, so
+/// naming them is what lets it retry exactly those and finalise again.</summary>
+public record MissingChunksDto(IReadOnlyList<int> MissingSequences);
+
 public record TranscriptionDto(
     Guid Id,
     string Model,

@@ -585,6 +585,57 @@ public class RecordingsController : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("{id:guid}/live/finalize")]
+    [EndpointSummary("Finish a live recording")]
+    [EndpointDescription(
+        "Stops accepting chunks and concatenates them into the recording's audio, after which the " +
+        "normal transcription pipeline runs exactly as it does for an uploaded file. Responds 202; " +
+        "subscribe to the recording or the `recording.transcribed` webhook for the result.\n\n" +
+        "409 with the missing sequence numbers if any chunk never arrived - retry those and call this " +
+        "again, rather than accepting a recording with holes in it. 204 if no chunk ever arrived, in " +
+        "which case the empty recording is discarded.")]
+    public async Task<IActionResult> FinalizeLive(Guid id)
+    {
+        var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
+        if (rec is null) return NotFound();
+
+        // Finalising twice is the normal consequence of a client retrying a request whose response it
+        // never saw, so the second call reports the same success rather than an error.
+        if (rec.Status == RecordingStatus.Merging) return Accepted();
+        if (rec.Status != RecordingStatus.Live)
+            return StatusCode(StatusCodes.Status409Conflict, "This recording is not a live capture.");
+
+        var chunks = await _db.RecordingChunks
+            .Where(c => c.RecordingId == id)
+            .OrderBy(c => c.Sequence)
+            .ToListAsync();
+
+        if (chunks.Count == 0)
+        {
+            // Nothing was ever captured. Leaving the row would show the user an empty recording they
+            // have to tidy up themselves.
+            _db.Recordings.Remove(rec);
+            await _db.SaveChangesAsync();
+            return NoContent();
+        }
+
+        // Every sequence from 0 to the highest received must be present: a hole means a chunk was lost,
+        // and concatenating around it would silently splice unrelated audio together.
+        var received = chunks.Select(c => c.Sequence).ToHashSet();
+        var missing = Enumerable.Range(0, chunks[^1].Sequence + 1).Where(s => !received.Contains(s)).ToList();
+        if (missing.Count > 0)
+            return StatusCode(StatusCodes.Status409Conflict, new MissingChunksDto(missing));
+
+        rec.Status = RecordingStatus.Merging;
+        var outputKey = $"{UserId}/{id}-live-{Guid.NewGuid():N}.webm";
+        await _db.SaveChangesAsync();
+
+        await _queue.EnqueueAudioMergeAsync(new AudioMergeJob(
+            rec.Id, chunks.Select(c => c.BlobKey).ToList(), outputKey, [], Kind: "live-chunks"));
+        await _hub.NotifyStatusAsync(UserId, rec.Id, rec.Status.ToString());
+        return Accepted();
+    }
+
     [HttpPost("{id:guid}/retranscribe")]
     [EndpointSummary("Re-transcribe a recording")]
     [EndpointDescription(
@@ -2283,33 +2334,8 @@ public class RecordingsController : ControllerBase
         return string.IsNullOrEmpty(slug) ? "transcript" : slug;
     }
 
-    private async Task EnqueueTranscriptionAsync(Recording rec, string? model = null)
-    {
-        var nextVersion = await _db.Transcriptions
-            .Where(t => t.RecordingId == rec.Id)
-            .Select(t => (int?)t.Version).MaxAsync() ?? 0;
-
-        var transcription = new Transcription
-        {
-            Id = Guid.NewGuid(),
-            RecordingId = rec.Id,
-            Model = model ?? _defaultModel,
-            Version = nextVersion + 1
-        };
-        _db.Transcriptions.Add(transcription);
-
-        // The spoken language: this recording's own pin, else the owner's default, else auto-detect. The
-        // default is read per job rather than copied onto the recording, so changing the preference applies
-        // to everything that has not overridden it. Mapped to a Whisper code here - the worker hands it
-        // straight to the model, which does not know the platform's regional tags ("pt-BR").
-        var chosenLanguage = rec.TranscriptionLanguage
-            ?? (await _db.UserSettings.FindAsync(rec.UserId))?.TranscriptionLanguage;
-
-        rec.Status = RecordingStatus.Queued;
-        await _queue.EnqueueAsync(new TranscriptionJob(rec.Id, transcription.Id, rec.BlobKey, transcription.Model,
-            rec.MinSpeakers, rec.MaxSpeakers, SupportedLanguages.ToWhisperCode(chosenLanguage)));
-        await _hub.NotifyStatusAsync(rec.UserId, rec.Id, rec.Status.ToString());
-    }
+    private Task EnqueueTranscriptionAsync(Recording rec, string? model = null) =>
+        TranscriptionEnqueue.AddAsync(_db, _queue, _hub, rec, _defaultModel, model);
 
     /// <summary>Projects a speaker plus, when it was identified as someone, that person's details - so the
     /// Speakers panel needs no second call. A "Multiple Speakers" slot is deliberately left bare: it is

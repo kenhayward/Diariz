@@ -18,7 +18,8 @@ public class WorkerMergeCallbackTests
     private static WorkerMergeCallbackController Build(DiarizDbContext db, FakeAudioStorage storage, string? secret = Secret)
     {
         var controller = new WorkerMergeCallbackController(
-            db, new FakeHubContext(), storage, Options.Create(new WorkerOptions { CallbackSecret = Secret }));
+            db, new FakeHubContext(), storage, new FakeJobQueue(),
+            Options.Create(new WorkerOptions { CallbackSecret = Secret }));
         var ctx = Http.Context(Guid.NewGuid());
         if (secret is not null) ctx.HttpContext.Request.Headers["X-Worker-Secret"] = secret;
         controller.ControllerContext = ctx;
