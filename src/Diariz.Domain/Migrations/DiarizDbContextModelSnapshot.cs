@@ -1312,6 +1312,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<string>("Error")
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("LiveSessionId")
+                        .HasColumnType("uuid");
+
                     b.Property<int?>("MaxSpeakers")
                         .HasColumnType("integer");
 

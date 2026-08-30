@@ -321,6 +321,24 @@ public record UpdateMeetingMinutesRequest(string Text);
 /// <summary>Email the meeting minutes to the signed-in user, optionally attaching the recording's files.</summary>
 public record EmailMeetingMinutesRequest(bool IncludeAttachments = false);
 
+/// <summary>Begin a live capture. Mirrors the <c>Upload</c> form fields minus the audio, which arrives
+/// afterwards as chunks. <paramref name="SessionId"/> is client-generated and identifies the capturing
+/// device: a second device gets 409 rather than interleaving its chunks into this recording.
+/// <paramref name="ExpectedDurationMs"/> is only used to charge a provisional quota estimate, which is
+/// reconciled against the real size at finalise.</summary>
+public record BeginLiveRecordingRequest(
+    string? Title,
+    RecordingSource Source,
+    Guid? SectionId,
+    Guid? RoomId,
+    DateTimeOffset? StartedAt,
+    Guid SessionId,
+    long ExpectedDurationMs);
+
+/// <summary>The live recording that was just created. <paramref name="SessionId"/> is echoed so a client
+/// that lost its own copy can recover it rather than being locked out of its own capture.</summary>
+public record LiveRecordingDto(Guid Id, Guid SessionId, RecordingStatus Status);
+
 public record TranscriptionDto(
     Guid Id,
     string Model,

@@ -183,6 +183,8 @@ Drop the `IsUnique()` from the index, watch `DuplicateSequenceForOneRecording_Is
 **Files:**
 - Modify: `src/Diariz.Api/Controllers/RecordingsController.cs`
 - Modify: `src/Diariz.Api/Contracts/ApiDtos.cs`
+- Modify: `src/Diariz.Domain/Entities/Recording.cs` (`LiveSessionId`) + a migration - **not** foreseen when this plan was written; the session id of §9.5 has to live somewhere, and Task 2's migration was already committed
+- Create: `tests/Diariz.Api.Tests/LiveTestSupport.cs` (shared seeding/wiring for Tasks 3-7)
 - Test: `tests/Diariz.Api.Tests/LiveRecordingControllerTests.cs` (new)
 
 **Interfaces:**

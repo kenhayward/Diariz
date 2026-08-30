@@ -450,6 +450,76 @@ public class RecordingsController : ControllerBase
                 null, null, false, rec.HasAudio, StartedAt: rec.StartedAt, EndedAt: rec.EndedAt));
     }
 
+    /// <summary>Bytes per second of captured audio, used only to charge a provisional quota estimate at
+    /// the start of a live capture. A live recording cannot know its size in advance, and the normal
+    /// check runs against a known <c>audio.Length</c>. Measured from the recorder's own WebM/Opus output
+    /// (~193 KB for 12 s, so ~16 KB/s); the estimate is reconciled to the real size at finalise, so an
+    /// error here costs a slightly wrong quota reading mid-meeting and nothing after it.</summary>
+    private const long LiveEstimatedBytesPerSecond = 16_000;
+
+    [HttpPost("live")]
+    [EndpointSummary("Begin a live recording")]
+    [EndpointDescription(
+        "Creates the recording server-side before any audio exists, so a capture is durable while the " +
+        "meeting is still running rather than arriving in one upload at the end. The recording comes " +
+        "back with status `Live`; send the audio as chunks to `PUT /api/recordings/{id}/chunks/{sequence}` " +
+        "and then call `POST /api/recordings/{id}/live/finalize`.\n\n" +
+        "`sessionId` identifies the capturing device and must be presented by every chunk - a second " +
+        "device is refused rather than interleaving its audio into this recording. A capture whose " +
+        "client disappears is finalised automatically from whatever chunks arrived.")]
+    public async Task<ActionResult<LiveRecordingDto>> BeginLive(BeginLiveRecordingRequest req)
+    {
+        // Charge a provisional estimate up front. Without it a user could start any number of live
+        // captures and only discover at finalise that none of them fit.
+        var estimate = Math.Max(0, req.ExpectedDurationMs) / 1000 * LiveEstimatedBytesPerSecond;
+        var quota = await _db.Users.Where(u => u.Id == UserId).Select(u => u.QuotaBytes).FirstOrDefaultAsync();
+        var used = await _db.Recordings.Where(r => r.UserId == UserId).SumAsync(r => r.SizeBytes);
+        if (used + estimate > quota)
+            return StatusCode(413,
+                "Storage quota exceeded. Delete some recordings or ask an administrator to raise your quota.");
+
+        var personalRoomId = await _rooms.PersonalRoomIdAsync(UserId);
+        var intoSharedRoom = req.RoomId is { } rid && rid != personalRoomId;
+        if (intoSharedRoom &&
+            !(await _rooms.PermissionsAsync(UserId, req.RoomId!.Value)).HasFlag(RoomPermission.CreateRecording))
+            return StatusCode(StatusCodes.Status403Forbidden, "You can't add recordings to that room.");
+
+        var rec = new Recording
+        {
+            Id = Guid.NewGuid(),
+            UserId = UserId,
+            Title = string.IsNullOrWhiteSpace(req.Title)
+                ? $"Recording {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm}"
+                : req.Title,
+            Source = req.Source,
+            ContentType = "audio/webm",
+            // No blob and no bytes yet: both are filled in when the chunks are concatenated at finalise.
+            BlobKey = "",
+            SizeBytes = 0,
+            DurationMs = 0,
+            StartedAt = PlausibleCaptureTime(req.StartedAt),
+            Status = RecordingStatus.Live,
+            LiveSessionId = req.SessionId,
+        };
+        _db.Recordings.Add(rec);
+        await _db.SaveChangesAsync();
+
+        var placementSection = intoSharedRoom
+            ? null
+            : req.SectionId is { } sid
+              && await _db.Sections.AnyAsync(s => s.Id == sid && s.RoomId == personalRoomId)
+                ? req.SectionId
+                : null;
+        await _rooms.PlaceInMainRoomAsync(rec.Id, UserId, placementSection);
+        if (intoSharedRoom)
+            await _rooms.ShareIntoRoomAsync(rec.Id, req.RoomId!.Value, UserId, sectionId: null);
+
+        await _hub.NotifyStatusAsync(UserId, rec.Id, rec.Status.ToString());
+
+        return CreatedAtAction(nameof(Get), new { id = rec.Id },
+            new LiveRecordingDto(rec.Id, req.SessionId, rec.Status));
+    }
+
     [HttpPost("{id:guid}/retranscribe")]
     [EndpointSummary("Re-transcribe a recording")]
     [EndpointDescription(

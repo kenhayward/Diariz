@@ -103,6 +103,12 @@ public class Recording
     /// <summary>Optional link to the Google Calendar event this recording belongs to (1:1). Null = unlinked.</summary>
     public RecordingCalendarLink? CalendarLink { get; set; }
 
+    /// <summary>The capturing device's client-generated session id, while <see cref="Status"/> is
+    /// <see cref="RecordingStatus.Live"/>. Chunk uploads must present it, so a second device signed in
+    /// as the same user is refused rather than interleaving its audio into this recording. Null for
+    /// every recording that did not arrive as a live capture.</summary>
+    public Guid? LiveSessionId { get; set; }
+
     /// <summary>Uploaded slices of a capture still in progress. Empty for every finished recording -
     /// they are concatenated into <see cref="BlobKey"/> and deleted at finalise.</summary>
     public ICollection<RecordingChunk> Chunks { get; set; } = new List<RecordingChunk>();
