@@ -648,6 +648,33 @@ public class RecordingsController : ControllerBase
         return Accepted();
     }
 
+    [HttpDelete("{id:guid}/live")]
+    [EndpointSummary("Abandon a live recording")]
+    [EndpointDescription(
+        "Discards a capture in progress and everything uploaded for it. Use it when a recording was " +
+        "begun and then abandoned before any of it was wanted - a take stopped while this call was " +
+        "still in flight, for instance.\n\n" +
+        "409 once finalising has started: at that point the chunks are the concatenation job's input, " +
+        "and removing them would fail the merge rather than tidy anything. A capture simply left alone " +
+        "is collected automatically instead.")]
+    public async Task<IActionResult> DiscardLive(Guid id)
+    {
+        var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
+        if (rec is null) return NotFound();
+        if (rec.Status != RecordingStatus.Live)
+            return StatusCode(StatusCodes.Status409Conflict, "This recording is not a live capture.");
+
+        // The DB cascade clears the chunk rows, but not their blobs - free those first or they are
+        // orphaned in object storage with nothing left pointing at them.
+        var chunks = await _db.RecordingChunks.Where(c => c.RecordingId == id).ToListAsync();
+        foreach (var chunk in chunks)
+            await _storage.DeleteAsync(chunk.BlobKey);
+
+        _db.Recordings.Remove(rec);
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
     [HttpPost("{id:guid}/retranscribe")]
     [EndpointSummary("Re-transcribe a recording")]
     [EndpointDescription(

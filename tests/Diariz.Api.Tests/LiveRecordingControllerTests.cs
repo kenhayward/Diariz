@@ -236,4 +236,61 @@ public class LiveRecordingControllerTests
 
         Assert.IsType<BadRequestObjectResult>(result);
     }
+
+    // ---- DELETE /api/recordings/{id}/live ----
+
+    [Fact]
+    public async Task DiscardLive_RemovesTheRecordingAndItsChunkBlobs()
+    {
+        // Called when a take is stopped while the begin call was still in flight. The reaper would
+        // collect it eventually, but the user would see a stray recording in their list first.
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        await LiveTestSupport.SeedUser(db, me);
+        var storage = new FakeAudioStorage();
+        var controller = LiveTestSupport.Build(db, me, storage: storage);
+        var (id, session) = await BeginAsync(db, me, controller);
+        await controller.PutChunk(id, 0, Chunk(), session, 0, 30_000);
+        var chunkKey = (await db.RecordingChunks.SingleAsync(c => c.RecordingId == id)).BlobKey;
+
+        var result = await controller.DiscardLive(id);
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.False(await db.Recordings.AnyAsync(r => r.Id == id));
+        Assert.False(await db.RecordingChunks.AnyAsync(c => c.RecordingId == id));
+        Assert.False(storage.Objects.ContainsKey(chunkKey), "the chunk blob should be freed, not orphaned");
+    }
+
+    [Fact]
+    public async Task DiscardLive_ForAnotherUsersRecording_Returns404()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var other = Guid.NewGuid();
+        await LiveTestSupport.SeedUser(db, me);
+        await LiveTestSupport.SeedUser(db, other);
+        var (id, _) = await BeginAsync(db, other, LiveTestSupport.Build(db, other));
+
+        Assert.IsType<NotFoundResult>(await LiveTestSupport.Build(db, me).DiscardLive(id));
+        Assert.True(await db.Recordings.AnyAsync(r => r.Id == id));
+    }
+
+    [Fact]
+    public async Task DiscardLive_RefusesARecordingThatIsNoLongerLive()
+    {
+        // Once finalise has started, the chunks are the worker's input. Deleting them from under it
+        // would fail the merge rather than tidy anything.
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        await LiveTestSupport.SeedUser(db, me);
+        var controller = LiveTestSupport.Build(db, me);
+        var (id, _) = await BeginAsync(db, me, controller);
+        (await db.Recordings.SingleAsync(r => r.Id == id)).Status = RecordingStatus.Merging;
+        await db.SaveChangesAsync();
+
+        var result = await controller.DiscardLive(id);
+
+        Assert.Equal(StatusCodes.Status409Conflict, Assert.IsType<ObjectResult>(result).StatusCode);
+        Assert.True(await db.Recordings.AnyAsync(r => r.Id == id));
+    }
 }

@@ -334,6 +334,62 @@
         ],
         "type": "object"
       },
+      "BeginLiveRecordingRequest": {
+        "properties": {
+          "expectedDurationMs": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "roomId": {
+            "format": "uuid",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sectionId": {
+            "format": "uuid",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sessionId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/RecordingSource"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "title",
+          "source",
+          "sectionId",
+          "roomId",
+          "startedAt",
+          "sessionId",
+          "expectedDurationMs"
+        ],
+        "type": "object"
+      },
       "CalendarAttendee": {
         "properties": {
           "displayName": {
@@ -1762,6 +1818,27 @@
         },
         "required": [
           "eventId"
+        ],
+        "type": "object"
+      },
+      "LiveRecordingDto": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "sessionId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RecordingStatus"
+          }
+        },
+        "required": [
+          "id",
+          "sessionId",
+          "status"
         ],
         "type": "object"
       },
@@ -9687,6 +9764,57 @@
         ]
       }
     },
+    "/api/recordings/live": {
+      "post": {
+        "description": "Creates the recording server-side before any audio exists, so a capture is durable while the meeting is still running rather than arriving in one upload at the end. The recording comes back with status `Live`; send the audio as chunks to `PUT /api/recordings/{id}/chunks/{sequence}` and then call `POST /api/recordings/{id}/live/finalize`.\n\n`sessionId` identifies the capturing device and must be presented by every chunk - a second device is refused rather than interleaving its audio into this recording. A capture whose client disappears is finalised automatically from whatever chunks arrived.",
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/BeginLiveRecordingRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BeginLiveRecordingRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BeginLiveRecordingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveRecordingDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveRecordingDto"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveRecordingDto"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Begin a live recording",
+        "tags": [
+          "Recordings"
+        ]
+      }
+    },
     "/api/recordings/merge": {
       "post": {
         "description": "Combines two or more recordings into the **earliest-created** one, which survives; the others are deleted. Their transcripts are concatenated with timestamps laid end to end into a new transcription version on the survivor, and their action items are appended. Use it for a meeting captured in several parts.\n\nRecordings whose audio has been deleted can still be merged - they contribute transcript and actions only. If any source still has audio the response is 202 and an audio-concatenation job stitches the available audio in the background, swapping in the combined blob and removing the other recordings when it finishes; if none has audio the merge completes synchronously.\n\nThe summary and minutes are **not** merged - regenerate them afterwards.",
@@ -10081,6 +10209,122 @@
         ]
       }
     },
+    "/api/recordings/{id}/chunks/{sequence}": {
+      "put": {
+        "description": "Adds a slice of audio to a capture in progress. Chunks are contiguous, non-overlapping and 0-based, and must carry the `sessionId` returned by `POST /api/recordings/live`.\n\n**Idempotent on (recording, sequence)**: re-sending a sequence replaces it rather than adding a second copy, so a chunk whose upload failed can simply be retried. 409 if the recording is no longer live, or if the session id belongs to a different device.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sequence",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "allOf": [
+                  {
+                    "properties": {
+                      "ContentDisposition": {
+                        "type": "string"
+                      },
+                      "ContentType": {
+                        "type": "string"
+                      },
+                      "FileName": {
+                        "type": "string"
+                      },
+                      "Headers": {
+                        "additionalProperties": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "type": "object"
+                      },
+                      "Length": {
+                        "format": "int64",
+                        "pattern": "^-?(?:0|[1-9]\\d*)$",
+                        "type": [
+                          "integer",
+                          "string"
+                        ]
+                      },
+                      "Name": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "sessionId": {
+                        "format": "uuid",
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "startMs": {
+                        "format": "int64",
+                        "pattern": "^-?(?:0|[1-9]\\d*)$",
+                        "type": [
+                          "integer",
+                          "string"
+                        ]
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "endMs": {
+                        "format": "int64",
+                        "pattern": "^-?(?:0|[1-9]\\d*)$",
+                        "type": [
+                          "integer",
+                          "string"
+                        ]
+                      }
+                    },
+                    "type": "object"
+                  }
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Upload one chunk of a live recording",
+        "tags": [
+          "Recordings"
+        ]
+      }
+    },
     "/api/recordings/{id}/email": {
       "post": {
         "description": "Sends the current transcript - the recording name, its summary, and the speaker-labelled segments - to **your own account address**. There is no recipient parameter, by design: this endpoint can only mail you. Labels are rendered in your interface language. Requires an email sender to be configured on the platform.",
@@ -10101,6 +10345,56 @@
           }
         },
         "summary": "Email the transcript to yourself",
+        "tags": [
+          "Recordings"
+        ]
+      }
+    },
+    "/api/recordings/{id}/live": {
+      "delete": {
+        "description": "Discards a capture in progress and everything uploaded for it. Use it when a recording was begun and then abandoned before any of it was wanted - a take stopped while this call was still in flight, for instance.\n\n409 once finalising has started: at that point the chunks are the concatenation job's input, and removing them would fail the merge rather than tidy anything. A capture simply left alone is collected automatically instead.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Abandon a live recording",
+        "tags": [
+          "Recordings"
+        ]
+      }
+    },
+    "/api/recordings/{id}/live/finalize": {
+      "post": {
+        "description": "Stops accepting chunks and concatenates them into the recording's audio, after which the normal transcription pipeline runs exactly as it does for an uploaded file. Responds 202; subscribe to the recording or the `recording.transcribed` webhook for the result.\n\n409 with the missing sequence numbers if any chunk never arrived - retry those and call this again, rather than accepting a recording with holes in it. 204 if no chunk ever arrived, in which case the empty recording is discarded.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Finish a live recording",
         "tags": [
           "Recordings"
         ]
