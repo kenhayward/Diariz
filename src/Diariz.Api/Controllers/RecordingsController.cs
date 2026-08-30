@@ -520,6 +520,71 @@ public class RecordingsController : ControllerBase
             new LiveRecordingDto(rec.Id, req.SessionId, rec.Status));
     }
 
+    [HttpPut("{id:guid}/chunks/{sequence:int}")]
+    [EndpointSummary("Upload one chunk of a live recording")]
+    [EndpointDescription(
+        "Adds a slice of audio to a capture in progress. Chunks are contiguous, non-overlapping and " +
+        "0-based, and must carry the `sessionId` returned by `POST /api/recordings/live`.\n\n" +
+        "**Idempotent on (recording, sequence)**: re-sending a sequence replaces it rather than adding " +
+        "a second copy, so a chunk whose upload failed can simply be retried. 409 if the recording is " +
+        "no longer live, or if the session id belongs to a different device.")]
+    [RequestSizeLimit(UploadOptions.MaxRequestBytes)]
+    public async Task<IActionResult> PutChunk(
+        Guid id, int sequence, [FromForm] IFormFile chunk, [FromForm] Guid sessionId,
+        [FromForm] long startMs, [FromForm] long endMs)
+    {
+        if (chunk is null || chunk.Length == 0) return BadRequest("Empty chunk.");
+        if (sequence < 0) return BadRequest("Sequence must not be negative.");
+
+        var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
+        if (rec is null) return NotFound();
+        if (rec.Status != RecordingStatus.Live)
+            return StatusCode(StatusCodes.Status409Conflict, "This recording is no longer live.");
+        if (rec.LiveSessionId != sessionId)
+            return StatusCode(StatusCodes.Status409Conflict,
+                "This recording is being captured by another device.");
+
+        var existing = await _db.RecordingChunks
+            .FirstOrDefaultAsync(c => c.RecordingId == id && c.Sequence == sequence);
+        var blobKey = $"{UserId}/{id}/chunks/{sequence:D5}.webm";
+
+        // Blob first, row second, and the order is load-bearing. A crash between the two leaves an
+        // orphaned blob that finalise ignores and the reaper collects - recoverable. The reverse leaves
+        // a row pointing at audio that was never stored, which finalise would then fail to concatenate.
+        await using (var stream = chunk.OpenReadStream())
+            await _storage.UploadAsync(blobKey, stream, "audio/webm");
+
+        // The quota charge tracks the bytes actually held, so a replaced chunk swaps its contribution
+        // rather than adding to it.
+        rec.SizeBytes += chunk.Length - (existing?.SizeBytes ?? 0);
+
+        if (existing is null)
+        {
+            _db.RecordingChunks.Add(new RecordingChunk
+            {
+                Id = Guid.NewGuid(),
+                RecordingId = id,
+                Sequence = sequence,
+                BlobKey = blobKey,
+                StartMs = startMs,
+                EndMs = endMs,
+                SizeBytes = chunk.Length,
+                ReceivedAt = DateTimeOffset.UtcNow,
+            });
+        }
+        else
+        {
+            existing.BlobKey = blobKey;
+            existing.StartMs = startMs;
+            existing.EndMs = endMs;
+            existing.SizeBytes = chunk.Length;
+            existing.ReceivedAt = DateTimeOffset.UtcNow;
+        }
+
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
     [HttpPost("{id:guid}/retranscribe")]
     [EndpointSummary("Re-transcribe a recording")]
     [EndpointDescription(

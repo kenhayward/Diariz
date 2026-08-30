@@ -1,3 +1,4 @@
+using System.Text;
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
 using Diariz.Api.Tests.Infrastructure;
@@ -108,5 +109,131 @@ public class LiveRecordingControllerTests
         var rec = await db.Recordings.SingleAsync(r => r.Id == dto.Id);
         Assert.Equal(session, rec.LiveSessionId);
         Assert.Equal(session, dto.SessionId);
+    }
+
+    // ---- PUT /api/recordings/{id}/chunks/{sequence} ----
+
+    private static FormFile Chunk(string body = "chunk-bytes") =>
+        new(new MemoryStream(Encoding.UTF8.GetBytes(body)), 0, Encoding.UTF8.GetByteCount(body),
+            "chunk", "chunk.webm")
+        {
+            Headers = new HeaderDictionary(),
+            ContentType = "audio/webm",
+        };
+
+    private static async Task<(Guid RecordingId, Guid SessionId)> BeginAsync(
+        DiarizDbContext db, Guid userId, RecordingsController controller)
+    {
+        var session = Guid.NewGuid();
+        var result = await controller.BeginLive(Req(sessionId: session));
+        var dto = (LiveRecordingDto)((CreatedAtActionResult)result.Result!).Value!;
+        return (dto.Id, session);
+    }
+
+    [Fact]
+    public async Task PutChunk_StoresTheBlobAndCreatesTheRow()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        await LiveTestSupport.SeedUser(db, me);
+        var storage = new FakeAudioStorage();
+        var controller = LiveTestSupport.Build(db, me, storage: storage);
+        var (id, session) = await BeginAsync(db, me, controller);
+
+        var result = await controller.PutChunk(id, 0, Chunk(), session, startMs: 0, endMs: 30_000);
+
+        Assert.IsType<NoContentResult>(result);
+        var chunk = await db.RecordingChunks.SingleAsync(c => c.RecordingId == id);
+        Assert.Equal(0, chunk.Sequence);
+        Assert.Equal(30_000, chunk.EndMs);
+        // Zero-padded so a plain object-store listing sorts into capture order.
+        Assert.EndsWith("/chunks/00000.webm", chunk.BlobKey);
+        Assert.True(storage.Objects.ContainsKey(chunk.BlobKey));
+    }
+
+    [Fact]
+    public async Task PutChunk_Twice_IsIdempotent()
+    {
+        // The retry path. Every flaky network in production exercises this, and a version that
+        // appended would break finalise's contiguity check as well as double-charging quota.
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        await LiveTestSupport.SeedUser(db, me);
+        var storage = new FakeAudioStorage();
+        var controller = LiveTestSupport.Build(db, me, storage: storage);
+        var (id, session) = await BeginAsync(db, me, controller);
+
+        await controller.PutChunk(id, 0, Chunk("first-attempt"), session, 0, 30_000);
+        await controller.PutChunk(id, 0, Chunk("retry-wins"), session, 0, 30_000);
+
+        var chunk = Assert.Single(await db.RecordingChunks.Where(c => c.RecordingId == id).ToListAsync());
+        Assert.Equal("retry-wins", Encoding.UTF8.GetString(storage.Objects[chunk.BlobKey]));
+        Assert.Equal(Encoding.UTF8.GetByteCount("retry-wins"), chunk.SizeBytes);
+        var rec = await db.Recordings.SingleAsync(r => r.Id == id);
+        Assert.Equal(Encoding.UTF8.GetByteCount("retry-wins"), rec.SizeBytes);
+    }
+
+    [Fact]
+    public async Task PutChunk_ForAnotherUsersRecording_Returns404()
+    {
+        // 404 rather than 403: confirming the id exists would leak that it does.
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var other = Guid.NewGuid();
+        await LiveTestSupport.SeedUser(db, me);
+        await LiveTestSupport.SeedUser(db, other);
+        var (id, session) = await BeginAsync(db, other, LiveTestSupport.Build(db, other));
+
+        var result = await LiveTestSupport.Build(db, me).PutChunk(id, 0, Chunk(), session, 0, 30_000);
+
+        Assert.IsType<NotFoundResult>(result);
+        Assert.False(await db.RecordingChunks.AnyAsync());
+    }
+
+    [Fact]
+    public async Task PutChunk_WithAMismatchedSessionId_Returns409()
+    {
+        // A second device signed in as the same user. Interleaving its chunks would silently corrupt
+        // the recording, so it is refused rather than merged.
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        await LiveTestSupport.SeedUser(db, me);
+        var controller = LiveTestSupport.Build(db, me);
+        var (id, _) = await BeginAsync(db, me, controller);
+
+        var result = await controller.PutChunk(id, 0, Chunk(), Guid.NewGuid(), 0, 30_000);
+
+        Assert.Equal(StatusCodes.Status409Conflict, Assert.IsType<ObjectResult>(result).StatusCode);
+        Assert.False(await db.RecordingChunks.AnyAsync());
+    }
+
+    [Fact]
+    public async Task PutChunk_WhenTheRecordingIsNotLive_Returns409()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        await LiveTestSupport.SeedUser(db, me);
+        var controller = LiveTestSupport.Build(db, me);
+        var (id, session) = await BeginAsync(db, me, controller);
+        (await db.Recordings.SingleAsync(r => r.Id == id)).Status = RecordingStatus.Transcribed;
+        await db.SaveChangesAsync();
+
+        var result = await controller.PutChunk(id, 0, Chunk(), session, 0, 30_000);
+
+        Assert.Equal(StatusCodes.Status409Conflict, Assert.IsType<ObjectResult>(result).StatusCode);
+    }
+
+    [Fact]
+    public async Task PutChunk_WithAnEmptyBody_Returns400()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        await LiveTestSupport.SeedUser(db, me);
+        var controller = LiveTestSupport.Build(db, me);
+        var (id, session) = await BeginAsync(db, me, controller);
+
+        var result = await controller.PutChunk(id, 0, Chunk(""), session, 0, 30_000);
+
+        Assert.IsType<BadRequestObjectResult>(result);
     }
 }
