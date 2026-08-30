@@ -103,6 +103,10 @@ public class Recording
     /// <summary>Optional link to the Google Calendar event this recording belongs to (1:1). Null = unlinked.</summary>
     public RecordingCalendarLink? CalendarLink { get; set; }
 
+    /// <summary>Uploaded slices of a capture still in progress. Empty for every finished recording -
+    /// they are concatenated into <see cref="BlobKey"/> and deleted at finalise.</summary>
+    public ICollection<RecordingChunk> Chunks { get; set; } = new List<RecordingChunk>();
+
     public ICollection<Transcription> Transcriptions { get; set; } = new List<Transcription>();
     public ICollection<Speaker> Speakers { get; set; } = new List<Speaker>();
     public ICollection<RecordingAction> Actions { get; set; } = new List<RecordingAction>();
