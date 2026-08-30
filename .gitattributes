@@ -18,3 +18,15 @@
 # psql tolerates CRLF, but keep these LF for the same reason as the shell scripts above -
 # so what a fresh Windows clone mounts is byte-identical to what CI and Linux hosts mount.
 deploy/postgres-init/*.sql text eol=lf
+
+# EF Core writes a full copy of the model into a *.Designer.cs alongside every migration.
+# At 98 migrations that is ~215,000 lines - 96% of src/Diariz.Domain/Migrations, and 94% of
+# the compiled Diariz.Domain.dll (2,988 KB with them, 175 KB without). None of it is written
+# or read by hand: `dotnet ef migrations add` generates it and EF consumes it.
+#
+# Marking it generated collapses it in GitHub diffs and drops it from the language stats, so a
+# one-column migration reviews as its ~20 real lines instead of a 3,600-line wall. Deliberately
+# NOT `-diff`, which would also suppress the local `git diff` you want on the rare occasion a
+# snapshot change is the thing you are actually inspecting.
+src/Diariz.Domain/Migrations/*.Designer.cs linguist-generated=true
+src/Diariz.Domain/Migrations/DiarizDbContextModelSnapshot.cs linguist-generated=true
