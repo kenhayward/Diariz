@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.265.5",
+    date: "2026-09-01",
+    pr: 721,
+    headline: "Two dependency records that no longer match the build",
+    summary:
+      "Diariz's server code records the exact version of every third-party library a build resolved to, in a set of lock files kept beside each project. A dependency refresh earlier today updated four of those files and left two behind.\n\nNothing was broken by that, which is precisely the problem: a build from a clean checkout quietly resolved something different from what was written down, rewrote the file to match, and carried on. Anyone building the project found their working copy modified before they had touched anything, and the record of what a release was actually built from was wrong for two of the six projects.\n\nBoth are back in step. Nothing running in Diariz changes version: one of the two covers the shared test helpers, and the other moves a build-time tool used when packaging the desktop app's Outlook helper, not anything the app runs.",
+    fixed: [
+      "Two of the six .NET lock files were left behind by an earlier dependency refresh, so a clean build resolved different versions from the ones recorded and rewrote them. Both now match what everything else already used.",
+    ],
+  },
+  {
     version: "0.265.4",
     date: "2026-09-01",
     pr: 720,
