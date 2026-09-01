@@ -59,12 +59,20 @@ export function useLiveTranscript(recordingId: string | null, recordedMs: () => 
       inFlight.current.add(e.sequence);
       try {
         const detail = await api.getRecording(e.recordingId);
+        // A speaker is a suggestion when the server is asking rather than asserting. That lives on the
+        // speaker, not the segment, so it is looked up by label - the same label the segments carry.
+        const suggested = new Set(
+          (detail.speakers ?? []).filter((sp) => sp.suggestedPersonId).map((sp) => sp.label),
+        );
         const segments = (detail.current?.segments ?? []).map((s) => ({
           id: s.id,
           startMs: s.startMs,
           endMs: s.endMs,
           text: s.revised ?? s.original,
           sequence: e.sequence,
+          // Falls back to nothing rather than to the raw label: an unstitched label is worse than none.
+          speaker: s.speakerDisplay || undefined,
+          speakerIsSuggestion: suggested.has(s.speaker) || undefined,
         }));
         // The fetch returns the WHOLE transcript, so it replaces rather than appends - which also
         // makes a missed event self-healing: the next one that lands repairs the gap.

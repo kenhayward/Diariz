@@ -472,6 +472,11 @@ public sealed class FakeSpeakerIdentifier : ISpeakerIdentifier
     public List<RankedCandidate> Ranked { get; set; } = [];
     public int Calls { get; private set; }
 
+    /// <summary>The probe of the most recent call. Lets a test assert WHAT was ranked, not merely that
+    /// ranking happened - the difference between "identification ran" and "identification ran on the
+    /// stitched centroid rather than on whichever chunk arrived last".</summary>
+    public float[]? LastProbe { get; private set; }
+
     /// <summary>Convenience for the common "one candidate at this distance" case.</summary>
     public void Nearest(Guid personId, string name, double distance) =>
         Ranked = [new RankedCandidate(personId, name, distance)];
@@ -480,6 +485,7 @@ public sealed class FakeSpeakerIdentifier : ISpeakerIdentifier
         Pgvector.Vector embedding, int take = 2, CancellationToken ct = default)
     {
         Calls++;
+        LastProbe = embedding.ToArray();
         return Task.FromResult<IReadOnlyList<RankedCandidate>>(Ranked.Take(Math.Max(1, take)).ToList());
     }
 }

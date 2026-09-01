@@ -711,9 +711,9 @@ Per-recording diarization label → display name, plus its voiceprint and any id
 |---|---|---|
 | `Id` | uuid PK | |
 | `RecordingId` | uuid FK → Recordings | cascade |
-| `Label` | text | raw diarization label |
+| `Label` | text | the diarization label for an ordinary recording. For a **live** one it is the **session** label the stitcher minted: pyannote's labels hold only inside the chunk they came from, so they are mapped onto one label per voice per meeting before anything is stored, and a merge can move segments from one of these to another mid-meeting |
 | `DisplayName` | varchar(256) | user-facing name (defaults to the label) |
-| `Embedding` | **vector(192)** null | ECAPA per-speaker voiceprint from the worker; Postgres-only |
+| `Embedding` | **vector(192)** null | ECAPA per-speaker voiceprint from the worker; Postgres-only. For a **live** recording it is instead the **running centroid** for that session label - a sample-weighted, re-normalised mean of every chunk vector matched to it, so it keeps improving as the meeting goes and is what identification is run against. The sample count behind it is **derived** from how many distinct chunks carry the label, never stored |
 | `ProfileId` | uuid FK → SpeakerProfiles null | = CLR `PersonId`; the identified person; **SetNull** on person delete |
 | `IdentifiedAuto` | bool | true when name/profile were set by auto-ID (vs a manual rename) |
 | `IsMultiSpeaker` | bool | user marked this slot as overlapping speech ("Multiple Speakers"); never auto-identified or enrolled into a voiceprint |

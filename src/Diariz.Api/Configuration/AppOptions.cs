@@ -428,6 +428,20 @@ public class LiveCaptureOptions
     /// transcript then catches up eventually instead of stopping.</summary>
     public int MaxLagSeconds { get; set; } = 120;
 
+    /// <summary>How close a chunk's voice must be to a running session centroid to be treated as the same
+    /// person, as a cosine distance. Deliberately separate from the identification threshold on
+    /// <see cref="Diariz.Domain.Entities.PlatformSettings"/>: that asks whether a voice is a
+    /// <b>named person</b>, judged against a voiceprint enrolled from minutes of clean audio; this asks
+    /// whether two chunks of one meeting hold the <b>same voice</b>, judged against a centroid built from
+    /// seconds. Same units, different evidence - one number serving both would mean tuning either
+    /// silently retuned the other.</summary>
+    public double StitchThreshold { get; set; } = 0.35;
+
+    /// <summary>Clear air required over the next-best session centroid. Without it a voice sitting between
+    /// two known speakers is assigned by a coin flip that every later chunk then inherits. Matches the
+    /// convention in <see cref="IdentificationRules"/>: a gap of less than this is ambiguous.</summary>
+    public double StitchMargin { get; set; } = 0.05;
+
     // There is deliberately no overlap setting. The previous chunk is prepended whole or not at all -
     // a WebM fragment cannot be byte-sliced mid-cluster - so the overlap is that chunk's own duration
     // and there is nothing here to tune. A knob that silently could not be honoured was worse than none:

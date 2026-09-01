@@ -9,6 +9,23 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.265.0",
+    date: "2026-09-01",
+    pr: 708,
+    headline: "The live transcript knows who is talking",
+    summary:
+      "The live transcript arrived last release as a wall of text with no names on it. That was deliberate: the transcriber works on the meeting in half-minute slices and tells the voices apart inside each one, but it has no way to know that the first speaker in this slice is the same person as the first speaker in the next. Showing those numbers would have had everyone reshuffling every thirty seconds.\n\nDiariz now follows a voice across the whole meeting, so a speaker keeps one identity from start to finish - and where that voice belongs to someone already enrolled, they are named rather than numbered. The transcript you read during the meeting now reads like a conversation.\n\nIt corrects itself as it goes. A voice heard badly in one slice can be filed as a second speaker by mistake; when later audio makes clear it was one person all along, the earlier lines are joined back up in front of you. And where it is not certain who someone is, it says so - a guessed name is shown as a guess, not stated as fact.\n\nOne thing it deliberately never does: recognising a voice during a meeting never teaches Diariz that voice. Voice recognition is shared across everyone on your Diariz, so a name learned from thirty seconds of half-finished transcript would change recognition for every colleague in every future meeting. Training still happens only when a person confirms who someone is.",
+    added: [
+      "**Speaker labels in the live transcript**, stable for the whole meeting rather than resetting every half minute.",
+      "An **enrolled voice is named** during the meeting, using the same recognition as a finished recording.",
+      "A name Diariz is unsure of is shown as a **question rather than a statement**, so a guess reads as a guess.",
+    ],
+    changed: [
+      "When later audio shows that two live speakers were one person, the earlier lines are **joined back together in front of you** rather than staying split.",
+      "Recognising a voice live never trains that voice. Voice recognition is shared across everyone on your Diariz, so it still only learns when a person confirms who somebody is.",
+    ],
+  },
+  {
     version: "0.264.0",
     date: "2026-09-01",
     pr: 705,

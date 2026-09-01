@@ -94,14 +94,19 @@ person) at the moment you hear them, without leaving the transcript.
   minutes ago while they are still in the room. The **assistant can be asked about a meeting that is
   still going** - it is told explicitly that the transcript is partial and ends mid-meeting, so it
   will not describe something as decided or final when the people in the room are still arguing
-  about it. Three deliberate limits. The live text carries **no speaker names**: a diarization label
-  is only meaningful within the chunk it came from, so the same person is a different number in the
-  next one, and rendering that would have speakers reshuffling every thirty seconds as though it
-  meant something - attribution arrives once it can be made stable across the whole meeting. It
-  **never presents itself as finished**: a status line says how far behind the meeting it is, and
-  the ordinary full-recording transcript replaces it when you press Stop. And if the server falls
-  far enough behind, it **stops writing the live text and says so** rather than showing text that is
-  minutes stale - capture is unaffected either way, and the full transcript still arrives.
+  about it. **Speakers are named as the meeting runs**: a voice keeps one identity from start to
+  finish rather than being renumbered every half minute, and where it belongs to someone already
+  enrolled they are named, using the same recognition and the same operating point as a finished
+  recording. When later audio shows that two live speakers were actually one person, the earlier
+  lines are **rejoined in front of you** rather than staying split; where Diariz is not certain who
+  someone is, the name is shown as a **question rather than stated**, so a guess reads as a guess.
+  Two limits remain. It **never presents itself as finished**: a status line says how far behind the
+  meeting it is, and the ordinary full-recording transcript replaces it when you press Stop. And if
+  the server falls far enough behind it **stops writing the live text and says so** rather than
+  showing text that is minutes stale - capture is unaffected either way, and the full transcript
+  still arrives. Recognising a voice live **never enrols it**: recognition is platform-wide, so a
+  name learned from a half-finished transcript would change recognition for every colleague in every
+  future meeting - training still happens only when a person confirms who somebody is.
 
 - **Recording hub** — opening a meeting lands on a hub rather than a strip of tabs. A **hero summary card**
 carries the **meeting type** (a dropdown that drives the minutes template and the formulas offered), the key
