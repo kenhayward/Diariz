@@ -3,6 +3,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// The API reference renders Scalar, which is ~83 MB on disk and the slowest thing any test here pulls in.
+// These tests only assert that the reference opens *in place* - the dialog wrapper and its label - and never
+// look at what Scalar itself renders, so a stub costs no coverage. `pages/ApiReference.test.tsx` has always
+// mocked it for the same reason; this file did not, and paid for the real load on every run (issue #588).
+vi.mock("@scalar/api-reference-react", () => ({
+  ApiReferenceReact: () => <div data-testid="scalar" />,
+}));
+
 // Settings is now a Platform-Administrator-only modal (personal settings moved to Preferences), so every test
 // runs as a platform admin.
 const authState = { isPlatformAdmin: true, logout: vi.fn() };
