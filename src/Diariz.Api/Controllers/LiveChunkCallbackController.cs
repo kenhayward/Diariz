@@ -27,7 +27,8 @@ public class LiveChunkCallbackController(
     DiarizDbContext db,
     IHubContext<TranscriptionHub> hub,
     IOptions<WorkerOptions> opts,
-    IOptions<LiveCaptureOptions>? live = null) : ControllerBase
+    IOptions<LiveCaptureOptions>? live = null,
+    ISpeakerIdentification? identification = null) : ControllerBase
 {
     private readonly WorkerOptions _opts = opts.Value;
     private readonly LiveCaptureOptions _live = live?.Value ?? new LiveCaptureOptions();
@@ -116,6 +117,20 @@ public class LiveChunkCallbackController(
         // under a label it had just retired.
         await ApplyMergesAsync(rec, transcription,
             new StitchThresholds(_live.StitchThreshold, _live.StitchMargin));
+
+        // Put names to the voices, through the SAME ranking and rules the finished-recording path uses.
+        // Deliberately not a parallel copy with its own numbers: identification's operating point is one
+        // thing an administrator calibrates, and a second one here would drift out of step invisibly.
+        //
+        // It runs on every chunk rather than once, because the centroid it judges keeps improving - a
+        // voice named wrongly on a noisy first chunk has to be correctable by later evidence, and
+        // SpeakerLabeling withdraws an automatic name that no longer holds.
+        //
+        // This NEVER enrols. See LiveIdentificationNeverEnrolsTests: an automatic match writes no
+        // VoiceSample and rebuilds no shared centroid, because enrolment is platform-wide and a live
+        // chunk - provisional text, a short window, a centroid still forming - is the worst possible
+        // input to it.
+        await IdentifyAsync(rec, transcription);
 
         // Ordinal is what every reader sorts by, and chunks can complete out of order under retry - so
         // it is assigned across the whole transcription by recording time, not by arrival.
@@ -267,6 +282,33 @@ public class LiveChunkCallbackController(
             if (loser is not null) db.Speakers.Remove(loser);
         }
 
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Rank each session voice against the platform voiceprint directory and apply the verdict.
+    ///
+    /// <para>Speech per label is measured from the segments now stored, which is what
+    /// <c>IdentificationRules</c> needs for its minimum-speech floor: a voice heard for a second and a
+    /// half is not scored at all, live or otherwise.</para></summary>
+    private async Task IdentifyAsync(Recording rec, Transcription transcription)
+    {
+        if (identification is null) return;
+
+        // The embedding filter is applied in memory: vector columns are mapped only under Npgsql, so a
+        // `s.Embedding != null` in the query cannot be translated by the in-memory test provider.
+        var speakers = (await db.Speakers.Where(s => s.RecordingId == rec.Id).ToListAsync())
+            .Where(s => s.Embedding is not null)
+            .ToList();
+        if (speakers.Count == 0) return;
+
+        var speechByLabel = (await db.Segments
+                .Where(s => s.TranscriptionId == transcription.Id)
+                .Select(s => new { s.SpeakerLabel, Ms = s.EndMs - s.StartMs })
+                .ToListAsync())
+            .GroupBy(x => x.SpeakerLabel)
+            .ToDictionary(g => g.Key, g => g.Sum(x => x.Ms), StringComparer.Ordinal);
+
+        await identification.ApplyAsync(speakers, speechByLabel);
         await db.SaveChangesAsync();
     }
 
