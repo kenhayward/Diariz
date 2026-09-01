@@ -110,6 +110,13 @@ public class LiveChunkCallbackController(
             speaker.Embedding = new Pgvector.Vector(se.Embedding);
         }
 
+        // Mark the chunk done, so the lag calculation stops counting it. Without this the oldest
+        // outstanding chunk never changes and the transcript pauses itself after one threshold's worth
+        // of meeting, however well the transcriber is actually keeping up.
+        var chunk = await db.RecordingChunks
+            .FirstOrDefaultAsync(c => c.RecordingId == rec.Id && c.Sequence == body.Sequence);
+        if (chunk is not null) chunk.TranscribedAt = DateTimeOffset.UtcNow;
+
         await db.SaveChangesAsync();
 
         // Ordinal is what every reader sorts by, and chunks can complete out of order under retry - so

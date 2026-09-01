@@ -653,7 +653,10 @@ public sealed class FakeTranscriptSearch : ITranscriptSearch
 }
 
 /// <summary>Records the jobs that would have been pushed onto the Redis stream.</summary>
-public sealed class FakeJobQueue : IJobQueue
+/// <summary>Records what was enqueued. Not sealed, and the enqueue methods are virtual, so a test
+/// can subclass it to make one queue fail - `new` would not do, since callers hold an IJobQueue
+/// and a hidden method is never reached through the interface.</summary>
+public class FakeJobQueue : IJobQueue
 {
     public List<TranscriptionJob> Enqueued { get; } = new();
     public List<SummarizationJob> SummarizationEnqueued { get; } = new();
@@ -668,7 +671,7 @@ public sealed class FakeJobQueue : IJobQueue
     public List<SectionMinutesJob> SectionMinutesEnqueued { get; } = new();
     public List<FormulaRunJob> FormulaRunJobs { get; } = new();
 
-    public Task EnqueueLiveChunkAsync(LiveChunkJob job, CancellationToken ct = default)
+    public virtual Task EnqueueLiveChunkAsync(LiveChunkJob job, CancellationToken ct = default)
     {
         LiveChunkEnqueued.Add(job);
         return Task.CompletedTask;
@@ -710,7 +713,7 @@ public sealed class FakeJobQueue : IJobQueue
         return Task.CompletedTask;
     }
 
-    public Task EnqueueAudioMergeAsync(AudioMergeJob job, CancellationToken ct = default)
+    public virtual Task EnqueueAudioMergeAsync(AudioMergeJob job, CancellationToken ct = default)
     {
         AudioMergeEnqueued.Add(job);
         return Task.CompletedTask;

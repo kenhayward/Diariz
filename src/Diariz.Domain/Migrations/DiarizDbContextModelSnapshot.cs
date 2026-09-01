@@ -1488,6 +1488,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<long>("StartMs")
                         .HasColumnType("bigint");
 
+                    b.Property<DateTimeOffset?>("TranscribedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("Id");
 
                     b.HasIndex("RecordingId", "Sequence")

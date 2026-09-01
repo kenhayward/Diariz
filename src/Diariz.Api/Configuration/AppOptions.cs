@@ -421,4 +421,15 @@ public class LiveCaptureOptions
 
     /// <summary>How often the reaper looks. Cheap - one projected query over live recordings only.</summary>
     public int ReaperIntervalMinutes { get; set; } = 5;
+
+    /// <summary>How far the live transcript may fall behind before the API stops queueing live work for
+    /// a recording. Measured, a 30 s chunk costs about 2.7 s on the production GPU, so two minutes of
+    /// backlog means something is genuinely wrong rather than merely busy. 0 disables the pause: the
+    /// transcript then catches up eventually instead of stopping.</summary>
+    public int MaxLagSeconds { get; set; } = 120;
+
+    /// <summary>How much of the previous chunk to prepend when transcribing, so a chunk does not start
+    /// mid-sentence. Discarded again before the segments are stored - it is a property of the decode
+    /// window, not of the audio.</summary>
+    public int OverlapMs { get; set; } = 3_000;
 }

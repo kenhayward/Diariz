@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.Controllers;
@@ -31,6 +32,8 @@ public class RecordingsController : ControllerBase
     private readonly ISpeakerIdentification _identification;
     private readonly ISpeakerAssignment _assignment;
     private readonly UploadOptions _uploads;
+    private readonly LiveCaptureOptions _live;
+    private readonly ILogger<RecordingsController> _logger;
     private readonly IRoomScope _rooms;
     private readonly IPeopleDirectory _people;
     private readonly IWebhookPublisher _webhooks;
@@ -47,7 +50,9 @@ public class RecordingsController : ControllerBase
         IOptions<UploadOptions> uploads, IRoomScope rooms, IPeopleDirectory people,
         IWebhookPublisher webhooks,
         IOptions<AppPublicOptions> appOpts, IExportLocalizer? exportLocalizer = null,
-        ICalendarAggregator? calendars = null)
+        ICalendarAggregator? calendars = null,
+        IOptions<LiveCaptureOptions>? live = null,
+        ILogger<RecordingsController>? logger = null)
     {
         _db = db;
         _storage = storage;
@@ -64,6 +69,8 @@ public class RecordingsController : ControllerBase
         _appOpts = appOpts;
         _exportLocalizer = exportLocalizer;
         _calendars = calendars;
+        _live = live?.Value ?? new LiveCaptureOptions();
+        _logger = logger ?? NullLogger<RecordingsController>.Instance;
         _defaultModel = config["Transcription:DefaultModel"] ?? "whisperx-large-v3";
     }
 
@@ -595,7 +602,63 @@ public class RecordingsController : ControllerBase
         }
 
         await _db.SaveChangesAsync();
+
+        // Queue the chunk for live transcription. Deliberately AFTER the chunk is durable and after the
+        // response is decided: everything below is best-effort, and a failure here costs the live
+        // transcript and nothing else. The chunk is stored, the recording is intact, and the final pass
+        // transcribes the whole meeting regardless.
+        await TryQueueLiveTranscriptionAsync(rec, sequence, blobKey, startMs);
+
         return NoContent();
+    }
+
+    /// <summary>Enqueue one chunk for live transcription, unless the transcriber has fallen too far
+    /// behind. Swallows its own failures: capture must never depend on this succeeding.</summary>
+    private async Task TryQueueLiveTranscriptionAsync(Recording rec, int sequence, string blobKey, long startMs)
+    {
+        try
+        {
+            var transcription = await _db.Transcriptions
+                .FirstOrDefaultAsync(t => t.RecordingId == rec.Id && t.IsProvisional);
+
+            // The oldest chunk still waiting to be transcribed. Null means the transcriber is keeping up.
+            var oldestOutstanding = await _db.RecordingChunks
+                .Where(c => c.RecordingId == rec.Id && c.TranscribedAt == null && c.Sequence != sequence)
+                .OrderBy(c => c.ReceivedAt)
+                .Select(c => (DateTimeOffset?)c.ReceivedAt)
+                .FirstOrDefaultAsync();
+
+            if (LiveTranscriptLag.ShouldPause(oldestOutstanding, DateTimeOffset.UtcNow,
+                    TimeSpan.FromSeconds(_live.MaxLagSeconds)))
+            {
+                await _hub.NotifyLiveTranscriptDegradedAsync(rec.UserId, rec.Id, sequence);
+                return;
+            }
+
+            // The previous chunk's tail is prepended so the model does not start mid-sentence; sequence 0
+            // has nothing before it.
+            var prevKey = sequence == 0
+                ? null
+                : await _db.RecordingChunks
+                    .Where(c => c.RecordingId == rec.Id && c.Sequence == sequence - 1)
+                    .Select(c => c.BlobKey)
+                    .FirstOrDefaultAsync();
+
+            var language = rec.TranscriptionLanguage
+                ?? (await _db.UserSettings.FindAsync(rec.UserId))?.TranscriptionLanguage;
+
+            await _queue.EnqueueLiveChunkAsync(new LiveChunkJob(
+                rec.Id, transcription?.Id ?? Guid.Empty, sequence, blobKey, prevKey,
+                startMs, prevKey is null ? 0 : _live.OverlapMs,
+                SupportedLanguages.ToWhisperCode(language)));
+        }
+        catch (Exception e)
+        {
+            // Never rethrow. The chunk is already stored and acknowledged; a queue hiccup must not turn
+            // a successful upload into a failed one from the recorder's point of view.
+            _logger.LogWarning(e, "Could not queue live transcription for chunk {Sequence} of {RecordingId}",
+                sequence, rec.Id);
+        }
     }
 
     [HttpPost("{id:guid}/live/finalize")]

@@ -342,4 +342,52 @@ public class LiveRecordingControllerTests
             return base.DeleteAsync(key, ct);
         }
     }
+
+    // ---- live transcription is queued from the chunk upload ----
+
+    [Fact]
+    public async Task PutChunk_QueuesTheChunkForLiveTranscription()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        await LiveTestSupport.SeedUser(db, me);
+        var queue = new FakeJobQueue();
+        var controller = LiveTestSupport.Build(db, me, queue);
+        var (id, session) = await BeginAsync(db, me, controller);
+
+        await controller.PutChunk(id, 0, Chunk(), session, 0, 30_000);
+        await controller.PutChunk(id, 1, Chunk(), session, 30_000, 60_000);
+
+        Assert.Equal(2, queue.LiveChunkEnqueued.Count);
+        var second = queue.LiveChunkEnqueued[1];
+        Assert.Equal(1, second.Sequence);
+        Assert.EndsWith("/chunks/00000.webm", second.PrevBlobKey);
+        Assert.True(second.OverlapMs > 0, "later chunks prepend the previous tail");
+        // Sequence 0 has nothing before it, so no overlap to correct for.
+        Assert.Null(queue.LiveChunkEnqueued[0].PrevBlobKey);
+        Assert.Equal(0, queue.LiveChunkEnqueued[0].OverlapMs);
+    }
+
+    [Fact]
+    public async Task PutChunk_StillSucceeds_WhenLiveTranscriptionCannotBeQueued()
+    {
+        // The promise of the whole feature: the live transcript is optional, the recording is not. A
+        // queue hiccup must not turn a successful upload into a failure the recorder has to retry.
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        await LiveTestSupport.SeedUser(db, me);
+        var controller = LiveTestSupport.Build(db, me, new ThrowingLiveQueue());
+        var (id, session) = await BeginAsync(db, me, controller);
+
+        var result = await controller.PutChunk(id, 0, Chunk(), session, 0, 30_000);
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.Single(await db.RecordingChunks.Where(c => c.RecordingId == id).ToListAsync());
+    }
+
+    private sealed class ThrowingLiveQueue : FakeJobQueue
+    {
+        public override Task EnqueueLiveChunkAsync(LiveChunkJob job, CancellationToken ct = default) =>
+            throw new InvalidOperationException("redis down");
+    }
 }
