@@ -670,3 +670,40 @@ def test_run_loop_prefers_live_chunks_over_a_queued_full_transcription(monkeypat
     worker.run_loop(_StreamAwareRedis(), keep_going=_keep_going(2))
 
     assert order and order[0] == "live", f"live chunk must be handled first, got {order}"
+
+
+def test_every_stream_the_loop_reads_has_its_group_created_at_startup(monkeypatch):
+    """The read loop must never name a stream whose consumer group nobody created.
+
+    Redis answers XREADGROUP on an unknown group with NOGROUP, which raises rather than returning
+    empty - so a stream that is read but not ensured takes the whole worker down in a crash loop on
+    startup, and with it every transcription, not just the feature that added the stream. The group
+    is normally created by whichever side gets there first, but the worker cannot rely on the API
+    having enqueued something before it starts: on a clean deployment it has not.
+    """
+    import worker as worker_mod
+
+    ensured: list[str] = []
+    monkeypatch.setattr(worker_mod, "ensure_group", lambda r, key: ensured.append(key))
+    monkeypatch.setattr(worker_mod, "run_loop", lambda r: None)
+    monkeypatch.setattr(worker_mod.heartbeat, "start", lambda: None)
+    # torch is GPU-only and absent here; main() patches it before it reaches the streams.
+    monkeypatch.setattr(worker_mod.torch_compat, "restore_legacy_torch_load", lambda: None)
+
+    class FakeRedis:
+        def ping(self):
+            return True
+
+    monkeypatch.setattr(worker_mod.redis.Redis, "from_url", staticmethod(lambda *a, **k: FakeRedis()))
+    worker_mod.main()
+
+    config = worker_mod.config
+    read = {
+        config.STREAM_KEY,
+        config.MERGE_STREAM_KEY,
+        config.VOICEPRINT_STREAM_KEY,
+        config.LIVE_CHUNK_STREAM_KEY,
+    }
+    assert read - set(ensured) == set(), (
+        f"read but never ensured: {sorted(read - set(ensured))}"
+    )

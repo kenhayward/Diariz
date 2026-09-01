@@ -354,12 +354,14 @@ def main() -> None:
             log.info("Waiting for Redis at %s ...", config.REDIS_URL)
             time.sleep(2)
 
-    ensure_group(r, config.STREAM_KEY)
-    ensure_group(r, config.MERGE_STREAM_KEY)
-    ensure_group(r, config.VOICEPRINT_STREAM_KEY)
-    log.info("Worker %s listening on streams %s, %s, %s",
-             config.CONSUMER_NAME, config.STREAM_KEY, config.MERGE_STREAM_KEY,
-             config.VOICEPRINT_STREAM_KEY)
+    # Every stream run_loop reads, without exception. Redis raises NOGROUP rather than returning empty
+    # for an unknown group, so a stream that is read but not ensured crash-loops the whole worker on a
+    # clean deployment - taking down all transcription, not just the feature that added the stream.
+    streams = (config.STREAM_KEY, config.MERGE_STREAM_KEY, config.VOICEPRINT_STREAM_KEY,
+               config.LIVE_CHUNK_STREAM_KEY)
+    for key in streams:
+        ensure_group(r, key)
+    log.info("Worker %s listening on streams %s", config.CONSUMER_NAME, ", ".join(streams))
 
     # Start the liveness heartbeat (read by the Docker healthcheck) once we're up and consuming.
     heartbeat.start()
