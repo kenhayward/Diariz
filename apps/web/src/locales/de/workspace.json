@@ -753,5 +753,6 @@
   "suggestionExcludedCount_one": "{{count}} Abschnitt nicht im Stimmabdruck",
   "suggestionExcludedCount_other": "{{count}} Abschnitte nicht im Stimmabdruck",
   "suggestionRestoreExcluded": "Wiederherstellen",
-  "suggestionTrainsFrom": "Bestaetigen schult mit {{kept}} von {{total}} Abschnitten"
+  "suggestionTrainsFrom": "Bestaetigen schult mit {{kept}} von {{total}} Abschnitten",
+  "liveTranscriptTab": "Transkript"
 }

@@ -753,5 +753,6 @@
   "suggestionExcludedCount_one": "{{count}} fragmento fuera de la huella vocal",
   "suggestionExcludedCount_other": "{{count}} fragmentos fuera de la huella vocal",
   "suggestionRestoreExcluded": "Restaurar",
-  "suggestionTrainsFrom": "Al confirmar se entrena con {{kept}} de {{total}} fragmentos"
+  "suggestionTrainsFrom": "Al confirmar se entrena con {{kept}} de {{total}} fragmentos",
+  "liveTranscriptTab": "Transcripcion"
 }

@@ -9,6 +9,33 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.265.3",
+    date: "2026-09-01",
+    pr: 718,
+    headline: "A finished meeting no longer looks like it was never transcribed",
+    summary:
+      "Two faults that between them could leave a finished meeting looking as though it had never been transcribed.\n\nPressing Stop wiped the live transcript off the screen. The full transcript is written as a new version of the same recording, and that new version was taking over the moment the work was queued - while it was still empty. So the text you had been reading vanished and nothing replaced it until the full pass finished, which on a long meeting is many minutes. If that pass then failed, the recording showed an empty transcript for good, even though everything said in the meeting was still safely stored. A transcript with nothing in it no longer replaces one with something in it.\n\nThe second was rarer and worse. While the server works on a long recording it periodically renews its claim on the job, so nothing else steals it. Each renewal was being counted as a failed attempt, and after about three minutes of entirely healthy work the job looked like one that had been crashing repeatedly. If the server restarted at any point after that, the recovery routine threw the job away rather than resuming it - and the recording stayed stuck with no transcript. Renewing a claim is no longer counted as a failure.",
+    fixed: [
+      "Stopping a recording made the live transcript disappear, leaving the recording apparently empty until the full transcript was ready - and permanently, if it never was.",
+      "A long transcription could be discarded by the very mechanism that protects it, leaving the recording stuck with no transcript after a server restart.",
+    ],
+  },
+  {
+    version: "0.265.2",
+    date: "2026-09-01",
+    pr: 714,
+    headline: "Live transcript: a real tab name, honest waiting, and no leftovers",
+    summary:
+      "Three things about the live transcript, all reported from a real meeting.\n\nThe Transcript tab was labelled with an internal name instead of the word Transcript. It now reads properly, in every language.\n\nBefore the first text arrived, the panel said nothing had been said yet - a statement about the room, and usually a wrong one, since people have generally been talking for a while by then. It now says what is actually true: Diariz is waiting for the first stretch of transcript, and that takes a moment.\n\nStarting a second recording showed the previous meeting's transcript until the new one caught up. The tab now starts empty for each meeting.\n\nAlso fixed, and less visible: when Diariz stopped transcribing live because it had fallen too far behind, it said so to nobody - the panel carried on claiming it was keeping up. That notice now reaches the screen, so a transcript that has quietly stopped tells you rather than looking merely slow.\n\nAnd the notes window you pop out into its own window now carries the Transcript tab too. It is the window people use precisely because a call has taken the screen, so it was the one that most needed it. Both windows read from the same source, so they cannot end up telling you different things about the same meeting.",
+    fixed: [
+      "The live transcript tab showed an internal name (liveTranscriptTab) rather than Transcript.",
+      "Before any text arrived, the panel claimed nothing had been said - when what was true is that Diariz had not transcribed anything yet.",
+      "Starting a second recording showed the **previous meeting's transcript** until the new one produced its own.",
+      "A notice that live transcription had paused never reached the screen, so a stopped transcript was indistinguishable from a slow one.",
+      "The **popped-out notes window** had no Transcript tab - the one window someone uses because a call has the screen, and so the one that most needs it.",
+    ],
+  },
+  {
     version: "0.265.1",
     date: "2026-09-01",
     pr: 710,

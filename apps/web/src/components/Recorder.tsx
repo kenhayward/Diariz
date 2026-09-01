@@ -919,6 +919,11 @@ export default function Recorder({
     autoCapture,
     canAutoCapture: canAutoCapture(),
     recording,
+    // Sent rather than fetched: the pop-out never calls the API, and two windows reading the same
+    // meeting independently could disagree about it.
+    liveTranscript: live.transcript ?? undefined,
+    liveLagSeconds: live.lagSeconds,
+    liveDegraded: live.degraded,
   };
 
   const { poppedOut, popOut, notifyClosed } = useNotesPopout({

@@ -15,6 +15,7 @@
 /// polling. See the spike results in docs/superpowers/specs/2026-08-13-notes-popout-window-design.md.
 
 import type { MeetingNote, ShotView } from "./types";
+import type { LiveTranscript } from "./liveTranscript";
 
 export const NOTES_CHANNEL = "diariz.live-notes";
 
@@ -33,6 +34,16 @@ export interface NotesState {
   autoCapture: boolean;
   canAutoCapture: boolean;
   recording: boolean;
+  /// The live transcript, as the host holds it. Sent across rather than fetched, because the pop-out
+  /// deliberately never calls the API - that is why it needs no auth - and because two windows reading
+  /// the same meeting independently could disagree about it. Absent when the host has no live capture,
+  /// which hides the tab rather than showing an empty one.
+  liveTranscript?: LiveTranscript;
+  /// How far behind the meeting the text is, and whether the server has stopped keeping up. Both come
+  /// from the host for the same reason the transcript does: one source, so the two windows cannot say
+  /// different things about the same meeting.
+  liveLagSeconds?: number;
+  liveDegraded?: boolean;
 }
 
 type HostMessage = { type: "state"; state: NotesState } | { type: "ended" };

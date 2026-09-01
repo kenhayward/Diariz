@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { applyAppend, emptyLiveTranscript, lagSeconds, type LiveTranscript } from "./liveTranscript";
 
@@ -10,7 +10,10 @@ export interface LiveState {
 
 export type LiveEvent =
   | { kind: "append"; recordingId: string; sequence: number; segments: LiveTranscript["segments"] }
-  | { kind: "degraded"; recordingId: string; sequence: number };
+  | { kind: "degraded"; recordingId: string; sequence: number }
+  /// The capture this panel is following has changed - a new meeting started. Not a hub event: it is
+  /// raised locally, because nothing on the server knows that this page has moved on.
+  | { kind: "recording-changed"; recordingId: string };
 
 /// Fold one hub event into the live state. Pure, so the interesting rules are testable without a hub,
 /// a fetch or a component.
@@ -19,6 +22,13 @@ export type LiveEvent =
 /// open receives events for every other recording that user has running; allocating a new state for
 /// each would re-render the panel on somebody else's meeting.
 export function nextLiveState(state: LiveState, event: LiveEvent): LiveState {
+  // Handled before the recording filter below, because it is the one event that is ABOUT the recording
+  // changing - the filter would discard it for naming a different one, which is the whole point of it.
+  if (event.kind === "recording-changed") {
+    if (event.recordingId === state.transcript.recordingId) return state;
+    return { transcript: emptyLiveTranscript(event.recordingId), degraded: false };
+  }
+
   if (event.recordingId !== state.transcript.recordingId) return state;
 
   if (event.kind === "degraded") {
@@ -51,6 +61,14 @@ export function useLiveTranscript(recordingId: string | null, recordedMs: () => 
   // Guards against two events for the same chunk racing each other's fetch, where the slower response
   // would overwrite the newer one.
   const inFlight = useRef<Set<number>>(new Set());
+
+  // Follow the recording the caller is on. useState only ever seeds from its FIRST argument, so without
+  // this the transcript of the meeting before stays on screen under the new meeting's heading until its
+  // first chunk lands - which is exactly what happened in a real session.
+  useEffect(() => {
+    setState((prev) => nextLiveState(prev, { kind: "recording-changed", recordingId: recordingId ?? "" }));
+    inFlight.current.clear();
+  }, [recordingId]);
 
   const onAppend = useCallback(
     async (e: { recordingId: string; sequence: number }) => {

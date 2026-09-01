@@ -185,9 +185,13 @@ class _FakeRedis:
         self.last_idle_filter = idle
         return list(self._pending.get(stream, []))
 
-    def xclaim(self, stream, group, consumer, min_idle_time, message_ids):
+    def xclaim(self, stream, group, consumer, min_idle_time, message_ids, justid=False):
         # min_idle_time 0 is a keepalive refresh by the owner; anything else is a steal from a dead one.
+        # justid mirrors the real XCLAIM: with it the delivery counter is left alone, which is what stops
+        # a keepalive being mistaken for a redelivery by the poison-message guard.
         (self.refreshed if min_idle_time == 0 else self.claimed).append((stream, message_ids[0]))
+        if justid:
+            return [message_ids[0]]
         return [(message_ids[0], {"job": json.dumps({"TranscriptionId": "recovered"})})]
 
 
@@ -752,3 +756,27 @@ def test_handle_live_chunk_prepends_the_init_segment_from_the_first_chunk(monkey
     assert blob.startswith(b"\x1aE\xdf\xa3INIT"), "decodable input must open with the init segment"
     assert b"first-audio" not in blob, "the first chunk's AUDIO must not be dragged in, only its header"
     assert blob.endswith(b"prev-audiocur-audio")
+
+
+def test_a_keepalive_does_not_count_as_a_delivery(monkeypatch):
+    """Refreshing a claim must not increment the message's delivery counter.
+
+    XCLAIM increments it by default, and reclaim_stale reads that same counter as evidence of a poison
+    message - anything past RECLAIM_MAX_DELIVERIES is acked and abandoned. The keepalive fires every 60
+    seconds, so a perfectly healthy job crosses the threshold after about three minutes of work; a
+    worker restart any time after that would drop it, leaving the recording queued forever with no
+    transcript. Observed live at a delivery count of 13 on a job that was progressing normally.
+
+    JUSTID is what makes a keepalive a keepalive rather than a redelivery.
+    """
+    calls = {}
+
+    class FakeRedis:
+        def xclaim(self, stream, group, consumer, **kw):
+            calls.update(kw)
+            return []
+
+    worker.refresh_claim(FakeRedis(), "transcription-jobs", "1-0")
+
+    assert calls.get("justid") is True, "a claim refresh must not count as a delivery"
+    assert calls.get("min_idle_time") == 0, "a keepalive re-claims unconditionally; it is not a steal"

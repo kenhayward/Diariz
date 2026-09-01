@@ -1,0 +1,239 @@
+import { render, screen, fireEvent, waitFor, within, act } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
+import { expectsConsoleError } from "../test-setup";
+
+// A JWT-shaped token whose payload decodes to { sub: "u1" } (used for the per-user pending key).
+const TOKEN = `h.${btoa(JSON.stringify({ sub: "u1" }))}.s`;
+
+let hubHandlers: import("../lib/signalr").HubHandlers | null = null;
+vi.mock("../lib/signalr", () => ({
+  createHub: (...args: unknown[]) => {
+    hubHandlers = args[0] as import("../lib/signalr").HubHandlers;
+    return hubFactory(...args);
+  },
+}));
+let hubFactory: (...args: unknown[]) => unknown = () => ({
+  start: () => Promise.resolve(),
+  stop: () => Promise.resolve(),
+  on: () => {},
+});
+
+vi.mock("../lib/api", () => ({
+  api: {
+    upload: vi.fn(), createNotes: vi.fn(), createScreenshot: vi.fn(),
+    renameRecording: vi.fn(), putCalendarLink: vi.fn(),
+    // Live capture defaults to unavailable, so every pre-existing test exercises the fallback
+    // path - which is exactly the behaviour that must not change.
+    beginLive: vi.fn().mockRejectedValue(new Error("no live")),
+    putChunk: vi.fn().mockResolvedValue(undefined),
+    finalizeLive: vi.fn().mockResolvedValue(undefined),
+    discardLive: vi.fn().mockResolvedValue(undefined),
+  },
+  apiErrorMessage: (_e: unknown, fb: string) => fb,
+  getToken: () => TOKEN,
+}));
+vi.mock("../lib/pendingNotes", () => ({
+  savePendingNotes: vi.fn().mockResolvedValue(undefined),
+  loadPendingNotes: vi.fn().mockResolvedValue(null),
+  clearPendingNotes: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("../lib/pendingScreenshots", () => ({
+  addPendingScreenshot: vi.fn().mockResolvedValue(undefined),
+  loadPendingScreenshots: vi.fn().mockResolvedValue(null),
+  removePendingScreenshot: vi.fn().mockResolvedValue(undefined),
+  setPendingScreenshotsRecordingId: vi.fn().mockResolvedValue(undefined),
+  clearPendingScreenshots: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("../lib/uploadContext", () => ({ useUpload: () => ({ uploadFiles: vi.fn() }) }));
+const setStatus = vi.fn();
+vi.mock("../lib/status", () => ({ useStatus: () => ({ status: null, setStatus }) }));
+// The recorder now consults the current room's permissions + placement. Default: full access, no folder.
+const roomState = {
+  can: (_p: number) => true,
+  recordingSectionId: null as string | null,
+  currentRoom: undefined as { id: string; isPersonal: boolean } | undefined,
+};
+vi.mock("../lib/rooms", () => ({
+  useRoom: () => ({
+    can: (p: number) => roomState.can(p),
+    currentRoom: roomState.currentRoom,
+    rooms: [],
+    permissions: 0,
+    selectedSectionId: null,
+    recordingSectionId: roomState.recordingSectionId,
+    isLoading: false,
+  }),
+}));
+// The recorder is rendered bare (no QueryClientProvider), so its settings hook is mocked rather than its
+// underlying query. Tests that care flip `calendarSettings` before rendering.
+const calendarSettings = { enabled: false, afterMinutes: 3, silenceSeconds: 30 };
+vi.mock("../lib/calendarRecordingSettings", () => ({
+  useCalendarRecordingSettings: () => calendarSettings,
+}));
+// What the (stubbed) silence watcher reports the room is doing. The extend prompt asks it whether anyone is
+// still talking at the calendar's stop time, so tests that care flip this before rendering.
+let silenceState = { heardSound: true, silentMs: 0 };
+const silenceWatcher = {
+  setPaused: vi.fn(),
+  stop: vi.fn(),
+  state: () => silenceState,
+  onSilent: null as (() => void) | null,
+};
+vi.mock("../lib/silenceWatcher", () => ({
+  startSilenceWatcher: vi.fn((_stream: MediaStream, _thresholdMs: number, onSilent: () => void) => {
+    silenceWatcher.onSilent = onSilent;
+    return silenceWatcher;
+  }),
+}));
+vi.mock("../lib/audioSource", () => ({
+  getStream: vi.fn(),
+  getCombinedStream: vi.fn(),
+  supportsDisplayAudio: vi.fn(() => true),
+  isElectron: false,
+  describeAudioError: () => "audio error",
+  listInputDevices: vi.fn().mockResolvedValue({ devices: [], hasLabels: false }),
+  micPermissionState: vi.fn().mockResolvedValue("granted"),
+  unlockDeviceLabels: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("../lib/pendingRecording", () => ({
+  savePendingRecording: vi.fn().mockResolvedValue(undefined),
+  loadPendingRecording: vi.fn().mockResolvedValue(null),
+  clearPendingRecording: vi.fn().mockResolvedValue(undefined),
+}));
+
+import { api } from "../lib/api";
+import {
+  getStream, getCombinedStream, listInputDevices, micPermissionState, unlockDeviceLabels,
+} from "../lib/audioSource";
+import { loadPendingRecording, clearPendingRecording } from "../lib/pendingRecording";
+import { savePendingNotes, clearPendingNotes } from "../lib/pendingNotes";
+import {
+  addPendingScreenshot,
+  loadPendingScreenshots,
+  removePendingScreenshot,
+  setPendingScreenshotsRecordingId,
+  clearPendingScreenshots,
+} from "../lib/pendingScreenshots";
+import type { PendingShot } from "../lib/pendingScreenshots";
+import Recorder, { MAX_LIVE_SCREENSHOTS } from "./Recorder";
+import { requestRecording } from "../lib/recordRequest";
+import { startSilenceWatcher } from "../lib/silenceWatcher";
+import { ToastProvider } from "../lib/toast";
+
+// jsdom has no MediaRecorder; a minimal stub lets start() run without capturing real audio.
+class FakeMediaRecorder {
+  ondataavailable: ((e: unknown) => void) | null = null;
+  onstop: (() => void) | null = null;
+  state = "inactive";
+  constructor(
+    public stream: unknown,
+    public opts: unknown,
+  ) {}
+  start() {
+    this.state = "recording";
+  }
+  pause() {
+    this.state = "paused";
+  }
+  resume() {
+    this.state = "recording";
+  }
+  stop() {
+    this.state = "inactive";
+    this.onstop?.();
+  }
+}
+(globalThis as unknown as { MediaRecorder: unknown }).MediaRecorder = FakeMediaRecorder;
+const fakeStream = { getTracks: () => [], getAudioTracks: () => [], getVideoTracks: () => [] };
+// getStream/getCombinedStream resolve to a CaptureSession ({ stream, stop }).
+const fakeSession = { stream: fakeStream, stop: () => {} };
+
+const pending = {
+  userId: "u1",
+  blob: new Blob(["audio"], { type: "audio/webm" }),
+  title: "Mic 6/30/2026",
+  durationMs: 2_700_000,
+  source: "Microphone" as const,
+  createdAt: Date.now(),
+};
+
+// Restore defaults after any test that changes them, so ordering can't leak room state.
+afterEach(() => {
+  roomState.can = () => true;
+  roomState.recordingSectionId = null;
+  roomState.currentRoom = undefined;
+});
+
+/// The recovery banners and the overrun prompt all float over the routed page. A background with an alpha
+/// modifier (`bg-amber-900/30`) lets that page's own controls read through the panel and tangle with the
+/// banner's buttons, and a button with no background of its own shows the page through the button itself.
+/// Asserting on the classes is the only handle jsdom gives us - it computes no compositing (#601).
+function expectOpaqueFloatingPanel(panel: HTMLElement) {
+  const backgrounds = panel.className.split(/\s+/).filter((c) => /(^|:)bg-/.test(c));
+  expect(backgrounds.length).toBeGreaterThan(0);
+  for (const cls of backgrounds) expect(cls).not.toMatch(/\//);
+  for (const button of Array.from(panel.querySelectorAll("button")))
+    expect(button.className).toMatch(/(^|\s)(dark:)?bg-/);
+}
+
+// Live capture defaults to unavailable for every test in this file, so the whole pre-existing suite
+// exercises the fallback path - the behaviour that must not change. `vi.clearAllMocks` in the various
+// beforeEach hooks resets calls but keeps implementations, so a test that makes live capture succeed
+// would otherwise leak into every test after it, in any describe block.
+
+/// The host's half of the pop-out transcript.
+///
+/// NotesPopout's own tests prove the detached window renders what it is handed. Nothing proved the
+/// recorder hands it over, and the gap was not hypothetical: replacing the published `liveDegraded`
+/// with a literal `false` passed every other test in the suite, which means the pop-out could have gone
+/// on claiming the transcript was keeping up while the inline panel said it had stopped. One source,
+/// two windows - the whole point is that they cannot disagree.
+///
+/// It lives in its own file because capturing what is published means replacing `useNotesPopout`, and
+/// the recorder suite has a test that exercises the real one.
+let published: import("../lib/notesChannel").NotesState | null = null;
+vi.mock("../lib/useNotesPopout", () => ({
+  useNotesPopout: ({ state }: { state: import("../lib/notesChannel").NotesState }) => {
+    published = state;
+    return { poppedOut: false, popOut: vi.fn(), notifyClosed: vi.fn() };
+  },
+}));
+
+beforeEach(() => {
+  published = null;
+  hubHandlers = null;
+  hubFactory = () => ({
+    start: () => Promise.resolve(),
+    stop: () => Promise.resolve(),
+    on: () => {},
+  });
+  (getStream as Mock).mockResolvedValue(fakeSession);
+  (api.putChunk as Mock).mockResolvedValue(undefined);
+  (api.finalizeLive as Mock).mockResolvedValue(undefined);
+  (api.discardLive as Mock).mockResolvedValue(undefined);
+});
+
+describe("what the recorder publishes to the pop-out window", () => {
+  it("sends the live transcript once a capture has begun", async () => {
+    (api.beginLive as Mock).mockResolvedValue({ id: "live-9", sessionId: "s9", status: "Live" });
+
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+
+    await waitFor(() => expect(published?.liveTranscript?.recordingId).toBe("live-9"));
+  });
+
+  it("sends the paused state rather than a hardcoded false", async () => {
+    (api.beginLive as Mock).mockResolvedValue({ id: "live-10", sessionId: "s10", status: "Live" });
+
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+    await waitFor(() => expect(hubHandlers?.onLiveTranscriptDegraded).toBeTruthy());
+
+    act(() => hubHandlers!.onLiveTranscriptDegraded!({ recordingId: "live-10", sequence: 3 }));
+
+    await waitFor(() => expect(published?.liveDegraded).toBe(true));
+  });
+});

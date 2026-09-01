@@ -181,15 +181,30 @@ public class RecordingsController : ControllerBase
         "recorded it and to members of any room it is placed in; anyone else gets 404.")]
     public async Task<ActionResult<RecordingDetailDto>> Get(Guid id)
     {
+        // "Current" is the highest version that actually HAS something in it, not simply the highest.
+        //
+        // The distinction is load-bearing for live capture: the full-recording transcription takes the
+        // next version the moment its job is queued, before the worker has written a segment. Ordering
+        // by version alone, that empty row instantly hides the provisional transcript holding everything
+        // said in the meeting - so pressing Stop wiped the live text off the screen and left nothing in
+        // its place for as long as the full pass took, which on the recording that prompted this was
+        // over twelve minutes. If the full pass then failed or was dropped, the recording showed an
+        // empty transcript permanently while its text sat in the database.
+        //
+        // An empty transcription therefore never supersedes a populated one; among populated ones, and
+        // when nothing anywhere has segments, the highest version still wins.
         var rec = await _db.Recordings
             .Include(r => r.Speakers)
             .Include(r => r.Actions)
             .Include(r => r.CalendarLink)
-            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+            .Include(r => r.Transcriptions
+                .OrderByDescending(t => t.Segments.Any()).ThenByDescending(t => t.Version).Take(1))
                 .ThenInclude(t => t.Segments.OrderBy(s => s.Ordinal))
-            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+            .Include(r => r.Transcriptions
+                .OrderByDescending(t => t.Segments.Any()).ThenByDescending(t => t.Version).Take(1))
                 .ThenInclude(t => t.Summary)
-            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+            .Include(r => r.Transcriptions
+                .OrderByDescending(t => t.Segments.Any()).ThenByDescending(t => t.Version).Take(1))
                 .ThenInclude(t => t.MeetingMinutes)
             .AsSplitQuery()
             .FirstOrDefaultAsync(r => r.Id == id);
