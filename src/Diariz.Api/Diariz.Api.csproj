@@ -29,7 +29,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.*" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
     <!-- Official MCP C# SDK ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â hosts the in-process Streamable-HTTP /mcp endpoint (tools/resources/prompts). -->
-    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="1.4.0" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
     <!-- Direct pin to override the transitive Microsoft.OpenApi 2.0.0 (from AspNetCore.OpenApi), which has
          a high-severity advisory GHSA-v5pm-xwqc-g5wc (stack overflow on circular schema refs). 2.7.5 is the
          first patched release on the 2.x line.
