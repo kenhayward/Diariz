@@ -741,7 +741,7 @@ public sealed class FakeJobQueue : IJobQueue
 }
 
 /// <summary>In-memory stand-in for MinIO/S3. Records uploads as byte arrays.</summary>
-public sealed class FakeAudioStorage : IAudioStorage
+public class FakeAudioStorage : IAudioStorage
 {
     public Dictionary<string, byte[]> Objects { get; } = new();
 
@@ -780,7 +780,7 @@ public sealed class FakeAudioStorage : IAudioStorage
     public Task<long?> GetSizeAsync(string key, CancellationToken ct = default) =>
         Task.FromResult(Objects.TryGetValue(key, out var bytes) ? bytes.Length : (long?)null);
 
-    public Task DeleteAsync(string key, CancellationToken ct = default)
+    public virtual Task DeleteAsync(string key, CancellationToken ct = default)
     {
         Objects.Remove(key);
         return Task.CompletedTask;

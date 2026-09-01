@@ -1911,7 +1911,10 @@ public class RecordingsController : ControllerBase
         // The DB cascade clears Transcriptions -> Segments + Summary, Speakers, Attachment and
         // MeetingScreenshot rows - but not their object-storage blobs, so the uploaded-attachment files
         // and the screenshot images must be deleted explicitly too.
-        await _storage.DeleteAsync(rec.BlobKey);
+        // A live capture has no canonical blob until finalise, and one that failed at the merge never
+        // gets one - BlobKey is empty for both. Object storage rejects an empty key, so guard it here
+        // rather than letting a delete 500 on a recording the user is trying to clear up.
+        if (!string.IsNullOrEmpty(rec.BlobKey)) await _storage.DeleteAsync(rec.BlobKey);
         foreach (var key in await FileAttachmentKeysAsync(rec.Id))
             await _storage.DeleteAsync(key);
         foreach (var key in await ScreenshotKeysAsync(rec.Id))
@@ -1971,7 +1974,14 @@ public class RecordingsController : ControllerBase
         if (rec.IsAudioProtected)
             return Conflict("This recording's audio is protected from deletion. Remove the protection first.");
 
-        if (rec.HasAudio)
+        // A capture still in progress has no canonical blob to reclaim - its audio is a set of chunks
+        // the finalise job still needs. Refusing is clearer than silently doing nothing, and stops the
+        // empty BlobKey reaching object storage on the way to finding that out.
+        if (rec.Status == RecordingStatus.Live || rec.Status == RecordingStatus.Merging)
+            return StatusCode(StatusCodes.Status409Conflict,
+                "This recording is still being captured. Stop it first.");
+
+        if (rec.HasAudio && !string.IsNullOrEmpty(rec.BlobKey))
         {
             await _storage.DeleteAsync(rec.BlobKey);
             rec.AudioDeletedAt = DateTimeOffset.UtcNow;
@@ -2000,6 +2010,8 @@ public class RecordingsController : ControllerBase
             .ToListAsync();
         foreach (var rec in recs)
         {
+            // Skip a capture that has no canonical blob yet rather than failing the whole batch on it.
+            if (string.IsNullOrEmpty(rec.BlobKey)) continue;
             await _storage.DeleteAsync(rec.BlobKey);
             rec.AudioDeletedAt = DateTimeOffset.UtcNow;
             rec.SizeBytes = 0;

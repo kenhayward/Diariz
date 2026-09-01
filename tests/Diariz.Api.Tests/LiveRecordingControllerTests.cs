@@ -293,4 +293,53 @@ public class LiveRecordingControllerTests
         Assert.Equal(StatusCodes.Status409Conflict, Assert.IsType<ObjectResult>(result).StatusCode);
         Assert.True(await db.Recordings.AnyAsync(r => r.Id == id));
     }
+
+    [Fact]
+    public async Task DeleteRecording_ForALiveCaptureWithNoBlobYet_Succeeds()
+    {
+        // A live recording has no canonical blob until finalise, and one that failed at the merge never
+        // gets one. Before live capture existed every recording always had a key, so the delete path
+        // handed object storage whatever BlobKey held - which for these is the empty string. Found by
+        // deleting a failed capture on a real stack and getting a 500.
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        await LiveTestSupport.SeedUser(db, me);
+        var storage = new ThrowsOnEmptyKeyStorage();
+        var controller = LiveTestSupport.Build(db, me, storage: storage);
+        var (id, _) = await BeginAsync(db, me, controller);
+
+        var result = await controller.Delete(id);
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.False(await db.Recordings.AnyAsync(r => r.Id == id));
+    }
+
+    [Fact]
+    public async Task DeleteAudio_ForALiveCapture_Returns409_RatherThanTouchingStorage()
+    {
+        // "Delete the audio to reclaim space" is meaningless for a capture that is still running, and
+        // the empty BlobKey would reach object storage on the way to finding that out.
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        await LiveTestSupport.SeedUser(db, me);
+        var storage = new ThrowsOnEmptyKeyStorage();
+        var controller = LiveTestSupport.Build(db, me, storage: storage);
+        var (id, _) = await BeginAsync(db, me, controller);
+
+        var result = await controller.DeleteAudio(id);
+
+        Assert.Equal(StatusCodes.Status409Conflict, Assert.IsType<ObjectResult>(result).StatusCode);
+        Assert.Null((await db.Recordings.SingleAsync(r => r.Id == id)).AudioDeletedAt);
+    }
+
+    /// <summary>Rejects an empty key the way a real object store does, so a test cannot pass by handing
+    /// one to a fake that shrugs.</summary>
+    private sealed class ThrowsOnEmptyKeyStorage : FakeAudioStorage
+    {
+        public override Task DeleteAsync(string key, CancellationToken ct = default)
+        {
+            if (string.IsNullOrEmpty(key)) throw new InvalidOperationException("empty object key");
+            return base.DeleteAsync(key, ct);
+        }
+    }
 }
