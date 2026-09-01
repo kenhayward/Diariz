@@ -97,3 +97,38 @@ def post_voiceprint_failure(voice_sample_id: str, error: str) -> None:
         requests.post(url, json=body, headers=_HEADERS, timeout=30).raise_for_status()
     except Exception:  # noqa: BLE001 - best-effort failure reporting
         log.exception("Failed to report voiceprint failure for %s", voice_sample_id)
+
+
+def post_live_chunk_result(recording_id: str, transcription_id: str, sequence: int, language: str,
+                           segments: list[dict], speakers: list | None = None,
+                           processing_ms: int | None = None) -> None:
+    """Report one transcribed live chunk. Times are already in recording time (pipeline._offset_segments),
+    so the API stores them without arithmetic."""
+    url = f"{config.API_BASE_URL}/internal/transcriptions/live-chunk"
+    body = {
+        "RecordingId": recording_id,
+        "TranscriptionId": transcription_id,
+        "Sequence": sequence,
+        "Language": language,
+        "Segments": [
+            {"Speaker": s.get("speaker"), "StartMs": s["start_ms"], "EndMs": s["end_ms"],
+             "Text": s.get("text", ""), "Words": s.get("words")}
+            for s in segments
+        ],
+        "Speakers": [{"Speaker": s["speaker"], "Embedding": s["embedding"]} for s in (speakers or [])],
+        "ProcessingMs": processing_ms,
+    }
+    resp = requests.post(url, json=body, headers=_HEADERS, timeout=60)
+    resp.raise_for_status()
+    log.info("Posted live chunk %s (%d segments) for transcription %s",
+             sequence, len(segments), transcription_id)
+
+
+def post_live_chunk_failure(recording_id: str, transcription_id: str, sequence: int, error: str) -> None:
+    """One chunk failed. Reported so the API can decide whether to keep going; the meeting is not
+    stopped for it, and capture is entirely unaffected."""
+    url = f"{config.API_BASE_URL}/internal/transcriptions/live-chunk-failure"
+    body = {"RecordingId": recording_id, "TranscriptionId": transcription_id,
+            "Sequence": sequence, "Error": error[:2000]}
+    resp = requests.post(url, json=body, headers=_HEADERS, timeout=60)
+    resp.raise_for_status()

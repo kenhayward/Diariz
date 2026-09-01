@@ -438,3 +438,47 @@ def test_strips_whitespace_around_words():
         "words": [{"word": " Hello ", "start": 0.0, "end": 0.5}, {"word": "world", "start": 0.6, "end": 2.0}],
     }]
     assert pipeline._shape_segments(raw)[0]["Words"][0]["W"] == "Hello"
+
+
+# ---- live-chunk window trimming ----
+
+def test_trim_to_window_drops_segments_from_the_prepended_overlap():
+    """The worker prepends the previous chunk's tail so Whisper does not start mid-sentence.
+
+    Everything from that prepended audio has already been reported by the previous chunk, so it must be
+    discarded - otherwise the transcript repeats a sentence at every chunk boundary, which reads as a
+    transcription bug rather than an overlap one.
+    """
+    # 3 s of overlap prepended: chunk audio starts at t=3000 in the decoded window.
+    segments = [
+        {"speaker": "SPEAKER_00", "start_ms": 200, "end_ms": 2600, "text": "already reported"},
+        {"speaker": "SPEAKER_00", "start_ms": 3100, "end_ms": 6000, "text": "genuinely new"},
+    ]
+    kept = pipeline._trim_to_window(segments, overlap_ms=3000)
+    assert [s["text"] for s in kept] == ["genuinely new"]
+
+
+def test_trim_to_window_keeps_a_segment_straddling_the_boundary():
+    """A sentence that starts inside the overlap and finishes inside this chunk belongs to this chunk.
+
+    Dropping it would lose the words entirely: the previous chunk ended before it finished, so nobody
+    else reports them.
+    """
+    segments = [{"speaker": "SPEAKER_00", "start_ms": 2500, "end_ms": 4500, "text": "straddles"}]
+    assert len(pipeline._trim_to_window(segments, overlap_ms=3000)) == 1
+
+
+def test_trim_to_window_is_a_no_op_without_overlap():
+    segments = [{"speaker": "SPEAKER_00", "start_ms": 0, "end_ms": 1000, "text": "first chunk"}]
+    assert pipeline._trim_to_window(segments, overlap_ms=0) == segments
+
+
+def test_offset_into_recording_time_shifts_every_segment():
+    """The API stores what the worker sends without arithmetic, so the shift happens here."""
+    segments = [
+        {"speaker": "SPEAKER_00", "start_ms": 0, "end_ms": 1000, "text": "a"},
+        {"speaker": "SPEAKER_01", "start_ms": 1000, "end_ms": 2000, "text": "b"},
+    ]
+    shifted = pipeline._offset_segments(segments, offset_ms=90_000, overlap_ms=3_000)
+    # Offset is the chunk's start in the recording; the overlap sat BEFORE it, so subtract it back out.
+    assert [(s["start_ms"], s["end_ms"]) for s in shifted] == [(87_000, 88_000), (88_000, 89_000)]

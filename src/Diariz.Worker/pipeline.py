@@ -240,6 +240,77 @@ def _too_long(duration_ms: int, max_seconds: float) -> bool:
     return max_seconds > 0 and duration_ms > max_seconds * 1000
 
 
+def transcribe_window(audio_path: str, offset_ms: float = 0, overlap_ms: float = 0,
+                      language=None) -> dict:
+    """Transcribe one live chunk, already byte-joined with the previous chunk's tail.
+
+    The same passes as `transcribe`, minus the duration cap (a chunk is seconds long) and plus the two
+    window corrections: drop what belonged to the prepended overlap, then shift into recording time.
+    Diarization stays on - not to label anything yet, but because the per-speaker ECAPA vectors are what
+    later stitches a speaker's identity across chunks, and a diarized chunk is affordable (measured:
+    ~2.7 s for 30 s of audio).
+    """
+    with telemetry.span("audio.decode", "decode"):
+        audio = whisperx.load_audio(audio_path)
+
+    with telemetry.span("ai.asr", "asr"):
+        asr = _asr(audio, language)
+    language = asr["language"]
+
+    with telemetry.span("ai.align", "align"):
+        aligned = _get_align(language)
+        if aligned is None:
+            result = {"segments": asr["segments"]}
+        else:
+            align_model, metadata = aligned
+            result = whisperx.align(asr["segments"], align_model, metadata, audio, config.DEVICE,
+                                    return_char_alignments=False)
+
+    with telemetry.span("ai.diarize", "diarize"):
+        diarize_segments = _diarize(audio, None, None)
+        result = whisperx.assign_word_speakers(diarize_segments, result)
+
+    with telemetry.span("ai.shape", "shape"):
+        segments = _shape_segments(result["segments"])
+
+    with telemetry.span("ai.embeddings", "embeddings"):
+        speakers = _extract_speakers(audio, segments)
+
+    segments = _trim_to_window(segments, overlap_ms)
+    segments = _offset_segments(segments, offset_ms, overlap_ms)
+    return {"language": language, "segments": segments, "speakers": speakers}
+
+
+def _trim_to_window(segments: list[dict], overlap_ms: float) -> list[dict]:
+    """Drop segments that belong entirely to the prepended overlap.
+
+    A live chunk is decoded with the tail of the previous one in front of it, so Whisper does not start
+    mid-sentence. Everything wholly inside that prepended audio was already reported by the previous
+    chunk; keeping it would repeat a sentence at every chunk boundary, which reads as a transcription
+    bug rather than an overlap one.
+
+    A segment that *straddles* the boundary is kept: it started in the overlap but finishes in this
+    chunk, so the previous chunk ended before it did and nobody else reports those words.
+    """
+    if overlap_ms <= 0:
+        return segments
+    return [s for s in segments if s["end_ms"] > overlap_ms]
+
+
+def _offset_segments(segments: list[dict], offset_ms: float, overlap_ms: float) -> list[dict]:
+    """Shift chunk-relative times into recording time.
+
+    `offset_ms` is where this chunk starts in the recording. The decoded window began `overlap_ms`
+    earlier than that, so the prepended audio has to be subtracted back out or every segment lands late
+    by the length of the overlap.
+    """
+    shift = offset_ms - overlap_ms
+    return [
+        {**s, "start_ms": s["start_ms"] + shift, "end_ms": s["end_ms"] + shift}
+        for s in segments
+    ]
+
+
 def transcribe(audio_path: str, min_speakers=None, max_speakers=None, language=None) -> dict:
     """Run transcription -> alignment -> diarization -> per-speaker embeddings.
     Returns {language, segments, speakers, duration_ms}. min/max_speakers are optional pyannote hints;
