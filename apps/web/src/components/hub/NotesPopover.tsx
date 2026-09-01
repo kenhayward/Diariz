@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import HubPopover from "./HubPopover";
 import NotesSection from "../NotesSection";
 import ShotStrip from "./ShotStrip";
 import CaptureControls from "./CaptureControls";
+import LiveTranscriptPanel from "./LiveTranscriptPanel";
+import type { LiveTranscript } from "../../lib/liveTranscript";
 import type { MeetingNote } from "../../lib/types";
 import type { PendingShot } from "../../lib/pendingScreenshots";
 
@@ -31,6 +34,14 @@ export type NotesPopoverProps = {
   /// Delete one capture, addressed by id rather than position - captures can arrive at any moment, so
   /// an index read at render time may not be the one the user clicked by the time the click lands.
   onDeleteShot: (id: string) => void;
+  /// The transcript of the meeting in progress, or absent when live transcription is not running -
+  /// an older server, a deployment without the hardware for it, or a capture that began before the
+  /// server could be reached. Absent hides the tab entirely rather than showing an empty one.
+  liveTranscript?: LiveTranscript;
+  /// How far behind the meeting the transcript is, in whole seconds.
+  liveLagSeconds?: number;
+  /// The server has stopped transcribing live. Capture is unaffected.
+  liveDegraded?: boolean;
   /// Absent in a plain browser, which is what hides the whole screenshot area.
   onChangeCaptureArea?: () => void;
   /// Takes a screenshot without closing the popover. Absent in a plain browser, same as onChangeCaptureArea:
@@ -65,6 +76,9 @@ export default function NotesPopover({
   onDelete,
   shots,
   onDeleteShot,
+  liveTranscript,
+  liveLagSeconds,
+  liveDegraded,
   onChangeCaptureArea,
   onCapture,
   captureAreaSet = true,
@@ -73,6 +87,8 @@ export default function NotesPopover({
   onPopOut,
 }: NotesPopoverProps) {
   const { t } = useTranslation("workspace");
+
+  const [activeTab, setActiveTab] = useState<"notes" | "transcript">("notes");
 
   return (
     <HubPopover open={open} onClose={onClose} width={400} anchorClassName="right-0" ariaLabel={t("liveNotesTitle")}>
@@ -137,8 +153,42 @@ export default function NotesPopover({
         <p style={{ margin: 0, fontFamily: "system-ui", fontWeight: 400, fontSize: 13, color: "var(--hub-muted)" }}>
           {t("liveNotesHint")}
         </p>
+        {liveTranscript && (
+          <div role="tablist" style={{ display: "flex", gap: 4 }}>
+            {(["notes", "transcript"] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab}
+                onClick={() => setActiveTab(tab)}
+                style={{
+                  border: "none",
+                  background: activeTab === tab ? "var(--hub-surface-hover)" : "transparent",
+                  color: activeTab === tab ? "var(--hub-text)" : "var(--hub-muted)",
+                  fontFamily: "system-ui",
+                  fontSize: 13,
+                  fontWeight: activeTab === tab ? 700 : 400,
+                  padding: "4px 10px",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                }}
+              >
+                {tab === "notes" ? t("liveNotesTitle") : t("liveTranscriptTab")}
+              </button>
+            ))}
+          </div>
+        )}
         <div style={{ maxHeight: 320, overflowY: "auto" }}>
-          <NotesSection notes={lines} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} />
+          {liveTranscript && activeTab === "transcript" ? (
+            <LiveTranscriptPanel
+              transcript={liveTranscript}
+              lagSeconds={liveLagSeconds ?? 0}
+              degraded={liveDegraded ?? false}
+            />
+          ) : (
+            <NotesSection notes={lines} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} />
+          )}
         </div>
         {onChangeCaptureArea && onCapture && (
           <div
