@@ -129,6 +129,8 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddVoiceSampleRecomputeState` | `ProfileContributions.RecomputeQueuedAt` / `RecomputeFailedAt` (both timestamptz, nullable). Whether a re-embed is in flight and whether the last one failed, recorded rather than inferred from `SpansJson`/`UsedMs` - which could not express either, so pressing **Re-measure** reported nothing at all whenever the whole speaker was selected. Null on every existing row means "nothing queued, nothing failed", which is what they all are - **no `CurrentFormat` bump** |
 | `AddVoiceSampleConfirmation` | `ProfileContributions.ConfirmedAt` (timestamptz, nullable) + `ConfirmedByUserId` (uuid, nullable, **no FK**). Records a human vouching that a recording really is that person - the gate multi-template voiceprints will seed from, since distance cannot separate a second microphone from a second person enrolled under one name. Null on every existing row means "nobody has vouched", which is what they all are - **no `CurrentFormat` bump** |
 | `AddActionPinned` | `RecordingActions.Pinned` (bool, NOT NULL, default false). An action reaches the cross-meeting Actions views only once someone pins it; it is visible on its own recording's page from the moment it is extracted either way. False on every existing row means "nothing pinned yet", which is the intended starting state - the tab is empty by design on the day this ships. Additive with a column default, so an older backup restores and migrates up cleanly with its actions unpinned - **no `CurrentFormat` bump** |
+| `AddRecordingChunks` | `RecordingChunks` (slices of a capture still in progress) + `RecordingStatus.Live = 8`. Unique index on `(RecordingId, Sequence)` - load-bearing rather than tidiness, since it is what makes a chunk upload idempotent so a retry after a network blip collides instead of duplicating. Cascade-deletes with the recording. Rows and blobs are removed once the chunks are concatenated at finalise, so a finished recording has none. Purely additive - **no `CurrentFormat` bump** |
+| `AddRecordingLiveSessionId` | `Recording.LiveSessionId` (uuid null). The capturing device's client-generated session id while the recording is `Live`; every chunk must present it, so a second device signed in as the same user is refused rather than interleaving its audio. Null for every recording that did not arrive as a live capture. Additive - **no `CurrentFormat` bump** |
 
 ### Entity-relationship overview
 
@@ -197,7 +199,7 @@ The owned audio recording.
 | `AudioDeletedAt` | timestamptz null | non-null once the audio blob was deleted to reclaim storage (transcript kept); audio endpoints 404 |
 | `AudioProtectedAt` | timestamptz null | non-null once the owner protected the audio from deletion; skips the nightly retention job and refuses the manual delete-audio action |
 | `DurationMs` | bigint | measured by the worker for uploads (no client duration) |
-| `Status` | int | `RecordingStatus`: 0 Uploaded, 1 Queued, 2 Transcribing, 3 Transcribed, 4 Summarized, 5 Failed, 6 Summarizing, 7 Merging |
+| `Status` | int | `RecordingStatus`: 0 Uploaded, 1 Queued, 2 Transcribing, 3 Transcribed, 4 Summarized, 5 Failed, 6 Summarizing, 7 Merging, 8 Live (capture in progress: chunks are arriving, no canonical blob or transcript yet) |
 | `Error` | text null | last failure message |
 | `MinSpeakers` / `MaxSpeakers` | int null | diarization hints (null = automatic) |
 | `TranscriptionLanguage` | text null | the spoken language to transcribe in (BCP-47, from the supported-language list). Null = fall back to `UserSettings.TranscriptionLanguage`, then to Whisper's own detection |
@@ -207,9 +209,35 @@ The owned audio recording.
 | `TagsExtractedAt` | timestamptz null | non-null once tag extraction has run (even a zero-tag result); null rows are the tag backfill's work list. Left null when the owner has no LLM so a later backfill retries |
 | `CreatedAt` | timestamptz | when the row was created, i.e. when the **upload landed** - for a recorded take, roughly when it stopped. Keep for retention/ordering, not for "when the meeting happened" |
 | `StartedAt` | timestamptz null | wall clock capture began, reported by the client and sanity-checked server-side (rejects >24 h future / >366 d past, normalised to UTC). Null for `Source=Upload` and pre-`AddRecordingStartedAt` rows; callers fall back to `CreatedAt`. **This is what calendar matching spans from** |
+| `LiveSessionId` | uuid null | the capturing device's client-generated session id while `Status = Live`. Every chunk upload must present it, so a second device signed in as the same user is refused rather than interleaving its audio into this recording. Null for anything that did not arrive as a live capture, and cleared at finalise |
 | `EndedAt` | timestamptz null | wall clock capture stopped. Null when unknown; callers fall back to `StartedAt + DurationMs`. Stored separately because `DurationMs` is captured-audio length - it excludes paused time, and after a merge it is the concatenated length - so it cannot describe a wall-clock span |
 
-Index: `(UserId, CreatedAt)`, `(UserId, StartedAt)`. Children cascade: `Transcriptions`, `Speakers`, `RecordingActions`, `RecordingTags`.
+Index: `(UserId, CreatedAt)`, `(UserId, StartedAt)`. Children cascade: `Transcriptions`, `Speakers`, `RecordingActions`, `RecordingTags`, `RecordingChunks`.
+
+#### `RecordingChunks`
+Slices of a capture still in progress. A recording is created at `Status = Live` before any audio exists
+and chunks arrive against it while the meeting runs, so what has already been said is durable on the
+server rather than only in the browser. At finalise they are concatenated into the recording's canonical
+blob and both the rows and their blobs are deleted - **a finished recording has none**.
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid PK | |
+| `RecordingId` | uuid FK → Recordings | **cascade**; unique with `Sequence` |
+| `Sequence` | int | 0-based position in the capture |
+| `BlobKey` | varchar(512) | `{userId}/{recordingId}/chunks/{sequence:D5}.webm`. Zero-padded so a plain object-store listing sorts into capture order, which is the only way to reconstruct the sequence if these rows are ever lost |
+| `StartMs` / `EndMs` | bigint | span covered, in the recording's own pause-aware clock (the same clock `Segments.StartMs` uses) |
+| `SizeBytes` | bigint | counts toward the owner's quota while the recording is live; reconciled against the concatenated blob at finalise |
+| `ReceivedAt` | timestamptz | when the upload landed. The newest chunk's value is what the reaper measures an abandoned capture against |
+
+Unique index: `(RecordingId, Sequence)`. This is **load-bearing rather than tidiness** - it is what makes
+the chunk upload idempotent, so a retry after a network blip collides and replaces instead of duplicating.
+
+Chunks are stored **contiguous and non-overlapping**. Overlap for transcription is a property of the
+decode window, not of the stored audio, because overlapping stored chunks would duplicate audio in the
+concatenation. Note also that **only the first chunk carries the WebM/EBML header**, so a later chunk is
+not independently decodable - anything that decodes one must byte-join it onto the chunks before it (see
+`docs/Streaming_Capture_and_Live_Transcript.md` §5.1 findings).
 
 #### `Transcriptions`
 One transcription pass; recordings are **versioned**.

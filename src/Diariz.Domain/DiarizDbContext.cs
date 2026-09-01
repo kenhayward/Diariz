@@ -48,6 +48,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     }
 
     public DbSet<Recording> Recordings => Set<Recording>();
+    public DbSet<RecordingChunk> RecordingChunks => Set<RecordingChunk>();
     public DbSet<Transcription> Transcriptions => Set<Transcription>();
     public DbSet<Segment> Segments => Set<Segment>();
     public DbSet<TranscriptChunk> TranscriptChunks => Set<TranscriptChunk>();
@@ -362,6 +363,18 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         {
             e.HasIndex(a => new { a.RecordingId, a.Ordinal });
             e.Property(a => a.Name).HasMaxLength(512);
+        });
+
+        // Slices of a capture still in progress. Provider-agnostic (plain columns), so it stays outside
+        // the Npgsql guard and loads under the in-memory test provider too. The unique index is what
+        // makes the chunk upload idempotent - a retried sequence collides rather than duplicating - so
+        // it is load-bearing behaviour, not a tidiness constraint.
+        builder.Entity<RecordingChunk>(e =>
+        {
+            e.HasIndex(c => new { c.RecordingId, c.Sequence }).IsUnique();
+            e.Property(c => c.BlobKey).HasMaxLength(512);
+            e.HasOne(c => c.Recording).WithMany(r => r.Chunks)
+                .HasForeignKey(c => c.RecordingId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // Folder-direct attachments. Provider-agnostic (plain columns, no vector/jsonb), so it stays outside

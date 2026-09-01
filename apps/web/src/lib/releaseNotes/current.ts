@@ -9,6 +9,25 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.263.0",
+    date: "2026-09-01",
+    pr: 687,
+    headline: "Your recording is saved as you go, not all at once at the end",
+    summary:
+      "Until now nothing reached Diariz until you pressed Stop. The whole meeting sat in your browser, and if the tab crashed, the laptop slept, or you closed the window by mistake, all of it went with them. A long meeting also had to go up in one push at the end, which is the slowest and least convenient moment for it.\n\nRecordings are now sent in pieces while the meeting runs. The recording appears in your list the moment you press Record and fills in as you talk, so at any point what has already been said is safe on the server rather than only in your browser.\n\nIf something does interrupt you, at most the last few seconds are lost instead of the entire meeting - and a recording whose window disappears is finished off automatically, with everything that arrived. There is nothing new to click: press Record and Stop exactly as before.\n\nThis also takes the weight out of long meetings. A three-hour recording no longer builds up in the browser as you go, and there is no large upload waiting for you at the end.",
+    added: [
+      "Recordings are **uploaded as the meeting runs**, so what has been said is already saved rather than waiting in your browser until you stop.",
+      "A meeting whose window closes unexpectedly is **finished off on its own** from everything that arrived, instead of being lost.",
+    ],
+    changed: [
+      "Stopping a recording is now quick even for a long meeting, because the audio has been arriving all along instead of going up in one push at the end.",
+      "Long meetings no longer build up in the browser tab while you record.",
+    ],
+    fixed: [
+      "A crashed tab, a sleeping laptop or a closed window during a meeting lost the entire recording. Nothing had reached Diariz until Stop was pressed, so there was nothing to recover.",
+    ],
+  },
+  {
     version: "0.262.2",
     date: "2026-09-01",
     pr: 688,

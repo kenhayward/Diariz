@@ -12,6 +12,15 @@ export type RecordingStatus =
 
 export type RecordingSource = "Microphone" | "System" | "Upload" | "Combined";
 
+/// A capture in progress. It has no audio and no transcript yet - chunks arrive against it, and
+/// finalising turns it into an ordinary recording.
+export interface LiveRecording {
+  id: string;
+  /// Echoed back so a client that lost its own copy is not locked out of its own capture.
+  sessionId: string;
+  status: RecordingStatus;
+}
+
 export interface RecordingSummary {
   id: string;
   title: string;

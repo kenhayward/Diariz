@@ -403,3 +403,17 @@ public class TelemetryOptions
     /// <summary>True when a DSN is configured; otherwise the SDK is never initialised.</summary>
     public bool Enabled => !string.IsNullOrWhiteSpace(Dsn);
 }
+
+/// <summary>Live capture (chunked recording) tuning. See docs/Streaming_Capture_and_Live_Transcript.md.</summary>
+public class LiveCaptureOptions
+{
+    public const string Section = "Live";
+
+    /// <summary>How long a live recording may go without a chunk before the reaper finalises it from
+    /// whatever arrived (or discards it, if nothing did). Long enough to survive a laptop sleeping
+    /// through a break, short enough that a stranded capture is not a mystery for the rest of the day.</summary>
+    public int AbandonAfterMinutes { get; set; } = 30;
+
+    /// <summary>How often the reaper looks. Cheap - one projected query over live recordings only.</summary>
+    public int ReaperIntervalMinutes { get; set; } = 5;
+}

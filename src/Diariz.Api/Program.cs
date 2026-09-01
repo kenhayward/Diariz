@@ -48,6 +48,7 @@ builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailO
 builder.Services.Configure<AppPublicOptions>(builder.Configuration.GetSection(AppPublicOptions.Section));
 builder.Services.Configure<IdentificationOptions>(builder.Configuration.GetSection(IdentificationOptions.Section));
 builder.Services.Configure<UploadOptions>(builder.Configuration.GetSection(UploadOptions.Section));
+builder.Services.Configure<LiveCaptureOptions>(builder.Configuration.GetSection(LiveCaptureOptions.Section));
 // The multipart form reader keeps its own body ceiling, enforced while binding the form and NOT raised by
 // an action's [RequestSizeLimit]. Its 128 MB default sat below both nginx (1024m) and the upload endpoint's
 // own 1 GiB limit, so a long recording failed with "Multipart body length limit 134217728 exceeded" before
@@ -579,6 +580,8 @@ builder.Services.AddHostedService<StorageBackfillService>();
 // Nightly audio-retention job: deletes audio blobs of old, transcribed, unprotected recordings when the
 // Platform Administrator has opted in (off by default). Runs at the configured server-local time of day.
 builder.Services.AddHostedService<AudioRetentionWorker>();
+// Finalises live captures whose client vanished mid-meeting (see LiveRecordingReaper).
+builder.Services.AddHostedService<LiveRecordingReaper>();
 // Nightly LLM usage-log retention sweep: deletes LlmCall rows older than LlmUsageRetentionDays (0 = keep
 // forever). Reuses AudioRetentionSchedule's server-local time of day.
 builder.Services.AddHostedService<LlmUsageRetentionWorker>();

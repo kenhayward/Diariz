@@ -450,6 +450,231 @@ public class RecordingsController : ControllerBase
                 null, null, false, rec.HasAudio, StartedAt: rec.StartedAt, EndedAt: rec.EndedAt));
     }
 
+    /// <summary>Bytes per second of captured audio, used only to charge a provisional quota estimate at
+    /// the start of a live capture. A live recording cannot know its size in advance, and the normal
+    /// check runs against a known <c>audio.Length</c>. Measured from the recorder's own WebM/Opus output
+    /// (~193 KB for 12 s, so ~16 KB/s); the estimate is reconciled to the real size at finalise, so an
+    /// error here costs a slightly wrong quota reading mid-meeting and nothing after it.</summary>
+    private const long LiveEstimatedBytesPerSecond = 16_000;
+
+    [HttpPost("live")]
+    [EndpointSummary("Begin a live recording")]
+    [EndpointDescription(
+        "Creates the recording server-side before any audio exists, so a capture is durable while the " +
+        "meeting is still running rather than arriving in one upload at the end. The recording comes " +
+        "back with status `Live`; send the audio as chunks to `PUT /api/recordings/{id}/chunks/{sequence}` " +
+        "and then call `POST /api/recordings/{id}/live/finalize`.\n\n" +
+        "`sessionId` identifies the capturing device and must be presented by every chunk - a second " +
+        "device is refused rather than interleaving its audio into this recording. A capture whose " +
+        "client disappears is finalised automatically from whatever chunks arrived.")]
+    public async Task<ActionResult<LiveRecordingDto>> BeginLive(BeginLiveRecordingRequest req)
+    {
+        // Charge a provisional estimate up front. Without it a user could start any number of live
+        // captures and only discover at finalise that none of them fit.
+        var estimate = Math.Max(0, req.ExpectedDurationMs) / 1000 * LiveEstimatedBytesPerSecond;
+        var quota = await _db.Users.Where(u => u.Id == UserId).Select(u => u.QuotaBytes).FirstOrDefaultAsync();
+        var used = await _db.Recordings.Where(r => r.UserId == UserId).SumAsync(r => r.SizeBytes);
+        if (used + estimate > quota)
+            return StatusCode(413,
+                "Storage quota exceeded. Delete some recordings or ask an administrator to raise your quota.");
+
+        var personalRoomId = await _rooms.PersonalRoomIdAsync(UserId);
+        var intoSharedRoom = req.RoomId is { } rid && rid != personalRoomId;
+        if (intoSharedRoom &&
+            !(await _rooms.PermissionsAsync(UserId, req.RoomId!.Value)).HasFlag(RoomPermission.CreateRecording))
+            return StatusCode(StatusCodes.Status403Forbidden, "You can't add recordings to that room.");
+
+        var rec = new Recording
+        {
+            Id = Guid.NewGuid(),
+            UserId = UserId,
+            Title = string.IsNullOrWhiteSpace(req.Title)
+                ? $"Recording {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm}"
+                : req.Title,
+            Source = req.Source,
+            ContentType = "audio/webm",
+            // No blob and no bytes yet: both are filled in when the chunks are concatenated at finalise.
+            BlobKey = "",
+            SizeBytes = 0,
+            DurationMs = 0,
+            StartedAt = PlausibleCaptureTime(req.StartedAt),
+            Status = RecordingStatus.Live,
+            LiveSessionId = req.SessionId,
+        };
+        _db.Recordings.Add(rec);
+        await _db.SaveChangesAsync();
+
+        var placementSection = intoSharedRoom
+            ? null
+            : req.SectionId is { } sid
+              && await _db.Sections.AnyAsync(s => s.Id == sid && s.RoomId == personalRoomId)
+                ? req.SectionId
+                : null;
+        await _rooms.PlaceInMainRoomAsync(rec.Id, UserId, placementSection);
+        if (intoSharedRoom)
+            await _rooms.ShareIntoRoomAsync(rec.Id, req.RoomId!.Value, UserId, sectionId: null);
+
+        await _hub.NotifyStatusAsync(UserId, rec.Id, rec.Status.ToString());
+
+        return CreatedAtAction(nameof(Get), new { id = rec.Id },
+            new LiveRecordingDto(rec.Id, req.SessionId, rec.Status));
+    }
+
+    [HttpPut("{id:guid}/chunks/{sequence:int}")]
+    [EndpointSummary("Upload one chunk of a live recording")]
+    [EndpointDescription(
+        "Adds a slice of audio to a capture in progress. Chunks are contiguous, non-overlapping and " +
+        "0-based, and must carry the `sessionId` returned by `POST /api/recordings/live`.\n\n" +
+        "**Idempotent on (recording, sequence)**: re-sending a sequence replaces it rather than adding " +
+        "a second copy, so a chunk whose upload failed can simply be retried. 409 if the recording is " +
+        "no longer live, or if the session id belongs to a different device.")]
+    [RequestSizeLimit(UploadOptions.MaxRequestBytes)]
+    public async Task<IActionResult> PutChunk(
+        Guid id, int sequence, [FromForm] IFormFile chunk, [FromForm] Guid sessionId,
+        [FromForm] long startMs, [FromForm] long endMs)
+    {
+        if (chunk is null || chunk.Length == 0) return BadRequest("Empty chunk.");
+        if (sequence < 0) return BadRequest("Sequence must not be negative.");
+
+        var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
+        if (rec is null) return NotFound();
+        if (rec.Status != RecordingStatus.Live)
+            return StatusCode(StatusCodes.Status409Conflict, "This recording is no longer live.");
+        if (rec.LiveSessionId != sessionId)
+            return StatusCode(StatusCodes.Status409Conflict,
+                "This recording is being captured by another device.");
+
+        var existing = await _db.RecordingChunks
+            .FirstOrDefaultAsync(c => c.RecordingId == id && c.Sequence == sequence);
+
+        // Quota is enforced per chunk, not only at begin. The begin check is a pre-flight estimate
+        // against a duration the client declares, so without this a capture could run past the
+        // owner's quota indefinitely - and several captures started at once can each pass their own
+        // estimate while collectively exceeding it. Checked before anything is written, so a refused
+        // chunk leaves no blob and no row.
+        var quota = await _db.Users.Where(u => u.Id == UserId).Select(u => u.QuotaBytes).FirstOrDefaultAsync();
+        var used = await _db.Recordings.Where(r => r.UserId == UserId).SumAsync(r => r.SizeBytes);
+        if (used - (existing?.SizeBytes ?? 0) + chunk.Length > quota)
+            return StatusCode(413,
+                "Storage quota exceeded. Delete some recordings or ask an administrator to raise your quota.");
+
+        var blobKey = $"{UserId}/{id}/chunks/{sequence:D5}.webm";
+
+        // Blob first, row second, and the order is load-bearing. A crash between the two leaves an
+        // orphaned blob that finalise ignores and the reaper collects - recoverable. The reverse leaves
+        // a row pointing at audio that was never stored, which finalise would then fail to concatenate.
+        await using (var stream = chunk.OpenReadStream())
+            await _storage.UploadAsync(blobKey, stream, "audio/webm");
+
+        // The quota charge tracks the bytes actually held, so a replaced chunk swaps its contribution
+        // rather than adding to it.
+        rec.SizeBytes += chunk.Length - (existing?.SizeBytes ?? 0);
+
+        if (existing is null)
+        {
+            _db.RecordingChunks.Add(new RecordingChunk
+            {
+                Id = Guid.NewGuid(),
+                RecordingId = id,
+                Sequence = sequence,
+                BlobKey = blobKey,
+                StartMs = startMs,
+                EndMs = endMs,
+                SizeBytes = chunk.Length,
+                ReceivedAt = DateTimeOffset.UtcNow,
+            });
+        }
+        else
+        {
+            existing.BlobKey = blobKey;
+            existing.StartMs = startMs;
+            existing.EndMs = endMs;
+            existing.SizeBytes = chunk.Length;
+            existing.ReceivedAt = DateTimeOffset.UtcNow;
+        }
+
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpPost("{id:guid}/live/finalize")]
+    [EndpointSummary("Finish a live recording")]
+    [EndpointDescription(
+        "Stops accepting chunks and concatenates them into the recording's audio, after which the " +
+        "normal transcription pipeline runs exactly as it does for an uploaded file. Responds 202; " +
+        "subscribe to the recording or the `recording.transcribed` webhook for the result.\n\n" +
+        "409 with the missing sequence numbers if any chunk never arrived - retry those and call this " +
+        "again, rather than accepting a recording with holes in it. 204 if no chunk ever arrived, in " +
+        "which case the empty recording is discarded.")]
+    public async Task<IActionResult> FinalizeLive(Guid id)
+    {
+        var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
+        if (rec is null) return NotFound();
+
+        // Finalising twice is the normal consequence of a client retrying a request whose response it
+        // never saw, so the second call reports the same success rather than an error.
+        if (rec.Status == RecordingStatus.Merging) return Accepted();
+        if (rec.Status != RecordingStatus.Live)
+            return StatusCode(StatusCodes.Status409Conflict, "This recording is not a live capture.");
+
+        var chunks = await _db.RecordingChunks
+            .Where(c => c.RecordingId == id)
+            .OrderBy(c => c.Sequence)
+            .ToListAsync();
+
+        if (chunks.Count == 0)
+        {
+            // Nothing was ever captured. Leaving the row would show the user an empty recording they
+            // have to tidy up themselves.
+            _db.Recordings.Remove(rec);
+            await _db.SaveChangesAsync();
+            return NoContent();
+        }
+
+        // Every sequence from 0 to the highest received must be present: a hole means a chunk was lost,
+        // and concatenating around it would silently splice unrelated audio together.
+        var received = chunks.Select(c => c.Sequence).ToHashSet();
+        var missing = Enumerable.Range(0, chunks[^1].Sequence + 1).Where(s => !received.Contains(s)).ToList();
+        if (missing.Count > 0)
+            return StatusCode(StatusCodes.Status409Conflict, new MissingChunksDto(missing));
+
+        rec.Status = RecordingStatus.Merging;
+        var outputKey = $"{UserId}/{id}-live-{Guid.NewGuid():N}.webm";
+        await _db.SaveChangesAsync();
+
+        await _queue.EnqueueAudioMergeAsync(new AudioMergeJob(
+            rec.Id, chunks.Select(c => c.BlobKey).ToList(), outputKey, [], Kind: "live-chunks"));
+        await _hub.NotifyStatusAsync(UserId, rec.Id, rec.Status.ToString());
+        return Accepted();
+    }
+
+    [HttpDelete("{id:guid}/live")]
+    [EndpointSummary("Abandon a live recording")]
+    [EndpointDescription(
+        "Discards a capture in progress and everything uploaded for it. Use it when a recording was " +
+        "begun and then abandoned before any of it was wanted - a take stopped while this call was " +
+        "still in flight, for instance.\n\n" +
+        "409 once finalising has started: at that point the chunks are the concatenation job's input, " +
+        "and removing them would fail the merge rather than tidy anything. A capture simply left alone " +
+        "is collected automatically instead.")]
+    public async Task<IActionResult> DiscardLive(Guid id)
+    {
+        var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
+        if (rec is null) return NotFound();
+        if (rec.Status != RecordingStatus.Live)
+            return StatusCode(StatusCodes.Status409Conflict, "This recording is not a live capture.");
+
+        // The DB cascade clears the chunk rows, but not their blobs - free those first or they are
+        // orphaned in object storage with nothing left pointing at them.
+        var chunks = await _db.RecordingChunks.Where(c => c.RecordingId == id).ToListAsync();
+        foreach (var chunk in chunks)
+            await _storage.DeleteAsync(chunk.BlobKey);
+
+        _db.Recordings.Remove(rec);
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
     [HttpPost("{id:guid}/retranscribe")]
     [EndpointSummary("Re-transcribe a recording")]
     [EndpointDescription(
@@ -1686,7 +1911,10 @@ public class RecordingsController : ControllerBase
         // The DB cascade clears Transcriptions -> Segments + Summary, Speakers, Attachment and
         // MeetingScreenshot rows - but not their object-storage blobs, so the uploaded-attachment files
         // and the screenshot images must be deleted explicitly too.
-        await _storage.DeleteAsync(rec.BlobKey);
+        // A live capture has no canonical blob until finalise, and one that failed at the merge never
+        // gets one - BlobKey is empty for both. Object storage rejects an empty key, so guard it here
+        // rather than letting a delete 500 on a recording the user is trying to clear up.
+        if (!string.IsNullOrEmpty(rec.BlobKey)) await _storage.DeleteAsync(rec.BlobKey);
         foreach (var key in await FileAttachmentKeysAsync(rec.Id))
             await _storage.DeleteAsync(key);
         foreach (var key in await ScreenshotKeysAsync(rec.Id))
@@ -1746,7 +1974,14 @@ public class RecordingsController : ControllerBase
         if (rec.IsAudioProtected)
             return Conflict("This recording's audio is protected from deletion. Remove the protection first.");
 
-        if (rec.HasAudio)
+        // A capture still in progress has no canonical blob to reclaim - its audio is a set of chunks
+        // the finalise job still needs. Refusing is clearer than silently doing nothing, and stops the
+        // empty BlobKey reaching object storage on the way to finding that out.
+        if (rec.Status == RecordingStatus.Live || rec.Status == RecordingStatus.Merging)
+            return StatusCode(StatusCodes.Status409Conflict,
+                "This recording is still being captured. Stop it first.");
+
+        if (rec.HasAudio && !string.IsNullOrEmpty(rec.BlobKey))
         {
             await _storage.DeleteAsync(rec.BlobKey);
             rec.AudioDeletedAt = DateTimeOffset.UtcNow;
@@ -1775,6 +2010,8 @@ public class RecordingsController : ControllerBase
             .ToListAsync();
         foreach (var rec in recs)
         {
+            // Skip a capture that has no canonical blob yet rather than failing the whole batch on it.
+            if (string.IsNullOrEmpty(rec.BlobKey)) continue;
             await _storage.DeleteAsync(rec.BlobKey);
             rec.AudioDeletedAt = DateTimeOffset.UtcNow;
             rec.SizeBytes = 0;
@@ -2148,33 +2385,8 @@ public class RecordingsController : ControllerBase
         return string.IsNullOrEmpty(slug) ? "transcript" : slug;
     }
 
-    private async Task EnqueueTranscriptionAsync(Recording rec, string? model = null)
-    {
-        var nextVersion = await _db.Transcriptions
-            .Where(t => t.RecordingId == rec.Id)
-            .Select(t => (int?)t.Version).MaxAsync() ?? 0;
-
-        var transcription = new Transcription
-        {
-            Id = Guid.NewGuid(),
-            RecordingId = rec.Id,
-            Model = model ?? _defaultModel,
-            Version = nextVersion + 1
-        };
-        _db.Transcriptions.Add(transcription);
-
-        // The spoken language: this recording's own pin, else the owner's default, else auto-detect. The
-        // default is read per job rather than copied onto the recording, so changing the preference applies
-        // to everything that has not overridden it. Mapped to a Whisper code here - the worker hands it
-        // straight to the model, which does not know the platform's regional tags ("pt-BR").
-        var chosenLanguage = rec.TranscriptionLanguage
-            ?? (await _db.UserSettings.FindAsync(rec.UserId))?.TranscriptionLanguage;
-
-        rec.Status = RecordingStatus.Queued;
-        await _queue.EnqueueAsync(new TranscriptionJob(rec.Id, transcription.Id, rec.BlobKey, transcription.Model,
-            rec.MinSpeakers, rec.MaxSpeakers, SupportedLanguages.ToWhisperCode(chosenLanguage)));
-        await _hub.NotifyStatusAsync(rec.UserId, rec.Id, rec.Status.ToString());
-    }
+    private Task EnqueueTranscriptionAsync(Recording rec, string? model = null) =>
+        TranscriptionEnqueue.AddAsync(_db, _queue, _hub, rec, _defaultModel, model);
 
     /// <summary>Projects a speaker plus, when it was identified as someone, that person's details - so the
     /// Speakers panel needs no second call. A "Multiple Speakers" slot is deliberately left bare: it is

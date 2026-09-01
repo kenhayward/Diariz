@@ -20,15 +20,20 @@ public class WorkerMergeCallbackController : ControllerBase
     private readonly DiarizDbContext _db;
     private readonly IHubContext<TranscriptionHub> _hub;
     private readonly IAudioStorage _storage;
+    private readonly IJobQueue _queue;
     private readonly WorkerOptions _opts;
+    private readonly string _defaultModel;
 
     public WorkerMergeCallbackController(
-        DiarizDbContext db, IHubContext<TranscriptionHub> hub, IAudioStorage storage, IOptions<WorkerOptions> opts)
+        DiarizDbContext db, IHubContext<TranscriptionHub> hub, IAudioStorage storage, IJobQueue queue,
+        IOptions<WorkerOptions> opts, IConfiguration? config = null)
     {
         _db = db;
         _hub = hub;
         _storage = storage;
+        _queue = queue;
         _opts = opts.Value;
+        _defaultModel = config?["Transcription:DefaultModel"] ?? "whisperx-large-v3";
     }
 
     private bool SecretOk =>
@@ -52,6 +57,26 @@ public class WorkerMergeCallbackController : ControllerBase
         survivor.AudioDeletedAt = null;
         survivor.Error = null;
         survivor.Status = RecordingStatus.Transcribed;
+
+        // A finalised live capture, rather than several recordings folded together. The chunks were
+        // slices of this recording's own audio, so there are no source recordings to delete - just the
+        // chunk rows and their blobs - and the recording has never been transcribed, so this is where
+        // the ordinary pipeline finally picks it up. Everything after this point is identical to an
+        // uploaded file.
+        if (body.Kind == "live-chunks")
+        {
+            var chunks = await _db.RecordingChunks
+                .Where(c => c.RecordingId == survivor.Id)
+                .ToListAsync();
+            foreach (var chunk in chunks)
+                await _storage.DeleteAsync(chunk.BlobKey);
+            _db.RecordingChunks.RemoveRange(chunks);
+            survivor.LiveSessionId = null;
+
+            await TranscriptionEnqueue.AddAsync(_db, _queue, _hub, survivor, _defaultModel);
+            await _db.SaveChangesAsync();
+            return Ok();
+        }
 
         // Remove the now-merged source recordings (cascade clears their transcriptions/segments/speakers).
         var others = await _db.Recordings

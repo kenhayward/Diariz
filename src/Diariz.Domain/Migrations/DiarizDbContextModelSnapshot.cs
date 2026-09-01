@@ -1312,6 +1312,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<string>("Error")
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("LiveSessionId")
+                        .HasColumnType("uuid");
+
                     b.Property<int?>("MaxSpeakers")
                         .HasColumnType("integer");
 
@@ -1454,6 +1457,43 @@ namespace Diariz.Domain.Migrations
                     b.HasKey("RecordingId");
 
                     b.ToTable("RecordingCalendarLinks");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.RecordingChunk", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BlobKey")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<long>("EndMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RecordingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("StartMs")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecordingId", "Sequence")
+                        .IsUnique();
+
+                    b.ToTable("RecordingChunks");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.RecordingTag", b =>
@@ -3123,6 +3163,17 @@ namespace Diariz.Domain.Migrations
                     b.Navigation("Recording");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.RecordingChunk", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.Recording", "Recording")
+                        .WithMany("Chunks")
+                        .HasForeignKey("RecordingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Recording");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.RecordingTag", b =>
                 {
                     b.HasOne("Diariz.Domain.Entities.Recording", "Recording")
@@ -3542,6 +3593,8 @@ namespace Diariz.Domain.Migrations
                     b.Navigation("Attachments");
 
                     b.Navigation("CalendarLink");
+
+                    b.Navigation("Chunks");
 
                     b.Navigation("Speakers");
 

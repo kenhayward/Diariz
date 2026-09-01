@@ -134,7 +134,12 @@ public record AudioMergeJob(
     Guid RecordingId,
     IReadOnlyList<string> BlobKeys,
     string OutputKey,
-    IReadOnlyList<Guid> DeleteRecordingIds);
+    IReadOnlyList<Guid> DeleteRecordingIds,
+    /// <summary><c>"recordings"</c> (default) folds whole recordings together; <c>"live-chunks"</c>
+    /// concatenates slices of one live capture. The worker uses it to decide whether to byte-join
+    /// first - live chunks are not individually decodable - and echoes it back so the API can decide
+    /// what the finished merge means.</summary>
+    string Kind = "recordings");
 
 /// <summary>Callback body the worker POSTs when the concatenated audio is ready.</summary>
 public record AudioMergeResult(
@@ -143,7 +148,8 @@ public record AudioMergeResult(
     string ContentType,
     long SizeBytes,
     long DurationMs,
-    IReadOnlyList<Guid> DeleteRecordingIds);
+    IReadOnlyList<Guid> DeleteRecordingIds,
+    string Kind = "recordings");
 
 /// <summary>Callback body the worker POSTs when the merge fails (originals are kept).</summary>
 public record AudioMergeFailure(

@@ -24,7 +24,7 @@
 - **`main` is branch protected.** Work lands via a PR. Never commit or push to `main`, never merge locally.
 - **Branch:** `claude/streaming-capture-phase-1`, off `origin/main` at `75fe5bc9`.
 - **Target version:** `0.262.0` -> **`0.263.0`** (functional enhancement, minor bump). Applied once, in Task 12.
-- **Do not bump `MaintenanceController.CurrentFormat`.** Every change here is additive, so an older backup restores unchanged (spec §7.4). A `Live` recording inside a restored backup is collected by the Task 6 reaper like any other abandoned session.
+- **Do not bump `MaintenanceController.CurrentFormat`.** Every change here is additive, so an older backup restores unchanged (spec §7.5). A `Live` recording inside a restored backup is collected by the Task 6 reaper like any other abandoned session.
 - **The web suite cannot be trusted locally on Windows.** `vitest.config.ts` pins `reporters: ["default"]`; do not remove it. Before claiming the web suite passes, run it on Linux (mount the repo read-only into `node:24`, `tar` everything except `node_modules`, `npm ci`, `npx vitest run`).
 - **`dotnet test --filter "Name=X"` does not work in this repo** despite what CLAUDE.md says. Always use `FullyQualifiedName~X`.
 - **Split queries are the app-wide default.** Just write the `Include`s; do not add `.AsSplitQuery()`. The one caveat that applies here: a `Skip`/`Take` over a query that also `Include`s a collection needs a deterministic `OrderBy`. Task 6's reaper query projects with `Select`, so it does not hit this.
@@ -183,6 +183,8 @@ Drop the `IsUnique()` from the index, watch `DuplicateSequenceForOneRecording_Is
 **Files:**
 - Modify: `src/Diariz.Api/Controllers/RecordingsController.cs`
 - Modify: `src/Diariz.Api/Contracts/ApiDtos.cs`
+- Modify: `src/Diariz.Domain/Entities/Recording.cs` (`LiveSessionId`) + a migration - **not** foreseen when this plan was written; the session id of §9.5 has to live somewhere, and Task 2's migration was already committed
+- Create: `tests/Diariz.Api.Tests/LiveTestSupport.cs` (shared seeding/wiring for Tasks 3-7)
 - Test: `tests/Diariz.Api.Tests/LiveRecordingControllerTests.cs` (new)
 
 **Interfaces:**

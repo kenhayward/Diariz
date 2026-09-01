@@ -3022,6 +3022,26 @@ the least likely to hold.
   (the RAG index), and `tag-cloud-jobs`/`tag-extractors` (the tag cloud). Job payloads are **PascalCase JSON**
   so .NET produces and Python/.NET consume without renaming. Keep `TranscriptionJob` / `TranscriptionResult` /
   `AudioMergeJob` / `VoiceprintJob` / `Segment` shapes in sync across both languages.
+- **`AudioMergeJob.Kind` decides how the worker concatenates, and the API decides what it meant.**
+  `"recordings"` (the default) folds whole recordings together, each independently decodable. `"live-chunks"`
+  concatenates slices of one live capture, where **only the first chunk carries the WebM/EBML header** - so
+  `build_concat_command`, which opens every input separately, dies on the second one with *"EBML header
+  parsing failed"*. `audio_merge.join_then_concat` byte-joins first and hands ffmpeg a single input. The worker
+  branches only on that, then **echoes `Kind` back unchanged** through `post_merge_result`; the callback uses it
+  to choose between deleting the merged-away source recordings and finishing a live capture (drop the chunk rows
+  and blobs, then enqueue the ordinary transcription). Measured in the S0 spike - see
+  [`Streaming_Capture_and_Live_Transcript.md`](Streaming_Capture_and_Live_Transcript.md) §5.1.
+- **Live capture (chunked recording).** `POST /api/recordings/live` creates the recording at `Status = Live`
+  before any audio exists; `PUT /api/recordings/{id}/chunks/{sequence}` uploads each slice, **idempotent on
+  `(recording, sequence)`** so a retry replaces rather than duplicates; `POST /api/recordings/{id}/live/finalize`
+  concatenates and hands over to the normal pipeline, refusing with the missing sequence numbers if any chunk
+  never arrived. Every chunk carries the client-generated `sessionId` from the begin call, so a second device
+  signed in as the same user is refused instead of interleaving its audio. Quota is checked per chunk as well
+  as at begin, because the begin check is only an estimate against a duration the client declares.
+- **`LiveRecordingReaper` (hosted service).** Finalises live captures whose client vanished - a closed lid, a
+  killed tab - from whatever chunks arrived, or deletes the recording if none did. It deliberately skips
+  `Merging`, so it cannot race an in-flight finalise; the consequence is that a failed enqueue must put the
+  status back to `Live` or no later pass would ever retry it. Takes the API's `AddHostedService` count to 16.
 - **Merge recordings.** `POST /api/recordings/merge` folds 2+ recordings into the earliest one: it builds a new
   transcription version on the survivor (`TranscriptMerger` lays the source transcripts end-to-end, offsetting
   timestamps and namespacing speakers) and **appends every source's action items** to the survivor. The summary

@@ -429,11 +429,21 @@ gates on it:
 | MCP tools, `SearchController` | excluded from results |
 | `RecordingsController.Get` | returned as normal, with the flag on `TranscriptionDto` so the UI can label it |
 
-### 7.3 `RecordingStatus.Live = 8`
+### 7.3 `Recording.LiveSessionId`
+
+`uuid null`. The capturing device's client-generated session id while the recording is live. Every chunk
+upload must present it, so a second device signed in as the same user is refused rather than interleaving
+its audio (§9.5). Null for every recording that did not arrive as a live capture, and cleared at finalise.
+
+*Added during implementation.* The session rule was specified in §9.5 from the start, but this section
+did not say where the id lives, and §9.5's "takes a client-generated session id" is not by itself a
+schema change anyone would notice was missing.
+
+### 7.4 `RecordingStatus.Live = 8`
 
 Append-only, following `Merging = 7`. Never renumber - values persist as ints.
 
-### 7.4 Backup-restore
+### 7.5 Backup-restore
 
 None of this is destructive and an older backup restores unchanged, so
 `MaintenanceController.CurrentFormat` is **not** bumped. A restored backup can contain a `Live`
@@ -553,6 +563,18 @@ Chunks plus a concatenated blob charge the owner twice until cleanup. Today `Siz
 a known `audio.Length` before anything is stored. Live recordings must instead charge incrementally as
 chunks arrive and reconcile at finalise, and the reaper (§9.4) must release the charge for an abandoned
 session.
+
+**Quota is checked per chunk, not only at begin.** The begin check is an estimate against a duration the
+*client declares*, so on its own it lets a capture run past the owner's quota indefinitely simply by
+recording for longer than it said it would. Each chunk is therefore checked before anything is written,
+so a refused chunk leaves neither a blob nor a row.
+
+**Known limitation, accepted for phase 1.** Several captures started at once can each pass their own begin
+estimate while collectively exceeding the quota, because the estimate is a pre-flight check and is not
+held against the account. They are then stopped at the chunk that crosses the line rather than at Record.
+Holding the estimate properly needs a reservation column and a release path on every exit - finalise,
+discard, reap, and a failed begin - which is more machinery than the failure mode warrants: a refusal
+mid-capture, not data loss, and the audio already uploaded is still finalised.
 
 ### 12.2 Retention
 

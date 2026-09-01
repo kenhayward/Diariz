@@ -127,15 +127,16 @@ def test_handle_merge_concatenates_uploads_and_reports(monkeypatch, tmp_path):
                         lambda key, path, ct: uploaded.update(key=key, ct=ct))
     posted = {}
     monkeypatch.setattr(worker.callback, "post_merge_result",
-                        lambda rid, key, ct, size, dur, dels: posted.update(
-                            rid=rid, key=key, size=size, dur=dur, dels=dels))
+                        lambda rid, key, ct, size, dur, dels, kind="recordings": posted.update(
+                            rid=rid, key=key, size=size, dur=dur, dels=dels, kind=kind))
     monkeypatch.setattr(worker.callback, "post_merge_failure", lambda *a, **k: posted.update(failed=True))
 
     worker.handle_merge(_merge_job())
 
     assert downloaded == ["u/a.webm", "u/b.webm"]  # downloaded in order
     assert uploaded["key"] == "u/merged.webm"
-    assert posted == {"rid": "rec-1", "key": "u/merged.webm", "size": 1234, "dur": 5000, "dels": ["rec-2"]}
+    assert posted == {"rid": "rec-1", "key": "u/merged.webm", "size": 1234, "dur": 5000,
+                      "dels": ["rec-2"], "kind": "recordings"}
     assert not os.path.exists(str(out))  # temp output cleaned up
 
 
@@ -481,3 +482,61 @@ def test_handle_leaves_the_language_unset_when_the_job_does_not_pin_one(monkeypa
     worker.handle(_job("tid-auto"))
 
     assert captured["language"] is None
+
+
+def _merge_spies(monkeypatch, tmp_path):
+    """Record which concat entry point handle_merge reaches for, and what it reports back."""
+    src = tmp_path / "a.webm"; src.write_text("a")
+    out = tmp_path / "merged.webm"; out.write_text("ab")
+    calls: dict = {}
+
+    monkeypatch.setattr(worker.storage, "download", lambda key: str(src))
+    monkeypatch.setattr(worker.storage, "upload", lambda key, path, ct: None)
+    def spy(name):
+        def record(paths):
+            calls[name] = list(paths)
+            return str(out), 1, 2
+        return record
+
+    monkeypatch.setattr(worker.audio_merge, "concat", spy("concat"))
+    monkeypatch.setattr(worker.audio_merge, "join_then_concat", spy("join_then_concat"))
+    monkeypatch.setattr(worker.callback, "post_merge_result",
+                        lambda rid, key, ct, size, dur, dels, kind="recordings":
+                        calls.update(posted_kind=kind))
+    monkeypatch.setattr(worker.callback, "post_merge_failure",
+                        lambda rid, err: calls.update(failed=err))
+    return calls
+
+
+def test_handle_merge_live_chunks_uses_join_then_concat(monkeypatch, tmp_path):
+    """Live-capture chunks are slices of one stream, so only the first has a WebM header.
+
+    Handing them to the ordinary concat path makes ffmpeg die on the second input - the S0 finding.
+    """
+    calls = _merge_spies(monkeypatch, tmp_path)
+
+    worker.handle_merge(_merge_job(Kind="live-chunks"))
+
+    assert "join_then_concat" in calls
+    assert "concat" not in calls
+    assert "failed" not in calls
+
+
+def test_handle_merge_recordings_still_uses_concat(monkeypatch, tmp_path):
+    """The pre-existing merge path, which has been in production far longer than live capture."""
+    calls = _merge_spies(monkeypatch, tmp_path)
+
+    worker.handle_merge(_merge_job())
+
+    assert "concat" in calls
+    assert "join_then_concat" not in calls
+
+
+def test_handle_merge_echoes_kind(monkeypatch, tmp_path):
+    """The worker branches on Kind for the join, then hands it straight back: what happens next
+    (delete source recordings, or delete chunk rows and transcribe) is the API's decision."""
+    calls = _merge_spies(monkeypatch, tmp_path)
+
+    worker.handle_merge(_merge_job(Kind="live-chunks"))
+
+    assert calls["posted_kind"] == "live-chunks"

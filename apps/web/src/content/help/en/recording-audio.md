@@ -1,16 +1,35 @@
 ---
 title: Recording audio
-summary: Record from your microphone, from system audio, or both at once. You can pause, schedule an auto-stop, and watch the input level while you record.
+summary: Record from your microphone, from system audio, or both at once. Your recording is saved as you go, so an interruption costs at most the last few seconds. You can pause, schedule an auto-stop, and watch the level.
 group: getting-started
 order: 20
 ---
 
 Press **Record** in the capture panel to start. Press **Stop** to end the take and begin transcription.
 
-After you press Stop the recording has to be uploaded before transcription can begin. The controls
-are disabled while that happens, and the status bar along the bottom of the window counts up -
-"Uploading... 4s" - until it is safely up, then clears itself. A long meeting on a slow connection can
-take several seconds; the counter is there so you can see it is still working rather than stuck.
+## Your recording is saved while you record
+
+Diariz sends the audio to the server in pieces as the meeting runs, rather than all at once when you
+stop. The recording appears in your list the moment you press Record and fills in as you talk.
+
+This matters most when something goes wrong. If the browser crashes, the laptop goes to sleep, or you
+close the window by mistake, you lose at most the last few seconds - not the whole meeting. A recording
+whose window disappears is finished off automatically after about half an hour, with everything that
+reached the server, and then transcribes as normal. You do not have to do anything to recover it.
+
+There is nothing new to press. Record and Stop work exactly as they always have.
+
+Two side effects you may notice: stopping is quick even after a long meeting, because the audio has
+been arriving all along instead of going up in one push at the end; and a long recording no longer
+builds up in the browser as you go, so a three-hour meeting no longer makes the tab heavy.
+
+If the server cannot be reached when you press Record, or a piece never gets through, Diariz falls
+back to the way it used to work - it keeps the whole recording in the browser and uploads it when you
+stop. The status bar counts up ("Uploading... 4s") until it is safely up, then clears itself. So a
+patchy connection costs you the head start, never the meeting.
+
+One recording, one device: if you are signed in on two machines, only the one that started the
+recording can add to it. The other is turned away rather than mixing its audio into yours.
 
 ## Choosing what to capture
 

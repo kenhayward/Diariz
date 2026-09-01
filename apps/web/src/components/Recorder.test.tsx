@@ -9,6 +9,12 @@ vi.mock("../lib/api", () => ({
   api: {
     upload: vi.fn(), createNotes: vi.fn(), createScreenshot: vi.fn(),
     renameRecording: vi.fn(), putCalendarLink: vi.fn(),
+    // Live capture defaults to unavailable, so every pre-existing test exercises the fallback
+    // path - which is exactly the behaviour that must not change.
+    beginLive: vi.fn().mockRejectedValue(new Error("no live")),
+    putChunk: vi.fn().mockResolvedValue(undefined),
+    finalizeLive: vi.fn().mockResolvedValue(undefined),
+    discardLive: vi.fn().mockResolvedValue(undefined),
   },
   apiErrorMessage: (_e: unknown, fb: string) => fb,
   getToken: () => TOKEN,
@@ -156,6 +162,17 @@ function expectOpaqueFloatingPanel(panel: HTMLElement) {
   for (const button of Array.from(panel.querySelectorAll("button")))
     expect(button.className).toMatch(/(^|\s)(dark:)?bg-/);
 }
+
+// Live capture defaults to unavailable for every test in this file, so the whole pre-existing suite
+// exercises the fallback path - the behaviour that must not change. `vi.clearAllMocks` in the various
+// beforeEach hooks resets calls but keeps implementations, so a test that makes live capture succeed
+// would otherwise leak into every test after it, in any describe block.
+beforeEach(() => {
+  (api.beginLive as Mock).mockRejectedValue(new Error("no live"));
+  (api.putChunk as Mock).mockResolvedValue(undefined);
+  (api.finalizeLive as Mock).mockResolvedValue(undefined);
+  (api.discardLive as Mock).mockResolvedValue(undefined);
+});
 
 describe("Recorder recovery", () => {
   beforeEach(() => {
@@ -515,6 +532,58 @@ describe("Recorder source selection", () => {
     await waitFor(() => expect(api.upload).toHaveBeenCalled());
     expect((api.upload as Mock).mock.calls[0][3]).toBe("Microphone");
     expect(getCombinedStream).not.toHaveBeenCalled();
+  });
+
+  it("falls back to uploading the whole take when live capture cannot start", async () => {
+    // The most important behaviour in the live-capture wiring, and the one most likely to be skipped
+    // because it is the unhappy path. A briefly unreachable server must cost the live transcript and
+    // nothing else - never the meeting.
+    (getStream as Mock).mockResolvedValue(fakeSession);
+    (api.upload as Mock).mockResolvedValue({ id: "r1" });
+    (api.beginLive as Mock).mockRejectedValue(new Error("server down"));
+
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(api.upload).toHaveBeenCalled());
+    expect(api.finalizeLive).not.toHaveBeenCalled();
+    expect(api.putChunk).not.toHaveBeenCalled();
+  });
+
+  it("finalises server-side instead of uploading when live capture is running", async () => {
+    (getStream as Mock).mockResolvedValue(fakeSession);
+    (api.beginLive as Mock).mockResolvedValue({ id: "live-1", sessionId: "s1", status: "Live" });
+    (api.finalizeLive as Mock).mockResolvedValue(undefined);
+    const onUploaded = vi.fn();
+
+    render(<Recorder onUploaded={onUploaded} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(api.finalizeLive).toHaveBeenCalledWith("live-1"));
+    // The server already has the audio; re-uploading the whole blob would double the bytes and
+    // create a second recording.
+    expect(api.upload).not.toHaveBeenCalled();
+    await waitFor(() => expect(onUploaded).toHaveBeenCalled());
+  });
+
+  it("uploads the whole take when finalising a live capture fails", async () => {
+    // The audio is buffered locally throughout precisely so this is recoverable: a finalise that
+    // fails must not leave the user with nothing.
+    (getStream as Mock).mockResolvedValue(fakeSession);
+    (api.beginLive as Mock).mockResolvedValue({ id: "live-2", sessionId: "s2", status: "Live" });
+    (api.finalizeLive as Mock).mockRejectedValue(new Error("gateway"));
+    (api.upload as Mock).mockResolvedValue({ id: "r1" });
+
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(api.upload).toHaveBeenCalled());
   });
 
   it("reports the wall clock it started and stopped, not just the recorded duration", async () => {
@@ -1861,7 +1930,10 @@ describe("recording started from a calendar event", () => {
     await joinAndRecord();
 
     // Armed with the user's threshold, in milliseconds.
-    expect(startSilenceWatcher).toHaveBeenCalledWith(fakeStream, 45_000, expect.any(Function));
+    // The trailing argument is the level feed live capture drives its chunk boundaries off; it is a
+    // no-op until a live session exists, so a calendar take without one behaves exactly as before.
+    expect(startSilenceWatcher).toHaveBeenCalledWith(
+      fakeStream, 45_000, expect.any(Function), expect.any(Function));
 
     // The meeting breaks up: the watcher fires, and the recording ends and uploads like any other.
     act(() => silenceWatcher.onSilent!());

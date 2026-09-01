@@ -1447,6 +1447,19 @@ const GENERATED: GeneratedResource[] = [
     "value": "recordings",
     "operations": [
       {
+        "value": "abandonALiveRecording",
+        "displayName": "Abandon a live recording",
+        "description": "Discards a capture in progress and everything uploaded for it. Use it when a recording was begun and then abandoned before any of it was wanted - a take stopped while this call was still in flight, for instance.",
+        "method": "DELETE",
+        "path": "/api/recordings/{id}/live",
+        "pathParams": [
+          "id"
+        ],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": false
+      },
+      {
         "value": "addATagToARecording",
         "displayName": "Add a tag to a recording",
         "description": "Adds one tag. Automatic topic extraction only ever suggests tags; this is how a tag becomes real and starts counting towards your tag cloud. Promoting a suggestion is the same call - pass its text and it is stored in its normalised form, not kept verbatim. Whitespace inside the tag becomes hyphens (budget planning -> budget-planning), matching is case-insensitive, and adding a tag you already have does nothing. You can always tag your own recording; tagging someone else's needs the EditOthersRecordings permission in a room it is shared into. 400 for blank text, 404 if you cannot see the recording, 403 if you can see it but lack that permission.",
@@ -1469,6 +1482,17 @@ const GENERATED: GeneratedResource[] = [
           "id",
           "label"
         ],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": false
+      },
+      {
+        "value": "beginALiveRecording",
+        "displayName": "Begin a live recording",
+        "description": "Creates the recording server-side before any audio exists, so a capture is durable while the meeting is still running rather than arriving in one upload at the end. The recording comes back with status Live; send the audio as chunks to PUT /api/recordings/{id}/chunks/{sequence} and then call POST /api/recordings/{id}/live/finalize.",
+        "method": "POST",
+        "path": "/api/recordings/live",
+        "pathParams": [],
         "queryParams": [],
         "hasBody": true,
         "returnsArray": false
@@ -1664,6 +1688,19 @@ const GENERATED: GeneratedResource[] = [
         "pathParams": [],
         "queryParams": [],
         "hasBody": true,
+        "returnsArray": false
+      },
+      {
+        "value": "finishALiveRecording",
+        "displayName": "Finish a live recording",
+        "description": "Stops accepting chunks and concatenates them into the recording's audio, after which the normal transcription pipeline runs exactly as it does for an uploaded file. Responds 202; subscribe to the recording or the recording.transcribed webhook for the result.",
+        "method": "POST",
+        "path": "/api/recordings/{id}/live/finalize",
+        "pathParams": [
+          "id"
+        ],
+        "queryParams": [],
+        "hasBody": false,
         "returnsArray": false
       },
       {
@@ -2007,6 +2044,20 @@ const GENERATED: GeneratedResource[] = [
         "method": "POST",
         "path": "/api/recordings",
         "pathParams": [],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": false
+      },
+      {
+        "value": "uploadOneChunkOfALiveRecording",
+        "displayName": "Upload one chunk of a live recording",
+        "description": "Adds a slice of audio to a capture in progress. Chunks are contiguous, non-overlapping and 0-based, and must carry the sessionId returned by POST /api/recordings/live.",
+        "method": "PUT",
+        "path": "/api/recordings/{id}/chunks/{sequence}",
+        "pathParams": [
+          "id",
+          "sequence"
+        ],
         "queryParams": [],
         "hasBody": true,
         "returnsArray": false
