@@ -3049,6 +3049,33 @@ the least likely to hold.
   of the **decode window only** - nothing overlapping is ever stored. Results `POST` to
   **`internal/transcriptions/live-chunk`** (`LiveChunkCallbackController`), authenticated by the same
   `X-Worker-Secret` shared secret as the other worker callbacks, with `LiveChunkFailure` for the failure path.
+- **Live speaker identity is stitched, and the stitch is a separate decision from naming.** pyannote
+  clusters each chunk independently, so its labels hold only inside the window they came from.
+  `LiveSpeakerStitcher` (pure) matches each chunk's ECAPA vectors onto a running centroid per **session
+  label**, minting where nothing fits, and `FindMerges` collapses two session labels that later turn out
+  to be one voice - relabelling the earlier segments retroactively, in one `ExecuteUpdate` rather than one
+  per row. Session speakers are ordinary `Speaker` rows on the recording, their centroid on
+  `Speaker.Embedding`; **sample counts are derived** from how many distinct chunks carry each label rather
+  than stored, so there is no second copy to drift. Two settings tune it - `Live:StitchThreshold` and
+  `Live:StitchMargin` - and they are deliberately **not** the identification thresholds: that pair asks
+  whether a voice is a named person, judged against a voiceprint enrolled from minutes of clean audio;
+  this pair asks whether two chunks hold the same voice, judged against a centroid built from seconds.
+  Two rules are load-bearing: two labels heard in the **same chunk** can never merge, because diarization
+  within one window had the actual audio and beats any cross-window centroid comparison; and a
+  **manually named** speaker is never merged away.
+- **Naming a live voice reuses the finished-recording path exactly.** The callback calls
+  `ISpeakerIdentification.ApplyAsync` - the same wrapper over `ISpeakerIdentifier.RankAsync` and
+  `IdentificationRules.Decide` used by the worker callback and the on-demand re-identify - so there is no
+  second operating point anywhere. It re-runs on every chunk, because the centroid keeps improving and a
+  voice named wrongly on a noisy first chunk has to be correctable by later evidence.
+- **A live match never enrols.** Automatic identification writes no `VoiceSample` and rebuilds no shared
+  centroid, whatever the verdict. This is not caution but structure: `LiveChunkCallbackController` takes
+  neither `IPeopleDirectory` nor `ISpeakerAssignment`, so it cannot. Enrolment is platform-wide -
+  `RecomputeVoiceprintAsync` averages every sample for a person with no owner filter - so one sample
+  taken from provisional text and a seconds-long window would change recognition for every user of the
+  instance. A person **confirming** a live speaker by hand still enrols, through `ISpeakerAssignment`;
+  the rule is about automatic matches, not about people. Pinned by
+  `LiveIdentificationNeverEnrolsTests`, structurally and by data, across all three verdicts.
 - **Live-chunk callbacks must replace, not append.** Redis streams are at-least-once, so the same chunk
   *will* arrive twice in production. `Segment.ChunkSequence` records which live chunk produced each segment
   precisely so a redelivery can delete exactly its own rows and re-insert them; appending instead would

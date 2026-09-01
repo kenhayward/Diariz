@@ -26,18 +26,32 @@ far. It is told the meeting has not finished, so it will not tell you something 
 people in the room are still arguing about it. Ask it what a customer said earlier, or what you have
 already agreed, without leaving the call.
 
-## Why there are no names
+## Who is speaking
 
-The live transcript does not say who is speaking, and this is deliberate rather than missing.
+Names appear beside the lines. A voice keeps the same name for the whole meeting, and where Diariz
+already knows that voice - because someone has been recognised in an earlier recording - it uses their
+real name rather than a number.
 
-Working out who a voice belongs to needs a whole meeting to compare against. Within a single half-minute
-slice the transcriber can tell voices apart, but it has no way to know that the person it called the
-first speaker in one slice is the same person in the next. If names were shown they would reshuffle
-every thirty seconds, and you would have no way to tell a genuine change of speaker from the system
-changing its mind.
+Two things you will see it do.
 
-Speakers are worked out properly once the meeting ends, on the full recording, and appear in the
-finished transcript as usual.
+**It corrects itself.** Voices are worked out from short slices of audio, and a slice can be
+misleading - somebody speaking quietly, or over another person. If Diariz decides partway through that
+two speakers were actually one, the earlier lines are joined back together in front of you. This is
+normal and means the transcript is getting better, not worse.
+
+**It says when it is unsure.** A name it is confident about is shown plainly. A name it is only
+guessing at is shown with a question mark and in italics. If you hover over it, Diariz tells you it is
+not certain. The finished transcript settles it.
+
+## Naming somebody yourself
+
+If Diariz has a speaker wrong, or does not know them, you can put a name to them once the recording
+has finished, from the Speakers tab.
+
+That is also the only thing that teaches Diariz a voice. Recognising somebody during a meeting never
+trains their voiceprint. Voice recognition is shared across everyone on your Diariz, so a name picked
+up from a few seconds of half-finished transcript would change recognition for all of your colleagues,
+in every future meeting. Only a person confirming who somebody is can do that.
 
 ## It is provisional
 
