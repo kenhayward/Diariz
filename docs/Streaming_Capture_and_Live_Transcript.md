@@ -653,13 +653,14 @@ PR 1 is worth shipping even if 2-4 never happen. PR 4 is small because §6.6 req
 
 ### Release checklist impact
 
-**This doc is a docs-only change**: no version bump, no `RELEASES` entry, no `CAPABILITIES` or README
+**This doc is a docs-only change**: no version bump, no `RECENT` entry, no `CAPABILITIES` or README
 edit. It does update `Overall_Synopsis_of_Platform.md` for the throughput correction in §4, which is a
 factual fix to an existing document rather than a new claim about the product.
 
-Each implementation PR does the full checklist in `CLAUDE.md`: version + seven mirrors, a `RELEASES`
-entry, and - because this adds a user-facing capability - the README Features row, the `docs/features.md`
-bullet and the About-box `CAPABILITIES` row in lockstep. PR 1 and PR 2 both touch
+Each implementation PR does the full checklist in `CLAUDE.md`: version + seven mirrors, a `RECENT[0]`
+entry in `apps/web/src/lib/releaseNotes/current.ts`, and - because this adds a user-facing capability - the
+README Features row, the `docs/features.md` bullet and the About-box `CAPABILITIES` row (in
+`apps/web/src/lib/appInfo.ts`) in lockstep. PR 1 and PR 2 both touch
 `Overall_Synopsis_of_Platform.md` (new stream, new contract, new hosted service) and `Data_Schema.md`
 (new entity, new column, new enum value).
 
