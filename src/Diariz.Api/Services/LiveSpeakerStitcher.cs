@@ -95,6 +95,40 @@ public static class LiveSpeakerStitcher
         return decisions;
     }
 
+    /// <summary>Fold one more chunk vector into a session's running centroid.
+    ///
+    /// <para>A running mean, weighted by how much has already been heard, then re-normalised. The
+    /// weighting is what stops a voice being redefined by its worst chunk: measured and recorded in spec
+    /// §6.4, ECAPA on 15-30 s of a single voice is noisy, and that noise is the real floor under chunk
+    /// length. A centroid whose tenth sample moved it as far as its second would inherit every bad chunk
+    /// in full. It must still move, though - a centroid that froze could never be corrected by later
+    /// evidence, and correcting an early wrong guess is exactly what the extra evidence is for.</para>
+    ///
+    /// <para>Re-normalisation matters beyond this class: cosine distance would not notice a drifting
+    /// magnitude, but this vector is stored on <c>Speaker.Embedding</c> and later ranked in Postgres
+    /// against voiceprints the worker L2-normalises. An un-normalised centroid would mean something
+    /// subtly different from every other embedding in the database.</para></summary>
+    public static SessionCentroid UpdateCentroid(SessionCentroid current, float[] observed)
+    {
+        var n = Math.Max(current.Samples, 1);
+        var mean = new float[current.Centroid.Length];
+        for (var i = 0; i < mean.Length && i < observed.Length; i++)
+            mean[i] = (float)((current.Centroid[i] * (double)n + observed[i]) / (n + 1));
+
+        return current with { Centroid = Normalise(mean), Samples = current.Samples + 1 };
+    }
+
+    private static float[] Normalise(float[] v)
+    {
+        double sum = 0;
+        foreach (var x in v) sum += x * (double)x;
+        var norm = Math.Sqrt(sum);
+        if (norm <= 0) return v;
+        var outv = new float[v.Length];
+        for (var i = 0; i < v.Length; i++) outv[i] = (float)(v[i] / norm);
+        return outv;
+    }
+
     /// <summary>Cosine distance, matching pgvector's <c>&lt;=&gt;</c> so a distance means the same thing
     /// here as it does when the same vector is ranked against the voiceprint directory in Postgres.</summary>
     public static double CosineDistance(float[] a, float[] b)

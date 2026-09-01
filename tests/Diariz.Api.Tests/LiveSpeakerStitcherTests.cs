@@ -191,4 +191,63 @@ public class LiveSpeakerStitcherTests
         var all = decisions.Select(d => d.SessionLabel).Concat(["SPEAKER_00", "SPEAKER_01"]).ToList();
         Assert.Equal(all.Count, all.Distinct().Count());
     }
+
+    // ---- the running centroid ----
+
+    [Fact]
+    public void ACentroidIsTheMeanOfWhatHasBeenHeard_Renormalised()
+    {
+        // It has to stay a unit vector, because it is matched against unit vectors and later ranked in
+        // Postgres against enrolled voiceprints that are L2-normalised by the worker. A drifting
+        // magnitude would not change cosine distance here, but it would make Speaker.Embedding mean
+        // something subtly different from every other embedding in the database.
+        var updated = LiveSpeakerStitcher.UpdateCentroid(
+            new SessionCentroid("S1", Vector((0, 1f)), 1), Vector((1, 1f)));
+
+        var norm = Math.Sqrt(updated.Centroid.Sum(x => (double)x * x));
+        Assert.Equal(1.0, norm, 6);
+        // Halfway between the two axes.
+        Assert.Equal(updated.Centroid[0], updated.Centroid[1], 6);
+        Assert.Equal(2, updated.Samples);
+    }
+
+    [Fact]
+    public void AddingAVectorMovesTheCentroidTowardIt()
+    {
+        var before = new SessionCentroid("S1", At(0), 1);
+        var after = LiveSpeakerStitcher.UpdateCentroid(before, At(40));
+
+        Assert.True(LiveSpeakerStitcher.CosineDistance(after.Centroid, At(40))
+                    < LiveSpeakerStitcher.CosineDistance(before.Centroid, At(40)));
+    }
+
+    [Fact]
+    public void ACentroidBuiltFromManyChunksIsNotSwungAroundByOneMore()
+    {
+        // The measured reason, recorded in spec section 6.4: ECAPA on 15-30 s of one voice is noisy, and
+        // that noise is the real floor under chunk length. A centroid that let its tenth sample move it
+        // as far as its second would inherit every bad chunk in full - so the assertion is about the
+        // direction and the diminishing size of the move, never a magic number.
+        var young = new SessionCentroid("S1", At(0), 1);
+        var old = new SessionCentroid("S1", At(0), 20);
+
+        var youngMove = LiveSpeakerStitcher.CosineDistance(
+            LiveSpeakerStitcher.UpdateCentroid(young, At(40)).Centroid, At(0));
+        var oldMove = LiveSpeakerStitcher.CosineDistance(
+            LiveSpeakerStitcher.UpdateCentroid(old, At(40)).Centroid, At(0));
+
+        Assert.True(oldMove < youngMove,
+            $"a well-established centroid moved {oldMove} but a new one moved {youngMove}");
+    }
+
+    [Fact]
+    public void AnEstablishedCentroidStillMovesAtAll()
+    {
+        // The opposite failure to the one above, and the one that would make a voice named wrongly early
+        // impossible to correct: a centroid that stops moving cannot be improved by later evidence.
+        var old = new SessionCentroid("S1", At(0), 50);
+        var moved = LiveSpeakerStitcher.UpdateCentroid(old, At(40));
+
+        Assert.True(LiveSpeakerStitcher.CosineDistance(moved.Centroid, At(0)) > 0);
+    }
 }
