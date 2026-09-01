@@ -17,6 +17,13 @@ import type { Epoch } from "./types";
 /// top of `archive.ts`, and extend ARCHIVED_SPINE.
 export const EPOCHS: Epoch[] = [
   {
+    id: "review-voice-matches",
+    title: "Review Voice Matches",
+    from: "0.249.0",
+    to: "0.259.13",
+    summary: "Speaker recognition stopped guessing in silence. When a voice is close but not certain Diariz asks instead, and the questions gather in **Review Voice Matches** - a panel that plays the speech beside what was said, a segment at a time, so you answer with your ears rather than a number. Accept a voice without accepting every segment of it, and say plainly when a recording sounds like somebody else.\n\nWhat trains a voiceprint became yours to choose: the recordings behind one are listed with how each was attributed, their audio is kept so you can listen back, and dropping a segment excludes it rather than deleting it. Alongside it: two calendar fixes, and a run of work making the test suite tell the truth about itself.",
+  },
+  {
     id: "screenshots-into-chat",
     title: "Screenshots into chat, and reading their text",
     from: "0.240.0",
@@ -241,6 +248,34 @@ export const EPOCHS: Epoch[] = [
 ///
 /// `epochs.test.ts` pins this to ARCHIVE exactly, so it cannot drift.
 export const ARCHIVED_SPINE: ReadonlyArray<{ version: string; date: string }> = [
+  { version: "0.259.13", date: "2026-08-28" },
+  { version: "0.259.12", date: "2026-08-28" },
+  { version: "0.259.11", date: "2026-08-28" },
+  { version: "0.259.10", date: "2026-08-28" },
+  { version: "0.259.9", date: "2026-08-28" },
+  { version: "0.259.8", date: "2026-08-28" },
+  { version: "0.259.7", date: "2026-08-28" },
+  { version: "0.259.6", date: "2026-08-28" },
+  { version: "0.259.5", date: "2026-08-27" },
+  { version: "0.259.4", date: "2026-08-27" },
+  { version: "0.259.3", date: "2026-08-27" },
+  { version: "0.259.2", date: "2026-08-27" },
+  { version: "0.259.1", date: "2026-08-27" },
+  { version: "0.259.0", date: "2026-08-27" },
+  { version: "0.258.0", date: "2026-08-27" },
+  { version: "0.257.0", date: "2026-08-26" },
+  { version: "0.256.1", date: "2026-08-26" },
+  { version: "0.256.0", date: "2026-08-26" },
+  { version: "0.255.0", date: "2026-08-26" },
+  { version: "0.254.0", date: "2026-08-25" },
+  { version: "0.253.0", date: "2026-08-25" },
+  { version: "0.252.1", date: "2026-08-25" },
+  { version: "0.252.0", date: "2026-08-25" },
+  { version: "0.251.0", date: "2026-08-25" },
+  { version: "0.250.2", date: "2026-08-25" },
+  { version: "0.250.1", date: "2026-08-25" },
+  { version: "0.250.0", date: "2026-08-25" },
+  { version: "0.249.0", date: "2026-08-24" },
   { version: "0.248.2", date: "2026-08-24" },
   { version: "0.248.1", date: "2026-08-24" },
   { version: "0.248.0", date: "2026-08-24" },
