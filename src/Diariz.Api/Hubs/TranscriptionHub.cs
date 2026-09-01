@@ -27,6 +27,21 @@ public static class TranscriptionHubExtensions
         hub.Clients.Group(userId.ToString())
             .SendAsync("RecordingStatusChanged", new { recordingId, status });
 
+    /// <summary>A live capture's transcript has grown. Carries the ids rather than the text: the page
+    /// refetches, so one event shape serves an append, a correction and a relabel alike.</summary>
+    public static Task NotifyLiveTranscriptAsync(this IHubContext<TranscriptionHub> hub,
+        Guid userId, Guid recordingId, Guid transcriptionId, int sequence) =>
+        hub.Clients.Group(userId.ToString())
+            .SendAsync("LiveTranscriptAppended", new { recordingId, transcriptionId, sequence });
+
+    /// <summary>A live chunk could not be transcribed. The meeting is unaffected - capture continues and
+    /// the final pass covers everything - so this tells the page to say the live transcript has a gap
+    /// rather than to show an error.</summary>
+    public static Task NotifyLiveTranscriptDegradedAsync(this IHubContext<TranscriptionHub> hub,
+        Guid userId, Guid recordingId, int sequence) =>
+        hub.Clients.Group(userId.ToString())
+            .SendAsync("LiveTranscriptDegraded", new { recordingId, sequence });
+
     /// <summary>Push a folder-level (section) generation status change. A distinct event from
     /// <c>RecordingStatusChanged</c> so per-recording listeners aren't confused by a section id. <paramref
     /// name="kind"/> is "summary" or "minutes"; <paramref name="status"/> is a <c>SectionGenerationStatus</c>

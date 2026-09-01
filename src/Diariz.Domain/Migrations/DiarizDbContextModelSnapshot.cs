@@ -1866,6 +1866,9 @@ namespace Diariz.Domain.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<int?>("ChunkSequence")
+                        .HasColumnType("integer");
+
                     b.Property<Vector>("Embedding")
                         .HasColumnType("vector(768)");
 

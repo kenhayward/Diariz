@@ -47,6 +47,14 @@ public record LiveChunkResult(
     IReadOnlyList<SpeakerEmbeddingResult>? Speakers = null,
     long? ProcessingMs = null);
 
+/// <summary>Callback body when one live chunk could not be transcribed. A gap in the live transcript,
+/// not a failure of the recording: capture continues and the final pass covers the whole meeting.</summary>
+public record LiveChunkFailure(
+    Guid RecordingId,
+    Guid TranscriptionId,
+    int Sequence,
+    string Error);
+
 /// <summary>Job payload for async summarisation, consumed by the API's SummarizationWorker.</summary>
 public record SummarizationJob(
     Guid RecordingId,
