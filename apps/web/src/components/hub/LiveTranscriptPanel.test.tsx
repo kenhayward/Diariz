@@ -5,13 +5,33 @@ import { emptyLiveTranscript, applyAppend, type LiveTranscript } from "../../lib
 
 const RECORDING = "rec-1";
 
-function withLines(...lines: { startMs: number; text: string; sequence: number }[]): LiveTranscript {
+function withLines(
+  ...lines: {
+    startMs: number;
+    text: string;
+    sequence: number;
+    speaker?: string;
+    speakerIsSuggestion?: boolean;
+  }[]
+): LiveTranscript {
   let s = emptyLiveTranscript(RECORDING);
-  for (const l of lines) {
+  // Grouped by chunk, because applyAppend REPLACES a sequence rather than adding to it - feeding lines
+  // that share a sequence one at a time would leave only the last of them.
+  for (const sequence of [...new Set(lines.map((l) => l.sequence))]) {
     s = applyAppend(s, {
       recordingId: RECORDING,
-      sequence: l.sequence,
-      segments: [{ id: `${l.sequence}-${l.startMs}`, startMs: l.startMs, endMs: l.startMs + 3000, text: l.text, sequence: l.sequence }],
+      sequence,
+      segments: lines
+        .filter((l) => l.sequence === sequence)
+        .map((l) => ({
+          id: `${l.sequence}-${l.startMs}`,
+          startMs: l.startMs,
+          endMs: l.startMs + 3000,
+          text: l.text,
+          sequence: l.sequence,
+          speaker: l.speaker,
+          speakerIsSuggestion: l.speakerIsSuggestion,
+        })),
     });
   }
   return s;
@@ -34,24 +54,77 @@ describe("LiveTranscriptPanel", () => {
     expect(lines).toEqual(["shall we make a start", "the warehouse integration"]);
   });
 
-  it("shows no speaker labels", () => {
-    // THE guard for the phase 2 / phase 3 split, and the reason this test exists rather than being
-    // implied. A diarization label is only meaningful within one chunk, so SPEAKER_00 in chunk 3 has
-    // no relationship to SPEAKER_00 in chunk 4 - showing them raw would have speakers reshuffling
-    // every thirty seconds, which reads as though it means something and is worse than saying
-    // nothing. Labels are turned on when they can be made stable, not before.
-    //
-    // Delete this test in the SAME change that makes labels meaningful. Deleting it earlier removes
-    // the guard while it still matters.
+  it("shows who is speaking", () => {
+    // Turned on here and not before. Until the server stitched each chunk's voices onto one identity per
+    // meeting, a label was only meaningful inside the thirty seconds it came from - SPEAKER_00 in chunk 3
+    // had no relationship to SPEAKER_00 in chunk 4 - so showing them raw would have had speakers
+    // reshuffling constantly, which reads as though it means something. The guard that enforced that
+    // silence lived here and was deleted in the change that made labels stable.
     render(
       <LiveTranscriptPanel
-        transcript={withLines({ startMs: 0, text: "shall we make a start", sequence: 0 })}
+        transcript={withLines(
+          { startMs: 0, text: "shall we make a start", sequence: 0, speaker: "Ada" },
+          { startMs: 4000, text: "the warehouse integration", sequence: 0, speaker: "Grace" },
+        )}
         lagSeconds={0}
         degraded={false}
       />,
     );
 
-    expect(screen.queryByText(/SPEAKER_/)).toBeNull();
+    const speakers = screen.getAllByTestId("live-transcript-speaker").map((n) => n.textContent);
+    expect(speakers).toEqual(["Ada", "Grace"]);
+  });
+
+  it("marks a suggested name as a guess rather than stating it", () => {
+    // A borderline match is the server asking, not answering. Rendering it identically to a confident
+    // one would put a coin flip on screen with the same authority as a name somebody confirmed.
+    render(
+      <LiveTranscriptPanel
+        transcript={withLines(
+          { startMs: 0, text: "certain", sequence: 0, speaker: "Ada" },
+          { startMs: 4000, text: "unsure", sequence: 0, speaker: "Grace", speakerIsSuggestion: true },
+        )}
+        lagSeconds={0}
+        degraded={false}
+      />,
+    );
+
+    const [confident, guess] = screen.getAllByTestId("live-transcript-speaker");
+    expect(guess.getAttribute("data-suggestion")).toBe("true");
+    expect(confident.getAttribute("data-suggestion")).not.toBe("true");
+  });
+
+  it("repeats a speaker's name only when it changes", () => {
+    // A name on every line of a long turn is noise. The transcript reads as a conversation, so the label
+    // marks where the speaker changes.
+    render(
+      <LiveTranscriptPanel
+        transcript={withLines(
+          { startMs: 0, text: "first", sequence: 0, speaker: "Ada" },
+          { startMs: 4000, text: "still me", sequence: 0, speaker: "Ada" },
+          { startMs: 8000, text: "now me", sequence: 0, speaker: "Grace" },
+        )}
+        lagSeconds={0}
+        degraded={false}
+      />,
+    );
+
+    expect(screen.getAllByTestId("live-transcript-speaker").map((n) => n.textContent))
+      .toEqual(["Ada", "Grace"]);
+  });
+
+  it("renders a line with no speaker at all", () => {
+    // A transcript recorded before speakers were stitched, and the first moments of one where the
+    // stitcher has not answered yet. Neither should render an empty label or crash the panel.
+    render(
+      <LiveTranscriptPanel
+        transcript={withLines({ startMs: 0, text: "anonymous", sequence: 0 })}
+        lagSeconds={0}
+        degraded={false}
+      />,
+    );
+
+    expect(screen.getByText("anonymous")).toBeTruthy();
     expect(screen.queryByTestId("live-transcript-speaker")).toBeNull();
   });
 

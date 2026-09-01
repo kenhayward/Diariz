@@ -8,9 +8,9 @@
 /// the server side, and the hub can re-push; a model that simply concatenated would show a sentence
 /// twice in the middle of a transcript, which reads as a transcription fault rather than a delivery one.
 ///
-/// Phase 2 deliberately carries **no speaker labels**. A diarization label is only meaningful within one
-/// chunk, so showing it would have speakers reshuffling every thirty seconds - which reads as though it
-/// means something. Attribution arrives when it can be made stable.
+/// Segments carry a speaker from phase 3 on. The raw diarization label is meaningless across chunks - the
+/// server stitches each chunk's voices onto one label per meeting first, and what arrives here is already
+/// that stitched identity, named where the voice matches somebody enrolled.
 
 export interface LiveSegment {
   id: string;
@@ -20,6 +20,12 @@ export interface LiveSegment {
   /// The chunk this segment came from. Replacement is keyed on it, not on segment ids: a re-transcribe
   /// can split or merge lines, and matching by id would strand the ones that no longer exist.
   sequence: number;
+  /// Who is speaking: a person's name where the voice was recognised, otherwise the meeting-stable label
+  /// the server minted. Undefined only for a transcript recorded before speakers were stitched.
+  speaker?: string;
+  /// The server is asking rather than asserting - close enough to suggest, not close enough to apply. It
+  /// is shown differently so a guess is legible as a guess.
+  speakerIsSuggestion?: boolean;
 }
 
 export interface LiveTranscript {

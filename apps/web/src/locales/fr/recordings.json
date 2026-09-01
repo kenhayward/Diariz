@@ -22,6 +22,7 @@
   "delete": "Supprimer",
   "edit": "Modifier",
   "liveTranscriptLive": "Transcription en cours pendant que vous parlez. Ce texte n'est pas definitif - la transcription complete arrive a l'arret.",
+  "liveTranscriptSpeakerGuess": "Diariz pense qu'il s'agit de cette personne, sans certitude. La transcription finale le confirmera.",
   "liveTranscriptBehind": "Transcription en cours, environ {{seconds}}s de retard. Ce texte n'est pas definitif.",
   "liveTranscriptDegraded": "La transcription en direct est en pause. L'enregistrement continue et la transcription complete sera prete apres la reunion.",
   "liveTranscriptEmpty": "Rien n'a encore ete dit.",

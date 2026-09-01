@@ -12,12 +12,7 @@ export type LiveTranscriptPanelProps = {
 
 /// The transcript of the meeting you are currently in.
 ///
-/// Two things it deliberately does not do.
-///
-/// It shows **no speaker labels**. A diarization label is only meaningful within the chunk it came
-/// from, so the same person is a different number in the next one. Rendering that would have speakers
-/// reshuffling every thirty seconds, which reads as though it means something. Attribution arrives once
-/// it can be made stable across the whole meeting.
+/// One thing it deliberately does not do.
 ///
 /// It never presents itself as finished. The text is provisional - the final pass over the whole
 /// recording replaces it when the meeting ends - so the status line says so rather than leaving someone
@@ -53,11 +48,33 @@ export default function LiveTranscriptPanel({
         </p>
       ) : (
         <ol className="flex list-none flex-col gap-1 p-0">
-          {transcript.segments.map((s) => (
-            <li key={s.id} data-testid="live-transcript-line" className="text-sm leading-relaxed">
-              {s.text}
-            </li>
-          ))}
+          {transcript.segments.map((s, i) => {
+            // The name marks where the speaker changes rather than repeating down a long turn, which
+            // would be noise: the transcript reads as a conversation.
+            const changed = s.speaker && s.speaker !== transcript.segments[i - 1]?.speaker;
+            return (
+              <li key={s.id} data-testid="live-transcript-line" className="text-sm leading-relaxed">
+                {changed && (
+                  <span
+                    data-testid="live-transcript-speaker"
+                    // A suggestion is the server asking, not answering. Rendering it identically to a
+                    // confident match would give a coin flip the authority of a confirmed name.
+                    data-suggestion={s.speakerIsSuggestion ? "true" : undefined}
+                    className={
+                      s.speakerIsSuggestion
+                        ? "mr-2 text-xs italic text-[var(--muted)]"
+                        : "mr-2 text-xs font-medium text-[var(--muted)]"
+                    }
+                    title={s.speakerIsSuggestion ? t("liveTranscriptSpeakerGuess") : undefined}
+                  >
+                    {s.speaker}
+                    {s.speakerIsSuggestion ? "?" : ""}
+                  </span>
+                )}
+                {s.text}
+              </li>
+            );
+          })}
         </ol>
       )}
     </div>

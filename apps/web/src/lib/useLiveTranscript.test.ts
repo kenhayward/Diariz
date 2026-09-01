@@ -77,4 +77,26 @@ describe("nextLiveState", () => {
     const after = nextLiveState(before, { kind: "degraded", recordingId: RECORDING, sequence: 7 });
     expect(after).toBe(before);
   });
+
+  it("keeps a retroactive relabel, because the refetch returns the whole transcript", () => {
+    // A merge on the server can rename a speaker on text the user is already looking at. The append is
+    // only a signal to refetch, and the refetch returns everything - so an earlier line silently adopts
+    // the corrected name. This is why the model replaces rather than appends: an append-only client
+    // would keep showing a split the server has abandoned.
+    let s = nextLiveState(fresh(), {
+      kind: "append",
+      recordingId: RECORDING,
+      sequence: 0,
+      segments: [{ ...seg(0, "before the merge", 0), speaker: "SPEAKER_01" }],
+    });
+
+    s = nextLiveState(s, {
+      kind: "append",
+      recordingId: RECORDING,
+      sequence: 0,
+      segments: [{ ...seg(0, "before the merge", 0), speaker: "Ada" }],
+    });
+
+    expect(s.transcript.segments.map((x) => x.speaker)).toEqual(["Ada"]);
+  });
 });

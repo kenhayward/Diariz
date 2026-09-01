@@ -22,6 +22,7 @@
   "delete": "Delete",
   "edit": "Edit",
   "liveTranscriptLive": "Transcribing as you talk. This text is not final - the full transcript arrives when you stop.",
+  "liveTranscriptSpeakerGuess": "Diariz thinks this is who is speaking, but is not certain. The finished transcript confirms it.",
   "liveTranscriptBehind": "Transcribing as you talk, about {{seconds}}s behind. This text is not final.",
   "liveTranscriptDegraded": "The live transcript has paused. Recording is unaffected, and the full transcript will be ready after the meeting.",
   "liveTranscriptEmpty": "Nothing has been said yet.",
