@@ -110,12 +110,11 @@ def post_live_chunk_result(recording_id: str, transcription_id: str, sequence: i
         "TranscriptionId": transcription_id,
         "Sequence": sequence,
         "Language": language,
-        "Segments": [
-            {"Speaker": s.get("speaker"), "StartMs": s["start_ms"], "EndMs": s["end_ms"],
-             "Text": s.get("text", ""), "Words": s.get("words")}
-            for s in segments
-        ],
-        "Speakers": [{"Speaker": s["speaker"], "Embedding": s["embedding"]} for s in (speakers or [])],
+        # Passed through unchanged, exactly as post_result does: _shape_segments and
+        # _speaker_embeddings already emit the API's contract shape. Re-mapping here would be a second,
+        # divergent idea of the key names - which is precisely how this broke.
+        "Segments": segments,
+        "Speakers": speakers or [],
         "ProcessingMs": processing_ms,
     }
     resp = requests.post(url, json=body, headers=_HEADERS, timeout=60)

@@ -11,6 +11,7 @@ API from the recording's own override or the user's default; null means let Whis
 import json
 import logging
 import os
+import tempfile
 import threading
 import time
 
@@ -179,7 +180,24 @@ def handle_live_chunk(job: dict) -> None:
                 if prev_key and overlap_ms > 0:
                     prev_path = storage.download(prev_key)
                     downloaded.append(prev_path)
-                    joined = audio_merge.join_bytes([prev_path, this_path])
+                    # Only chunk 0 carries the WebM/EBML header, so from sequence 2 on both prev and
+                    # this one are headerless and the pair will not open. Prepending chunk 0's
+                    # initialisation segment - a few hundred bytes of header and track definitions,
+                    # not its audio - is what makes the window decodable. Sequence 1 needs nothing:
+                    # its previous chunk IS chunk 0.
+                    parts = [prev_path, this_path]
+                    first_key = job.get("FirstBlobKey")
+                    if first_key and first_key != prev_key:
+                        first_path = storage.download(first_key)
+                        downloaded.append(first_path)
+                        init = audio_merge.webm_init_segment(first_path)
+                        if init:
+                            fd, init_path = tempfile.mkstemp(suffix=".webm")
+                            with os.fdopen(fd, "wb") as f:
+                                f.write(init)
+                            downloaded.append(init_path)
+                            parts.insert(0, init_path)
+                    joined = audio_merge.join_bytes(parts)
                     audio_path = joined
                 else:
                     # Sequence 0 has nothing before it, so there is no overlap to correct for either.

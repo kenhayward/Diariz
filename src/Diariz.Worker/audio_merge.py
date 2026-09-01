@@ -39,6 +39,27 @@ def probe_duration_ms(path: str) -> int:
     return int(round(float(out) * 1000))
 
 
+# The EBML element id that opens a Matroska/WebM Cluster. Everything before the first one is the
+# initialisation segment: the header and track definitions a decoder needs before any media.
+_CLUSTER_ID = bytes.fromhex("1F43B675")
+
+
+def webm_init_segment(path: str) -> bytes:
+    """The initialisation segment of a WebM file - its bytes up to the first Cluster.
+
+    Only fragment 0 of a MediaRecorder stream carries this, which is what makes every later fragment
+    undecodable on its own. Prepending these few hundred bytes to a pair of later fragments makes them
+    decodable without also prepending the first chunk's audio.
+
+    Returns b"" for a fragment that opens on a cluster - it has no init segment to give, and handing
+    back the whole file instead would silently prepend a duplicate of somebody's audio.
+    """
+    with open(path, "rb") as f:
+        data = f.read()
+    i = data.find(_CLUSTER_ID)
+    return data[:i] if i > 0 else b""
+
+
 def join_bytes(input_paths: list[str]) -> str:
     """Byte-join the inputs, in order, into one temp file. Returns its path.
 

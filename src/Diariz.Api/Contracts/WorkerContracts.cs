@@ -31,8 +31,15 @@ public record LiveChunkJob(
     string BlobKey,
     string? PrevBlobKey,
     long OffsetMs,
+    /// <summary>How much of the decode window belongs to the previous chunk, and must therefore be
+    /// trimmed off the front. This is that chunk's <b>real duration</b>, not a fixed window: a WebM
+    /// fragment cannot be byte-sliced mid-cluster, so the worker prepends the whole of it or none.</summary>
     long OverlapMs,
-    string? Language = null);
+    string? Language = null,
+    /// <summary>Chunk 0's blob, whose EBML header the worker prepends so the window can be decoded at
+    /// all. Only chunk 0 carries one, so from sequence 2 on the prev+current pair is headerless.
+    /// Null for sequences 0 and 1, which need nothing: sequence 1's previous chunk IS chunk 0.</summary>
+    string? FirstBlobKey = null);
 
 /// <summary>Callback body the worker POSTs when a live chunk has been transcribed. Times are already
 /// offset into recording time, so the API stores them without arithmetic.</summary>

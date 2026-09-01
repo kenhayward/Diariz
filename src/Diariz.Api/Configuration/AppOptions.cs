@@ -428,8 +428,9 @@ public class LiveCaptureOptions
     /// transcript then catches up eventually instead of stopping.</summary>
     public int MaxLagSeconds { get; set; } = 120;
 
-    /// <summary>How much of the previous chunk to prepend when transcribing, so a chunk does not start
-    /// mid-sentence. Discarded again before the segments are stored - it is a property of the decode
-    /// window, not of the audio.</summary>
-    public int OverlapMs { get; set; } = 3_000;
+    // There is deliberately no overlap setting. The previous chunk is prepended whole or not at all -
+    // a WebM fragment cannot be byte-sliced mid-cluster - so the overlap is that chunk's own duration
+    // and there is nothing here to tune. A knob that silently could not be honoured was worse than none:
+    // set to 3s while the worker prepended a whole 30s chunk, it put every segment after the first 27s
+    // late in the transcript.
 }

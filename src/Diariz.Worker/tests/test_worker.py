@@ -582,7 +582,9 @@ def _live_spies(monkeypatch, tmp_path):
         calls["transcribe_kw"] = kw
         offset, overlap = kw.get("offset_ms", 0), kw.get("overlap_ms", 0)
         # Mirror what the real pass does to times, so the handler's plumbing is what is under test.
-        segs = [{"speaker": "SPEAKER_00", "start_ms": 0, "end_ms": 1000, "text": "hi"}]
+        # PascalCase, because that is what _shape_segments really emits - these dicts become the
+        # callback body that .NET binds. A snake_case fixture here is what let the key mismatch through.
+        segs = [{"Speaker": "SPEAKER_00", "StartMs": 0, "EndMs": 1000, "Text": "hi"}]
         segs = pipeline._offset_segments(pipeline._trim_to_window(segs, 0), offset, overlap)
         return {"language": "en", "segments": segs,
                 "speakers": [{"speaker": "SPEAKER_00", "embedding": [0.1] * 192}]}
@@ -623,7 +625,7 @@ def test_handle_live_chunk_posts_segments_in_recording_time(monkeypatch, tmp_pat
     posted = calls["posted"]
     assert posted["sequence"] == 3
     # 0 ms into a window that began 3 s before the chunk, which itself starts at 90 s.
-    assert posted["segments"][0]["start_ms"] == 87_000
+    assert posted["segments"][0]["StartMs"] == 87_000
 
 
 def test_handle_live_chunk_failure_is_reported_and_does_not_raise(monkeypatch, tmp_path):
@@ -707,3 +709,46 @@ def test_every_stream_the_loop_reads_has_its_group_created_at_startup(monkeypatc
     assert read - set(ensured) == set(), (
         f"read but never ensured: {sorted(read - set(ensured))}"
     )
+
+
+def test_handle_live_chunk_prepends_the_init_segment_from_the_first_chunk(monkeypatch, tmp_path):
+    """From sequence 2 on, prev and current are both headerless and the pair cannot be decoded.
+
+    This is the defect that made every chunk past the second fail with "EBML header parsing failed"
+    while the first two worked - sequence 1's previous chunk IS chunk 0, so it carries the header by
+    luck. The job therefore names the first chunk's blob, and the worker prepends its init segment:
+    a few hundred bytes of header, not the first chunk's audio.
+    """
+    import pathlib as _pathlib
+
+    first = tmp_path / "first.webm"
+    first.write_bytes(b"\x1aE\xdf\xa3INIT" + bytes.fromhex("1F43B675") + b"first-audio")
+    prev = tmp_path / "prev.webm"; prev.write_bytes(b"prev-audio")
+    cur = tmp_path / "cur.webm"; cur.write_bytes(b"cur-audio")
+
+    blobs = {"first": str(first), "prev": str(prev), "cur": str(cur)}
+    monkeypatch.setattr(worker.storage, "download", lambda key: blobs[key])
+
+    captured = {}
+
+    def fake_join(paths):
+        captured["blob"] = b"".join(_pathlib.Path(p).read_bytes() for p in paths)
+        out = tmp_path / "joined.webm"
+        out.write_bytes(captured["blob"])
+        return str(out)
+
+    monkeypatch.setattr(worker.audio_merge, "join_bytes", fake_join)
+    monkeypatch.setattr(worker.pipeline, "transcribe_window",
+                        lambda path, offset_ms, overlap_ms, language: {
+                            "language": "en", "segments": [], "speakers": []})
+    monkeypatch.setattr(worker.callback, "post_live_chunk_result", lambda **kw: None)
+
+    worker.handle_live_chunk({
+        "RecordingId": "r1", "TranscriptionId": "t1", "Sequence": 2, "BlobKey": "cur",
+        "PrevBlobKey": "prev", "FirstBlobKey": "first", "OffsetMs": 60000, "OverlapMs": 30000,
+        "Language": "en"})
+
+    blob = captured["blob"]
+    assert blob.startswith(b"\x1aE\xdf\xa3INIT"), "decodable input must open with the init segment"
+    assert b"first-audio" not in blob, "the first chunk's AUDIO must not be dragged in, only its header"
+    assert blob.endswith(b"prev-audiocur-audio")

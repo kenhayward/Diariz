@@ -294,7 +294,7 @@ def _trim_to_window(segments: list[dict], overlap_ms: float) -> list[dict]:
     """
     if overlap_ms <= 0:
         return segments
-    return [s for s in segments if s["end_ms"] > overlap_ms]
+    return [s for s in segments if s["EndMs"] > overlap_ms]
 
 
 def _offset_segments(segments: list[dict], offset_ms: float, overlap_ms: float) -> list[dict]:
@@ -306,7 +306,7 @@ def _offset_segments(segments: list[dict], offset_ms: float, overlap_ms: float) 
     """
     shift = offset_ms - overlap_ms
     return [
-        {**s, "start_ms": s["start_ms"] + shift, "end_ms": s["end_ms"] + shift}
+        {**s, "StartMs": s["StartMs"] + shift, "EndMs": s["EndMs"] + shift}
         for s in segments
     ]
 

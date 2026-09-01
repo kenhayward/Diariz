@@ -635,12 +635,26 @@ public class RecordingsController : ControllerBase
                 return;
             }
 
-            // The previous chunk's tail is prepended so the model does not start mid-sentence; sequence 0
-            // has nothing before it.
-            var prevKey = sequence == 0
+            // The previous chunk is prepended so the model does not start mid-sentence; sequence 0 has
+            // nothing before it. The WHOLE of it goes in, not a tail: a WebM fragment cannot be
+            // byte-sliced mid-cluster, so it is all or nothing - which is why the overlap the worker
+            // trims is that chunk's real duration rather than a configured window.
+            var prev = sequence == 0
                 ? null
                 : await _db.RecordingChunks
                     .Where(c => c.RecordingId == rec.Id && c.Sequence == sequence - 1)
+                    .Select(c => new { c.BlobKey, c.StartMs, c.EndMs })
+                    .FirstOrDefaultAsync();
+            var prevKey = prev?.BlobKey;
+            var overlapMs = prev is null ? 0 : prev.EndMs - prev.StartMs;
+
+            // Only chunk 0 carries the WebM/EBML header, so from sequence 2 on the prev+current pair is
+            // headerless and will not open at all. The worker prepends chunk 0's header - not its audio.
+            // Sequence 1 needs nothing: its previous chunk IS chunk 0.
+            var firstKey = sequence < 2
+                ? null
+                : await _db.RecordingChunks
+                    .Where(c => c.RecordingId == rec.Id && c.Sequence == 0)
                     .Select(c => c.BlobKey)
                     .FirstOrDefaultAsync();
 
@@ -649,8 +663,8 @@ public class RecordingsController : ControllerBase
 
             await _queue.EnqueueLiveChunkAsync(new LiveChunkJob(
                 rec.Id, transcription?.Id ?? Guid.Empty, sequence, blobKey, prevKey,
-                startMs, prevKey is null ? 0 : _live.OverlapMs,
-                SupportedLanguages.ToWhisperCode(language)));
+                startMs, overlapMs,
+                SupportedLanguages.ToWhisperCode(language), firstKey));
         }
         catch (Exception e)
         {

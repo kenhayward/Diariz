@@ -451,11 +451,11 @@ def test_trim_to_window_drops_segments_from_the_prepended_overlap():
     """
     # 3 s of overlap prepended: chunk audio starts at t=3000 in the decoded window.
     segments = [
-        {"speaker": "SPEAKER_00", "start_ms": 200, "end_ms": 2600, "text": "already reported"},
-        {"speaker": "SPEAKER_00", "start_ms": 3100, "end_ms": 6000, "text": "genuinely new"},
+        {"Speaker": "SPEAKER_00", "StartMs": 200, "EndMs": 2600, "Text": "already reported"},
+        {"Speaker": "SPEAKER_00", "StartMs": 3100, "EndMs": 6000, "Text": "genuinely new"},
     ]
     kept = pipeline._trim_to_window(segments, overlap_ms=3000)
-    assert [s["text"] for s in kept] == ["genuinely new"]
+    assert [s["Text"] for s in kept] == ["genuinely new"]
 
 
 def test_trim_to_window_keeps_a_segment_straddling_the_boundary():
@@ -464,21 +464,47 @@ def test_trim_to_window_keeps_a_segment_straddling_the_boundary():
     Dropping it would lose the words entirely: the previous chunk ended before it finished, so nobody
     else reports them.
     """
-    segments = [{"speaker": "SPEAKER_00", "start_ms": 2500, "end_ms": 4500, "text": "straddles"}]
+    segments = [{"Speaker": "SPEAKER_00", "StartMs": 2500, "EndMs": 4500, "Text": "straddles"}]
     assert len(pipeline._trim_to_window(segments, overlap_ms=3000)) == 1
 
 
 def test_trim_to_window_is_a_no_op_without_overlap():
-    segments = [{"speaker": "SPEAKER_00", "start_ms": 0, "end_ms": 1000, "text": "first chunk"}]
+    segments = [{"Speaker": "SPEAKER_00", "StartMs": 0, "EndMs": 1000, "Text": "first chunk"}]
     assert pipeline._trim_to_window(segments, overlap_ms=0) == segments
 
 
 def test_offset_into_recording_time_shifts_every_segment():
     """The API stores what the worker sends without arithmetic, so the shift happens here."""
     segments = [
-        {"speaker": "SPEAKER_00", "start_ms": 0, "end_ms": 1000, "text": "a"},
-        {"speaker": "SPEAKER_01", "start_ms": 1000, "end_ms": 2000, "text": "b"},
+        {"Speaker": "SPEAKER_00", "StartMs": 0, "EndMs": 1000, "Text": "a"},
+        {"Speaker": "SPEAKER_01", "StartMs": 1000, "EndMs": 2000, "Text": "b"},
     ]
     shifted = pipeline._offset_segments(segments, offset_ms=90_000, overlap_ms=3_000)
     # Offset is the chunk's start in the recording; the overlap sat BEFORE it, so subtract it back out.
-    assert [(s["start_ms"], s["end_ms"]) for s in shifted] == [(87_000, 88_000), (88_000, 89_000)]
+    assert [(s["StartMs"], s["EndMs"]) for s in shifted] == [(87_000, 88_000), (88_000, 89_000)]
+
+
+def test_window_helpers_consume_exactly_what_shape_segments_produces():
+    """The trim and offset helpers must read the key names `_shape_segments` actually writes.
+
+    This is the seam the live path runs through: transcribe_window shapes the segments and then
+    immediately trims and offsets them. Both sides were unit-tested in isolation and both passed,
+    because the helper tests built their own snake_case dicts - while `_shape_segments` emits
+    PascalCase, as it must, since these same dicts go on to be the callback body that .NET binds.
+    The mismatch could therefore only ever show up at runtime, and it did: every live chunk died with
+    KeyError: 'start_ms' and no transcript ever appeared.
+
+    Feeding real `_shape_segments` output through is what makes the two sides unable to drift apart.
+    """
+    shaped = pipeline._shape_segments([
+        {"speaker": "SPEAKER_00", "start": 0.2, "end": 2.6, "text": "in the overlap"},
+        {"speaker": "SPEAKER_01", "start": 3.1, "end": 6.0, "text": "genuinely new"},
+    ])
+
+    trimmed = pipeline._trim_to_window(shaped, overlap_ms=3000)
+    shifted = pipeline._offset_segments(trimmed, offset_ms=30000, overlap_ms=3000)
+
+    assert [s["Text"] for s in shifted] == ["genuinely new"]
+    # 3100 in window time, minus the 3000 of prepended overlap, plus the 30000 offset.
+    assert shifted[0]["StartMs"] == 30100
+    assert shifted[0]["EndMs"] == 33000

@@ -369,6 +369,50 @@ public class LiveRecordingControllerTests
     }
 
     [Fact]
+    public async Task TheOverlapIsThePreviousChunksRealDuration_NotAFixedWindow()
+    {
+        // The worker prepends the WHOLE previous chunk - a WebM fragment cannot be byte-sliced mid
+        // cluster, so there is no way to hand it just the last few seconds. The overlap it is told to
+        // trim must therefore be that chunk's real duration. A fixed 3s constant made every segment
+        // after the first chunk land 27s late in the transcript, and the old assertion here - merely
+        // that the overlap was positive - was satisfied by exactly that wrong constant.
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        await LiveTestSupport.SeedUser(db, me);
+        var queue = new FakeJobQueue();
+        var controller = LiveTestSupport.Build(db, me, queue);
+        var (id, session) = await BeginAsync(db, me, controller);
+
+        await controller.PutChunk(id, 0, Chunk(), session, 0, 30_000);
+        // Deliberately not 30s: a chunk boundary follows the speech, so they are not all equal.
+        await controller.PutChunk(id, 1, Chunk(), session, 30_000, 47_500);
+        await controller.PutChunk(id, 2, Chunk(), session, 47_500, 77_500);
+
+        Assert.Equal(30_000, queue.LiveChunkEnqueued[1].OverlapMs);
+        Assert.Equal(17_500, queue.LiveChunkEnqueued[2].OverlapMs);
+    }
+
+    [Fact]
+    public async Task ChunksPastTheSecond_CarryTheFirstChunksKey_SoTheWindowCanBeDecoded()
+    {
+        // Only chunk 0 holds the WebM/EBML header. From sequence 2 on, prev and current are both
+        // headerless and ffmpeg refuses the pair outright, so the job has to name the chunk whose
+        // header can be prepended. Sequence 1 does not need it - its previous chunk IS chunk 0.
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        await LiveTestSupport.SeedUser(db, me);
+        var queue = new FakeJobQueue();
+        var controller = LiveTestSupport.Build(db, me, queue);
+        var (id, session) = await BeginAsync(db, me, controller);
+
+        await controller.PutChunk(id, 0, Chunk(), session, 0, 30_000);
+        await controller.PutChunk(id, 1, Chunk(), session, 30_000, 60_000);
+        await controller.PutChunk(id, 2, Chunk(), session, 60_000, 90_000);
+
+        Assert.EndsWith("/chunks/00000.webm", queue.LiveChunkEnqueued[2].FirstBlobKey);
+    }
+
+    [Fact]
     public async Task PutChunk_StillSucceeds_WhenLiveTranscriptionCannotBeQueued()
     {
         // The promise of the whole feature: the live transcript is optional, the recording is not. A

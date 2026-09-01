@@ -76,3 +76,32 @@ def test_join_then_concat_hands_ffmpeg_exactly_one_input(tmp_path, monkeypatch):
 
     assert len(seen["paths"]) == 1, "ffmpeg must receive the joined file, not the raw chunks"
     assert (out, duration_ms, size) == ("/tmp/out.webm", 1234, 99)
+
+
+CLUSTER_ID = bytes.fromhex("1F43B675")
+
+
+def test_webm_init_segment_is_everything_before_the_first_cluster(tmp_path):
+    """A live chunk after the first two cannot be decoded without this.
+
+    Only fragment 0 of a MediaRecorder stream carries the WebM/EBML header, so joining chunk N onto
+    chunk N-1 produces two headerless fragments and ffmpeg dies with "EBML header parsing failed".
+    Prepending chunk 0's initialisation segment - the bytes up to its first Cluster, a few hundred of
+    them - makes the pair decodable without dragging the whole first chunk's audio along with it.
+    """
+    src = tmp_path / "first.webm"
+    src.write_bytes(b"\x1aE\xdf\xa3HEADERBYTES" + CLUSTER_ID + b"clusterpayload")
+
+    init = audio_merge.webm_init_segment(str(src))
+
+    assert init == b"\x1aE\xdf\xa3HEADERBYTES"
+    assert CLUSTER_ID not in init
+
+
+def test_webm_init_segment_of_a_headerless_fragment_is_empty(tmp_path):
+    """A fragment that opens on a cluster has no init segment to give - say so rather than handing
+    back the whole file, which would silently prepend a duplicate of somebody's audio."""
+    src = tmp_path / "later.webm"
+    src.write_bytes(CLUSTER_ID + b"payload only")
+
+    assert audio_merge.webm_init_segment(str(src)) == b""
