@@ -19,16 +19,16 @@ transformers==4.53.3
 huggingface_hub==0.35.3
 
 # Speaker embeddings (voiceprints): ECAPA-TDNN, 192-d, Apache-2.0 code + weights.
-speechbrain==1.1.0
+speechbrain==1.1.1
 
 # Cap at the 3.10 line: the worker base image (nvidia/cuda ...-ubuntu22.04) ships Python 3.10, and
 # matplotlib 3.11+ requires Python >= 3.11 (so 3.11.0 has no installable wheel here). Keep <3.11 until
 # the base image's Python is bumped — a Dependabot bump to 3.11.x will break the Docker build.
 matplotlib==3.10.9
 redis==8.1.0
-boto3==1.43.61
+boto3==1.43.83
 requests==2.34.2
 
 # Optional error + performance reporting (GlitchTip / Sentry-compatible). Imported lazily and only
 # when SENTRY_DSN is set, so it costs nothing on deployments that do not use it.
-sentry-sdk==2.66.1
+sentry-sdk==2.68.1
