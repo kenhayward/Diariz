@@ -6,7 +6,7 @@
 pytest==9.1.1
 requests==2.34.2
 redis==8.1.0
-boto3==1.43.61
+boto3==1.43.83
 # numpy is a real (non-GPU) dependency of pipeline._speaker_embeddings — installed so the
 # voiceprint-pooling logic runs under test with a stub embedder (no torch/speechbrain needed).
 # Range (not a hard pin) so wheels exist across the CI/dev Python versions (3.13/3.14).
