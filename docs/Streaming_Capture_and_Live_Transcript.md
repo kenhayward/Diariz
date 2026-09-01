@@ -246,9 +246,32 @@ transcription windows, but overlapping *stored* chunks would duplicate audio and
 produces the canonical file.
 
 **Resolution:** chunks are stored contiguous and non-overlapping. The live job carries the *previous*
-chunk's key, and the worker prepends `Live:OverlapMs` of its tail before transcribing. Results outside
-the chunk's own time range are discarded before they are persisted. Overlap costs nothing on disk and
-nothing in the concat path, and the 91% headroom pays for the extra audio comfortably.
+chunk's key, and the worker prepends it before transcribing. Results outside the chunk's own time range
+are discarded before they are persisted. Overlap costs nothing on disk and nothing in the concat path.
+
+**Corrected during implementation - the overlap is the whole previous chunk, not a tail of it.** This
+spec assumed a configurable `Live:OverlapMs` of a few seconds. That is not implementable: a WebM
+fragment cannot be byte-sliced mid-cluster, so the previous chunk goes into the decode window whole or
+not at all. The setting was written anyway, defaulted to 3 s, and disagreed with what the worker
+actually prepended by 27 s - which is exactly how far into the transcript every segment after the first
+chunk would have landed. It has been removed rather than corrected, because no value of it could have
+been honoured. The overlap the worker trims is now the previous chunk's real duration, read from its
+own row.
+
+Two consequences follow, and neither was anticipated here:
+
+- **The decode window is twice the chunk length** (~60 s for a 30 s chunk), not chunk + a few seconds.
+  The measured headroom in §3 was against a ~33 s window, so the real figure is roughly half of what
+  §3.4 states. It still fits on the measured hardware - the marginal cost per second is what dominates
+  at this length, and doubling the audio does not double the wall clock - but it is no longer the 91%
+  this document claimed, and any future chunk-length decision has to start from the doubled window.
+- **A decode window past sequence 1 needs chunk 0's header.** Only fragment 0 of a `MediaRecorder`
+  stream carries the EBML header, so prev+current is headerless from sequence 2 on and ffmpeg refuses
+  it outright. §5.1 recorded this for the *concat* path and it applies here too, which the original
+  design missed. The job therefore also carries chunk 0's key, and the worker prepends its
+  initialisation segment - a few hundred bytes of header and track definitions, not its audio. Sequence
+  1 needs nothing, since its previous chunk *is* chunk 0; that is why the defect presented as "the
+  first two chunks work and everything after fails".
 
 ### 5.3 D3 - the live transcript is provisional and disposable
 
@@ -481,6 +504,19 @@ computes the expected sequence set from the highest sequence received and refuse
 missing, returning the gap. The client retries the named sequences from its IndexedDB queue, then
 finalises again. Only if a chunk is genuinely unrecoverable does the user get a choice: finalise with a
 gap, or keep waiting.
+
+### 9.2b A chunk is corrupt, not merely late
+
+Verified live by uploading a chunk that was not audio at all. The worker fails it, reports the failure,
+and the live transcript keeps everything it already had; the chunk upload still returns 204, capture is
+untouched, and the full transcript at Stop is unaffected.
+
+The one thing worth knowing is the **blast radius is two chunks, not one**: the next chunk's decode
+window prepends the failed one, so that window is corrupt too and fails with it. The chunk after that
+prepends a good chunk and recovers on its own. Nothing is lost from the recording either way - a live
+chunk that never transcribes only costs its own text - so this is recorded rather than defended
+against. The obvious defence, retrying a failed window without the prepend, would cost a boundary
+sentence for a case rare enough that it has to be induced deliberately.
 
 ### 9.3 The recording is paused
 

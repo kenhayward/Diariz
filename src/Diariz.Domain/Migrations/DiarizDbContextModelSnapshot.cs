@@ -1488,6 +1488,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<long>("StartMs")
                         .HasColumnType("bigint");
 
+                    b.Property<DateTimeOffset?>("TranscribedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("Id");
 
                     b.HasIndex("RecordingId", "Sequence")
@@ -1866,6 +1869,9 @@ namespace Diariz.Domain.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<int?>("ChunkSequence")
+                        .HasColumnType("integer");
+
                     b.Property<Vector>("Embedding")
                         .HasColumnType("vector(768)");
 
@@ -2089,6 +2095,9 @@ namespace Diariz.Domain.Migrations
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsProvisional")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Language")
                         .HasColumnType("text");

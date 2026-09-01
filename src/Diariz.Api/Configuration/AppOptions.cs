@@ -47,6 +47,11 @@ public class JobQueueOptions
     /// <summary>On-demand voiceprint re-embeds. Third stream on the Python worker, alongside
     /// transcription and audio merge.</summary>
     public string VoiceprintStreamKey { get; set; } = "voiceprint-jobs";
+
+    /// <summary>Chunks of a capture still in progress, transcribed while the meeting runs. Its own stream
+    /// rather than sharing the transcription one, so the worker can prefer it over a queued full-meeting
+    /// job - a live chunk behind an hour of audio would arrive long after the meeting ended.</summary>
+    public string LiveChunkStreamKey { get; set; } = "live-chunk-jobs";
 }
 
 public class WorkerOptions
@@ -416,4 +421,16 @@ public class LiveCaptureOptions
 
     /// <summary>How often the reaper looks. Cheap - one projected query over live recordings only.</summary>
     public int ReaperIntervalMinutes { get; set; } = 5;
+
+    /// <summary>How far the live transcript may fall behind before the API stops queueing live work for
+    /// a recording. Measured, a 30 s chunk costs about 2.7 s on the production GPU, so two minutes of
+    /// backlog means something is genuinely wrong rather than merely busy. 0 disables the pause: the
+    /// transcript then catches up eventually instead of stopping.</summary>
+    public int MaxLagSeconds { get; set; } = 120;
+
+    // There is deliberately no overlap setting. The previous chunk is prepended whole or not at all -
+    // a WebM fragment cannot be byte-sliced mid-cluster - so the overlap is that chunk's own duration
+    // and there is nothing here to tune. A knob that silently could not be honoured was worse than none:
+    // set to 3s while the worker prepended a whole 30s chunk, it put every segment after the first 27s
+    // late in the transcript.
 }

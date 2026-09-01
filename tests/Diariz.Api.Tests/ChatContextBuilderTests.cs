@@ -190,4 +190,41 @@ public class ChatContextBuilderTests
         var lastUser = msgs.Last(m => m.Role == "user");
         Assert.Equal(["data:image/png;base64,AAA"], lastUser.ImageDataUrls);
     }
+
+
+    // ---- a meeting still in progress ----
+
+    [Fact]
+    public void BuildSystemPrompt_MarksATranscriptFromAMeetingStillRunning()
+    {
+        // Without this the model reads a partial transcript as a finished one and answers as though
+        // the discussion concluded - "they decided to defer it" when they are still arguing about it.
+        // One line of prompt, easy to drop, and impossible to notice from the outside.
+        var prompt = ChatContextBuilder.BuildSystemPrompt(
+            [new TranscriptContext("Standup", "Shall we make a start", InProgress: true)], null, null);
+
+        Assert.Contains("in progress", prompt, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BuildSystemPrompt_DoesNotMarkAFinishedTranscript()
+    {
+        // The companion: the marker must not appear on every meeting, or it means nothing on the one
+        // that is actually running.
+        var prompt = ChatContextBuilder.BuildSystemPrompt(
+            [new TranscriptContext("Standup", "Shall we make a start")], null, null);
+
+        Assert.DoesNotContain("in progress", prompt, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BuildSystemPrompt_StillIncludesTheTextOfARunningMeeting()
+    {
+        // Marking it must not mean withholding it - answering questions about what has been said is
+        // the entire point.
+        var prompt = ChatContextBuilder.BuildSystemPrompt(
+            [new TranscriptContext("Standup", "the warehouse integration is slow", InProgress: true)], null, null);
+
+        Assert.Contains("the warehouse integration is slow", prompt);
+    }
 }

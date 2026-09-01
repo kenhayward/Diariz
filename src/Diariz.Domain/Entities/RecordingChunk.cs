@@ -44,4 +44,13 @@ public class RecordingChunk
     /// <summary>When the upload landed. The newest chunk's value is what the reaper measures a
     /// disappeared client against.</summary>
     public DateTimeOffset ReceivedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>When this chunk's live transcription came back, or null while it is still outstanding.
+    /// <para>
+    /// The oldest null is how far behind the live transcript has fallen: past a threshold the API stops
+    /// queueing live work rather than building an unbounded backlog. Null forever is normal and harmless
+    /// for a chunk whose live pass failed or was skipped - the final full-file pass covers the meeting
+    /// regardless, so this only ever gates the running commentary.
+    /// </para></summary>
+    public DateTimeOffset? TranscribedAt { get; set; }
 }

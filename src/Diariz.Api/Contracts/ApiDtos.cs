@@ -351,7 +351,11 @@ public record TranscriptionDto(
     string? Language,
     DateTimeOffset CreatedAt,
     IReadOnlyList<SegmentDto> Segments,
-    long? ProcessingMs = null);
+    long? ProcessingMs = null,
+    /// <summary>True while this is the live pass over a capture still in progress - partial text that the
+    /// final pass supersedes. The detail endpoint returns it so the UI can render and label it; everything
+    /// else declines it.</summary>
+    bool IsProvisional = false);
 
 public record RecordingDetailDto(
     Guid Id,

@@ -9,6 +9,22 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.264.0",
+    date: "2026-09-01",
+    pr: 705,
+    headline: "Read the meeting while you are still in it",
+    summary:
+      "Diariz has always been something you looked at afterwards. The transcript arrived once the meeting had finished, which is the point at which you least need it: the moment you actually want to check what someone said twenty minutes ago is while they are still in the room.\n\nThe transcript is now written as the meeting runs. Open the notes panel while recording and there is a Transcript tab beside your notes, filling in every half minute or so with what has been said. You can also ask the assistant about a meeting that is still going, and it answers from the conversation so far.\n\nTwo things it is careful about. It does not put names to voices yet, because who is who only becomes reliable once there is a whole meeting to compare against, and a transcript that reshuffled its speakers every thirty seconds would be worse than one that stays quiet about them. And it never presents itself as the finished article: the status line tells you how far behind it is, and the full transcript still replaces it when you press Stop. If the server falls a long way behind it stops writing the live text and says so, which never affects the recording itself.",
+    added: [
+      "A **live transcript** while you record, in a new Transcript tab in the notes panel, updating as the meeting goes.",
+      "The assistant can be asked about a **meeting that is still running**, and is told the conversation is unfinished so it does not report things as settled when they are still being argued about.",
+      "A status line showing how far behind the live text is, and saying so plainly when it has stopped keeping up.",
+    ],
+    changed: [
+      "The live transcript deliberately shows no speaker names. Attribution arrives once it can be made to hold across a whole meeting.",
+    ],
+  },
+  {
     version: "0.263.1",
     date: "2026-09-01",
     pr: 689,

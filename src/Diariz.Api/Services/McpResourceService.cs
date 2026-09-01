@@ -44,7 +44,8 @@ public sealed class McpResourceService : IMcpResourceService
                 r.Name,
                 r.Title,
                 r.CreatedAt,
-                Versions = r.Transcriptions.Select(t => new
+                // Provisional versions are not part of the record an assistant may read.
+                Versions = r.Transcriptions.Where(t => !t.IsProvisional).Select(t => new
                 {
                     t.Version,
                     SegmentCount = t.Segments.Count,
@@ -79,13 +80,21 @@ public sealed class McpResourceService : IMcpResourceService
         var rec = await _db.Recordings
             .Where(r => r.Id == recordingId && r.UserId == userId)
             .Include(r => r.Speakers)
-            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1)).ThenInclude(t => t.Segments)
-            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1)).ThenInclude(t => t.MeetingMinutes)
+            // Filtered inside the Include, not after it: Take(1) loads only the top version, and while a
+            // meeting is being captured that is the provisional live pass - so filtering afterwards would
+            // find nothing at all rather than the real transcript.
+            .Include(r => r.Transcriptions.Where(t => !t.IsProvisional).OrderByDescending(t => t.Version).Take(1)).ThenInclude(t => t.Segments)
+            .Include(r => r.Transcriptions.Where(t => !t.IsProvisional).OrderByDescending(t => t.Version).Take(1)).ThenInclude(t => t.MeetingMinutes)
             .AsSplitQuery()
             .FirstOrDefaultAsync(ct);
         if (rec is null) return null;
 
-        var current = rec.Transcriptions.OrderByDescending(t => t.Version).FirstOrDefault();
+        // The newest NON-provisional version: while a meeting is being captured the live pass is the
+        // highest version, and an assistant must not read half a meeting as though it were the record.
+        var current = rec.Transcriptions
+            .Where(t => !t.IsProvisional)
+            .OrderByDescending(t => t.Version)
+            .FirstOrDefault();
         if (current is null) return null;
         var name = rec.Name ?? rec.Title;
 

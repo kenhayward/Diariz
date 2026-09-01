@@ -9,7 +9,36 @@ export interface StatusEvent {
   status: string;
 }
 
-export function createHub(onStatus: (e: StatusEvent) => void): HubConnection {
+/// One chunk of a running meeting has been transcribed. Carries ids rather than text: the page
+/// refetches, so one event shape serves an append, a correction and (later) a relabel alike.
+export interface LiveTranscriptEvent {
+  recordingId: string;
+  transcriptionId: string;
+  sequence: number;
+}
+
+/// The server has stopped transcribing live for this recording. Capture is unaffected.
+export interface LiveTranscriptDegradedEvent {
+  recordingId: string;
+  sequence: number;
+}
+
+export interface HubHandlers {
+  onStatus: (e: StatusEvent) => void;
+  onLiveTranscript?: (e: LiveTranscriptEvent) => void;
+  onLiveTranscriptDegraded?: (e: LiveTranscriptDegradedEvent) => void;
+}
+
+export function createHub(
+  handlers: ((e: StatusEvent) => void) | HubHandlers,
+): HubConnection {
+  // Accepts the original single-callback form as well as the handler bag, so every existing caller and
+  // its tests keep working unchanged - this is a hub used from several places.
+  const h: HubHandlers = typeof handlers === "function" ? { onStatus: handlers } : handlers;
+  return buildHub(h);
+}
+
+function buildHub(handlers: HubHandlers): HubConnection {
   const conn = new HubConnectionBuilder()
     .withUrl(`${baseURL}/hubs/transcription`, {
       accessTokenFactory: () => getToken() ?? "",
@@ -21,6 +50,9 @@ export function createHub(onStatus: (e: StatusEvent) => void): HubConnection {
     })
     .build();
 
-  conn.on("RecordingStatusChanged", onStatus);
+  conn.on("RecordingStatusChanged", handlers.onStatus);
+  if (handlers.onLiveTranscript) conn.on("LiveTranscriptAppended", handlers.onLiveTranscript);
+  if (handlers.onLiveTranscriptDegraded)
+    conn.on("LiveTranscriptDegraded", handlers.onLiveTranscriptDegraded);
   return conn;
 }

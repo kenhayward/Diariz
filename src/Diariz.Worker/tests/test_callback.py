@@ -152,3 +152,27 @@ def test_post_voiceprint_result_raises_so_the_worker_can_report_it(monkeypatch):
     monkeypatch.setattr(callback.requests, "post", lambda *a, **k: _ErrorResponse())
     with pytest.raises(RuntimeError):
         callback.post_voiceprint_result("vs-4", [1.0], 1, 1)
+
+
+def test_live_chunk_posts_the_shaped_segments_unchanged(monkeypatch):
+    """The live callback must pass pipeline output through, exactly as post_result does.
+
+    _shape_segments and _speaker_embeddings already emit the API's contract shape - PascalCase, because
+    .NET binds these dicts directly. Re-mapping them in the callback is not just redundant, it is where
+    a second, divergent idea of the key names crept in: the live callback read s["start_ms"] from dicts
+    whose key is "StartMs", so every live chunk failed at the last step, after the GPU work was done.
+    """
+    posted = {}
+    monkeypatch.setattr(callback.requests, "post",
+                        lambda url, json=None, headers=None, timeout=None: posted.update(url=url, body=json) or _OkResponse())
+
+    segments = [{"Speaker": "SPEAKER_00", "StartMs": 87_000, "EndMs": 90_000, "Text": "hello",
+                 "Words": [{"W": "hello", "S": 87_000, "E": 87_400}]}]
+    speakers = [{"Speaker": "SPEAKER_00", "Embedding": [0.1, 0.2]}]
+
+    callback.post_live_chunk_result(
+        recording_id="r1", transcription_id="t1", sequence=3, language="en",
+        segments=segments, speakers=speakers, processing_ms=1234)
+
+    assert posted["body"]["Segments"] == segments
+    assert posted["body"]["Speakers"] == speakers

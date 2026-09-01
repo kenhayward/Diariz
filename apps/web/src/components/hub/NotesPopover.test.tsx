@@ -196,3 +196,36 @@ describe("NotesPopover pop-out control", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("NotesPopover live transcript tab", () => {
+  const transcript = {
+    recordingId: "rec-1",
+    highestSequence: 0,
+    segments: [{ id: "0-0", startMs: 0, endMs: 3000, text: "shall we make a start", sequence: 0 }],
+  };
+
+  it("offers no transcript tab when live transcription is not running", () => {
+    // An older server, or a deployment without the hardware for it. An empty tab that never fills
+    // would be worse than no tab: it promises something that is not coming.
+    renderPopover();
+    expect(screen.queryByRole("tab", { name: /transcript/i })).toBeNull();
+  });
+
+  it("shows notes first, with the transcript a tab away", () => {
+    // Notes are what someone opened this to write; the transcript is a reference beside them.
+    renderPopover({ liveTranscript: transcript });
+
+    expect(screen.getByRole("tab", { name: /transcript/i }).getAttribute("aria-selected")).toBe("false");
+    expect(screen.queryAllByTestId("live-transcript-line")).toHaveLength(0);
+  });
+
+  it("switches to the transcript when the tab is chosen", () => {
+    renderPopover({ liveTranscript: transcript });
+
+    fireEvent.click(screen.getByRole("tab", { name: /transcript/i }));
+
+    expect(screen.getAllByTestId("live-transcript-line").map((n) => n.textContent))
+      .toEqual(["shall we make a start"]);
+  });
+});
+

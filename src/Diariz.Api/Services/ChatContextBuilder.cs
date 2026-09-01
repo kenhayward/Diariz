@@ -3,7 +3,10 @@ using System.Text;
 namespace Diariz.Api.Services;
 
 /// <summary>One transcript's plain text plus a human-readable title, used as chat context.</summary>
-public sealed record TranscriptContext(string Title, string Text);
+/// <summary>One transcript put in front of the model.
+/// <para><paramref name="InProgress"/> marks a meeting that is still being recorded: the text is
+/// partial and the last thing in it is not the last thing that will be said.</para></summary>
+public sealed record TranscriptContext(string Title, string Text, bool InProgress = false);
 
 /// <summary>
 /// Pure (no IO) assembly of the chat system prompt from selected transcripts and an optional
@@ -23,6 +26,14 @@ public static class ChatContextBuilder
         foreach (var t in transcripts)
         {
             context.Append("=== Transcript: ").Append(t.Title).Append(" ===\n");
+            // Say plainly that the meeting has not finished. Without it the model reads a partial
+            // transcript as a complete one and answers as though the discussion concluded - reporting
+            // that something was decided when the people in the room are still arguing about it.
+            if (t.InProgress)
+                context.Append(
+                    "(This meeting is IN PROGRESS and still being recorded. The transcript below is "
+                    + "partial and ends mid-meeting. Do not describe anything in it as concluded, "
+                    + "decided or final, and say so if asked about an outcome.)\n");
             context.Append(string.IsNullOrWhiteSpace(t.Text) ? "(no transcript yet)\n" : t.Text);
             context.Append('\n');
         }

@@ -13,6 +13,55 @@ public record TranscriptionJob(
     int? MaxSpeakers = null,
     string? Language = null);
 
+/// <summary>One chunk of a live capture, transcribed while the meeting is still running. Consumed by the
+/// Python worker off <c>live-chunk-jobs</c>.
+///
+/// <para><paramref name="PrevBlobKey"/> and <paramref name="OverlapMs"/> exist because Whisper on a clip
+/// that starts mid-sentence produces noise at the seam: the worker prepends that much of the previous
+/// chunk's tail before transcribing, then discards anything falling outside this chunk's own span. Null
+/// for sequence 0, which has nothing before it.</para>
+///
+/// <para>Overlap is a property of the <b>decode window</b>, not of the stored audio - the chunks
+/// themselves stay contiguous and non-overlapping, or the concatenation that produces the canonical blob
+/// would duplicate audio.</para></summary>
+public record LiveChunkJob(
+    Guid RecordingId,
+    Guid TranscriptionId,
+    int Sequence,
+    string BlobKey,
+    string? PrevBlobKey,
+    long OffsetMs,
+    /// <summary>How much of the decode window belongs to the previous chunk, and must therefore be
+    /// trimmed off the front. This is that chunk's <b>real duration</b>, not a fixed window: a WebM
+    /// fragment cannot be byte-sliced mid-cluster, so the worker prepends the whole of it or none.</summary>
+    long OverlapMs,
+    string? Language = null,
+    /// <summary>Chunk 0's blob, whose EBML header the worker prepends so the window can be decoded at
+    /// all. Only chunk 0 carries one, so from sequence 2 on the prev+current pair is headerless.
+    /// Null for sequences 0 and 1, which need nothing: sequence 1's previous chunk IS chunk 0.</summary>
+    string? FirstBlobKey = null);
+
+/// <summary>Callback body the worker POSTs when a live chunk has been transcribed. Times are already
+/// offset into recording time, so the API stores them without arithmetic.</summary>
+public record LiveChunkResult(
+    Guid RecordingId,
+    Guid TranscriptionId,
+    int Sequence,
+    string? Language,
+    /// <summary>Reuses the same shapes as the full-recording callback rather than parallel types: the
+    /// worker produces them from the same pipeline, and two near-identical contracts would drift.</summary>
+    IReadOnlyList<SegmentResult> Segments,
+    IReadOnlyList<SpeakerEmbeddingResult>? Speakers = null,
+    long? ProcessingMs = null);
+
+/// <summary>Callback body when one live chunk could not be transcribed. A gap in the live transcript,
+/// not a failure of the recording: capture continues and the final pass covers the whole meeting.</summary>
+public record LiveChunkFailure(
+    Guid RecordingId,
+    Guid TranscriptionId,
+    int Sequence,
+    string Error);
+
 /// <summary>Job payload for async summarisation, consumed by the API's SummarizationWorker.</summary>
 public record SummarizationJob(
     Guid RecordingId,

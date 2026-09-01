@@ -41,6 +41,11 @@ public static class SummarizationProcessor
                 .FirstOrDefaultAsync(t => t.Id == job.TranscriptionId, ct)
                 ?? throw new InvalidOperationException("Transcription not found.");
 
+            // A provisional transcription is the live pass over a capture still in progress. Acting on
+            // it would summarise half a meeting and then name the recording from it - see the table in
+            // docs/Streaming_Capture_and_Live_Transcript.md section 7.2.
+            if (transcription.IsProvisional) return;
+
             // Protect a hand-edited summary: the automatic summariser leaves it untouched. A user-initiated
             // re-summarise clears IsUserEdited first (so it isn't blocked here).
             if (transcription.Summary is { IsUserEdited: true })

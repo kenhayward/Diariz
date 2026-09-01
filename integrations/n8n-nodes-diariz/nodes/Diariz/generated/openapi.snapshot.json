@@ -4958,6 +4958,10 @@
             "format": "uuid",
             "type": "string"
           },
+          "isProvisional": {
+            "default": false,
+            "type": "boolean"
+          },
           "language": {
             "type": [
               "null",

@@ -7,6 +7,7 @@ import os
 
 import redis
 
+import pipeline
 import worker
 
 
@@ -540,3 +541,214 @@ def test_handle_merge_echoes_kind(monkeypatch, tmp_path):
     worker.handle_merge(_merge_job(Kind="live-chunks"))
 
     assert calls["posted_kind"] == "live-chunks"
+
+
+# ---- live chunks ----
+
+def _live_job(**extra):
+    return {
+        "RecordingId": "rec-1",
+        "TranscriptionId": "tr-1",
+        "Sequence": 3,
+        "BlobKey": "u/r/chunks/00003.webm",
+        "PrevBlobKey": "u/r/chunks/00002.webm",
+        "OffsetMs": 90_000,
+        "OverlapMs": 3_000,
+        "Language": "en",
+        **extra,
+    }
+
+
+def _live_spies(monkeypatch, tmp_path):
+    """Record what the handler joined, transcribed and posted."""
+    calls: dict = {}
+    files = {}
+    for name in ("prev", "this"):
+        p = tmp_path / f"{name}.webm"
+        p.write_text(name)
+        files[name] = str(p)
+
+    monkeypatch.setattr(worker.storage, "download",
+                        lambda key: files["prev"] if key.endswith("00002.webm") else files["this"])
+
+    def fake_join(paths):
+        calls["joined"] = list(paths)
+        joined = tmp_path / "joined.webm"
+        joined.write_text("joined")
+        return str(joined)
+
+    monkeypatch.setattr(worker.audio_merge, "join_bytes", fake_join)
+    def fake_transcribe_window(path, **kw):
+        calls["transcribe_kw"] = kw
+        offset, overlap = kw.get("offset_ms", 0), kw.get("overlap_ms", 0)
+        # Mirror what the real pass does to times, so the handler's plumbing is what is under test.
+        # PascalCase, because that is what _shape_segments really emits - these dicts become the
+        # callback body that .NET binds. A snake_case fixture here is what let the key mismatch through.
+        segs = [{"Speaker": "SPEAKER_00", "StartMs": 0, "EndMs": 1000, "Text": "hi"}]
+        segs = pipeline._offset_segments(pipeline._trim_to_window(segs, 0), offset, overlap)
+        return {"language": "en", "segments": segs,
+                "speakers": [{"speaker": "SPEAKER_00", "embedding": [0.1] * 192}]}
+
+    monkeypatch.setattr(worker.pipeline, "transcribe_window", fake_transcribe_window)
+    monkeypatch.setattr(worker.callback, "post_live_chunk_result",
+                        lambda **kw: calls.update(posted=kw))
+    monkeypatch.setattr(worker.callback, "post_live_chunk_failure",
+                        lambda **kw: calls.update(failed=kw))
+    return calls
+
+
+def test_handle_live_chunk_byte_joins_the_previous_tail(monkeypatch, tmp_path):
+    """Only chunk 0 carries the WebM header, so the overlap must be BYTE-joined, never opened
+    separately - the same constraint the S0 spike found the hard way."""
+    calls = _live_spies(monkeypatch, tmp_path)
+
+    worker.handle_live_chunk(_live_job())
+
+    assert len(calls["joined"]) == 2, "previous chunk then this one, joined as bytes"
+    assert "failed" not in calls
+
+
+def test_handle_live_chunk_without_a_previous_chunk_does_not_join(monkeypatch, tmp_path):
+    calls = _live_spies(monkeypatch, tmp_path)
+
+    worker.handle_live_chunk(_live_job(Sequence=0, PrevBlobKey=None, OffsetMs=0, OverlapMs=0))
+
+    assert "joined" not in calls
+    assert "failed" not in calls
+
+
+def test_handle_live_chunk_posts_segments_in_recording_time(monkeypatch, tmp_path):
+    calls = _live_spies(monkeypatch, tmp_path)
+
+    worker.handle_live_chunk(_live_job())
+
+    posted = calls["posted"]
+    assert posted["sequence"] == 3
+    # 0 ms into a window that began 3 s before the chunk, which itself starts at 90 s.
+    assert posted["segments"][0]["StartMs"] == 87_000
+
+
+def test_handle_live_chunk_failure_is_reported_and_does_not_raise(monkeypatch, tmp_path):
+    """One bad chunk must not stop the meeting."""
+    calls = _live_spies(monkeypatch, tmp_path)
+    monkeypatch.setattr(worker.pipeline, "transcribe_window",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("model exploded")))
+
+    worker.handle_live_chunk(_live_job())
+
+    assert "failed" in calls
+    assert "posted" not in calls
+
+
+def test_run_loop_prefers_live_chunks_over_a_queued_full_transcription(monkeypatch):
+    """The priority read of spec section 6.3.
+
+    A live chunk sitting behind an hour of queued audio would arrive long after the meeting it belongs
+    to had ended, so the live stream is polled on its own before the blocking multi-stream read.
+    """
+    order = []
+    monkeypatch.setattr(worker, "handle_live_chunk", lambda job: order.append("live"))
+    monkeypatch.setattr(worker, "handle", lambda job: order.append("full"))
+
+    class _StreamAwareRedis:
+        """Holds BOTH a live chunk and a full transcription, and answers per stream - so the order the
+        loop asks in is what decides which runs first."""
+        def __init__(self):
+            self.acked = []
+
+        def xreadgroup(self, group, consumer, streams, count=1, block=None):
+            if list(streams) == [worker.config.LIVE_CHUNK_STREAM_KEY]:
+                return [(worker.config.LIVE_CHUNK_STREAM_KEY,
+                         [("1-1", {"job": json.dumps(_live_job())})])]
+            return [(worker.config.STREAM_KEY,
+                     [("2-1", {"job": json.dumps({"TranscriptionId": "t", "BlobKey": "b"})})])]
+
+        def xack(self, stream, group, msg_id):
+            self.acked.append((stream, msg_id))
+
+        def xpending_range(self, *a, **k):
+            return []
+
+    worker.run_loop(_StreamAwareRedis(), keep_going=_keep_going(2))
+
+    assert order and order[0] == "live", f"live chunk must be handled first, got {order}"
+
+
+def test_every_stream_the_loop_reads_has_its_group_created_at_startup(monkeypatch):
+    """The read loop must never name a stream whose consumer group nobody created.
+
+    Redis answers XREADGROUP on an unknown group with NOGROUP, which raises rather than returning
+    empty - so a stream that is read but not ensured takes the whole worker down in a crash loop on
+    startup, and with it every transcription, not just the feature that added the stream. The group
+    is normally created by whichever side gets there first, but the worker cannot rely on the API
+    having enqueued something before it starts: on a clean deployment it has not.
+    """
+    import worker as worker_mod
+
+    ensured: list[str] = []
+    monkeypatch.setattr(worker_mod, "ensure_group", lambda r, key: ensured.append(key))
+    monkeypatch.setattr(worker_mod, "run_loop", lambda r: None)
+    monkeypatch.setattr(worker_mod.heartbeat, "start", lambda: None)
+    # torch is GPU-only and absent here; main() patches it before it reaches the streams.
+    monkeypatch.setattr(worker_mod.torch_compat, "restore_legacy_torch_load", lambda: None)
+
+    class FakeRedis:
+        def ping(self):
+            return True
+
+    monkeypatch.setattr(worker_mod.redis.Redis, "from_url", staticmethod(lambda *a, **k: FakeRedis()))
+    worker_mod.main()
+
+    config = worker_mod.config
+    read = {
+        config.STREAM_KEY,
+        config.MERGE_STREAM_KEY,
+        config.VOICEPRINT_STREAM_KEY,
+        config.LIVE_CHUNK_STREAM_KEY,
+    }
+    assert read - set(ensured) == set(), (
+        f"read but never ensured: {sorted(read - set(ensured))}"
+    )
+
+
+def test_handle_live_chunk_prepends_the_init_segment_from_the_first_chunk(monkeypatch, tmp_path):
+    """From sequence 2 on, prev and current are both headerless and the pair cannot be decoded.
+
+    This is the defect that made every chunk past the second fail with "EBML header parsing failed"
+    while the first two worked - sequence 1's previous chunk IS chunk 0, so it carries the header by
+    luck. The job therefore names the first chunk's blob, and the worker prepends its init segment:
+    a few hundred bytes of header, not the first chunk's audio.
+    """
+    import pathlib as _pathlib
+
+    first = tmp_path / "first.webm"
+    first.write_bytes(b"\x1aE\xdf\xa3INIT" + bytes.fromhex("1F43B675") + b"first-audio")
+    prev = tmp_path / "prev.webm"; prev.write_bytes(b"prev-audio")
+    cur = tmp_path / "cur.webm"; cur.write_bytes(b"cur-audio")
+
+    blobs = {"first": str(first), "prev": str(prev), "cur": str(cur)}
+    monkeypatch.setattr(worker.storage, "download", lambda key: blobs[key])
+
+    captured = {}
+
+    def fake_join(paths):
+        captured["blob"] = b"".join(_pathlib.Path(p).read_bytes() for p in paths)
+        out = tmp_path / "joined.webm"
+        out.write_bytes(captured["blob"])
+        return str(out)
+
+    monkeypatch.setattr(worker.audio_merge, "join_bytes", fake_join)
+    monkeypatch.setattr(worker.pipeline, "transcribe_window",
+                        lambda path, offset_ms, overlap_ms, language: {
+                            "language": "en", "segments": [], "speakers": []})
+    monkeypatch.setattr(worker.callback, "post_live_chunk_result", lambda **kw: None)
+
+    worker.handle_live_chunk({
+        "RecordingId": "r1", "TranscriptionId": "t1", "Sequence": 2, "BlobKey": "cur",
+        "PrevBlobKey": "prev", "FirstBlobKey": "first", "OffsetMs": 60000, "OverlapMs": 30000,
+        "Language": "en"})
+
+    blob = captured["blob"]
+    assert blob.startswith(b"\x1aE\xdf\xa3INIT"), "decodable input must open with the init segment"
+    assert b"first-audio" not in blob, "the first chunk's AUDIO must not be dragged in, only its header"
+    assert blob.endswith(b"prev-audiocur-audio")

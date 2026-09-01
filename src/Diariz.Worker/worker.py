@@ -11,6 +11,7 @@ API from the recording's own override or the user's default; null means let Whis
 import json
 import logging
 import os
+import tempfile
 import threading
 import time
 
@@ -151,6 +152,82 @@ def handle(job: dict) -> None:
             os.remove(audio_path)
 
 
+def handle_live_chunk(job: dict) -> None:
+    """Transcribe one chunk of a capture still in progress.
+
+    The previous chunk's tail is prepended so Whisper does not start mid-sentence. It is **byte-joined**,
+    never opened as a second input: only chunk 0 carries the WebM header, so ffmpeg fails on any later
+    chunk handed to it on its own (the S0 spike finding - see
+    docs/Streaming_Capture_and_Live_Transcript.md section 5.1).
+
+    A failure here is reported and swallowed. One bad chunk costs a gap in the live transcript; it must
+    never stop the meeting, and the canonical recording is untouched either way.
+    """
+    recording_id = job["RecordingId"]
+    transcription_id = job["TranscriptionId"]
+    sequence = job["Sequence"]
+    overlap_ms = job.get("OverlapMs") or 0
+    prev_key = job.get("PrevBlobKey")
+
+    started = time.monotonic()
+    downloaded: list[str] = []
+    joined = None
+    try:
+        with telemetry.transaction("live-chunk"):
+            with telemetry.span("storage.download", "download"):
+                this_path = storage.download(job["BlobKey"])
+                downloaded.append(this_path)
+                if prev_key and overlap_ms > 0:
+                    prev_path = storage.download(prev_key)
+                    downloaded.append(prev_path)
+                    # Only chunk 0 carries the WebM/EBML header, so from sequence 2 on both prev and
+                    # this one are headerless and the pair will not open. Prepending chunk 0's
+                    # initialisation segment - a few hundred bytes of header and track definitions,
+                    # not its audio - is what makes the window decodable. Sequence 1 needs nothing:
+                    # its previous chunk IS chunk 0.
+                    parts = [prev_path, this_path]
+                    first_key = job.get("FirstBlobKey")
+                    if first_key and first_key != prev_key:
+                        first_path = storage.download(first_key)
+                        downloaded.append(first_path)
+                        init = audio_merge.webm_init_segment(first_path)
+                        if init:
+                            fd, init_path = tempfile.mkstemp(suffix=".webm")
+                            with os.fdopen(fd, "wb") as f:
+                                f.write(init)
+                            downloaded.append(init_path)
+                            parts.insert(0, init_path)
+                    joined = audio_merge.join_bytes(parts)
+                    audio_path = joined
+                else:
+                    # Sequence 0 has nothing before it, so there is no overlap to correct for either.
+                    audio_path = this_path
+                    overlap_ms = 0
+
+            result = pipeline.transcribe_window(
+                audio_path,
+                offset_ms=job.get("OffsetMs") or 0,
+                overlap_ms=overlap_ms,
+                language=job.get("Language"))
+
+            processing_ms = int((time.monotonic() - started) * 1000)
+            with telemetry.span("http.client", "callback"):
+                callback.post_live_chunk_result(
+                    recording_id=recording_id, transcription_id=transcription_id, sequence=sequence,
+                    language=result["language"], segments=result["segments"],
+                    speakers=result.get("speakers"), processing_ms=processing_ms)
+    except Exception as e:  # noqa: BLE001 - report and continue; the meeting keeps recording
+        log.exception("Live chunk %s failed for transcription %s", sequence, transcription_id)
+        telemetry.capture_exception(e)
+        callback.post_live_chunk_failure(
+            recording_id=recording_id, transcription_id=transcription_id,
+            sequence=sequence, error=str(e))
+    finally:
+        for path in downloaded + ([joined] if joined else []):
+            if path and os.path.exists(path):
+                os.remove(path)
+
+
 def handle_merge(job: dict) -> None:
     """Concatenate several recordings' audio into one and report back so the API can swap it onto the
     survivor and delete the merged sources."""
@@ -229,10 +306,17 @@ def run_loop(r: redis.Redis, keep_going=lambda: True) -> None:
     crashing the worker. ``keep_going`` is a test seam; production runs forever."""
     while keep_going():
         try:
+            # Live chunks first, on their own non-blocking read. A chunk of a meeting still in progress
+            # queued behind an hour of audio would arrive long after that meeting had ended, so it does
+            # not wait its turn. This bounds live latency by the job already running, not by queue depth.
             resp = r.xreadgroup(
                 config.CONSUMER_GROUP, config.CONSUMER_NAME,
-                {config.STREAM_KEY: ">", config.MERGE_STREAM_KEY: ">",
-                 config.VOICEPRINT_STREAM_KEY: ">"}, count=1, block=BLOCK_MS)
+                {config.LIVE_CHUNK_STREAM_KEY: ">"}, count=1, block=None)
+            if not resp:
+                resp = r.xreadgroup(
+                    config.CONSUMER_GROUP, config.CONSUMER_NAME,
+                    {config.STREAM_KEY: ">", config.MERGE_STREAM_KEY: ">",
+                     config.VOICEPRINT_STREAM_KEY: ">"}, count=1, block=BLOCK_MS)
         except (redis.TimeoutError, redis.ConnectionError) as e:
             log.warning("Redis unavailable (%s); retrying in %ds", e, RECONNECT_DELAY)
             time.sleep(RECONNECT_DELAY)
@@ -253,7 +337,9 @@ def run_loop(r: redis.Redis, keep_going=lambda: True) -> None:
                 done = claim_keepalive(r, stream, msg_id)
                 try:
                     job = json.loads(fields["job"])
-                    if stream == config.MERGE_STREAM_KEY:
+                    if stream == config.LIVE_CHUNK_STREAM_KEY:
+                        handle_live_chunk(job)
+                    elif stream == config.MERGE_STREAM_KEY:
                         handle_merge(job)
                     elif stream == config.VOICEPRINT_STREAM_KEY:
                         handle_voiceprint(job)
@@ -286,12 +372,14 @@ def main() -> None:
             log.info("Waiting for Redis at %s ...", config.REDIS_URL)
             time.sleep(2)
 
-    ensure_group(r, config.STREAM_KEY)
-    ensure_group(r, config.MERGE_STREAM_KEY)
-    ensure_group(r, config.VOICEPRINT_STREAM_KEY)
-    log.info("Worker %s listening on streams %s, %s, %s",
-             config.CONSUMER_NAME, config.STREAM_KEY, config.MERGE_STREAM_KEY,
-             config.VOICEPRINT_STREAM_KEY)
+    # Every stream run_loop reads, without exception. Redis raises NOGROUP rather than returning empty
+    # for an unknown group, so a stream that is read but not ensured crash-loops the whole worker on a
+    # clean deployment - taking down all transcription, not just the feature that added the stream.
+    streams = (config.STREAM_KEY, config.MERGE_STREAM_KEY, config.VOICEPRINT_STREAM_KEY,
+               config.LIVE_CHUNK_STREAM_KEY)
+    for key in streams:
+        ensure_group(r, key)
+    log.info("Worker %s listening on streams %s", config.CONSUMER_NAME, ", ".join(streams))
 
     # Start the liveness heartbeat (read by the Docker healthcheck) once we're up and consuming.
     heartbeat.start()

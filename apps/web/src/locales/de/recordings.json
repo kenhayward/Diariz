@@ -20,5 +20,10 @@
   "protectAudio": "Audio schützen",
   "unprotectAudio": "Audioschutz entfernen",
   "delete": "Löschen",
-  "edit": "Bearbeiten"
+  "edit": "Bearbeiten",
+  "liveTranscriptLive": "Transkription lauft mit. Dieser Text ist nicht endgultig - das vollstandige Transkript kommt, wenn Sie stoppen.",
+  "liveTranscriptBehind": "Transkription lauft mit, etwa {{seconds}}s im Ruckstand. Dieser Text ist nicht endgultig.",
+  "liveTranscriptDegraded": "Das Live-Transkript pausiert. Die Aufnahme lauft weiter, das vollstandige Transkript folgt nach dem Meeting.",
+  "liveTranscriptEmpty": "Es wurde noch nichts gesagt.",
+  "liveTranscriptTab": "Transkript"
 }

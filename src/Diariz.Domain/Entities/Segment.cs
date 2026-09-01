@@ -28,6 +28,16 @@ public class Segment
     /// <summary>The text actually shown/exported: the revision when present, else the model's original.</summary>
     public string EffectiveText => Revised ?? Original;
 
+    /// <summary>Which live chunk produced this segment, or null for a segment from an ordinary
+    /// full-recording pass.
+    /// <para>
+    /// It exists so a <b>redelivered</b> chunk can replace exactly its own segments. Redis streams are
+    /// at-least-once, so the same chunk will arrive twice in production; without this the handler could
+    /// only append, and the transcript would repeat a sentence somewhere in the middle - which reads as
+    /// a transcription fault rather than a queue one.
+    /// </para></summary>
+    public int? ChunkSequence { get; set; }
+
     /// <summary>Ordering index within the transcription.</summary>
     public int Ordinal { get; set; }
 

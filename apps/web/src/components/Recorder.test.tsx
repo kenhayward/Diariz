@@ -5,6 +5,15 @@ import { expectsConsoleError } from "../test-setup";
 // A JWT-shaped token whose payload decodes to { sub: "u1" } (used for the per-user pending key).
 const TOKEN = `h.${btoa(JSON.stringify({ sub: "u1" }))}.s`;
 
+vi.mock("../lib/signalr", () => ({
+  createHub: (...args: unknown[]) => hubFactory(...args),
+}));
+let hubFactory: (...args: unknown[]) => unknown = () => ({
+  start: () => Promise.resolve(),
+  stop: () => Promise.resolve(),
+  on: () => {},
+});
+
 vi.mock("../lib/api", () => ({
   api: {
     upload: vi.fn(), createNotes: vi.fn(), createScreenshot: vi.fn(),
@@ -168,6 +177,12 @@ function expectOpaqueFloatingPanel(panel: HTMLElement) {
 // beforeEach hooks resets calls but keeps implementations, so a test that makes live capture succeed
 // would otherwise leak into every test after it, in any describe block.
 beforeEach(() => {
+  // A hub that connects, unless a test replaces it. Reset per test so one that breaks it cannot leak.
+  hubFactory = () => ({
+    start: () => Promise.resolve(),
+    stop: () => Promise.resolve(),
+    on: () => {},
+  });
   (api.beginLive as Mock).mockRejectedValue(new Error("no live"));
   (api.putChunk as Mock).mockResolvedValue(undefined);
   (api.finalizeLive as Mock).mockResolvedValue(undefined);
@@ -584,6 +599,26 @@ describe("Recorder source selection", () => {
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
 
     await waitFor(() => expect(api.upload).toHaveBeenCalled());
+  });
+
+  it("keeps recording when the live transcript hub cannot be created", async () => {
+    // The transcript is a convenience; the recording is the thing the user cannot get back. A hub that
+    // throws on construction - an unreachable server, a browser blocking the socket - must cost them the
+    // live text and nothing else. Before this was guarded the throw propagated out of the effect and
+    // unmounted the recorder mid-take, so the Stop button vanished with the meeting still running.
+    hubFactory = () => {
+      throw new Error("websocket blocked");
+    };
+    (getStream as Mock).mockResolvedValue(fakeSession);
+    (api.beginLive as Mock).mockResolvedValue({ id: "live-3", sessionId: "s3", status: "Live" });
+    (api.finalizeLive as Mock).mockResolvedValue(undefined);
+
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+
+    // Still recording, and still stoppable.
+    fireEvent.click(await screen.findByRole("button", { name: /^stop$/i }));
+    await waitFor(() => expect(api.finalizeLive).toHaveBeenCalledWith("live-3"));
   });
 
   it("reports the wall clock it started and stopped, not just the recorded duration", async () => {

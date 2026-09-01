@@ -573,7 +573,10 @@ public class ChatController : ControllerBase
             var actionsText = TranscriptFormatter.ActionsForChat(actions);
             if (actionsText.Length > 0) text = text + "\n" + actionsText;
 
-            contexts.Add(new TranscriptContext(rec.Name ?? rec.Title, text));
+            // A provisional transcription means the meeting is still being recorded, so the text ends
+            // mid-meeting. The model is told, or it answers as though the discussion concluded.
+            contexts.Add(new TranscriptContext(
+                rec.Name ?? rec.Title, text, InProgress: current?.IsProvisional == true));
         }
         return (contexts, recs.Count == ids.Count);
     }

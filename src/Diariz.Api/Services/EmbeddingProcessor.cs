@@ -38,6 +38,11 @@ public static class EmbeddingProcessor
             .FirstOrDefaultAsync(t => t.Id == job.TranscriptionId, ct);
         if (transcription is null) return;
 
+        // A provisional transcription is the live pass over a capture still in progress. Chunks are
+        // replaced wholesale, so embedding one every thirty seconds would re-embed the whole meeting
+        // over and over; chat pre-loads the live transcript instead (spec D5).
+        if (transcription.IsProvisional) return;
+
         var names = await db.Speakers
             .Where(s => s.RecordingId == rec.Id)
             .ToDictionaryAsync(s => s.Label, s => s.DisplayName, ct);

@@ -39,6 +39,8 @@ import {
 import { startSilenceWatcher, type SilenceWatcher } from "../lib/silenceWatcher";
 import { startLiveSession, type LiveSession } from "../lib/liveSession";
 import { indexedDbChunkStore } from "../lib/liveChunkQueue";
+import { useLiveTranscript } from "../lib/useLiveTranscript";
+import { createHub } from "../lib/signalr";
 import { useCalendarRecordingSettings } from "../lib/calendarRecordingSettings";
 import { useStatus } from "../lib/status";
 import { useElapsedSeconds } from "../lib/elapsedSeconds";
@@ -358,6 +360,35 @@ export default function Recorder({
   // How many of chunksRef's fragments the live session has already taken. The tail sent at stop is
   // only what came after the last chunk boundary.
   const liveFragmentsSentRef = useRef(0);
+  // The live recording currently being captured, or null. Drives the transcript panel and the
+  // hub subscription that feeds it; cleared at stop so neither outlives the take.
+  const [liveRecordingId, setLiveRecordingId] = useState<string | null>(null);
+
+  const live = useLiveTranscript(liveRecordingId, () =>
+    timing.elapsedMs(timingRef.current, Date.now()));
+
+  // A hub for the duration of the capture only. The recordings list and the detail page have their own
+  // connections for their own purposes; this one exists while a meeting is being recorded and goes away
+  // with it, so a page that never records never opens it.
+  useEffect(() => {
+    if (!liveRecordingId) return;
+    // Everything here is inside the try: the recording is what the user cannot get back, and the live
+    // transcript is a convenience on top of it. A hub that cannot be built or started costs them the
+    // live text and nothing else - the audio is still captured, and the full transcript still arrives
+    // at the end. Uncaught, the throw would unmount the recorder with the meeting still running.
+    let hub: ReturnType<typeof createHub> | null = null;
+    try {
+      hub = createHub({
+        onStatus: () => {},
+        onLiveTranscript: (e) => void live.onAppend(e),
+        onLiveTranscriptDegraded: live.onDegraded,
+      });
+      void hub.start().catch(() => {});
+    } catch {
+      hub = null;
+    }
+    return () => void hub?.stop().catch(() => {});
+  }, [liveRecordingId, live.onAppend, live.onDegraded]);
 
   /// Feeds the live session's chunk boundary decision. A no-op until a session exists, so it is safe
   /// to hand to a watcher armed before the server answered.
@@ -1053,6 +1084,7 @@ export default function Recorder({
           return;
         }
         liveRef.current = live;
+        setLiveRecordingId(live.recordingId);
         // Chunk boundaries need level readings, and only now do we know they are wanted - a take with
         // no live session must not pay for an analyser it never reads. A calendar take already has a
         // watcher (armed above, and already feeding this same callback), so reuse it rather than
@@ -1191,6 +1223,7 @@ export default function Recorder({
     const live = liveRef.current;
     if (!live) return false;
     liveRef.current = null;
+    setLiveRecordingId(null);
     try {
       const tail = new Blob(chunksRef.current.slice(liveFragmentsSentRef.current), { type: "audio/webm" });
       await live.finish(timing.elapsedMs(timingRef.current, Date.now()), tail);
@@ -1672,6 +1705,9 @@ export default function Recorder({
               onDelete={notes.remove}
               shots={liveShots}
               onDeleteShot={deleteLiveShot}
+              liveTranscript={live.transcript ?? undefined}
+              liveLagSeconds={live.lagSeconds}
+              liveDegraded={live.degraded}
               onChangeCaptureArea={canCaptureScreenshots() ? requestChangeArea : undefined}
               onCapture={canCaptureScreenshots() ? requestCapture : undefined}
               captureAreaSet={captureAreaSet}
