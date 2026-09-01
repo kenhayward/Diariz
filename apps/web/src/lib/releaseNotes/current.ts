@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.263.1",
+    date: "2026-09-01",
+    pr: 689,
+    headline: "A test that cried wolf, and the 83 MB it was waiting for",
+    summary:
+      "One test in the suite checked that the API reference opens inside Diariz rather than throwing you out to a new browser tab. To do it, it was loading the entire library that draws that reference - about 83 MB of it - when the only thing it looks at is the window the reference opens in.\n\nOn a cold machine that load could take longer than the test was allowed, so it failed for reasons that had nothing to do with what it was checking. It now uses a stand-in, which is what the reference's own test has always done. Nothing about Diariz changes: the suite is simply faster and stops failing at random, which matters because a test that cries wolf is how a real fault gets waved through.",
+    fixed: [
+      "A test covering the API reference intermittently failed, having spent its whole time budget loading a large third-party library it never inspected. Two test files pulled it in for real; both now use a stand-in, and nothing in the suite loads it any more.",
+    ],
+  },
+  {
     version: "0.263.0",
     date: "2026-09-01",
     pr: 687,

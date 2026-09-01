@@ -2,6 +2,14 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// The API reference renders Scalar, which is ~83 MB on disk and the slowest thing any test here pulls in.
+// These tests only assert that the reference opens *in place* - the dialog wrapper and its label - and never
+// look at what Scalar itself renders, so a stub costs no coverage. `pages/ApiReference.test.tsx` has always
+// mocked it for the same reason; this file did not, and paid for the real load on every run (issue #588).
+vi.mock("@scalar/api-reference-react", () => ({
+  ApiReferenceReact: () => <div data-testid="scalar" />,
+}));
+
 vi.mock("../../lib/api", () => ({
   api: { getProfile: vi.fn(), listApiTokens: vi.fn(), createApiToken: vi.fn(), revokeApiToken: vi.fn() },
   apiErrorMessage: (e: unknown) => String(e),
