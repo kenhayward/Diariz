@@ -19,14 +19,21 @@ namespace Diariz.Api.IntegrationTests;
 [Collection(IntegrationCollection.Name)]
 public class LiveSpeakerIdentityIntegrationTests(ContainersFixture fx)
 {
-    /// A unit vector at <paramref name="degrees"/> in the first two dimensions, so every distance in these
-    /// tests is arithmetic rather than something the database gets to define.
+    /// A unit vector at <paramref name="degrees"/>, so every distance in these tests is arithmetic rather
+    /// than something the database gets to define.
+    ///
+    /// <para>It lives in dimensions 100 and 101 rather than 0 and 1, and that is not arbitrary. The
+    /// integration collection shares one database, and <c>RankAsync</c> deliberately scans EVERY person on
+    /// the platform with no owner filter - so a ranking test cannot assume its own people are the only
+    /// ones present. The first version placed them on dimensions every other fixture also uses and lost
+    /// to somebody else's person. Occupying a corner of the space nothing else touches makes these
+    /// people nearest by construction rather than by luck.</para>
     private static float[] At(double degrees)
     {
         var r = degrees * Math.PI / 180.0;
         var v = new float[192];
-        v[0] = (float)Math.Cos(r);
-        v[1] = (float)Math.Sin(r);
+        v[100] = (float)Math.Cos(r);
+        v[101] = (float)Math.Sin(r);
         return v;
     }
 
