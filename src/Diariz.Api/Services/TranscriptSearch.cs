@@ -73,9 +73,16 @@ public sealed class TranscriptSearch : ITranscriptSearch
     /// fuzzier. 0.3 is lenient enough to survive typos/partial phrases without flooding with noise.</summary>
     private const double Threshold = 0.3;
 
-    /// <summary>The current-transcription guard, reused by both queries.</summary>
+    /// <summary>The current-transcription guard, reused by both queries.
+    ///
+    /// <para>Provisional transcriptions are excluded outright, not merely out-ranked: while a meeting is
+    /// being captured the live pass IS the highest version, so without this every search would return
+    /// half-finished text from a recording that is still running - and the MAX() subquery would have to
+    /// skip it too, or the guard would exclude the real transcript once one exists.</para></summary>
     private const string CurrentVersion =
-        "t.\"Version\" = (SELECT MAX(t2.\"Version\") FROM \"Transcriptions\" t2 WHERE t2.\"RecordingId\" = r.\"Id\")";
+        "t.\"IsProvisional\" = FALSE AND " +
+        "t.\"Version\" = (SELECT MAX(t2.\"Version\") FROM \"Transcriptions\" t2 " +
+        "WHERE t2.\"RecordingId\" = r.\"Id\" AND t2.\"IsProvisional\" = FALSE)";
 
     /// <summary>The read gate: a recording is visible when it is placed in one of the caller's rooms (their
     /// personal room plus any shared room they belong to). Replaces the old <c>r."UserId" = @userId</c> so a

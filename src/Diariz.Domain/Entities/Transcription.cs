@@ -17,6 +17,22 @@ public class Transcription
     /// <summary>Monotonic version number per recording, starting at 1.</summary>
     public int Version { get; set; }
 
+    /// <summary>True while this is the <b>live</b> pass over a capture still in progress: a partial
+    /// transcript, assembled chunk by chunk, that the final full-file pass supersedes by writing the
+    /// next version.
+    /// <para>
+    /// Nothing downstream may act on it. Summaries, action items, tags, meeting minutes and embeddings
+    /// all decline it, exports refuse it, and search and the MCP tools exclude it - see the table in
+    /// <c>docs/Streaming_Capture_and_Live_Transcript.md</c> section 7.2. Several of those are one-shot:
+    /// action and tag extraction stamp a "done" marker even when they find nothing, so running one on
+    /// half a meeting would make the real pass skip it and silently lose the rest.
+    /// </para>
+    /// <para>
+    /// The detail endpoint <b>does</b> return it, flagged, because the UI has to render it while the
+    /// meeting is running.
+    /// </para></summary>
+    public bool IsProvisional { get; set; }
+
     /// <summary>Detected language code (ISO-639-1) if available.</summary>
     public string? Language { get; set; }
 

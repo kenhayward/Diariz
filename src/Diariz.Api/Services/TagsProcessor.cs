@@ -56,6 +56,11 @@ public static class TagsProcessor
                 .FirstOrDefaultAsync(t => t.Id == job.TranscriptionId, ct)
                 ?? throw new InvalidOperationException("Transcription not found.");
 
+            // A provisional transcription is the live pass over a capture still in progress. Acting on
+            // it would stamp TagsExtractedAt on a half-finished meeting, so the backfill would consider it done - see the table in
+            // docs/Streaming_Capture_and_Live_Transcript.md section 7.2.
+            if (transcription.IsProvisional) return;
+
             var names = rec.Speakers.ToDictionary(s => s.Label, s => s.DisplayName);
             var segs = transcription.Segments
                 .OrderBy(s => s.Ordinal)

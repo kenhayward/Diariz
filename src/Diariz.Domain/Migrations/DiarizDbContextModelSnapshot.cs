@@ -2090,6 +2090,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("IsProvisional")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Language")
                         .HasColumnType("text");
 

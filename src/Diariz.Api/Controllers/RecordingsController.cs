@@ -236,7 +236,8 @@ public class RecordingsController : ControllerBase
                 s.StartMs, s.EndMs, s.Original, s.Revised,
                 // Whether the segment can be split, not the words themselves - see SegmentDto.HasWords.
                 s.WordsJson != null)).ToList(),
-            current.ProcessingMs);
+            current.ProcessingMs,
+            current.IsProvisional);
         SummaryDto? sDto = current?.Summary is null ? null
             : new(current.Summary.Model, current.Summary.Text, current.Summary.CreatedAt, current.Summary.IsUserEdited);
         MeetingMinutesDto? mDto = current?.MeetingMinutes is null ? null
@@ -2344,6 +2345,13 @@ public class RecordingsController : ControllerBase
             .AsSplitQuery()
             .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
         if (rec is null) return NotFound();
+
+        // A live capture's transcript is provisional: partial, unstable at the tail, and superseded the
+        // moment the meeting ends. Exporting it would hand someone a document that reads like the record
+        // and is not, so refuse rather than quietly emit half a meeting.
+        if (rec.Transcriptions.FirstOrDefault()?.IsProvisional == true)
+            return StatusCode(StatusCodes.Status409Conflict,
+                "This recording is still being captured. The transcript can be downloaded once it has finished.");
 
         var current = rec.Transcriptions.FirstOrDefault();
         if (current is null || current.Segments.Count == 0) return NotFound();
