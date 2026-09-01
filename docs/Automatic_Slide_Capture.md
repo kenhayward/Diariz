@@ -23,13 +23,14 @@ Two caveats for anyone using this as a reference:
   (there are seven, all asserted by `apps/web/src/lib/versionMirrors.test.ts`) and point at
   `apps/web/src/lib/releases.ts`, which since 0.260.0 is `apps/web/src/lib/releaseNotes/current.ts` with
   `CAPABILITIES` in `apps/web/src/lib/appInfo.ts`. Follow `CLAUDE.md`, not these.
-- **§15.4 risk 3 is not true and may never have been.** It says `backgroundThrottling: false` "is already set
-  on the main window" and is load-bearing for capturing while minimised. It is not set anywhere in
-  `apps/desktop/` as of 0.262.0, and Electron's default throttles renderer timers on a hidden window. Whether
-  the 1 Hz auto-capture tick actually survives minimising is **unverified** - tracked as
-  [#684](https://github.com/kenhayward/Diariz/issues/684), which starts with reproducing it rather than
-  fixing it. Risk 2 (a screen-sharing indicator appearing while the stream is held) was recorded as
-  unmeasured and is not mentioned in the help article, so treat it as unmeasured still.
+- **§15.4 risk 3 was wrong twice over, and is now corrected in place.** It said `backgroundThrottling: false`
+  "is already set on the main window" and is load-bearing for capturing while minimised. It is **not set**
+  anywhere in `apps/desktop/`, and it is **not needed**: measured on Electron 43 / Windows 11, an active
+  media capture exempts the page from timer throttling entirely, and auto-capture only ever runs during a
+  recording. Investigated and closed as a false alarm in
+  [#684](https://github.com/kenhayward/Diariz/issues/684), which carries the measurements. Risk 2 (a
+  screen-sharing indicator appearing while the stream is held) was recorded as unmeasured and is not
+  mentioned in the help article, so treat it as unmeasured still.
 
 ---
 
@@ -910,8 +911,12 @@ so that "no change detected" could be distinguished from "the capture froze":
 | restored | +5.00 s | 6/8 | live |
 | hidden (`win.hide()`, separate run) | +3.02 s | 2/5 | live |
 
-The stream keeps delivering in every state. `backgroundThrottling: false` is set on the window, and
-should be treated as load-bearing rather than incidental.
+The stream keeps delivering in every state. The reason was misattributed here: `backgroundThrottling:
+false` is **not** set on the window and never has been. What keeps the tick running is that an **active
+media capture exempts the page from throttling** - and auto-capture can only run during a recording, which
+always holds one. Measured separately in #684: a bare hidden window drops to 1 tick/min after about a
+minute, while the same window holding a microphone stream and MediaRecorder kept 419 of 420 ticks across
+seven minutes minimised, and 179 of 180 hidden to the tray.
 
 **Still unmeasured:** whether Windows shows a persistent screen-sharing indicator while the stream is
 held, and the behaviour on macOS (where Screen Recording permission and its menu-bar indicator apply).
@@ -992,5 +997,11 @@ B0 and B1 are done. What remains:
 2. **A screen-sharing indicator** may appear while the stream is held (unmeasured). If Windows or macOS
    shows one for the whole meeting, that is a user-visible surprise and needs to be in the help text
    rather than discovered.
-3. **`backgroundThrottling: false`** is load-bearing for the minimised case. It is already set on the
-   main window; it must not be removed, and that deserves a comment where it is set.
+3. ~~**`backgroundThrottling: false`** is load-bearing for the minimised case. It is already set on the
+   main window; it must not be removed, and that deserves a comment where it is set.~~ **Not a risk, and
+   the premise was false** - see #684. The setting is not present anywhere in `apps/desktop/`, and adding
+   it would buy nothing: an active media capture already exempts the page, and auto-capture cannot run
+   without a recording. It would also cost something, since it disables throttling for the whole life of
+   the window, including the long stretches when Diariz sits in the tray doing nothing. The risk was
+   reasoned from Chromium's documented behaviour without checking whether the app's own always-on
+   recording exempts it.
