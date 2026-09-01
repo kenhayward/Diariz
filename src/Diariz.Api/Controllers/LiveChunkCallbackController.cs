@@ -26,9 +26,11 @@ namespace Diariz.Api.Controllers;
 public class LiveChunkCallbackController(
     DiarizDbContext db,
     IHubContext<TranscriptionHub> hub,
-    IOptions<WorkerOptions> opts) : ControllerBase
+    IOptions<WorkerOptions> opts,
+    IOptions<LiveCaptureOptions>? live = null) : ControllerBase
 {
     private readonly WorkerOptions _opts = opts.Value;
+    private readonly LiveCaptureOptions _live = live?.Value ?? new LiveCaptureOptions();
 
     private bool SecretOk =>
         Request.Headers.TryGetValue("X-Worker-Secret", out var v) && v == _opts.CallbackSecret;
@@ -71,17 +73,26 @@ public class LiveChunkCallbackController(
         var existing = await db.Segments
             .Where(s => s.TranscriptionId == transcription.Id && s.ChunkSequence == body.Sequence)
             .ToListAsync();
+
+        // At-least-once delivery means the same chunk WILL arrive twice. Segments are replaced either
+        // way, but the centroid must not absorb the same vector a second time: a running mean that
+        // double-counts is quietly wrong in a way no single-chunk test would catch, dragging a voice
+        // toward whichever chunk happened to be retried.
+        var isRedelivery = existing.Count > 0;
         db.Segments.RemoveRange(existing);
+
+        // Chunk-local labels mean nothing across chunks - pyannote clusters each one independently - so
+        // they are mapped onto labels that hold for the whole meeting before anything is stored.
+        var sessionOf = await StitchAsync(rec, transcription, body, isRedelivery);
 
         foreach (var s in body.Segments)
         {
+            var chunkLabel = string.IsNullOrWhiteSpace(s.Speaker) ? "UNKNOWN" : s.Speaker;
             db.Segments.Add(new Segment
             {
                 Id = Guid.NewGuid(),
                 TranscriptionId = transcription.Id,
-                // Phase 2 stores the diarization label but shows nothing: it is only meaningful within
-                // one chunk, so it is kept for the stitcher rather than displayed.
-                SpeakerLabel = string.IsNullOrWhiteSpace(s.Speaker) ? "UNKNOWN" : s.Speaker,
+                SpeakerLabel = sessionOf.GetValueOrDefault(chunkLabel, chunkLabel),
                 StartMs = s.StartMs,
                 EndMs = s.EndMs,
                 Original = TranscriptText.Normalize(s.Text),
@@ -89,25 +100,6 @@ public class LiveChunkCallbackController(
                 ChunkSequence = body.Sequence,
                 Ordinal = 0,   // assigned below, across the whole transcription
             });
-        }
-
-        // Keep the per-speaker vectors. Nothing is named from them in this phase; they are what a later
-        // pass stitches into one identity per voice across the whole meeting.
-        foreach (var se in body.Speakers ?? [])
-        {
-            if (se.Embedding is not { Length: > 0 }) continue;
-            var label = string.IsNullOrWhiteSpace(se.Speaker) ? "UNKNOWN" : se.Speaker;
-            var speaker = await db.Speakers
-                .FirstOrDefaultAsync(sp => sp.RecordingId == rec.Id && sp.Label == label);
-            if (speaker is null)
-            {
-                speaker = new Speaker
-                {
-                    Id = Guid.NewGuid(), RecordingId = rec.Id, Label = label, DisplayName = label,
-                };
-                db.Speakers.Add(speaker);
-            }
-            speaker.Embedding = new Pgvector.Vector(se.Embedding);
         }
 
         // Mark the chunk done, so the lag calculation stops counting it. Without this the oldest
@@ -118,6 +110,12 @@ public class LiveChunkCallbackController(
         if (chunk is not null) chunk.TranscribedAt = DateTimeOffset.UtcNow;
 
         await db.SaveChangesAsync();
+
+        // Only now, with this chunk's segments stored: a merge relabels by speaker across the whole
+        // transcription, so one decided before the write would leave the rows it could not see behind
+        // under a label it had just retired.
+        await ApplyMergesAsync(rec, transcription,
+            new StitchThresholds(_live.StitchThreshold, _live.StitchMargin));
 
         // Ordinal is what every reader sorts by, and chunks can complete out of order under retry - so
         // it is assigned across the whole transcription by recording time, not by arrival.
@@ -130,6 +128,146 @@ public class LiveChunkCallbackController(
 
         await hub.NotifyLiveTranscriptAsync(rec.UserId, rec.Id, transcription.Id, body.Sequence);
         return Ok();
+    }
+
+    /// <summary>Map this chunk's local speaker labels onto session labels, updating the running centroids.
+    ///
+    /// <para>The <c>Speaker</c> rows for a live recording carry the session labels, and their
+    /// <c>Embedding</c> is the running centroid. Sample counts are <b>derived</b> - the number of
+    /// distinct chunks whose segments carry that label - rather than stored, so there is no second copy
+    /// to fall out of step with the segments themselves, and no new column for something the data
+    /// already says.</para>
+    ///
+    /// <para>Returns the chunk-label to session-label map. Merging converged labels is deliberately a
+    /// separate pass, run once this chunk's segments exist - see <see cref="ApplyMergesAsync"/>.</para>
+    /// </summary>
+    private async Task<Dictionary<string, string>> StitchAsync(
+        Recording rec, Transcription transcription, LiveChunkResult body, bool isRedelivery)
+    {
+        var speakers = await db.Speakers.Where(s => s.RecordingId == rec.Id).ToListAsync();
+
+        var sampleCounts = (await db.Segments
+                .Where(s => s.TranscriptionId == transcription.Id && s.ChunkSequence != null)
+                .Select(s => new { s.SpeakerLabel, s.ChunkSequence })
+                .Distinct()
+                .ToListAsync())
+            .GroupBy(x => x.SpeakerLabel)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+
+        var known = speakers
+            .Where(s => s.Embedding is not null)
+            .Select(s => new SessionCentroid(s.Label, s.Embedding!.ToArray(),
+                sampleCounts.GetValueOrDefault(s.Label, 1)))
+            .ToList();
+
+        var incoming = (body.Speakers ?? [])
+            .Where(se => se.Embedding is { Length: > 0 })
+            .Select(se => new ChunkSpeaker(
+                string.IsNullOrWhiteSpace(se.Speaker) ? "UNKNOWN" : se.Speaker, se.Embedding!, 0))
+            .ToList();
+
+        var thresholds = new StitchThresholds(_live.StitchThreshold, _live.StitchMargin);
+        var decisions = LiveSpeakerStitcher.Stitch(known, incoming, thresholds);
+
+        var sessionOf = decisions.ToDictionary(d => d.ChunkLabel, d => d.SessionLabel,
+            StringComparer.Ordinal);
+
+        foreach (var d in decisions)
+        {
+            var observed = incoming.First(i => i.Label == d.ChunkLabel).Embedding;
+            var speaker = speakers.FirstOrDefault(s => s.Label == d.SessionLabel);
+            if (speaker is null)
+            {
+                speaker = new Speaker
+                {
+                    Id = Guid.NewGuid(), RecordingId = rec.Id,
+                    Label = d.SessionLabel, DisplayName = d.SessionLabel,
+                    Embedding = new Pgvector.Vector(observed),
+                };
+                db.Speakers.Add(speaker);
+                speakers.Add(speaker);
+                continue;
+            }
+
+            if (isRedelivery) continue;
+
+            var current = new SessionCentroid(speaker.Label, speaker.Embedding!.ToArray(),
+                sampleCounts.GetValueOrDefault(speaker.Label, 1));
+            speaker.Embedding = new Pgvector.Vector(
+                LiveSpeakerStitcher.UpdateCentroid(current, observed).Centroid);
+        }
+
+        await db.SaveChangesAsync();
+        return sessionOf;
+    }
+
+    /// <summary>Collapse any session labels that have converged onto one voice, moving earlier segments
+    /// with them.
+    ///
+    /// <para>The relabel is retroactive on purpose: the split was a guess made on a noisy first chunk,
+    /// and leaving the earlier text under a label the server no longer believes in would mean a person
+    /// appears twice in their own transcript for the rest of the meeting.</para></summary>
+    private async Task ApplyMergesAsync(
+        Recording rec, Transcription transcription, StitchThresholds thresholds)
+    {
+        var speakers = await db.Speakers.Where(s => s.RecordingId == rec.Id).ToListAsync();
+
+        var perChunk = await db.Segments
+            .Where(s => s.TranscriptionId == transcription.Id && s.ChunkSequence != null)
+            .Select(s => new { s.SpeakerLabel, s.ChunkSequence })
+            .Distinct()
+            .ToListAsync();
+
+        var samples = perChunk.GroupBy(x => x.SpeakerLabel)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+
+        // Labels pyannote heard in the same chunk and called different people. That judgement had the
+        // actual audio - two voices overlapping, answering each other - and beats any comparison of
+        // centroids across windows, so it is protected rather than weighed.
+        var neverTogether = new HashSet<(string, string)>();
+        foreach (var chunk in perChunk.GroupBy(x => x.ChunkSequence))
+        {
+            var labels = chunk.Select(x => x.SpeakerLabel).Distinct().ToList();
+            foreach (var a in labels)
+                foreach (var b in labels)
+                    if (a != b) neverTogether.Add((a, b));
+        }
+
+        // A speaker the user has named by hand is never merged away. They know who it is and the
+        // centroids do not; overruling that would discard the one piece of ground truth in the meeting.
+        var mergeable = speakers
+            .Where(s => s.Embedding is not null && s.PersonId is null && s.DisplayName == s.Label)
+            .Select(s => new SessionCentroid(s.Label, s.Embedding!.ToArray(),
+                samples.GetValueOrDefault(s.Label, 1)))
+            .ToList();
+
+        var merges = LiveSpeakerStitcher.FindMerges(mergeable, thresholds, neverTogether);
+        if (merges.Count == 0) return;
+
+        foreach (var (from, into) in merges)
+        {
+            // One statement, not one per segment: a 90-minute meeting carries thousands, and a merge can
+            // land on any chunk. ExecuteUpdate is relational-only, so the unit provider takes the loop -
+            // the single-statement path is exercised for real in the integration tests.
+            if (db.Database.IsRelational())
+            {
+                await db.Segments
+                    .Where(s => s.TranscriptionId == transcription.Id && s.SpeakerLabel == from)
+                    .ExecuteUpdateAsync(u => u.SetProperty(s => s.SpeakerLabel, into));
+            }
+            else
+            {
+                var affected = await db.Segments
+                    .Where(s => s.TranscriptionId == transcription.Id && s.SpeakerLabel == from)
+                    .ToListAsync();
+                foreach (var s in affected) s.SpeakerLabel = into;
+            }
+
+            var loser = speakers.FirstOrDefault(s => s.Label == from);
+            if (loser is not null) db.Speakers.Remove(loser);
+        }
+
+        await db.SaveChangesAsync();
     }
 
     [HttpPost("live-chunk-failure")]

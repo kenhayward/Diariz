@@ -110,9 +110,20 @@ public static class LiveSpeakerStitcher
     /// <para>The survivor is the label with more samples - the better centroid, and fewer segments to
     /// relabel. Chains collapse onto a single survivor so no merge is left pointing at a label that has
     /// itself just been merged away.</para></summary>
+    /// <param name="neverTogether">Pairs of labels that must not be merged whatever their centroids say,
+    /// because pyannote heard them <b>in the same chunk</b> and decided there that they were different
+    /// people. Diarization within one window is far better evidence than a centroid comparison across
+    /// windows: it had the actual audio, including the two voices overlapping and answering each other.
+    /// Without this the merge quietly undoes the one separation the stitcher works hardest to preserve,
+    /// and two people end up under one name.</param>
     public static IReadOnlyList<(string From, string Into)> FindMerges(
-        IReadOnlyList<SessionCentroid> known, StitchThresholds t)
+        IReadOnlyList<SessionCentroid> known, StitchThresholds t,
+        IReadOnlySet<(string, string)>? neverTogether = null)
     {
+        bool Forbidden(string a, string b) =>
+            neverTogether is not null &&
+            (neverTogether.Contains((a, b)) || neverTogether.Contains((b, a)));
+
         // Best established first, so a chain resolves onto the strongest centroid in one pass.
         var order = known.OrderByDescending(k => k.Samples).ThenBy(k => k.Label, StringComparer.Ordinal)
             .ToList();
@@ -124,6 +135,7 @@ public static class LiveSpeakerStitcher
             for (var j = i + 1; j < order.Count; j++)
             {
                 if (survivorOf.ContainsKey(order[j].Label)) continue;
+                if (Forbidden(order[i].Label, order[j].Label)) continue;
                 if (CosineDistance(order[i].Centroid, order[j].Centroid) < t.Threshold)
                     survivorOf[order[j].Label] = order[i].Label;
             }
