@@ -488,9 +488,9 @@ Per CLAUDE.md. This is a user-facing feature, so items 1-7 all apply.
 
 `version.json` plus its seven mirrors: `apps/web/package.json`, `apps/desktop/package.json`, `src/Diariz.Api/Diariz.Api.csproj`, `integrations/n8n-nodes-diariz/package.json`, and the three `package-lock.json` files (web, desktop, n8n - **two `version` fields in each**). Edit the lock files by hand; do not regenerate.
 
-- [ ] **Step 2: `RELEASES[0]` in `apps/web/src/lib/releases.ts`**
+- [ ] **Step 2: `RECENT[0]` in `apps/web/src/lib/releaseNotes/current.ts`**
 
-Version, date, `pr`, headline, a PR-level prose summary, and `added`/`changed` bullets. The `pr` number is the issue-free case, so it is the PR's own number - confirm it rather than assuming.
+Version, date, `pr`, headline, a PR-level prose summary, and `added`/`changed` bullets. The `pr` number is the issue-free case, so it is the PR's own number - confirm it rather than assuming. `current.ts` is the only release-notes file to touch: since 0.260.0 the history is split, and `lib/releaseNotes/archive.ts` must not be imported by anything but the drill-down page.
 
 - [ ] **Step 3: The three feature surfaces, in lockstep**
 

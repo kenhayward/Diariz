@@ -33,11 +33,19 @@ Every PR ships exactly one release: **bump the version and add one release-notes
 
 - Scheme is `Major.Minor.Build`. A **functional enhancement** bumps Minor +1 and resets Build to 0; any
   other PR (fix / chore / docs / refactor) bumps Build +1. Only bump Major when explicitly asked.
-- The canonical version is [`version.json`](version.json). Bump it in lockstep with its mirrors:
-  `apps/web/package.json`, `apps/desktop/package.json` (and their lock files), and
-  `src/Diariz.Api/Diariz.Api.csproj` (`<Version>`).
-- Add an entry to the top of `RELEASES` in [`apps/web/src/lib/releases.ts`](apps/web/src/lib/releases.ts);
-  `RELEASES[0].version` **must equal** `version.json` (a test asserts this).
+- The canonical version is [`version.json`](version.json). Bump it in lockstep with its **seven** mirrors:
+  `apps/web/package.json`, `apps/desktop/package.json`, `integrations/n8n-nodes-diariz/package.json`,
+  `src/Diariz.Api/Diariz.Api.csproj` (`<Version>`), and all three `package-lock.json` files - web, desktop
+  and n8n - each of which carries the version **twice**. `apps/web/src/lib/versionMirrors.test.ts` fails the
+  build if any of them drifts.
+- Add an entry to the top of `RECENT` in
+  [`apps/web/src/lib/releaseNotes/current.ts`](apps/web/src/lib/releaseNotes/current.ts);
+  `RECENT[0].version` **must equal** `version.json` (a test asserts this).
+- **That is the only release-notes file to edit.** The rest of `lib/releaseNotes/` is a summarisation layer:
+  older releases move to `archive.ts` under a named **epoch** in `epochs.ts`, and the release-notes page
+  opens on those epochs with every entry still listed verbatim one click in. Closing an epoch is its own
+  deliberate change, not part of shipping a release. `archive.ts` is loaded lazily by a single page and must
+  not be imported anywhere else - a test asserts the module graph, because nothing else would catch it.
 
 ### 3. Keep the docs current
 

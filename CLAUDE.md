@@ -223,8 +223,9 @@ the **PR body** - `Fixes #<n>` (or `Closes #<n>`) on its own line. Do this witho
 - Write the issue from the **user-visible symptom** (what went wrong, how to reproduce, what was expected), not
   from the fix you are about to write - it is the record of the bug, and the PR is the record of the fix.
 - **The issue consumes a number from the same sequence as PRs**, so the PR number is usually the issue number
-  + 1 - but confirm it rather than assuming (it feeds the `pr:` field in `apps/web/src/lib/releases.ts`, which
-  has to be written before `gh pr create` exists to report the real number).
+  + 1 - but confirm it rather than assuming (it feeds the `pr:` field in
+  `apps/web/src/lib/releaseNotes/current.ts`, which has to be written before `gh pr create` exists to
+  report the real number).
 - The closing keyword must be in the **PR body**; GitHub only auto-closes from the PR description or from a
   commit on the default branch, not from a PR title or a later comment. Verify the issue actually closed after
   the merge, and close it by hand if it did not.
@@ -244,15 +245,20 @@ is **Major.Minor.Build** (currently `0.x`).
   rewrites it and turns an unrelated dependency bump into a surprise version diff. Two of them sat at
   `0.197.4` for roughly sixty releases because the guard covered only the web one (issue #593).
   The web build injects the version (`__APP_VERSION__` via `vite.config.ts`/`vitest.config.ts`) and the API
-  reports it at `GET /health`. `RELEASES[0].version` in `apps/web/src/lib/releases.ts` **must equal**
-  `version.json` (asserted by `releases.test.ts`), and `versionMirrors.test.ts` asserts every mirror above.
-- **Add a release entry** to the top of `RELEASES` in `apps/web/src/lib/releases.ts` with: `version`,
-  `date`, `pr` (the GitHub PR number), `headline`, a **PR-level prose `summary`** (enough for a user to
-  understand the impact), and `added`/`changed`/`fixed` bullet lists as applicable.
-- **When the app's scope changes**, update the About-box `CAPABILITIES` summary in the same file (and
-  the disclaimers list in `apps/web/src/components/AboutModal.tsx` if a new third-party library/model
-  is introduced). `CAPABILITIES` is a **concise two-column markdown table** (`| Feature | Description |`,
-  one line per feature) — add/edit a row, don't reintroduce long prose (the About box renders it via
+  reports it at `GET /health`. `RECENT[0].version` in `apps/web/src/lib/releaseNotes/current.ts`
+  **must equal** `version.json` (asserted by `releaseNotes/releases.test.ts`), and `versionMirrors.test.ts`
+  asserts every mirror above.
+- **Add a release entry** to the top of `RECENT` in **`apps/web/src/lib/releaseNotes/current.ts`** with:
+  `version`, `date`, `pr` (the GitHub PR number), `headline`, a **PR-level prose `summary`** (enough for a
+  user to understand the impact), and `added`/`changed`/`fixed` bullet lists as applicable. **That file is
+  the only release-notes file an ordinary PR touches** - see "The release notes are epochs over an archive"
+  below for what the other four are and why you must not import them.
+- **When the app's scope changes**, update the About-box `CAPABILITIES` summary in
+  **`apps/web/src/lib/appInfo.ts`** - it moved there in 0.260.0 so the eager About box and Help pages
+  stop dragging the release history into the initial bundle - and the disclaimers list in
+  `apps/web/src/components/AboutModal.tsx` if a new third-party library/model is introduced.
+  `CAPABILITIES` is a **concise two-column markdown table** (`| Feature | Description |`, one line per
+  feature) — add/edit a row, don't reintroduce long prose (the About box renders it via
   `renderMarkdown`; `.chat-md` table CSS in `apps/web/src/index.css` styles it).
 - **Keep `README.md` current.** When a PR changes what the app does — a new user-facing feature, a stack
   change, or a shipped roadmap milestone — update the README in the same PR (it mirrors the
@@ -261,7 +267,65 @@ is **Major.Minor.Build** (currently `0.x`).
   **full prose** feature list. On a feature change, update **all three in lockstep**: the README Features
   table row, the matching `docs/features.md` bullet, and the About-box `CAPABILITIES` table row (plus
   **Architecture**/**Roadmap** in the README when relevant). The README deliberately does **not** carry a
-  version number (it would drift) — the version lives only in `version.json` / `releases.ts`.
+  version number (it would drift) — the version lives only in `version.json` / `releaseNotes/current.ts`.
+- **The release notes are epochs over an archive, and summarisation is additive.** As of 0.260.0
+  (PR #675) the history lives in `apps/web/src/lib/releaseNotes/`, split five ways, and **none of it is
+  in the initial bundle any more** - that is most of what the PR was for (-197 KB gzip, -22%). Nothing
+  enforces that but **who imports what**, which is why there is a test on the module graph itself.
+
+  | File | Holds | Ends up in |
+  |---|---|---|
+  | `current.ts` | `RECENT` - releases since the last closed epoch. **The file every PR edits.** | both release-notes chunks |
+  | `epochs.ts` | `EPOCHS` (the named spans) + `ARCHIVED_SPINE` (version+date for every archived release) | both release-notes chunks |
+  | `epochSpan.ts` | derives an epoch's release count and date span from the spine | summary-page chunk |
+  | `archive.ts` | `ARCHIVE` - every release already covered by an epoch, ~170 KB gzip | **drill-down chunk only** |
+  | `index.ts` | barrel: types + `RECENT`. Deliberately does **not** re-export `ARCHIVE` | - |
+
+  Both pages (`pages/ReleaseNotes.tsx`, `pages/EpochDetail.tsx`) are `lazy()` routes in `App.tsx`, and
+  nothing eager imports `lib/releaseNotes` at all. The About box and Help read `lib/appInfo.ts` instead,
+  which is why `CAPABILITIES` lives there and not with the releases.
+
+  The page opens on the epoch cards, newest first, with an open "current" card for `RECENT`; clicking one
+  lists **every release in that span verbatim**. So an epoch summary is a *chapter heading over an intact
+  archive*, never a rewrite of it - nothing is merged, condensed, or dropped, and the drill-down is
+  lossless. If you ever find yourself editing an existing `Release` entry to make an epoch summary read
+  better, you have the direction backwards.
+
+  Four rules that are invisible when broken:
+  - **Only `pages/EpochDetail.tsx` may import `./archive`**, and the barrel must not re-export it. Adding
+    `import { ARCHIVE }` to any eager module type-checks, renders correctly, and passes every other test
+    while putting the whole history back on every page load. `bundleBoundary.test.ts` asserts the module
+    graph directly, because nothing else would catch it.
+  - **The epoch ranges must tile the archive** - every archived release in exactly one epoch, no gaps, no
+    overlaps. A release falling between two epochs is simply never listed: no 404, no error. `epochs.test.ts`
+    asserts this as **one equality over the whole archive**; per-epoch checks are the trap, since every
+    epoch can be well-formed while the set leaves a hole.
+  - **`ARCHIVED_SPINE` must mirror `ARCHIVE` exactly**, in the same order. It exists so the summary page can
+    derive counts and date spans without loading the archive. An epoch stores **no** count or date span -
+    both are derived (`epochSpan`), because a stored copy would be a second derivation agreeing only by luck.
+  - **`current` is a reserved epoch id** (`OPEN_EPOCH_ID`), serving `/release-notes/current`. A real epoch
+    taking it would silently shadow the newest releases.
+
+  The directory is `releaseNotes/`, **not** `releases/`: `.gitignore` carries the Visual Studio rule
+  `[Rr]eleases/`, which would silently omit the whole directory from the commit while everything still
+  built and passed locally.
+
+- **Closing an epoch is a deliberate, separate PR - not something an ordinary release PR does.** Leave
+  `RECENT` growing; `releases.test.ts` fails above 80 entries, but that is a safety net, not the trigger.
+  Close one when an **arc of work finishes** (the historical 30 epochs average ~16 releases, range 6-25),
+  which is a judgement about narrative, not a count - so **ask the user** rather than closing one
+  unprompted. Boundaries are chosen by **theme**, never by version or date: the minor version bumps on
+  nearly every release, and the cadence is a flat 30-50 releases a week, so either would cut arcs in half.
+  An epoch is a narrative, not a taxonomy - its range may contain a release its summary never mentions,
+  which is fine precisely because the drill-down is lossless. To close one:
+  1. Add the `Epoch` record at the **top** of `EPOCHS` in `epochs.ts` (`id`, `title`, `from`, `to`,
+     prose `summary`; `from`/`to` are **inclusive** version bounds).
+  2. Move those entries from `current.ts` to the **top** of `archive.ts`, unchanged and in order.
+  3. Extend `ARCHIVED_SPINE` with the same `{ version, date }` pairs, in the same order.
+
+  Get the order wrong between (2) and (3) and `epochs.test.ts` catches it; skip (3) entirely and the epoch
+  card renders with a count of zero.
+
 - **User help articles are NOT a fourth sync target.** `apps/web/src/content/help/**` is task-oriented
   "how do I / what happens if" prose written for a user inside the app; the README table,
   `docs/features.md`, and `CAPABILITIES` are *inventories* of what exists. Different genres, deliberately
@@ -303,8 +367,8 @@ is **Major.Minor.Build** (currently `0.x`).
      by hand rather than regenerating them; regenerating churns dependency resolution for no reason.
      `apps/web/src/lib/versionMirrors.test.ts` fails the build if any of them drifts - it exists because the
      n8n node silently sat at `0.1.0` for ~70 releases, and an npm version cannot be corrected once published.
-  2. The `RELEASES[0]` entry in `apps/web/src/lib/releases.ts` (must equal `version.json`).
-  3. The About-box **`CAPABILITIES`** table row in `releases.ts` (on a scope change) + `AboutModal.tsx`
+  2. The `RECENT[0]` entry in `apps/web/src/lib/releaseNotes/current.ts` (must equal `version.json`).
+  3. The About-box **`CAPABILITIES`** table row in `appInfo.ts` (on a scope change) + `AboutModal.tsx`
      disclaimers (on a new third-party library/model).
   4. The **README Features** table row.
   5. The **`docs/features.md`** prose bullet - the canonical full feature list; **always** update it alongside
@@ -321,8 +385,8 @@ is **Major.Minor.Build** (currently `0.x`).
   **exploratory side project**: repurposing the device for offline ambient capture that is later uploaded to
   Diariz. It is not built, tested, shipped, or referenced by any Diariz deployable. So a PR that **only**
   touches `omi/**` (including `omi/firmware/docs/**`):
-  - does **not** bump `version.json` or any mirror, and adds **no** `RELEASES` entry;
-  - is **not** mentioned in `releases.ts` `CAPABILITIES`, `AboutModal.tsx`, `README.md`,
+  - does **not** bump `version.json` or any mirror, and adds **no** `RECENT` entry;
+  - is **not** mentioned in `appInfo.ts` `CAPABILITIES`, `AboutModal.tsx`, `README.md`,
     `docs/features.md`, `docs/Overall_Synopsis_of_Platform.md`, `docs/Data_Schema.md`, or
     `apps/web/src/content/help/**`;
   - documents itself inside **`omi/firmware/docs/`** only.
