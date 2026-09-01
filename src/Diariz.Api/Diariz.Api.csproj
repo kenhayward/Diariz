@@ -50,7 +50,7 @@
          REMOVE THE CEILING when this project moves to ASP.NET Core 11 - and expect work in
          OpenApi/OpenApiCuration.cs at the same time, since its transformers mutate the document
          (`document.Components.SecuritySchemes ??= ...`) rather than only inspecting it. -->
-    <PackageReference Include="Microsoft.OpenApi" Version="[2.7.5,3.0.0)" />
+    <PackageReference Include="Microsoft.OpenApi" Version="3.10.2" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.*">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
