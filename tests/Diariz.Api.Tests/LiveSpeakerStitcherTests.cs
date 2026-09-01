@@ -250,4 +250,77 @@ public class LiveSpeakerStitcherTests
 
         Assert.True(LiveSpeakerStitcher.CosineDistance(moved.Centroid, At(0)) > 0);
     }
+
+    // ---- merging two session labels that turn out to be one voice ----
+
+    [Fact]
+    public void TwoSessionLabelsThatHaveConvergedAreMerged()
+    {
+        // The case that makes this necessary: ECAPA on a short noisy first chunk puts a voice somewhere
+        // odd, the next chunk of the same person lands too far away to match, and they mint separately.
+        // Once both centroids have improved they are plainly the same voice - and without merging, that
+        // person is two speakers for the rest of the meeting.
+        var merges = LiveSpeakerStitcher.FindMerges(
+            [Known("SPEAKER_00", 0, samples: 5), Known("SPEAKER_01", 4, samples: 2)], Default);
+
+        var m = Assert.Single(merges);
+        Assert.Equal("SPEAKER_01", m.From);
+        Assert.Equal("SPEAKER_00", m.Into);
+    }
+
+    [Fact]
+    public void TheBetterEstablishedLabelSurvivesAMerge()
+    {
+        // Keeping the one built from more chunks keeps the better centroid and relabels fewer segments.
+        var merges = LiveSpeakerStitcher.FindMerges(
+            [Known("SPEAKER_00", 0, samples: 1), Known("SPEAKER_01", 4, samples: 9)], Default);
+
+        Assert.Equal("SPEAKER_00", Assert.Single(merges).From);
+        Assert.Equal("SPEAKER_01", merges[0].Into);
+    }
+
+    [Fact]
+    public void VoicesThatAreMerelyNearbyAreNotMerged()
+    {
+        // Merging is destructive in a way minting is not: an extra speaker is a nuisance the user can
+        // fix, whereas two people under one name loses who said what. So it takes the same threshold as
+        // matching, not a looser one.
+        var merges = LiveSpeakerStitcher.FindMerges(
+            [Known("SPEAKER_00", 0, samples: 5), Known("SPEAKER_01", 60, samples: 5)], Default);
+
+        Assert.Empty(merges);
+    }
+
+    [Fact]
+    public void AMergeChainCollapsesOntoOneSurvivor()
+    {
+        // Three labels that are all one voice must end as one, not as a pair plus an orphan still
+        // pointing at a label that no longer exists.
+        var merges = LiveSpeakerStitcher.FindMerges(
+            [Known("SPEAKER_00", 0, samples: 9), Known("SPEAKER_01", 3, samples: 2),
+             Known("SPEAKER_02", 6, samples: 1)], Default);
+
+        Assert.Equal(2, merges.Count);
+        Assert.All(merges, m => Assert.Equal("SPEAKER_00", m.Into));
+    }
+
+    [Fact]
+    public void AContestedMergeGoesToTheBetterEstablishedSurvivor()
+    {
+        // The case the chain test above cannot reach: there, all three are mutually close, so whichever
+        // way the loop runs they all land on the same survivor and a version with no guard at all passes.
+        // Here SPEAKER_02 is close to BOTH of the others while those two are not close to each other, so
+        // something has to choose - and it must be the better-established centroid rather than whichever
+        // comparison happened last. Without the guard the later, weaker one overwrites the earlier
+        // decision, and the merge points at a worse centroid built from a ninth of the audio.
+        var a = Known("SPEAKER_00", 0, samples: 9);
+        var b = Known("SPEAKER_01", 50, samples: 5);
+        var c = Known("SPEAKER_02", 25, samples: 1);
+        Assert.True(LiveSpeakerStitcher.CosineDistance(a.Centroid, b.Centroid) > Default.Threshold,
+            "the two survivors must not themselves be mergeable, or the case collapses");
+
+        var merges = LiveSpeakerStitcher.FindMerges([a, b, c], Default);
+
+        Assert.Equal("SPEAKER_00", Assert.Single(merges, m => m.From == "SPEAKER_02").Into);
+    }
 }

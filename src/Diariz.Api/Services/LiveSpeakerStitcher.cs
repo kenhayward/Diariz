@@ -95,6 +95,43 @@ public static class LiveSpeakerStitcher
         return decisions;
     }
 
+    /// <summary>Session labels that have turned out to be the same voice, as (loser, survivor) pairs.
+    ///
+    /// <para>Minting is deliberately eager - a voice that matches nothing gets its own label rather than
+    /// being guessed onto an existing one - and this is the correction for that. ECAPA on a short, noisy
+    /// first chunk can put a voice somewhere odd, so the same person's next chunk lands too far away to
+    /// match and mints separately; once both centroids have improved they are plainly one voice. Without
+    /// merging, that person stays two speakers for the rest of the meeting.</para>
+    ///
+    /// <para>It uses the same threshold as matching rather than a looser one, because merging is
+    /// destructive in a way minting is not: an extra speaker is a nuisance the user can fix afterwards,
+    /// whereas two people filed under one name loses who said what.</para>
+    ///
+    /// <para>The survivor is the label with more samples - the better centroid, and fewer segments to
+    /// relabel. Chains collapse onto a single survivor so no merge is left pointing at a label that has
+    /// itself just been merged away.</para></summary>
+    public static IReadOnlyList<(string From, string Into)> FindMerges(
+        IReadOnlyList<SessionCentroid> known, StitchThresholds t)
+    {
+        // Best established first, so a chain resolves onto the strongest centroid in one pass.
+        var order = known.OrderByDescending(k => k.Samples).ThenBy(k => k.Label, StringComparer.Ordinal)
+            .ToList();
+        var survivorOf = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        for (var i = 0; i < order.Count; i++)
+        {
+            if (survivorOf.ContainsKey(order[i].Label)) continue;   // already merged away
+            for (var j = i + 1; j < order.Count; j++)
+            {
+                if (survivorOf.ContainsKey(order[j].Label)) continue;
+                if (CosineDistance(order[i].Centroid, order[j].Centroid) < t.Threshold)
+                    survivorOf[order[j].Label] = order[i].Label;
+            }
+        }
+
+        return survivorOf.Select(kv => (From: kv.Key, Into: kv.Value)).ToList();
+    }
+
     /// <summary>Fold one more chunk vector into a session's running centroid.
     ///
     /// <para>A running mean, weighted by how much has already been heard, then re-normalised. The
