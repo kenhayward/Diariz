@@ -14,8 +14,10 @@ architecture plan for the full design.
 [docs/Runtime_Architecture.html](https://htmlpreview.github.io/?https://github.com/kenhayward/Diariz/blob/main/docs/Runtime_Architecture.html) has a live visual navigation of how Diariz fits together.
 
 Versioned per the rule in [CLAUDE.md](CLAUDE.md); the current version and per-release notes live in
-[`apps/web/src/lib/releases.ts`](apps/web/src/lib/releases.ts) (and [`/version.json`](version.json)) and on
-the in-app **Release Notes** page (`/release-notes`), reachable from **About** in the account menu.
+[`apps/web/src/lib/releaseNotes/`](apps/web/src/lib/releaseNotes) (and [`/version.json`](version.json)) and on
+the in-app **Release Notes** page (`/release-notes`), reachable from **About** in the account menu. That page
+opens on named **epochs** - a chapter per arc of work - with every individual release listed verbatim one
+click in.
 
 ## Features
 
@@ -166,9 +168,10 @@ ambient capture - see the [long-term roadmap](docs/long_term_roadmap.md).
 > **Keep this README current.** When a PR changes what the app does (a new feature, a stack change, or a
 > shipped roadmap item), update the **Features** table (one concise row) and **[docs/features.md](docs/features.md)**
 > (the full prose), plus the **Architecture** and **Roadmap** sections and the in-app About-box `CAPABILITIES`
-> table - all in the same PR, alongside the [`releases.ts`](apps/web/src/lib/releases.ts) entry required by
+> table - all in the same PR, alongside the
+> [`releaseNotes/current.ts`](apps/web/src/lib/releaseNotes/current.ts) entry required by
 > [CLAUDE.md](CLAUDE.md). (The version isn't repeated here on purpose - it lives in `version.json` /
-> `releases.ts` so it can't drift.)
+> `releaseNotes/current.ts` so it can't drift.)
 
 ## Licensing & commercial use
 

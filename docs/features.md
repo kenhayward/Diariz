@@ -2,7 +2,7 @@
 
 This is the detailed, prose feature list. The [README](../README.md) carries an at-a-glance
 two-column summary table and links here for the full detail. **Keep both in sync** (and the in-app
-About-box `CAPABILITIES` summary in [`apps/web/src/lib/releases.ts`](../apps/web/src/lib/releases.ts))
+About-box `CAPABILITIES` summary in [`apps/web/src/lib/appInfo.ts`](../apps/web/src/lib/appInfo.ts))
 when the app's scope changes - see [CLAUDE.md](../CLAUDE.md).
 
 - **Capture** audio from the browser microphone — **choose a specific input device** (the choice is

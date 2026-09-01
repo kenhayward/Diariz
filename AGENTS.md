@@ -32,8 +32,10 @@ Full detail is in `CLAUDE.md`; these are the ones worth naming twice.
 - **TDD is required.** Write the failing test, watch it fail, then write the minimum to pass it.
 - **Never commit or push to `main`, and never merge locally.** Every change lands through a PR that
   passes CI. A bug fix opens a GitHub issue first, and the PR body closes it with `Fixes #<n>`.
-- **Every user-facing PR ships exactly one release**: bump `version.json` *and* its mirrors, and add one
-  `RELEASES[0]` entry. A docs-only PR skips the bump - say so in the PR body.
+- **Every user-facing PR ships exactly one release**: bump `version.json` *and* its seven mirrors, and add
+  one `RECENT[0]` entry to `apps/web/src/lib/releaseNotes/current.ts`. That is the only release-notes file
+  an ordinary PR touches - the rest of `lib/releaseNotes/` is the epoch layer over the archive, and
+  `archive.ts` must stay out of every eager module. A docs-only PR skips the bump - say so in the PR body.
 - **Never put production data in the repo.** No real names, email addresses, company names, recording
   titles or transcript text - in code, comments, **test fixtures**, docs, commit messages, issues or PRs.
   This repository is public. Invent fixture names (`Ada`, `Grace`, `Alice`); report findings from a live

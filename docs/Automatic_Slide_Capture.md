@@ -1,8 +1,35 @@
 # Automatic Slide Capture - Feature Specification
 
-**Status:** specified, ready to implement (all open questions decided - see §12)
+**Status:** **shipped** - this document is now a record, not a plan.
 **Surface:** Electron desktop shell (`apps/desktop`) + web recorder (`apps/web`)
 **Server changes:** none
+
+Shipped as the two PRs §13.0 proposed, both on 2026-08-18:
+
+| | Version | PR | Headline |
+|---|---|---|---|
+| Phase A - icon capture controls | `0.226.2` | #543 | The capture buttons say why they are unavailable |
+| Phase B - auto-capture | `0.227.0` | #544 | Auto-capture takes the screenshots for you |
+
+**Read §14 and §15 before anything above them.** The B0 spike invalidated the original design mid-flight:
+detection moved from the shell to the renderer, driven by one warm `getDisplayMedia` stream. §15 explicitly
+supersedes §4.1-§4.5, §7.2 and Phase B of §13, and §15.2 lists what that deleted - `apps/desktop/src/slideDetector.js`,
+the `ageMs` IPC hint, the `paused` flag on `RecorderState` and `cropRectForSize` were **never built**. What
+exists instead is `apps/web/src/lib/slideDetector.ts` and `apps/web/src/lib/slideCapture.ts`.
+
+Two caveats for anyone using this as a reference:
+
+- The release checklists (§11, A5, B10) are a record of what was done at the time. They say "four mirrors"
+  (there are seven, all asserted by `apps/web/src/lib/versionMirrors.test.ts`) and point at
+  `apps/web/src/lib/releases.ts`, which since 0.260.0 is `apps/web/src/lib/releaseNotes/current.ts` with
+  `CAPABILITIES` in `apps/web/src/lib/appInfo.ts`. Follow `CLAUDE.md`, not these.
+- **§15.4 risk 3 is not true and may never have been.** It says `backgroundThrottling: false` "is already set
+  on the main window" and is load-bearing for capturing while minimised. It is not set anywhere in
+  `apps/desktop/` as of 0.262.0, and Electron's default throttles renderer timers on a hidden window. Whether
+  the 1 Hz auto-capture tick actually survives minimising is **unverified** - tracked as
+  [#684](https://github.com/kenhayward/Diariz/issues/684), which starts with reproducing it rather than
+  fixing it. Risk 2 (a screen-sharing indicator appearing while the stream is held) was recorded as
+  unmeasured and is not mentioned in the help article, so treat it as unmeasured still.
 
 ---
 

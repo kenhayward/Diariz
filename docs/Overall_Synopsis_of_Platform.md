@@ -17,9 +17,12 @@ transcript, and **chat across one or more transcripts** — all using an **OpenA
 configure** (per user or server-wide), so audio, transcripts, and the model stay on infrastructure you
 control.
 
-The canonical app version lives in `/version.json` (mirrored to the web/desktop `package.json`s and the API
-`<Version>`); the API reports it at `GET /health`, and user-facing release notes live in
-`apps/web/src/lib/releases.ts`.
+The canonical app version lives in `/version.json` (mirrored to the web/desktop/n8n `package.json`s, their
+three lock files, and the API `<Version>`); the API reports it at `GET /health`. User-facing release notes
+live in `apps/web/src/lib/releaseNotes/`: `current.ts` holds the releases since the last closed epoch and is
+the file each PR edits, `archive.ts` holds everything older, and `epochs.ts` names the curated spans the
+`/release-notes` page opens on. Both release-notes pages are lazy routes and nothing eager imports the
+module, which is what keeps ~170 KB gzip of history out of the initial bundle.
 
 ## Components
 
