@@ -301,7 +301,12 @@ public class TagsIntegrationTests(ContainersFixture fx)
             Assert.Equal(["hint"], dto.SuggestedTags!);
         }
 
-        var segmentQuery = Assert.Single(sql.Statements, s => s.Contains("\"Segments\""));
+        // Identified by a column only Segments has, rather than by the table name appearing anywhere.
+        // "Current" is now chosen by whether a transcription has any segments, so the TRANSCRIPTION query
+        // legitimately names Segments too - inside an EXISTS that projects nothing. Matching on the name
+        // alone would fail here while the thing this test guards, tags riding along on the segment fetch,
+        // is still perfectly fine.
+        var segmentQuery = Assert.Single(sql.Statements, s => s.Contains("\"WordsJson\""));
         Assert.DoesNotContain("\"RecordingTags\"", segmentQuery);
         Assert.Contains(sql.Statements, s => s.Contains("\"RecordingTags\"") && !s.Contains("\"Segments\""));
     }

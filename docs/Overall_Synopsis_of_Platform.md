@@ -464,8 +464,12 @@ row can never be once the final pass lands), and chat over a recording still in 
 provisional text with an explicit in-progress marker in the system prompt - without it the model reads a
 partial transcript as a complete one and reports an argument still running as though it had concluded.
 
-**Re-transcribe** bumps the `Transcription.Version`; `GET /api/recordings/{id}` returns only the
-highest-version transcription (plus its summary and the recording's actions). Speaker renames are preserved
+**Re-transcribe** bumps the `Transcription.Version`; `GET /api/recordings/{id}` returns the
+highest-version transcription **that has segments** (plus its summary and the recording's actions),
+falling back to the highest version when nothing anywhere has any. The qualification is load-bearing
+rather than defensive: the full-recording row takes the next version the moment its job is *queued*,
+before the worker has written anything, so ordering by version alone let an empty row hide the
+provisional transcript holding the whole meeting - and hide it permanently if the pass then failed. Speaker renames are preserved
 across re-transcribes (the callback only seeds new labels). Embeddings refresh and auto-ID re-runs without
 clobbering manual names.
 

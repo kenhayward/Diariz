@@ -163,4 +163,130 @@ public class DatabaseIntegrationTests(ContainersFixture fx)
         var dto = Assert.IsType<RecordingDetailDto>(result.Value);
         Assert.Equal(3, dto.Current!.Version);
     }
+
+
+    [Fact]
+    public async Task Get_PrefersAPopulatedTranscriptionOverAnEmptyHigherVersion()
+    {
+        // Reported from a real meeting: press Stop and the live transcript vanishes, replaced by nothing
+        // for as long as the full pass takes - over twelve minutes on the recording that prompted this.
+        //
+        // The final transcription row is created and takes the next version the moment its job is
+        // QUEUED, before the worker has written a segment. Returning strictly the highest version means
+        // that empty row instantly hides the provisional one holding the live text. Worse, if the full
+        // pass fails or is dropped the recording shows an empty transcript permanently, even though the
+        // live text is still sitting in the database.
+        //
+        // So: an empty transcription never supersedes a populated one.
+        var user = await SeedUser();
+        var recId = Guid.NewGuid();
+
+        await using (var seed = fx.CreateDbContext())
+        {
+            seed.Recordings.Add(new Recording { Id = recId, UserId = user.Id, BlobKey = "k" });
+            var provisional = new Transcription
+            {
+                Id = Guid.NewGuid(), RecordingId = recId, Model = "whisperx-live",
+                Version = 1, IsProvisional = true,
+            };
+            seed.Transcriptions.Add(provisional);
+            seed.Segments.Add(new Segment
+            {
+                Id = Guid.NewGuid(), TranscriptionId = provisional.Id, SpeakerLabel = "SPEAKER_00",
+                StartMs = 0, EndMs = 3000, Original = "said during the meeting", Ordinal = 0,
+            });
+            // The full pass, queued but not yet started: higher version, no segments.
+            seed.Transcriptions.Add(new Transcription
+            {
+                Id = Guid.NewGuid(), RecordingId = recId, Model = "whisperx-large-v3", Version = 2,
+            });
+            await seed.SaveChangesAsync();
+        }
+
+        var dto = await GetDetail(user.Id, recId);
+
+        Assert.Equal(1, dto.Current!.Version);
+        Assert.Single(dto.Current.Segments);
+    }
+
+    [Fact]
+    public async Task Get_ReturnsTheFullTranscriptOnceItHasSegments()
+    {
+        // The other half of the same rule: as soon as the full pass has written anything, it wins. If it
+        // did not, a provisional transcript would outlive the real one it exists to stand in for.
+        var user = await SeedUser();
+        var recId = Guid.NewGuid();
+
+        await using (var seed = fx.CreateDbContext())
+        {
+            seed.Recordings.Add(new Recording { Id = recId, UserId = user.Id, BlobKey = "k" });
+            foreach (var (version, provisional, text) in new[]
+                     { (1, true, "live text"), (2, false, "the finished transcript") })
+            {
+                var tr = new Transcription
+                {
+                    Id = Guid.NewGuid(), RecordingId = recId, Model = "m",
+                    Version = version, IsProvisional = provisional,
+                };
+                seed.Transcriptions.Add(tr);
+                seed.Segments.Add(new Segment
+                {
+                    Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00",
+                    StartMs = 0, EndMs = 3000, Original = text, Ordinal = 0,
+                });
+            }
+            await seed.SaveChangesAsync();
+        }
+
+        var dto = await GetDetail(user.Id, recId);
+
+        Assert.Equal(2, dto.Current!.Version);
+        Assert.False(dto.Current.IsProvisional);
+    }
+
+    [Fact]
+    public async Task Get_StillReturnsTheHighestVersion_WhenNothingHasSegmentsAtAll()
+    {
+        // A recording with nothing in any pass - a silent take, or one that failed - must still report
+        // the newest attempt rather than resurrecting an older empty one.
+        var user = await SeedUser();
+        var recId = Guid.NewGuid();
+
+        await using (var seed = fx.CreateDbContext())
+        {
+            seed.Recordings.Add(new Recording { Id = recId, UserId = user.Id, BlobKey = "k" });
+            foreach (var v in new[] { 1, 2, 3 })
+                seed.Transcriptions.Add(new Transcription
+                {
+                    Id = Guid.NewGuid(), RecordingId = recId, Model = "m", Version = v,
+                });
+            await seed.SaveChangesAsync();
+        }
+
+        var dto = await GetDetail(user.Id, recId);
+
+        Assert.Equal(3, dto.Current!.Version);
+    }
+
+    /// <summary>The controller wiring these three cases share.</summary>
+    private async Task<RecordingDetailDto> GetDetail(Guid userId, Guid recordingId)
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Transcription:DefaultModel"] = "whisperx-large-v3" })
+            .Build();
+
+        await using var db = fx.CreateDbContext();
+        var resolver = new LlmSettingsResolver(
+            db, Options.Create(new LlmDefaultsOptions()), Options.Create(new SummarizationOptions()),
+            new FakeApiKeyProtector(), new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())));
+        var controller = new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config,
+            resolver, new FakeEmailSender(), new FakeSpeakerIdentification(new FakeSpeakerIdentifier()), new SpeakerAssignment(db, new PeopleDirectory(db)), Options.Create(new UploadOptions()), new RoomScope(db),
+            new PeopleDirectory(db), new CapturingWebhookPublisher(), Options.Create(new AppPublicOptions()))
+        {
+            ControllerContext = Http.Context(userId)
+        };
+
+        var result = await controller.Get(recordingId);
+        return Assert.IsType<RecordingDetailDto>(result.Value);
+    }
 }

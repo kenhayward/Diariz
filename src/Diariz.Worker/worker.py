@@ -67,10 +67,16 @@ def refresh_claim(r: redis.Redis, stream_key: str, msg_id: str) -> None:
     """Reset a pending message's idle clock, marking it as still being worked on.
 
     ``min_idle_time=0`` re-claims it for this same consumer unconditionally - it is a keepalive, not a
-    steal. Best-effort: a Redis hiccup here must not interrupt a transcription that is going fine."""
+    steal. ``justid=True`` is what keeps it from ALSO counting as a redelivery: a plain XCLAIM increments
+    the message's delivery counter, and reclaim_stale reads that counter as evidence of a poison message.
+    Firing every 60 seconds, the keepalive pushed a healthy job past RECLAIM_MAX_DELIVERIES after about
+    three minutes of work - so any restart after that abandoned it, and the recording sat queued forever
+    with no transcript. The thing protecting long jobs was what made them look poisonous.
+
+    Best-effort: a Redis hiccup here must not interrupt a transcription that is going fine."""
     try:
         r.xclaim(stream_key, config.CONSUMER_GROUP, config.CONSUMER_NAME,
-                 min_idle_time=0, message_ids=[msg_id])
+                 min_idle_time=0, message_ids=[msg_id], justid=True)
     except Exception:  # noqa: BLE001 - a failed keepalive is not worth losing the job over
         log.debug("Claim refresh failed for %s on %s", msg_id, stream_key, exc_info=True)
 

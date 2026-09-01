@@ -9,6 +9,18 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.265.3",
+    date: "2026-09-01",
+    pr: 718,
+    headline: "A finished meeting no longer looks like it was never transcribed",
+    summary:
+      "Two faults that between them could leave a finished meeting looking as though it had never been transcribed.\n\nPressing Stop wiped the live transcript off the screen. The full transcript is written as a new version of the same recording, and that new version was taking over the moment the work was queued - while it was still empty. So the text you had been reading vanished and nothing replaced it until the full pass finished, which on a long meeting is many minutes. If that pass then failed, the recording showed an empty transcript for good, even though everything said in the meeting was still safely stored. A transcript with nothing in it no longer replaces one with something in it.\n\nThe second was rarer and worse. While the server works on a long recording it periodically renews its claim on the job, so nothing else steals it. Each renewal was being counted as a failed attempt, and after about three minutes of entirely healthy work the job looked like one that had been crashing repeatedly. If the server restarted at any point after that, the recovery routine threw the job away rather than resuming it - and the recording stayed stuck with no transcript. Renewing a claim is no longer counted as a failure.",
+    fixed: [
+      "Stopping a recording made the live transcript disappear, leaving the recording apparently empty until the full transcript was ready - and permanently, if it never was.",
+      "A long transcription could be discarded by the very mechanism that protects it, leaving the recording stuck with no transcript after a server restart.",
+    ],
+  },
+  {
     version: "0.265.2",
     date: "2026-09-01",
     pr: 714,
