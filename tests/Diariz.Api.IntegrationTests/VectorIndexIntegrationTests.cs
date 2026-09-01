@@ -22,6 +22,26 @@ public class VectorIndexIntegrationTests(ContainersFixture fx)
 {
     private const int Dim = 768;
 
+    /// <summary>The share of the exact top-k the ANN path must also return.
+    ///
+    /// <para>This used to be an equality: the approximate answer had to match the exact one item for item.
+    /// That reads as the stronger assertion and is really an incoherent one - HNSW is <b>approximate</b>, so
+    /// demanding exactness asserts the index is something it does not claim to be, and the test only passed
+    /// because the table happened to be small enough that the approximation was lossless. As the shared table
+    /// grew the walk started missing a true neighbour and the test failed, having found nothing wrong
+    /// (issue #718).</para>
+    ///
+    /// <para>Measured at the seed below, recall was 100% with this test run alone, 95% (19 of 20) run with the
+    /// rest of the class, and 100% across the full integration suite - it moves with the table, which is
+    /// exactly why a fixed equality could not hold. 80% is four misses of headroom under the worst of those,
+    /// and is still a hard assertion: an index on the wrong opclass, an ORDER BY the walk cannot use, or an
+    /// ef_search collapse do not degrade recall, they return almost nothing in common at all.</para>
+    ///
+    /// <para>Rank order is deliberately not asserted. An approximate walk may reorder near-equidistant
+    /// neighbours, and pinning the order would reintroduce the same fragility one level down.</para></summary>
+    private const double MinRecall = 0.80;
+
+
     /// <summary>EF's generated name for the ANN index (asserted below, so the plan tests can rely on it).</summary>
     private const string AnnIndex = "IX_TranscriptChunks_Embedding";
 
@@ -196,7 +216,7 @@ public class VectorIndexIntegrationTests(ContainersFixture fx)
     public async Task UnfencedSemanticSql_CanPlanOntoTheAnnIndex()
     {
         var (userId, recId, trId) = await SeedRecording();
-        await AddChunks(userId, recId, trId, 200, 0.01, 0.004, "Index");
+        await AddChunks(userId, recId, trId, 3000, 0.01, 0.0004, "Index");
         await using var db = fx.CreateDbContext();
         await Analyze(db);
 
@@ -245,12 +265,18 @@ public class VectorIndexIntegrationTests(ContainersFixture fx)
         // Recall of the ANN path, measured against the database's own exact answer rather than a hand-computed
         // expectation - the fenced query IS the exact answer, so this is a true recall check.
         //
+        // The seed is far larger than the 20 neighbours compared, and deliberately so: below roughly 800
+        // chunks the planner correctly costs a nested loop plus a sort under an HNSW scan and declines the
+        // index, which fails the precondition below. It used to seed 300 and pass only because sibling tests
+        // in this class had topped the table up first, so running it alone - or in any order that put it
+        // first - failed (issue #718).
+        //
         // On its own axis pair (6, 7), so that chunks other tests in this collection left behind sit at cosine
         // distance 1 and cannot displace any of these: the ANN path is being measured here, not the strategy
         // that decides when to take it.
         const int A = 6, B = 7;
         var (userId, recId, trId) = await SeedRecording();
-        await AddChunks(userId, recId, trId, 300, 0.01, 0.004, "Recall", A, B);
+        await AddChunks(userId, recId, trId, 3000, 0.01, 0.0004, "Recall", A, B);
         await using var db = fx.CreateDbContext();
         await Analyze(db);
         var roomIds = await AllRoomIdsAsync(db);
@@ -266,7 +292,15 @@ public class VectorIndexIntegrationTests(ContainersFixture fx)
         var exact = await StartMsAsync(db, TranscriptSearch.BuildSemanticSql(hasScope: false, exact: true), roomIds, query, ann: false);
 
         Assert.Equal(20, exact.Count);
-        Assert.Equal(exact, approx); // same neighbours, same order
+        Assert.Equal(20, approx.Count);
+
+        // Set overlap, not sequence equality - see MinRecall for why the exactness this used to demand was
+        // the wrong assertion about an approximate index.
+        var found = exact.Intersect(approx).Count();
+        var recall = found / (double)exact.Count;
+        Assert.True(recall >= MinRecall,
+            $"the ANN path returned {found} of the {exact.Count} true nearest neighbours ({recall:P0}); " +
+            $"at least {MinRecall:P0} is required");
     }
 
     /// <summary>Runs one of the two query shapes and returns the StartMs of each hit, in rank order.
