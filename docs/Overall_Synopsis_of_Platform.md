@@ -3255,6 +3255,7 @@ compose file, `deploy/docker-compose.observability.yml`, layered on top of the m
 `docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d` - so anyone who does not
 want it runs the platform exactly as before with zero extra containers.
 
+  The **live transcript travels the same way**: `NotesState` carries the transcript, its lag and whether it has paused, and the pop-out renders the same `LiveTranscriptPanel` the inline popover does. It is sent rather than fetched for the reason above - the pop-out never calls the API, which is why it needs no auth - and because two windows reading one meeting independently could disagree about it.
 - **Its own Postgres.** `glitchtip-postgres` (`postgres:16-alpine`) is a separate container and volume from
   the app's `pgvector/pgvector:pg16` database — platform backup/restore (`MaintenanceController`, see below)
   operates on the app database only, so co-locating GlitchTip's tables would entangle two things with

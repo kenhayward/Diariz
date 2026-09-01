@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import NotesSection from "../components/NotesSection";
 import ShotStrip from "../components/hub/ShotStrip";
 import CaptureControls from "../components/hub/CaptureControls";
+import LiveTranscriptPanel from "../components/hub/LiveTranscriptPanel";
 import { createNotesClient, type NotesClient, type NotesState } from "../lib/notesChannel";
 
 /**
@@ -18,6 +19,7 @@ export default function NotesPopout() {
   const { t } = useTranslation("workspace");
   const [state, setState] = useState<NotesState | null>(null);
   const [lost, setLost] = useState(false);
+  const [activeTab, setActiveTab] = useState<"notes" | "transcript">("notes");
   const clientRef = useRef<NotesClient | null>(null);
 
   useEffect(() => {
@@ -80,7 +82,49 @@ export default function NotesPopout() {
         </p>
       )}
 
-      {state !== null && (
+      {/* Same tab row as the inline popover, for the same reason: this is the window someone uses
+          BECAUSE a call has the screen, so it is the one that most needs the transcript. Hidden
+          entirely when the host sends none, rather than offering an empty tab. */}
+      {state?.liveTranscript && (
+        <div role="tablist" style={{ display: "flex", gap: 4 }}>
+          {(["notes", "transcript"] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab}
+              onClick={() => setActiveTab(tab)}
+              style={{
+                border: "none",
+                background: activeTab === tab ? "var(--hub-surface-hover)" : "transparent",
+                color: activeTab === tab ? "var(--hub-text)" : "var(--hub-muted)",
+                borderRadius: 8,
+                padding: "4px 10px",
+                fontFamily: "system-ui",
+                fontSize: 13,
+                fontWeight: activeTab === tab ? 700 : 400,
+                cursor: "pointer",
+              }}
+            >
+              {tab === "notes" ? t("liveNotesTitle") : t("liveTranscriptTab")}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {state !== null && state.liveTranscript && activeTab === "transcript" && (
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          {/* The same component the inline panel renders, given the same values - so the two windows
+              cannot end up saying different things about one meeting. */}
+          <LiveTranscriptPanel
+            transcript={state.liveTranscript}
+            lagSeconds={state.liveLagSeconds ?? 0}
+            degraded={state.liveDegraded ?? false}
+          />
+        </div>
+      )}
+
+      {state !== null && !(state.liveTranscript && activeTab === "transcript") && (
         <div style={{ flex: 1, overflowY: "auto" }}>
           <NotesSection
             notes={state.lines}

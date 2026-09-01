@@ -146,4 +146,54 @@ describe("NotesPopout", () => {
 
     expect(client.close).toHaveBeenCalledTimes(1);
   });
+
+  it("shows the live transcript in a tab, like the inline panel does", () => {
+    // The detached window is the one someone uses precisely BECAUSE a call has the screen, so it is the
+    // window that most needs the transcript - and it was the only one without it.
+    render(<NotesPopout />);
+    act(() =>
+      handlers.onState(
+        state({
+          liveTranscript: {
+            recordingId: "rec-1",
+            highestSequence: 0,
+            segments: [
+              { id: "s1", startMs: 0, endMs: 3000, text: "shall we make a start", sequence: 0, speaker: "Ada" },
+            ],
+          },
+        }),
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: /transcript/i }));
+
+    expect(screen.getByText("shall we make a start")).toBeTruthy();
+    expect(screen.getByTestId("live-transcript-speaker").textContent).toBe("Ada");
+  });
+
+  it("shows no transcript tab when the host is not sending one", () => {
+    // A recording started before the host could begin a live capture has no transcript to show, and an
+    // empty tab would suggest one is coming when none is.
+    render(<NotesPopout />);
+    act(() => handlers.onState(state()));
+
+    expect(screen.queryByRole("tab", { name: /transcript/i })).toBeNull();
+  });
+
+  it("passes the lag and paused state through, so both windows say the same thing", () => {
+    // The two windows read from one source. If the pop-out rendered its own idea of the status, the
+    // inline panel could say the transcript had paused while the detached one claimed it was keeping up.
+    render(<NotesPopout />);
+    act(() =>
+      handlers.onState(
+        state({
+          liveTranscript: { recordingId: "rec-1", highestSequence: 0, segments: [] },
+          liveDegraded: true,
+        }),
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: /transcript/i }));
+    expect(screen.getByTestId("live-transcript-status").textContent).toMatch(/paused/i);
+  });
 });
