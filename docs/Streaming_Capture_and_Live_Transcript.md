@@ -505,6 +505,19 @@ missing, returning the gap. The client retries the named sequences from its Inde
 finalises again. Only if a chunk is genuinely unrecoverable does the user get a choice: finalise with a
 gap, or keep waiting.
 
+### 9.2b A chunk is corrupt, not merely late
+
+Verified live by uploading a chunk that was not audio at all. The worker fails it, reports the failure,
+and the live transcript keeps everything it already had; the chunk upload still returns 204, capture is
+untouched, and the full transcript at Stop is unaffected.
+
+The one thing worth knowing is the **blast radius is two chunks, not one**: the next chunk's decode
+window prepends the failed one, so that window is corrupt too and fails with it. The chunk after that
+prepends a good chunk and recovers on its own. Nothing is lost from the recording either way - a live
+chunk that never transcribes only costs its own text - so this is recorded rather than defended
+against. The obvious defence, retrying a failed window without the prepend, would cost a boundary
+sentence for a case rare enough that it has to be induced deliberately.
+
 ### 9.3 The recording is paused
 
 The recorded clock is already pause-aware (`Recorder.tsx` `timing.pause`). Chunk boundaries are driven
