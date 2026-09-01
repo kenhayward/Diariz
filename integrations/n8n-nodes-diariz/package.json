@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-diariz",
-  "version": "0.262.1",
+  "version": "0.262.2",
   "description": "n8n community node for Diariz meeting transcription: react to transcriptions and drive the full REST API.",
   "keywords": [
     "n8n-community-node-package",

@@ -201,4 +201,55 @@ public class UserSettingsIntegrationTests(ContainersFixture fx)
         // every assertion above pass against an empty list.
         Assert.Contains("ChatToolsEnabled", present);
     }
+    /// <summary>Choosing <b>Ungrouped</b> on a user's very first settings save must stick (issue #680).
+    ///
+    /// <para><see cref="RecordingPlacementMode.Ungrouped"/> is 0 - the CLR default for the enum - while the
+    /// column carries a database default of <see cref="RecordingPlacementMode.SelectedFolder"/>. With no
+    /// sentinel configured, EF cannot tell "the user chose Ungrouped" from "nobody set this", so it omits
+    /// the column on INSERT and Postgres applies its own default. Only a user's first save is an INSERT;
+    /// every later save is an UPDATE, where the change tracker sees 1 -> 0 and writes it correctly. That is
+    /// what made the bug look intermittent.</para>
+    ///
+    /// <para>This cannot be written against the in-memory provider: it has no column defaults, so the
+    /// INSERT would round-trip 0 happily and the test would pass while the bug shipped.</para></summary>
+    [Fact]
+    public async Task Update_ChoosingUngroupedOnTheFirstSave_Persists()
+    {
+        // No UserSettings row, so the next save is the INSERT that triggers this.
+        var userId = await SeedUser();
+
+        await using (var db = fx.CreateDbContext())
+            await Settings(db, userId).Update(new UpdateUserSettingsRequest(
+                PlacementMode: RecordingPlacementMode.Ungrouped));
+
+        await using (var verify = fx.CreateDbContext())
+        {
+            var stored = await verify.UserSettings.SingleAsync(s => s.UserId == userId);
+            Assert.Equal(RecordingPlacementMode.Ungrouped, stored.RecordingPlacementMode);
+        }
+    }
+
+    /// <summary>The control for the test above: a placement whose value is not the CLR default survives the
+    /// same first save. Without this, a harness that dropped every write would fail the Ungrouped test and
+    /// read as the same bug, sending the next reader after the wrong cause.</summary>
+    [Fact]
+    public async Task Update_ChoosingSpecificFolderOnTheFirstSave_Persists()
+    {
+        var userId = await SeedUser();
+        var sectionId = Guid.NewGuid();
+
+        // SpecificFolder deliberately, not SelectedFolder: SelectedFolder is itself the column default, so a
+        // harness that dropped the write entirely would still read it back and this control would pass while
+        // proving nothing. RecordingPlacementSectionId carries no FK, so a bare id needs no Section row.
+        await using (var db = fx.CreateDbContext())
+            await Settings(db, userId).Update(new UpdateUserSettingsRequest(
+                PlacementMode: RecordingPlacementMode.SpecificFolder, PlacementSectionId: sectionId));
+
+        await using (var verify = fx.CreateDbContext())
+        {
+            var stored = await verify.UserSettings.SingleAsync(s => s.UserId == userId);
+            Assert.Equal(RecordingPlacementMode.SpecificFolder, stored.RecordingPlacementMode);
+            Assert.Equal(sectionId, stored.RecordingPlacementSectionId);
+        }
+    }
 }
