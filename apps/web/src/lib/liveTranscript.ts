@@ -1,0 +1,69 @@
+/// The transcript of a meeting still in progress, as the page holds it.
+///
+/// Pure: it folds append events into an ordered list and answers how far behind the text is. No
+/// SignalR, no fetching, no React - the component owns those and hands the events here.
+///
+/// Two properties are worth stating because they are what the tests pin, and both come from the same
+/// fact: **an append can arrive more than once, and out of order.** Redis streams are at-least-once on
+/// the server side, and the hub can re-push; a model that simply concatenated would show a sentence
+/// twice in the middle of a transcript, which reads as a transcription fault rather than a delivery one.
+///
+/// Phase 2 deliberately carries **no speaker labels**. A diarization label is only meaningful within one
+/// chunk, so showing it would have speakers reshuffling every thirty seconds - which reads as though it
+/// means something. Attribution arrives when it can be made stable.
+
+export interface LiveSegment {
+  id: string;
+  startMs: number;
+  endMs: number;
+  text: string;
+  /// The chunk this segment came from. Replacement is keyed on it, not on segment ids: a re-transcribe
+  /// can split or merge lines, and matching by id would strand the ones that no longer exist.
+  sequence: number;
+}
+
+export interface LiveTranscript {
+  recordingId: string;
+  segments: LiveSegment[];
+  highestSequence: number;
+}
+
+export interface LiveAppend {
+  recordingId: string;
+  sequence: number;
+  segments: LiveSegment[];
+}
+
+export function emptyLiveTranscript(recordingId: string): LiveTranscript {
+  return { recordingId, segments: [], highestSequence: -1 };
+}
+
+/// Fold one append into the transcript. Idempotent per sequence, and order-independent.
+export function applyAppend(state: LiveTranscript, append: LiveAppend): LiveTranscript {
+  // The hub is per user, not per recording, so events for another meeting reach this page too - a
+  // running capture and a recording being read at the same time is an ordinary thing to do.
+  if (append.recordingId !== state.recordingId) return state;
+
+  // Drop everything previously seen for this chunk, then take what arrived. A redelivery is then a
+  // no-op and a correction replaces cleanly, however many lines it now has.
+  const kept = state.segments.filter((s) => s.sequence !== append.sequence);
+  const merged = [...kept, ...append.segments].sort(
+    (a, b) => a.startMs - b.startMs || a.endMs - b.endMs,
+  );
+
+  return {
+    recordingId: state.recordingId,
+    segments: merged,
+    highestSequence: Math.max(state.highestSequence, append.sequence),
+  };
+}
+
+/// How far behind the meeting the transcript is, in whole seconds, for the status line.
+///
+/// Clamped at zero. An overlapping decode window can produce a segment ending marginally past a clock
+/// value read a moment earlier, and "-2s behind" on screen would be nonsense.
+export function lagSeconds(transcribedToMs: number | null, recordedMs: number): number {
+  if (transcribedToMs === null) return 0;
+  const behind = (recordedMs - transcribedToMs) / 1000;
+  return behind <= 0 ? 0 : Math.round(behind);
+}
