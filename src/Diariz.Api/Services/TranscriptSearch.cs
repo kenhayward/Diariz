@@ -75,12 +75,18 @@ public sealed class TranscriptSearch : ITranscriptSearch
 
     /// <summary>The current-transcription guard, reused by both queries.
     ///
-    /// <para>Provisional transcriptions are excluded outright, not merely out-ranked: while a meeting is
-    /// being captured the live pass IS the highest version, so without this every search would return
-    /// half-finished text from a recording that is still running - and the MAX() subquery would have to
-    /// skip it too, or the guard would exclude the real transcript once one exists.</para></summary>
+    /// <para>The subquery skips provisional transcriptions, and that one clause does all the work.
+    /// While a meeting is being captured the live pass is the <b>highest</b> version, so a plain
+    /// MAX(Version) would make search return half-finished text from a recording that is still running;
+    /// and once the final pass lands above it, a MAX that counted provisional rows would resolve to the
+    /// live one and hide the real transcript entirely.</para>
+    ///
+    /// <para>An outer <c>t."IsProvisional" = FALSE</c> looks like it belongs here too and does not:
+    /// (RecordingId, Version) is unique, so a provisional row's version can never equal the maximum
+    /// non-provisional version. It was written, found to be dead by mutation testing - removing it broke
+    /// no test - and removed, because a redundant guard tells the next reader that both are load-bearing
+    /// when only one is.</para></summary>
     private const string CurrentVersion =
-        "t.\"IsProvisional\" = FALSE AND " +
         "t.\"Version\" = (SELECT MAX(t2.\"Version\") FROM \"Transcriptions\" t2 " +
         "WHERE t2.\"RecordingId\" = r.\"Id\" AND t2.\"IsProvisional\" = FALSE)";
 
