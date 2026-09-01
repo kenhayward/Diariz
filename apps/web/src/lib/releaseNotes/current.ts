@@ -11,7 +11,7 @@ export const RECENT: Release[] = [
   {
     version: "0.262.2",
     date: "2026-09-01",
-    pr: 687,
+    pr: 688,
     headline: "Choosing Ungrouped now sticks the first time you save it",
     summary:
       "If you had never changed a setting before, going into Preferences, setting **where new recordings go** to **Ungrouped**, and saving would quietly put it back to **Selected folder** - and the next thing you recorded was filed into whichever folder you happened to have open, rather than staying loose.\n\nSaving it a second time worked, so it looked like a glitch rather than something that happens every time. It only ever caught the very first setting a new account saved, and only that one choice. It now sticks the first time.",
