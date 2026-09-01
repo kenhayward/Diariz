@@ -660,12 +660,19 @@ public sealed class FakeJobQueue : IJobQueue
     public List<MeetingMinutesJob> MeetingMinutesEnqueued { get; } = new();
     public List<ActionsJob> ActionsEnqueued { get; } = new();
     public List<AudioMergeJob> AudioMergeEnqueued { get; } = new();
+    public List<LiveChunkJob> LiveChunkEnqueued { get; } = new();
     public List<VoiceprintJob> VoiceprintJobs { get; } = new();
     public List<EmbeddingJob> EmbeddingEnqueued { get; } = new();
     public List<TagsJob> TagsEnqueued { get; } = new();
     public List<SectionSummaryJob> SectionSummaryEnqueued { get; } = new();
     public List<SectionMinutesJob> SectionMinutesEnqueued { get; } = new();
     public List<FormulaRunJob> FormulaRunJobs { get; } = new();
+
+    public Task EnqueueLiveChunkAsync(LiveChunkJob job, CancellationToken ct = default)
+    {
+        LiveChunkEnqueued.Add(job);
+        return Task.CompletedTask;
+    }
 
     public Task EnqueueAsync(TranscriptionJob job, CancellationToken ct = default)
     {

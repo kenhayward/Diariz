@@ -13,6 +13,40 @@ public record TranscriptionJob(
     int? MaxSpeakers = null,
     string? Language = null);
 
+/// <summary>One chunk of a live capture, transcribed while the meeting is still running. Consumed by the
+/// Python worker off <c>live-chunk-jobs</c>.
+///
+/// <para><paramref name="PrevBlobKey"/> and <paramref name="OverlapMs"/> exist because Whisper on a clip
+/// that starts mid-sentence produces noise at the seam: the worker prepends that much of the previous
+/// chunk's tail before transcribing, then discards anything falling outside this chunk's own span. Null
+/// for sequence 0, which has nothing before it.</para>
+///
+/// <para>Overlap is a property of the <b>decode window</b>, not of the stored audio - the chunks
+/// themselves stay contiguous and non-overlapping, or the concatenation that produces the canonical blob
+/// would duplicate audio.</para></summary>
+public record LiveChunkJob(
+    Guid RecordingId,
+    Guid TranscriptionId,
+    int Sequence,
+    string BlobKey,
+    string? PrevBlobKey,
+    long OffsetMs,
+    long OverlapMs,
+    string? Language = null);
+
+/// <summary>Callback body the worker POSTs when a live chunk has been transcribed. Times are already
+/// offset into recording time, so the API stores them without arithmetic.</summary>
+public record LiveChunkResult(
+    Guid RecordingId,
+    Guid TranscriptionId,
+    int Sequence,
+    string? Language,
+    /// <summary>Reuses the same shapes as the full-recording callback rather than parallel types: the
+    /// worker produces them from the same pipeline, and two near-identical contracts would drift.</summary>
+    IReadOnlyList<SegmentResult> Segments,
+    IReadOnlyList<SpeakerEmbeddingResult>? Speakers = null,
+    long? ProcessingMs = null);
+
 /// <summary>Job payload for async summarisation, consumed by the API's SummarizationWorker.</summary>
 public record SummarizationJob(
     Guid RecordingId,

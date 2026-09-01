@@ -150,6 +150,7 @@ public class LiveRecordingReaperTests
             return Task.CompletedTask;
         }
 
+        public Task EnqueueLiveChunkAsync(LiveChunkJob job, CancellationToken ct = default) => Task.CompletedTask;
         public Task EnqueueAsync(TranscriptionJob job, CancellationToken ct = default) => Task.CompletedTask;
         public Task EnqueueSummarizationAsync(SummarizationJob job, CancellationToken ct = default) => Task.CompletedTask;
         public Task EnqueueMeetingMinutesAsync(MeetingMinutesJob job, CancellationToken ct = default) => Task.CompletedTask;

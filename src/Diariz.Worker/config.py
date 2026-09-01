@@ -11,6 +11,10 @@ class Config:
     # On-demand voiceprint re-embeds. Third stream on this worker; needs only the ECAPA embedder, so
     # it is seconds of work - but it shares this process, so it can queue behind a transcription.
     VOICEPRINT_STREAM_KEY = os.getenv("VOICEPRINT_STREAM_KEY", "voiceprint-jobs")
+    # Fourth stream: chunks of a capture still in progress, transcribed while the meeting runs. Read
+    # ahead of the others (see worker.run_loop) - a live chunk queued behind an hour of audio would
+    # arrive long after the meeting it belongs to had ended.
+    LIVE_CHUNK_STREAM_KEY = os.getenv("LIVE_CHUNK_STREAM_KEY", "live-chunk-jobs")
     CONSUMER_GROUP = os.getenv("CONSUMER_GROUP", "workers")
     CONSUMER_NAME = os.getenv("CONSUMER_NAME", "worker-1")
 

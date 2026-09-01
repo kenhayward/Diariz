@@ -47,6 +47,11 @@ public class JobQueueOptions
     /// <summary>On-demand voiceprint re-embeds. Third stream on the Python worker, alongside
     /// transcription and audio merge.</summary>
     public string VoiceprintStreamKey { get; set; } = "voiceprint-jobs";
+
+    /// <summary>Chunks of a capture still in progress, transcribed while the meeting runs. Its own stream
+    /// rather than sharing the transcription one, so the worker can prefer it over a queued full-meeting
+    /// job - a live chunk behind an hour of audio would arrive long after the meeting ended.</summary>
+    public string LiveChunkStreamKey { get; set; } = "live-chunk-jobs";
 }
 
 public class WorkerOptions
