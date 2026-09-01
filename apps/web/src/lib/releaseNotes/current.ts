@@ -9,6 +9,18 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.265.1",
+    date: "2026-09-01",
+    pr: 710,
+    headline: "Recordings show the time you actually made them",
+    summary:
+      "A meeting could be listed at the wrong time - usually hours earlier than you recorded it, and by an odd amount that was neither a whole hour nor a time-zone difference. It only happened from the second recording onwards in a window you had not reloaded in between, which is why it looked so random: the same take made after a refresh came out right every time.\n\nWhat it was showing was the start time of your *previous* recording. Since recordings started uploading as the meeting runs, the start time is sent to the server the moment you press Record, and it was being read a fraction too early - before the new take had stamped its own. The first recording after opening Diariz had nothing to inherit and was always correct; every one after it borrowed the one before.\n\nThe audio, the transcript and the recording itself were never affected, only the time shown against it. That time also decides which calendar meeting a recording is matched to, so an affected recording could be linked to the wrong meeting or to none at all.\n\nRecordings made from now on carry their own start time. Ones already stored keep the time they were saved with.",
+    fixed: [
+      "A recording is stamped with **its own start time** rather than the previous recording's. Affected every recording after the first in a window that had not been reloaded.",
+      "Calendar matching for those recordings now looks around the right time, so a meeting is no longer missed or mismatched because the recording appeared to be hours old.",
+    ],
+  },
+  {
     version: "0.265.0",
     date: "2026-09-01",
     pr: 708,

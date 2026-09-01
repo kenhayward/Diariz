@@ -1036,6 +1036,14 @@ export default function Recorder({
         });
       };
       recorder.start();
+      // This take's wall clock, read once here and shared by everything that reports it. It is stamped
+      // at the top of the take rather than further down because beginLive is fired from this same
+      // synchronous block: when the ref was assigned below instead, beginLive read it BEFORE the write
+      // and got the PREVIOUS take's start, so every live take after the first in a page session was
+      // stamped hours early (#709). The recorder is mounted above the routed content and survives every
+      // navigation, so "the previous take" can be from much earlier in the day.
+      const startedAt = Date.now();
+      startedAtRef.current = startedAt;
       recorderRef.current = recorder;
       liveRef.current = null;
       liveStoppingRef.current = false;
@@ -1059,7 +1067,10 @@ export default function Recorder({
             expectedDurationMs: 60 * 60 * 1000,
             sectionId: pendingSectionRef.current,
             roomId: pendingRoomRef.current,
-            startedAt: startedAtRef.current ?? Date.now(),
+            // The local, not the ref: this take's start cannot be read out of a ref that a later
+            // take will overwrite, and one clock read keeps the live stamp and the fallback
+            // upload's stamp identical rather than a few milliseconds apart.
+            startedAt,
           }),
         upload: (recordingId, sessionId, chunk) =>
           api.putChunk(recordingId, chunk.sequence, chunk.blob, sessionId, chunk.startMs, chunk.endMs),
@@ -1104,7 +1115,6 @@ export default function Recorder({
       calendarStopRef.current = null;
       extensionsRef.current = 0;
       timingRef.current = timing.start(Date.now());
-      startedAtRef.current = Date.now();
       // Re-anchor a relative auto-stop to record-start, so "in N minutes" means N minutes of recording.
       applySchedule(autoStopChoice, autoStopTime, Date.now());
       // Started from a calendar event: the meeting's own end time is a second, independent answer to "when

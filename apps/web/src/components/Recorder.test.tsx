@@ -676,6 +676,38 @@ describe("Recorder source selection", () => {
     }
   });
 
+  it("stamps a second take in the same session with its own start, not the previous take's", async () => {
+    // The recorder is mounted in Workspace above the routed content, so one instance survives every
+    // navigation and serves take after take. beginLive is fired from the start path, and its startedAt
+    // must be this take's - a live capture whose startedAt is stale is displayed at the wrong time
+    // (the detail page shows startedAt ?? createdAt) and matched against the wrong calendar meeting.
+    (getStream as Mock).mockResolvedValue(fakeSession);
+    (api.beginLive as Mock).mockResolvedValue({ id: "live-1", sessionId: "s1", status: "Live" });
+    (api.finalizeLive as Mock).mockResolvedValue(undefined);
+    const t0 = 1_760_000_000_000;
+    let clock = t0;
+    const now = vi.spyOn(Date, "now").mockImplementation(() => clock);
+    try {
+      render(<Recorder onUploaded={() => {}} />);
+
+      fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+      await screen.findByRole("button", { name: /^stop$/i });
+      fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+      await waitFor(() => expect(api.finalizeLive).toHaveBeenCalled());
+
+      // Two hours later, same page, same mounted recorder.
+      clock = t0 + 2 * 60 * 60_000;
+      fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+      await screen.findByRole("button", { name: /^stop$/i });
+
+      await waitFor(() => expect(api.beginLive).toHaveBeenCalledTimes(2));
+      const second = (api.beginLive as Mock).mock.calls[1][0] as { startedAt: number };
+      expect(second.startedAt).toBe(clock);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
   it("files the recording into the folder resolved at Record time", async () => {
     roomState.recordingSectionId = "sec-42";
     (getStream as Mock).mockResolvedValue(fakeSession);
