@@ -9,6 +9,18 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.265.4",
+    date: "2026-09-01",
+    pr: 720,
+    headline: "Two search tests that failed for reasons of their own",
+    summary:
+      "Two tests covering the semantic search index passed or failed depending on nothing more than the order the test suite happened to run them in. They were not finding a fault when they failed, and they were not proving anything when they passed.\n\nBoth check that a search can use the index that makes it fast. Postgres only reaches for that index once there is enough data to be worth it, which is correct - but the tests seeded well under that much and were quietly relying on other tests in the same file to top the database up first. Run in a different order, they ran against a near-empty table and failed. Each now seeds its own data, so it holds whatever runs before it.\n\nThe second test was wrong in a more interesting way. The index is deliberately approximate - it trades a little accuracy for speed - and the test demanded its answer match the exact one perfectly. That passed only while the table was small enough for the approximation to lose nothing, and broke as it grew, again reporting a fault that was not there. It now measures how much of the exact answer the fast path finds and requires the great majority of it, which is the thing actually worth guaranteeing.\n\nNothing about Diariz itself changes. The value is that these tests can no longer fail for reasons unrelated to the code, and had already blocked an unrelated dependency upgrade by doing so.",
+    fixed: [
+      "Two tests covering the semantic search index depended on how much data earlier tests had left behind, so they passed or failed on test ordering alone. Each now seeds enough of its own.",
+      "The recall test required the approximate index to match the exact answer item for item, which it does not promise to do. It now measures the share of true results found and requires at least 80% of them.",
+    ],
+  },
+  {
     version: "0.265.3",
     date: "2026-09-01",
     pr: 718,
