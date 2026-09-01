@@ -700,7 +700,15 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.HasKey(s => s.UserId);
             e.Property(s => s.GoogleCalendarGranted).HasDefaultValue(false);
             e.Property(s => s.Theme).HasDefaultValue(ThemePreference.Auto);
-            e.Property(s => s.RecordingPlacementMode).HasDefaultValue(RecordingPlacementMode.SelectedFolder);
+            // The sentinel is what makes "the user chose Ungrouped" distinguishable from "nobody set this".
+            // Ungrouped is 0, the CLR default for the enum, so without one EF omits the column on INSERT and
+            // Postgres applies the default below - silently turning a first-time user's Ungrouped choice into
+            // SelectedFolder (issue #680). Only the first save is an INSERT, which is what made it look
+            // intermittent. -1 is outside the enum, so the property never holds it and the column is always
+            // written; the store default stays for the migration that added this column to existing rows.
+            e.Property(s => s.RecordingPlacementMode)
+                .HasDefaultValue(RecordingPlacementMode.SelectedFolder)
+                .HasSentinel((RecordingPlacementMode)(-1));
             // Column defaults, not just C# initialisers: these columns are added to a table that already has
             // rows, and an int column defaulting to 0 would mean "stop the moment recording starts" / "end on
             // zero seconds of silence" for every existing user.
