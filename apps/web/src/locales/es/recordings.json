@@ -25,6 +25,5 @@
   "liveTranscriptSpeakerGuess": "Diariz cree que es esta persona, pero no esta seguro. La transcripcion final lo confirma.",
   "liveTranscriptBehind": "Transcribiendo mientras hablas, unos {{seconds}}s por detras. Este texto no es definitivo.",
   "liveTranscriptDegraded": "La transcripcion en directo se ha pausado. La grabacion continua y la transcripcion completa estara lista tras la reunion.",
-  "liveTranscriptEmpty": "Aun no se ha dicho nada.",
-  "liveTranscriptTab": "Transcripcion"
+  "liveTranscriptEmpty": "Esperando la primera transcripcion. Tarda un momento en llegar y despues avanza en tramos de medio minuto."
 }

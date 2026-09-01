@@ -753,5 +753,6 @@
   "suggestionExcludedCount_one": "{{count}} passage exclu de l'empreinte vocale",
   "suggestionExcludedCount_other": "{{count}} passages exclus de l'empreinte vocale",
   "suggestionRestoreExcluded": "Restaurer",
-  "suggestionTrainsFrom": "Confirmer entraine sur {{kept}} passages sur {{total}}"
+  "suggestionTrainsFrom": "Confirmer entraine sur {{kept}} passages sur {{total}}",
+  "liveTranscriptTab": "Transcription"
 }

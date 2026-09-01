@@ -9,6 +9,20 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.265.2",
+    date: "2026-09-01",
+    pr: 714,
+    headline: "Live transcript: a real tab name, honest waiting, and no leftovers",
+    summary:
+      "Three things about the live transcript, all reported from a real meeting.\n\nThe Transcript tab was labelled with an internal name instead of the word Transcript. It now reads properly, in every language.\n\nBefore the first text arrived, the panel said nothing had been said yet - a statement about the room, and usually a wrong one, since people have generally been talking for a while by then. It now says what is actually true: Diariz is waiting for the first stretch of transcript, and that takes a moment.\n\nStarting a second recording showed the previous meeting's transcript until the new one caught up. The tab now starts empty for each meeting.\n\nAlso fixed, and less visible: when Diariz stopped transcribing live because it had fallen too far behind, it said so to nobody - the panel carried on claiming it was keeping up. That notice now reaches the screen, so a transcript that has quietly stopped tells you rather than looking merely slow.",
+    fixed: [
+      "The live transcript tab showed an internal name (liveTranscriptTab) rather than Transcript.",
+      "Before any text arrived, the panel claimed nothing had been said - when what was true is that Diariz had not transcribed anything yet.",
+      "Starting a second recording showed the **previous meeting's transcript** until the new one produced its own.",
+      "A notice that live transcription had paused never reached the screen, so a stopped transcript was indistinguishable from a slow one.",
+    ],
+  },
+  {
     version: "0.265.1",
     date: "2026-09-01",
     pr: 710,

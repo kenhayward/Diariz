@@ -753,5 +753,6 @@
   "suggestionExcludedCount_one": "{{count}} segment left out of the voiceprint",
   "suggestionExcludedCount_other": "{{count}} segments left out of the voiceprint",
   "suggestionRestoreExcluded": "Restore",
-  "suggestionTrainsFrom": "Confirming trains from {{kept}} of {{total}} segments"
+  "suggestionTrainsFrom": "Confirming trains from {{kept}} of {{total}} segments",
+  "liveTranscriptTab": "Transcript"
 }

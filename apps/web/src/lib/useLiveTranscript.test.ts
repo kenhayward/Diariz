@@ -99,4 +99,39 @@ describe("nextLiveState", () => {
 
     expect(s.transcript.segments.map((x) => x.speaker)).toEqual(["Ada"]);
   });
+
+  it("starts empty when the recording changes, rather than showing the last meeting's text", () => {
+    // Reported from a real session: record a meeting, stop, start another, and the Transcript tab still
+    // held the PREVIOUS meeting's lines until the new one's first chunk came back. The state is seeded
+    // once from the recording id the hook was first given, and nothing reset it when that id changed -
+    // so the panel showed one meeting's words under another meeting's heading, which is worse than
+    // showing nothing at all.
+    const first = nextLiveState(fresh(), {
+      kind: "append",
+      recordingId: RECORDING,
+      sequence: 0,
+      segments: [seg(0, "from the first meeting", 0)],
+    });
+
+    const second = nextLiveState(first, { kind: "recording-changed", recordingId: "rec-2" });
+
+    expect(second.transcript.recordingId).toBe("rec-2");
+    expect(second.transcript.segments).toEqual([]);
+    expect(second.degraded).toBe(false);
+  });
+
+  it("does not clear the transcript when the recording has not actually changed", () => {
+    // The reset has to be idempotent: React may re-run the effect that raises it, and a reset that fired
+    // on every render would wipe the transcript continuously and look exactly like the bug it fixes.
+    const s = nextLiveState(fresh(), {
+      kind: "append",
+      recordingId: RECORDING,
+      sequence: 0,
+      segments: [seg(0, "still here", 0)],
+    });
+
+    const after = nextLiveState(s, { kind: "recording-changed", recordingId: RECORDING });
+
+    expect(after).toBe(s);
+  });
 });
