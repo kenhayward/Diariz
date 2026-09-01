@@ -4,6 +4,7 @@ using Diariz.Api.Services.Llm;
 using Diariz.Api.Services;
 using Diariz.Domain;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.Tests.Infrastructure;

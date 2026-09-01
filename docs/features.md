@@ -88,6 +88,21 @@ the selection, while **Merge** always acts on the whole transcript. **Play selec
 that selection plays, so you can stop it without waiting for it to finish. The **speaker label at the start of
 every row** is the same assignment dropdown as the Speakers panel, so you can name a voice (or enrol a new
 person) at the moment you hear them, without leaving the transcript.
+- **Live transcript while the meeting runs.** The transcript no longer waits for the meeting to end.
+  Open the notes panel while recording and there is a **Transcript** tab beside your notes, filling
+  in roughly every half minute with what has been said, so you can check what someone said twenty
+  minutes ago while they are still in the room. The **assistant can be asked about a meeting that is
+  still going** - it is told explicitly that the transcript is partial and ends mid-meeting, so it
+  will not describe something as decided or final when the people in the room are still arguing
+  about it. Three deliberate limits. The live text carries **no speaker names**: a diarization label
+  is only meaningful within the chunk it came from, so the same person is a different number in the
+  next one, and rendering that would have speakers reshuffling every thirty seconds as though it
+  meant something - attribution arrives once it can be made stable across the whole meeting. It
+  **never presents itself as finished**: a status line says how far behind the meeting it is, and
+  the ordinary full-recording transcript replaces it when you press Stop. And if the server falls
+  far enough behind, it **stops writing the live text and says so** rather than showing text that is
+  minutes stale - capture is unaffected either way, and the full transcript still arrives.
+
 - **Recording hub** — opening a meeting lands on a hub rather than a strip of tabs. A **hero summary card**
 carries the **meeting type** (a dropdown that drives the minutes template and the formulas offered), the key
 facts as chips (date and time, duration, whether the audio is still available and how long it has left,

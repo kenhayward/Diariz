@@ -130,6 +130,10 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddVoiceSampleConfirmation` | `ProfileContributions.ConfirmedAt` (timestamptz, nullable) + `ConfirmedByUserId` (uuid, nullable, **no FK**). Records a human vouching that a recording really is that person - the gate multi-template voiceprints will seed from, since distance cannot separate a second microphone from a second person enrolled under one name. Null on every existing row means "nobody has vouched", which is what they all are - **no `CurrentFormat` bump** |
 | `AddActionPinned` | `RecordingActions.Pinned` (bool, NOT NULL, default false). An action reaches the cross-meeting Actions views only once someone pins it; it is visible on its own recording's page from the moment it is extracted either way. False on every existing row means "nothing pinned yet", which is the intended starting state - the tab is empty by design on the day this ships. Additive with a column default, so an older backup restores and migrates up cleanly with its actions unpinned - **no `CurrentFormat` bump** |
 | `AddRecordingChunks` | `RecordingChunks` (slices of a capture still in progress) + `RecordingStatus.Live = 8`. Unique index on `(RecordingId, Sequence)` - load-bearing rather than tidiness, since it is what makes a chunk upload idempotent so a retry after a network blip collides instead of duplicating. Cascade-deletes with the recording. Rows and blobs are removed once the chunks are concatenated at finalise, so a finished recording has none. Purely additive - **no `CurrentFormat` bump** |
+| `AddRecordingLiveSessionId` | `Recording.LiveSessionId` (nullable) - the browser's own id for a capture in progress, so a reconnecting client can find the recording it was already filling instead of starting a second one. Purely additive - **no `CurrentFormat` bump** |
+| `AddTranscriptionIsProvisional` | `Transcription.IsProvisional` (boolean, default `false`) - marks a transcript written chunk by chunk while the meeting was still running. Additive with a default, and an older backup restores as all-`false`, which is exactly right: nothing in it was provisional. **No `CurrentFormat` bump** |
+| `AddSegmentChunkSequence` | `Segment.ChunkSequence` (int, nullable) - which live chunk produced a segment, so an at-least-once redelivery replaces its own rows rather than appending duplicates. Null on every pre-existing row, meaning "from an ordinary full-recording pass". Purely additive - **no `CurrentFormat` bump** |
+| `AddRecordingChunkTranscribedAt` | `RecordingChunk.TranscribedAt` (timestamptz, nullable) - when a chunk's segments were persisted; drives the lag check that pauses live transcription when the worker falls behind. Purely additive - **no `CurrentFormat` bump** |
 | `AddRecordingLiveSessionId` | `Recording.LiveSessionId` (uuid null). The capturing device's client-generated session id while the recording is `Live`; every chunk must present it, so a second device signed in as the same user is refused rather than interleaving its audio. Null for every recording that did not arrive as a live capture. Additive - **no `CurrentFormat` bump** |
 
 ### Entity-relationship overview
@@ -229,6 +233,7 @@ blob and both the rows and their blobs are deleted - **a finished recording has 
 | `StartMs` / `EndMs` | bigint | span covered, in the recording's own pause-aware clock (the same clock `Segments.StartMs` uses) |
 | `SizeBytes` | bigint | counts toward the owner's quota while the recording is live; reconciled against the concatenated blob at finalise |
 | `ReceivedAt` | timestamptz | when the upload landed. The newest chunk's value is what the reaper measures an abandoned capture against |
+| `TranscribedAt` | timestamptz null | when the live-chunk callback persisted this chunk's segments; null = not transcribed yet. The **oldest** null is what the lag check measures, so a worker that has fallen too far behind can be told to stop transcribing live rather than emitting text that is minutes stale |
 
 Unique index: `(RecordingId, Sequence)`. This is **load-bearing rather than tidiness** - it is what makes
 the chunk upload idempotent, so a retry after a network blip collides and replaces instead of duplicating.
@@ -250,6 +255,7 @@ One transcription pass; recordings are **versioned**.
 | `Version` | int | monotonic per recording, starting at 1; highest = current |
 | `Language` | text null | ISO-639-1 if detected |
 | `ProcessingMs` | bigint null | full-pipeline wall-clock time the worker spent (download+transcribe+diarize+embed) |
+| `IsProvisional` | boolean | default `false`. `true` = written chunk by chunk from a live capture while the meeting was still running, so it is partial by construction. It is retired by the ordinary version rule rather than deleted: the full-recording pass at Stop takes the next version and becomes current, leaving this row as the record of what was shown during the meeting. RAG search never indexes it (the index filters to the current version, which a provisional row cannot be once the final pass lands) |
 | `CreatedAt` | timestamptz | |
 
 Unique index: `(RecordingId, Version)`. Children: `Segments` (cascade), `Summary` (1:1, cascade).
@@ -266,6 +272,7 @@ A contiguous, single-speaker span of transcribed speech.
 | `Original` | text | the model's verbatim output for this span — never overwritten after the worker writes it |
 | `Revised` | text null | a user edit (later: a translation) of `Original`; null = unchanged. The effective text = `Revised ?? Original` |
 | `Ordinal` | int | order within the transcription |
+| `ChunkSequence` | int null | which live chunk produced this segment; null for a segment from an ordinary full-recording pass. It exists so a **redelivered** chunk can replace exactly its own rows - Redis streams are at-least-once, so the same chunk will arrive twice in production, and a handler that could only append would duplicate a sentence in the middle of the transcript |
 | `WordsJson` | **jsonb** null | WhisperX's aligned word timings, `[{"w":"Hi","s":1,"e":2}]` (ms; single-letter keys because a long meeting carries ~10k of them per recording). **Null = no word timings** — every recording transcribed before this existed, any language with no alignment model, and a merged block whose run contained an edited segment. Null is what the split endpoint refuses on; read/written only through `SegmentWords`. Postgres-only (plain text under the in-memory provider) |
 | `Embedding` | **vector(768)** null | legacy per-segment RAG slot - **unused/null**, superseded by `TranscriptChunks` (a segment is too small a retrieval unit); kept to avoid a drop migration; Postgres-only |
 

@@ -454,6 +454,16 @@ three-second window the case for that work is weak.
 6. **Notify.** The API pushes **`RecordingStatusChanged`** over **SignalR** (`/hubs/transcription`) to the
    owner's per-user group; the browser refetches and the detail page shows the transcript.
 
+**Provisional transcriptions.** A live capture gets a `Transcription` with `IsProvisional = true` as soon as
+its first chunk comes back, so a meeting in progress has a transcript to show. It is an ordinary versioned
+row, which is what retires it: the full-recording pass that runs at Stop takes the next version, and
+"current = highest version" then means the finished transcript without anything having to delete the
+provisional one. It stays as the record of what was shown during the meeting. Two consequences worth
+knowing: **RAG search excludes it** (the semantic index filters to the current version, which a provisional
+row can never be once the final pass lands), and chat over a recording still in `Status = Live` reads the
+provisional text with an explicit in-progress marker in the system prompt - without it the model reads a
+partial transcript as a complete one and reports an argument still running as though it had concluded.
+
 **Re-transcribe** bumps the `Transcription.Version`; `GET /api/recordings/{id}` returns only the
 highest-version transcription (plus its summary and the recording's actions). Speaker renames are preserved
 across re-transcribes (the callback only seeds new labels). Embeddings refresh and auto-ID re-runs without
@@ -3015,13 +3025,36 @@ the least likely to hold.
 
 ## Cross-boundary contracts (the non-obvious glue)
 
-- **Redis Streams, eight of them.** `transcription-jobs`/`workers`, `audio-merge-jobs` and `voiceprint-jobs`
-  (all three API → Python worker, sharing the `workers` group — the worker `XREADGROUP`s all three streams and
-  dispatches by stream key) and five API-internal streams with their own in-process consumers: `summarization-jobs`/`summarizers`,
-  `meeting-minutes-jobs`/`minute-takers`, `actions-jobs`/`actions-extractors`, `embedding-jobs`/`embedders`
-  (the RAG index), and `tag-cloud-jobs`/`tag-extractors` (the tag cloud). Job payloads are **PascalCase JSON**
-  so .NET produces and Python/.NET consume without renaming. Keep `TranscriptionJob` / `TranscriptionResult` /
-  `AudioMergeJob` / `VoiceprintJob` / `Segment` shapes in sync across both languages.
+- **Redis Streams, twelve of them.** Four are API → Python worker, sharing the `workers` group (the worker
+  `XREADGROUP`s all four and dispatches by stream key): `transcription-jobs`, `audio-merge-jobs`,
+  `voiceprint-jobs` and `live-chunk-jobs`. Eight are API-internal, each with its own in-process
+  `BackgroundService` consumer: `summarization-jobs`/`summarizers`, `meeting-minutes-jobs`/`minute-takers`,
+  `actions-jobs`/`actions-extractors`, `section-summary-jobs`, `section-minutes-jobs`, `formula-run-jobs`/
+  `formula-runners`, `tag-cloud-jobs`/`tag-extractors` (the tag cloud) and `embedding-jobs`/`embedders` (the
+  RAG index). Job payloads are **PascalCase JSON** so .NET produces and Python/.NET consume without renaming.
+  Keep `TranscriptionJob` / `TranscriptionResult` / `AudioMergeJob` / `VoiceprintJob` / `LiveChunkJob` /
+  `LiveChunkResult` / `Segment` shapes in sync across both languages.
+- **`live-chunk-jobs` is read ahead of the other three, and that ordering is the feature.** The worker's read
+  is two calls, not one: a non-blocking `XREADGROUP` on `live-chunk-jobs` alone, and only if that returns
+  nothing, a blocking read across the other three. A live chunk is worth ~1.3 s of GPU against a 30 s budget,
+  but a full-recording transcription of a three-hour meeting occupies the worker for minutes - so without the
+  priority read a live transcript would stall behind whatever batch job happened to be in front of it, which
+  is precisely the case it exists to serve. A meeting in progress cannot wait; a finished one can.
+- **Live chunk contract, both directions.** `LiveChunkJob(RecordingId, TranscriptionId, Sequence, BlobKey,
+  PrevBlobKey, OffsetMs, OverlapMs, Language)` goes out; the worker byte-joins the previous chunk's tail onto
+  this one (only fragment 0 of a `MediaRecorder` stream carries the WebM/EBML header, so a chunk cannot be
+  decoded alone), transcribes the joined window, then **trims the overlap off the front and shifts the
+  remainder by `OffsetMs - OverlapMs`** so the times it returns are relative to the whole recording rather
+  than the window. The overlap exists to stop a word being cut in half at a chunk boundary and is a property
+  of the **decode window only** - nothing overlapping is ever stored. Results `POST` to
+  **`internal/transcriptions/live-chunk`** (`LiveChunkCallbackController`), authenticated by the same
+  `X-Worker-Secret` shared secret as the other worker callbacks, with `LiveChunkFailure` for the failure path.
+- **Live-chunk callbacks must replace, not append.** Redis streams are at-least-once, so the same chunk
+  *will* arrive twice in production. `Segment.ChunkSequence` records which live chunk produced each segment
+  precisely so a redelivery can delete exactly its own rows and re-insert them; appending instead would
+  duplicate a sentence in the middle of the transcript, which is both wrong and unfixable after the fact. The
+  callback also ignores any chunk arriving after the recording has left `Status = Live`, so a late redelivery
+  cannot resurrect rows on a finished recording.
 - **`AudioMergeJob.Kind` decides how the worker concatenates, and the API decides what it meant.**
   `"recordings"` (the default) folds whole recordings together, each independently decodable. `"live-chunks"`
   concatenates slices of one live capture, where **only the first chunk carries the WebM/EBML header** - so
@@ -3072,10 +3105,18 @@ the least likely to hold.
   `EMBED_MAX_SECONDS` is **120 s** (raised from 30) for both this path and the transcription-time one — one cap,
   so they cannot drift — and `UsedMs` may therefore be less than `SelectedMs`, which the UI states rather than
   implying the whole selection was used.
-- **Worker → API callback** uses routes `internal/transcriptions/*`, `internal/recordings/merge-*` and
-  `internal/people/voiceprint-*`, all with the **`X-Worker-Secret`** shared header (not JWT). Not user-facing.
+- **Worker → API callback** uses routes `internal/transcriptions/*` (including
+  `internal/transcriptions/live-chunk`), `internal/recordings/merge-*` and `internal/people/voiceprint-*`, all
+  with the **`X-Worker-Secret`** shared header (not JWT). Not user-facing.
 - **SignalR** hub `/hubs/transcription` requires JWT; clients auto-join a per-user group (group name = user
-  GUID) so `RecordingStatusChanged` events are scoped per user.
+  GUID) so `RecordingStatusChanged` events are scoped per user. The live transcript adds two more on the same
+  hub and the same per-user group: **`LiveTranscriptAppended`** (a chunk's segments were persisted) and
+  **`LiveTranscriptDegraded`** (live transcription has stopped for this recording - too far behind, or the
+  chunk failed). Both carry only `{ recordingId, sequence }`: the append is a **signal to refetch**, not the
+  text itself, so one event shape serves an append, a correction and a later relabel without the server
+  having to decide which of those it is sending - and a missed event is self-healing, since the next refetch
+  returns the whole transcript and repairs the gap. Because the group is per **user**, a client receives
+  events for every recording that user has running and must filter by `recordingId` on the way in.
 - **pgvector is Postgres-only.** All vector matching sits behind `ISpeakerIdentifier`; unit tests fake it,
   integration tests exercise the real cosine query. Vector columns are mapped only when
   `Database.IsNpgsql()`; under the in-memory test provider they're `Ignore`d.
