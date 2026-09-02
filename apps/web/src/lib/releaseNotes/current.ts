@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.266.4",
+    date: "2026-09-02",
+    pr: 740,
+    headline: "The speaker count on a meeting summary is the real one",
+    summary:
+      "A meeting summary could claim far more speakers than the meeting had - one with four people reported twelve - while the Speakers page beneath it listed the right number all along.\n\nDiariz keeps a record of every speaker label a recording has ever carried, on purpose: it is what lets a name you typed survive the recording being transcribed again. The summary tile was counting that history rather than the transcript in front of you, so a recording that had been transcribed more than once - which every live-captured meeting has been - counted the same people several times over.\n\nThe tile now counts the speakers actually heard in the transcript, and agrees with the page it links to.",
+    fixed: [
+      "A meeting summary could report many more speakers than it had - twelve for a four-person call - because it counted every speaker label the recording had ever carried rather than the ones in the current transcript. It now matches the Speakers page.",
+    ],
+  },
+  {
     version: "0.266.3",
     date: "2026-09-02",
     pr: 741,

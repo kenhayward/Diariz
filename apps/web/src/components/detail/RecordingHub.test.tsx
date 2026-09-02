@@ -36,8 +36,12 @@ const rec = (over: Partial<RecordingDetail> = {}): RecordingDetail =>
       createdAt: "2026-06-30T19:50:00Z",
       segments: Array.from({ length: 142 }, (_, i) => ({
         id: `s${i}`,
-        speaker: "SPEAKER_00",
-        speakerDisplay: "Ada Lovelace",
+        // Alternating, so the fixture is internally consistent: it declares two speakers above, and the
+        // hub's speaker count now derives from who actually speaks rather than from how many Speaker
+        // rows exist. Attributing all 142 segments to one of them made the fixture describe a recording
+        // that could not exist.
+        speaker: i % 2 === 0 ? "SPEAKER_00" : "SPEAKER_01",
+        speakerDisplay: i % 2 === 0 ? "Ada Lovelace" : "Nadia Dubois",
         startMs: i * 1000,
         endMs: i * 1000 + 900,
         original: "hi",
