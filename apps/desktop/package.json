@@ -15,6 +15,7 @@
     "start": "electron .",
     "test": "node --test \"src/**/*.test.js\"",
     "dist": "npm run build:outlook && electron-builder --config electron-builder.config.js",
+    "dist:dir": "npm run build:outlook && electron-builder --config electron-builder.config.js --dir",
     "publish": "npm run build:outlook && electron-builder --config electron-builder.config.js --publish always",
     "build:outlook": "dotnet publish native/Diariz.OutlookReader -c Release -o native/publish"
   },

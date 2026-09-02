@@ -87,6 +87,53 @@ jobs:
         working-directory: apps/desktop
         run: node --test "src/**/*.test.js"
 
+  desktop-build:
+    name: Desktop build (electron-builder)
+    # NOT in the Main_Rules required set, so it reports without gating a merge. It is deliberately a
+    # normal job rather than `continue-on-error: true`: a job that always reports success cannot tell
+    # you anything, and this repo has already paid for that once - see the note on the `desktop` job
+    # above, where a coverage run that could not fail let an ESM-only electron-store bump reach a green
+    # PR with its tests failing inside the log.
+    #
+    # What this covers and what it does not. `apps/desktop` is tested but was never BUILT anywhere
+    # except a `v*` release tag, so the first thing to discover that an Electron major broke packaging
+    # was whoever cut the installer. This packages the app for real - electron download, the config,
+    # asar, and the Outlook reader landing in extraResources - and stops there. It is a packaging
+    # check: it says nothing about whether the tray, the loopback audio capture or the updater still
+    # work at runtime, which still needs a human with an installer.
+    #
+    # windows-latest rather than ubuntu, because that is what actually ships: the win block is the one
+    # with extraResources, and the Outlook reader is a win-x64 exe. `--dir` stops at the unpacked
+    # directory, so there is no NSIS step and nothing to sign.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      # The Outlook reader is a self-contained .NET exe that electron-builder copies in via
+      # extraResources, so packaging fails without it having been published first.
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Install
+        working-directory: apps/desktop
+        run: npm ci
+      - name: Package (unpacked - no installer, no signing)
+        working-directory: apps/desktop
+        run: npm run dist:dir
+      # electron-builder exiting 0 is not proof it produced anything. Assert the app exists, so a
+      # config change that quietly stops emitting one fails here rather than at the next release.
+      - name: Verify an app was actually produced
+        working-directory: apps/desktop
+        shell: pwsh
+        run: |
+          $exe = "release/win-unpacked/Diariz.exe"
+          if (-not (Test-Path $exe)) { throw "electron-builder reported success but produced no app at $exe" }
+          "Packaged app: {0:N1} MB" -f ((Get-Item $exe).Length / 1MB)
+
   locale-gate:
     name: Locale single-language gate
     runs-on: ubuntu-latest
