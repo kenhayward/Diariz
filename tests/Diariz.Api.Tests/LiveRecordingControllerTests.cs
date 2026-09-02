@@ -1,3 +1,4 @@
+using Diariz.Api.Configuration;
 using System.Text;
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
@@ -410,6 +411,42 @@ public class LiveRecordingControllerTests
         await controller.PutChunk(id, 2, Chunk(), session, 60_000, 90_000);
 
         Assert.EndsWith("/chunks/00000.webm", queue.LiveChunkEnqueued[2].FirstBlobKey);
+    }
+
+    [Fact]
+    public async Task WithTheOverlapOff_NoChunkIsPrepended_AndEveryLaterChunkCarriesTheHeaderKey()
+    {
+        // The overlap doubles the decode window, and diarization - measured at ~79% of a chunk's cost -
+        // scales with that window. Turning it off is the lever; see issue #719.
+        //
+        // The trap it must not fall into: only chunk 0 carries the WebM header, so with no previous
+        // chunk prepended, sequence ONE now needs the header key too. With an overlap it never did -
+        // its previous chunk IS chunk 0 - so this is exactly the case a naive "just send zero" would
+        // break, and it would break by failing to decode at all.
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        await LiveTestSupport.SeedUser(db, me);
+        var queue = new FakeJobQueue();
+        var controller = LiveTestSupport.Build(db, me, queue,
+            live: new LiveCaptureOptions { OverlapEnabled = false });
+        var (id, session) = await BeginAsync(db, me, controller);
+
+        await controller.PutChunk(id, 0, Chunk(), session, 0, 30_000);
+        await controller.PutChunk(id, 1, Chunk(), session, 30_000, 60_000);
+        await controller.PutChunk(id, 2, Chunk(), session, 60_000, 90_000);
+
+        Assert.All(queue.LiveChunkEnqueued, j => Assert.Equal(0, j.OverlapMs));
+        Assert.Null(queue.LiveChunkEnqueued[0].FirstBlobKey);
+        Assert.EndsWith("/chunks/00000.webm", queue.LiveChunkEnqueued[1].FirstBlobKey);
+        Assert.EndsWith("/chunks/00000.webm", queue.LiveChunkEnqueued[2].FirstBlobKey);
+    }
+
+    [Fact]
+    public async Task TheOverlapIsOnByDefault_SoNothingChangesUntilItIsTurnedOff()
+    {
+        // Whether the live transcript reads well at chunk boundaries is a judgement about transcript
+        // quality, not a default to change quietly underneath anyone.
+        Assert.True(new LiveCaptureOptions().OverlapEnabled);
     }
 
     [Fact]

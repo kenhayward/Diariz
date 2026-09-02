@@ -660,13 +660,17 @@ public class RecordingsController : ControllerBase
                     .Where(c => c.RecordingId == rec.Id && c.Sequence == sequence - 1)
                     .Select(c => new { c.BlobKey, c.StartMs, c.EndMs })
                     .FirstOrDefaultAsync();
-            var prevKey = prev?.BlobKey;
-            var overlapMs = prev is null ? 0 : prev.EndMs - prev.StartMs;
+            var overlapOn = _live.OverlapEnabled;
+            var prevKey = overlapOn ? prev?.BlobKey : null;
+            var overlapMs = overlapOn && prev is not null ? prev.EndMs - prev.StartMs : 0;
 
-            // Only chunk 0 carries the WebM/EBML header, so from sequence 2 on the prev+current pair is
-            // headerless and will not open at all. The worker prepends chunk 0's header - not its audio.
-            // Sequence 1 needs nothing: its previous chunk IS chunk 0.
-            var firstKey = sequence < 2
+            // Only chunk 0 carries the WebM/EBML header, so any later chunk needs it prepended or the
+            // window will not open at all. WITH an overlap, sequence 1 is the exception - its previous
+            // chunk IS chunk 0, so the header comes along with the audio. WITHOUT one, nothing precedes
+            // this chunk, so sequence 1 needs the header key too. Getting that wrong is the failure mode
+            // that turning the overlap off invites, and it fails by not decoding at all.
+            var needsHeader = overlapOn ? sequence >= 2 : sequence >= 1;
+            var firstKey = !needsHeader
                 ? null
                 : await _db.RecordingChunks
                     .Where(c => c.RecordingId == rec.Id && c.Sequence == 0)

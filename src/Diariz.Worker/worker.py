@@ -183,17 +183,23 @@ def handle_live_chunk(job: dict) -> None:
             with telemetry.span("storage.download", "download"):
                 this_path = storage.download(job["BlobKey"])
                 downloaded.append(this_path)
-                if prev_key and overlap_ms > 0:
-                    prev_path = storage.download(prev_key)
-                    downloaded.append(prev_path)
-                    # Only chunk 0 carries the WebM/EBML header, so from sequence 2 on both prev and
-                    # this one are headerless and the pair will not open. Prepending chunk 0's
-                    # initialisation segment - a few hundred bytes of header and track definitions,
-                    # not its audio - is what makes the window decodable. Sequence 1 needs nothing:
-                    # its previous chunk IS chunk 0.
-                    parts = [prev_path, this_path]
+                # The window is built from up to three pieces, and each is there for its own reason:
+                #
+                #   header  - only chunk 0 carries the WebM/EBML header, so every later chunk needs it
+                #             prepended or the window will not open at all. A few hundred bytes of
+                #             track definitions, never chunk 0's audio.
+                #   prev    - the previous chunk, whole, so the model does not start mid-sentence.
+                #             Optional (Live:OverlapEnabled): it doubles the decode window, and
+                #             diarization - which is most of what a chunk costs - scales with that.
+                #   this    - the chunk being transcribed.
+                #
+                # Sequence 0 needs none of it: it has its own header and nothing precedes it.
+                parts = []
+                if sequence > 0:
                     first_key = job.get("FirstBlobKey")
-                    if first_key and first_key != prev_key:
+                    # With an overlap, sequence 1 already gets the header from prev, which IS chunk 0.
+                    needed = first_key and (overlap_ms <= 0 or first_key != prev_key)
+                    if needed:
                         first_path = storage.download(first_key)
                         downloaded.append(first_path)
                         init = audio_merge.webm_init_segment(first_path)
@@ -202,13 +208,23 @@ def handle_live_chunk(job: dict) -> None:
                             with os.fdopen(fd, "wb") as f:
                                 f.write(init)
                             downloaded.append(init_path)
-                            parts.insert(0, init_path)
+                            parts.append(init_path)
+
+                if prev_key and overlap_ms > 0:
+                    prev_path = storage.download(prev_key)
+                    downloaded.append(prev_path)
+                    parts.append(prev_path)
+                else:
+                    # Nothing was prepended before this chunk's own audio, so there is nothing to trim
+                    # back off the front of the result either.
+                    overlap_ms = 0
+
+                if parts:
+                    parts.append(this_path)
                     joined = audio_merge.join_bytes(parts)
                     audio_path = joined
                 else:
-                    # Sequence 0 has nothing before it, so there is no overlap to correct for either.
                     audio_path = this_path
-                    overlap_ms = 0
 
             result = pipeline.transcribe_window(
                 audio_path,

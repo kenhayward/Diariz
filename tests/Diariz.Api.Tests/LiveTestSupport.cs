@@ -34,7 +34,8 @@ internal static class LiveTestSupport
     }
 
     public static RecordingsController Build(
-        DiarizDbContext db, Guid userId, FakeJobQueue? queue = null, FakeAudioStorage? storage = null)
+        DiarizDbContext db, Guid userId, FakeJobQueue? queue = null, FakeAudioStorage? storage = null,
+        LiveCaptureOptions? live = null)
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -54,7 +55,9 @@ internal static class LiveTestSupport
             resolver, new FakeEmailSender(), new FakeSpeakerIdentification(new FakeSpeakerIdentifier()),
             new SpeakerAssignment(db, new PeopleDirectory(db)),
             Options.Create(new UploadOptions()), new RoomScope(db), new PeopleDirectory(db),
-            new CapturingWebhookPublisher(), Options.Create(new AppPublicOptions()))
+            new CapturingWebhookPublisher(), Options.Create(new AppPublicOptions()),
+            exportLocalizer: null, calendars: null,
+            live: Options.Create(live ?? new LiveCaptureOptions()))
         {
             ControllerContext = Http.Context(userId),
         };

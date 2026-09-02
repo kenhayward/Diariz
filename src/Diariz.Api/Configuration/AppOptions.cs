@@ -442,9 +442,20 @@ public class LiveCaptureOptions
     /// convention in <see cref="IdentificationRules"/>: a gap of less than this is ambiguous.</summary>
     public double StitchMargin { get; set; } = 0.05;
 
-    // There is deliberately no overlap setting. The previous chunk is prepended whole or not at all -
+    /// <summary>Whether the previous chunk is prepended to the decode window so the model does not start
+    /// mid-sentence. On by default: whether the live transcript reads well at chunk boundaries is a
+    /// judgement about transcript quality, not something to change underneath anyone.
+    ///
+    /// <para>Turning it off halves the decode window, and that is the point. Diarization is ~79% of what
+    /// a live chunk costs and scales with the window - measured on a 60 s window at 22 s, against 0.26 s
+    /// below a step change pyannote has at ~19 s. The cost is a word cut in half at each chunk boundary,
+    /// in the <b>provisional</b> text only: the full pass at Stop re-transcribes the whole recording and
+    /// is unaffected either way.</para></summary>
+    public bool OverlapEnabled { get; set; } = true;
+
+    // There is deliberately no overlap LENGTH setting. The previous chunk is prepended whole or not at all -
     // a WebM fragment cannot be byte-sliced mid-cluster - so the overlap is that chunk's own duration
-    // and there is nothing here to tune. A knob that silently could not be honoured was worse than none:
+    // and there is nothing to tune between on and off. A knob that silently could not be honoured was worse than none:
     // set to 3s while the worker prepended a whole 30s chunk, it put every segment after the first 27s
     // late in the transcript.
 }

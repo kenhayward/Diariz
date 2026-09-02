@@ -780,3 +780,116 @@ def test_a_keepalive_does_not_count_as_a_delivery(monkeypatch):
 
     assert calls.get("justid") is True, "a claim refresh must not count as a delivery"
     assert calls.get("min_idle_time") == 0, "a keepalive re-claims unconditionally; it is not a steal"
+
+
+def test_handle_live_chunk_without_overlap_still_prepends_the_header(monkeypatch, tmp_path):
+    """With the overlap off, a later chunk must still be decodable - and must NOT drag in prior audio.
+
+    This is the case #719 exists to enable, and the one that will bite: only chunk 0 carries the WebM
+    header, so "no overlap" cannot simply mean "hand ffmpeg this chunk". It means the initialisation
+    segment and nothing else. Get it wrong in one direction and the window will not open at all; get it
+    wrong in the other and the overlap is still there, silently, and the whole point is lost.
+    """
+    import pathlib as _pathlib
+
+    first = tmp_path / "first.webm"
+    first.write_bytes(b"\x1aE\xdf\xa3INIT" + bytes.fromhex("1F43B675") + b"first-audio")
+    prev = tmp_path / "prev.webm"; prev.write_bytes(b"prev-audio")
+    cur = tmp_path / "cur.webm"; cur.write_bytes(b"cur-audio")
+
+    blobs = {"first": str(first), "prev": str(prev), "cur": str(cur)}
+    monkeypatch.setattr(worker.storage, "download", lambda key: blobs[key])
+
+    captured = {}
+
+    def fake_join(paths):
+        captured["blob"] = b"".join(_pathlib.Path(p).read_bytes() for p in paths)
+        out = tmp_path / "joined.webm"
+        out.write_bytes(captured["blob"])
+        return str(out)
+
+    monkeypatch.setattr(worker.audio_merge, "join_bytes", fake_join)
+    seen = {}
+    monkeypatch.setattr(worker.pipeline, "transcribe_window",
+                        lambda path, offset_ms, overlap_ms, language: seen.update(
+                            overlap_ms=overlap_ms, path=path) or {
+                            "language": "en", "segments": [], "speakers": []})
+    monkeypatch.setattr(worker.callback, "post_live_chunk_result", lambda **kw: None)
+
+    worker.handle_live_chunk({
+        "RecordingId": "r1", "TranscriptionId": "t1", "Sequence": 2, "BlobKey": "cur",
+        "PrevBlobKey": "prev", "FirstBlobKey": "first", "OffsetMs": 60000, "OverlapMs": 0,
+        "Language": "en"})
+
+    blob = captured["blob"]
+    assert blob.startswith(b"\x1aE\xdf\xa3INIT"), "the window must still open with the header"
+    assert b"prev-audio" not in blob, "no overlap means the previous chunk's AUDIO is not prepended"
+    assert b"first-audio" not in blob, "only chunk 0's header is wanted, never its audio"
+    assert blob.endswith(b"cur-audio")
+    assert seen["overlap_ms"] == 0, "nothing is trimmed off the front when nothing was prepended"
+
+
+def test_handle_live_chunk_zero_sequence_needs_no_header_prepended(monkeypatch, tmp_path):
+    """Chunk 0 carries its own header, so it is handed over untouched whatever the overlap setting."""
+    cur = tmp_path / "cur.webm"
+    cur.write_bytes(b"\x1aE\xdf\xa3INIT" + bytes.fromhex("1F43B675") + b"cur-audio")
+    monkeypatch.setattr(worker.storage, "download", lambda key: str(cur))
+
+    joined = {"called": False}
+    monkeypatch.setattr(worker.audio_merge, "join_bytes",
+                        lambda paths: joined.update(called=True) or str(cur))
+    seen = {}
+    monkeypatch.setattr(worker.pipeline, "transcribe_window",
+                        lambda path, offset_ms, overlap_ms, language: seen.update(path=path) or {
+                            "language": "en", "segments": [], "speakers": []})
+    monkeypatch.setattr(worker.callback, "post_live_chunk_result", lambda **kw: None)
+
+    worker.handle_live_chunk({
+        "RecordingId": "r1", "TranscriptionId": "t1", "Sequence": 0, "BlobKey": "cur",
+        "PrevBlobKey": None, "FirstBlobKey": None, "OffsetMs": 0, "OverlapMs": 0, "Language": "en"})
+
+    assert seen["path"] == str(cur)
+    assert not joined["called"], "nothing to join for the first chunk"
+
+
+def test_sequence_one_without_overlap_still_gets_the_header(monkeypatch, tmp_path):
+    """The subtle case, and the one a plausible implementation gets wrong.
+
+    At sequence 1 the header chunk and the previous chunk are the SAME blob - chunk 0. With an overlap
+    that means the header arrives for free inside the prepended audio, so the worker can skip it. With
+    the overlap off, prev is not prepended at all, so the header must still be fetched even though its
+    key matches the prev key it is being compared against.
+
+    A guard written as `first_key != prev_key` looks right, passes every sequence-2 test, and leaves
+    exactly this chunk undecodable.
+    """
+    import pathlib as _pathlib
+
+    first = tmp_path / "first.webm"
+    first.write_bytes(b"\x1aE\xdf\xa3INIT" + bytes.fromhex("1F43B675") + b"first-audio")
+    cur = tmp_path / "cur.webm"; cur.write_bytes(b"cur-audio")
+    monkeypatch.setattr(worker.storage, "download",
+                        lambda key: {"first": str(first), "cur": str(cur)}[key])
+
+    captured = {}
+
+    def fake_join(paths):
+        captured["blob"] = b"".join(_pathlib.Path(p).read_bytes() for p in paths)
+        out = tmp_path / "joined.webm"; out.write_bytes(captured["blob"]); return str(out)
+
+    monkeypatch.setattr(worker.audio_merge, "join_bytes", fake_join)
+    monkeypatch.setattr(worker.pipeline, "transcribe_window",
+                        lambda path, offset_ms, overlap_ms, language: {
+                            "language": "en", "segments": [], "speakers": []})
+    monkeypatch.setattr(worker.callback, "post_live_chunk_result", lambda **kw: None)
+
+    # PrevBlobKey and FirstBlobKey are the same blob, exactly as they are at sequence 1.
+    worker.handle_live_chunk({
+        "RecordingId": "r1", "TranscriptionId": "t1", "Sequence": 1, "BlobKey": "cur",
+        "PrevBlobKey": "first", "FirstBlobKey": "first", "OffsetMs": 30000, "OverlapMs": 0,
+        "Language": "en"})
+
+    blob = captured["blob"]
+    assert blob.startswith(b"\x1aE\xdf\xa3INIT"), "sequence 1 needs the header when prev is not prepended"
+    assert b"first-audio" not in blob, "the header, not chunk 0's audio"
+    assert blob.endswith(b"cur-audio")
