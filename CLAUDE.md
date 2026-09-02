@@ -451,6 +451,15 @@ test by gaming the in-memory provider — move it to the integration harness.
 The API **auto-runs EF migrations, seeds the default user, and ensures the MinIO bucket on startup**
 (`Program.cs`) — you do not run `database update` manually for normal dev.
 
+That block **waits for Postgres rather than dying on it** (`StartupDatabaseWait`). On a redeploy the
+API and the database restart together and the API can reach the migration first - measured 0.9s early on
+a real one, where the resulting `57P03` propagated out of `Main` and killed the process. Docker restarted
+it five seconds later so it read as a blip, but every request in that window failed. The compose
+`condition: service_healthy` does not cover it: `pg_isready` polls every 5s, so Postgres can pass a check
+and still be starting when the API connects. Only **availability** faults are waited on - a wrong password
+or a broken migration fails immediately, because a container sitting quietly in a retry loop looks healthy
+and explains nothing.
+
 EF migrations (the `DbContext` lives in `Diariz.Domain`, but it's an ASP.NET host, so use the startup project):
 ```bash
 dotnet ef migrations add <Name> --project src/Diariz.Domain --startup-project src/Diariz.Api
