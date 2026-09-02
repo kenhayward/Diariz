@@ -30,7 +30,7 @@ communicating across process/language boundaries:
 |---|---|---|
 | API / auth / orchestration | ASP.NET Core (**.NET 10**) + EF Core + SignalR + OpenIddict | `src/Diariz.Api` |
 | Domain model + migrations (library) | EF Core + Postgres/pgvector | `src/Diariz.Domain` |
-| Transcription worker | Python: WhisperX (large-v3) + pyannote 3.1 + SpeechBrain ECAPA, GPU | `src/Diariz.Worker` |
+| Transcription worker | Python: WhisperX (large-v3) + pyannote 4 + SpeechBrain ECAPA, GPU | `src/Diariz.Worker` |
 | Web UI | React 19 + TS + Vite + Tailwind v4 | `apps/web` |
 | Desktop shell | Electron (mic + system audio; Windows tray + macOS beta menu-bar) | `apps/desktop` |
 | n8n community node (published to npm, not deployed here) | TypeScript, zero runtime deps | `integrations/n8n-nodes-diariz` |
@@ -473,12 +473,27 @@ HF_TOKEN=... REDIS_URL=redis://localhost:6379/0 API_BASE_URL=http://localhost:80
 ```
 **GPU compatibility (Blackwell / RTX 50-series, sm_120).** The worker pins the **cu128** torch
 stack (CUDA 12.8 base image) because cu121/torch 2.5 only compiles kernels up to sm_90 — on a 5090
-every job dies at model load with *"no kernel image is available for execution on the device"*. Three
-non-obvious pins make whisperx 3.3.1 work on this stack (see `Dockerfile` / `requirements.txt`):
-`ctranslate2==4.6.3` (first version with sm_120 / CUDA 12.8; whisperx caps it at <4.5.0 so the
-Dockerfile force-installs it), `transformers==4.48.0` + `huggingface_hub==0.27.1` (hub 1.0 removed the
-`use_auth_token` kwarg pyannote 3.3.2 still passes), and `worker.py` calls `torch_compat` to restore
-`torch.load(weights_only=False)` (torch≥2.6 flipped the default and rejects the pyannote checkpoints).
+every job dies at model load with *"no kernel image is available for execution on the device"*. The stack is
+**whisperx 3.8.6 + pyannote.audio 4 + torch 2.8 (cu128)**, and the pairing is deliberate: the identical
+diarization pipeline on identical audio runs **~17x faster** under pyannote 4 than under 3.3.2 (measured,
+one 60 s window: 32.1s -> 1.9s). Diarization was ~79% of what a live chunk cost, so this is what makes
+live transcription keep up at all. A whole 60 s window went from ~40s of work to ~5s.
+
+Pins that are still load-bearing (see `Dockerfile` / `requirements.txt`): `ctranslate2==4.6.3` is the
+first version with sm_120 / CUDA 12.8 - whisperx 3.8 asks only for `>=4.5.0`, so this is now a floor
+being met rather than a cap being forced, and it stays exact because a resolver free to pick 4.5.x would
+silently drop Blackwell. `libpython3.10` is apt-installed for **torchcodec**, which whisperx 3.8 pulls
+in and which otherwise cannot load its native library. `worker.py` still calls `torch_compat` to restore
+`torch.load(weights_only=False)`, which the pyannote checkpoints need.
+
+The `transformers` / `huggingface_hub` ceilings are **no longer about pyannote**: it was 3.3.2 passing
+`use_auth_token` that forced them, and pyannote 4 does not. They remain only because whisperx 3.8.6 asks
+for `huggingface-hub<1.0.0`.
+
+**whisperx 3.8 moved two things that fail silently at import:** `DiarizationPipeline` is no longer
+re-exported at `whisperx.DiarizationPipeline` (it is in `whisperx.diarize`), and its `use_auth_token`
+kwarg became `token`. Both surface as an error on the first job rather than at startup, which is why
+`pipeline._get_diarizer` has a test asserting the call shape rather than the import.
 
 Diarization is gated: you **must** set `HF_TOKEN` and accept the `pyannote/speaker-diarization-3.1`
 + `pyannote/segmentation-3.0` terms on Hugging Face, or jobs fail. CPU-only: `DEVICE=cpu COMPUTE_TYPE=int8` (slow).
