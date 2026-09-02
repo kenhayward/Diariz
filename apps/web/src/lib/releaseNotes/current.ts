@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.266.1",
+    date: "2026-09-02",
+    pr: 734,
+    headline: "Actions taken just after a restart no longer fail",
+    summary:
+      "An action taken just after Diariz restarts could come back as a bare failure, then work perfectly on a second try - most visibly when re-running a transcription immediately after an update.\n\nDiariz prepares its database when it starts. If the database itself was still coming up at that exact moment, Diariz gave up rather than waiting - on the restart that prompted this, it was nine tenths of a second too early. It restarted itself a few seconds later and everything was fine, so it looked like a glitch, but anything you did in that gap simply failed.\n\nIt now waits for the database instead of giving up. Nothing was ever lost when this happened - the transcription in question had already finished successfully - but the error was real and is gone.",
+    fixed: [
+      "Diariz stopped itself if its database was still starting up when it checked - a window of a few seconds after every update, during which anything you did came back as a failure. It now waits.",
+    ],
+  },
+  {
     version: "0.266.0",
     date: "2026-09-02",
     pr: 730,

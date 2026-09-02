@@ -609,7 +609,15 @@ await using (var scope = app.Services.CreateAsyncScope())
 {
     var sp = scope.ServiceProvider;
     var db = sp.GetRequiredService<DiarizDbContext>();
-    await db.Database.MigrateAsync();
+    // Wait for Postgres rather than dying on it. On a redeploy the API and the database restart
+    // together, and the API can reach this line first - measured at 0.9 seconds early on a real one,
+    // where the resulting 57P03 propagated out of Main and killed the process. Docker restarted it
+    // five seconds later, so it looked like a blip, but every request in that window failed.
+    //
+    // The compose healthcheck does not cover this: pg_isready polls every five seconds, so Postgres
+    // can pass a check and still be starting when this connects. Only the migration is wrapped - once
+    // it succeeds the database is demonstrably up, and the seeding below needs no waiting of its own.
+    await StartupDatabaseWait.RunAsync(() => db.Database.MigrateAsync(), logger: app.Logger);
     await sp.GetRequiredService<IAudioStorage>().EnsureBucketAsync();
     await Seeder.SeedRolesAsync(sp);
     var seedUserId = await Seeder.SeedDefaultUserAsync(sp, app.Configuration);
