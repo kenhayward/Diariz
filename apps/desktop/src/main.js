@@ -19,7 +19,7 @@ const {
   dialog,
 } = require("electron");
 const Store = require("electron-store");
-const { normalizeServerUrl } = require("./url");
+const { normalizeServerUrl, opensExternally } = require("./url");
 const { trayRecorderItems, trayTooltip, notificationFor, quitConfirmation } = require("./recorderState");
 const { updateRestartItem, notificationForUpdate, isNewerVersion } = require("./updateState");
 const { notificationForDownload } = require("./downloadState");
@@ -124,6 +124,24 @@ function attachContextMenu(win) {
   });
 }
 
+/// Window options for a same-origin popup - a help article opened from a `?` popover, say. Mirrors the
+/// main window's hardening exactly (contextIsolation on, sandbox on, nodeIntegration off) and carries the
+/// same preload, so the SPA still sees `window.diariz` and behaves as the desktop app rather than
+/// believing it is in a browser tab. Same session as its opener, which is the point: the login comes with
+/// it.
+function popupWindowOptions() {
+  return {
+    icon: ICON,
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+    },
+  };
+}
+
 // ---- Main window (loads the web app from the server origin) ----
 
 function createMainWindow(url) {
@@ -210,8 +228,15 @@ function createMainWindow(url) {
   const origin = new URL(url).origin;
   // Open external links in the system browser; keep navigation within the server origin.
   mainWindow.webContents.setWindowOpenHandler(({ url: target }) => {
-    shell.openExternal(target);
-    return { action: "deny" };
+    if (opensExternally(target, origin)) {
+      shell.openExternal(target);
+      return { action: "deny" };
+    }
+    // Same origin, so open it OURSELVES rather than handing it to the browser. This used to externalise
+    // everything, which is why an in-app link opened in a new tab landed on a sign-in page: the system
+    // browser has none of this app's session. `will-navigate` immediately below always got this right;
+    // the two are now consistent.
+    return { action: "allow", overrideBrowserWindowOptions: popupWindowOptions() };
   });
   mainWindow.webContents.on("will-navigate", (e, target) => {
     if (new URL(target).origin !== origin) {
@@ -316,8 +341,15 @@ function showNotesPopout() {
 
   const origin = new URL(url).origin;
   notesWindow.webContents.setWindowOpenHandler(({ url: target }) => {
-    shell.openExternal(target);
-    return { action: "deny" };
+    if (opensExternally(target, origin)) {
+      shell.openExternal(target);
+      return { action: "deny" };
+    }
+    // Same origin, so open it OURSELVES rather than handing it to the browser. This used to externalise
+    // everything, which is why an in-app link opened in a new tab landed on a sign-in page: the system
+    // browser has none of this app's session. `will-navigate` immediately below always got this right;
+    // the two are now consistent.
+    return { action: "allow", overrideBrowserWindowOptions: popupWindowOptions() };
   });
   notesWindow.webContents.on("will-navigate", (e, target) => {
     if (new URL(target).origin !== origin) {

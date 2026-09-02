@@ -22,6 +22,31 @@ export const RECENT: Release[] = [
     ],
   },
   {
+    version: "0.265.11",
+    date: "2026-09-02",
+    pr: 732,
+    headline: "The desktop app stops sending its own pages to your browser",
+    summary:
+      "The last release stopped the About box sending you to your browser to read help. This finishes the job for the desktop app itself.\n\nSome links inside Diariz are meant to open in a second window rather than replace what you are looking at - the little question-mark help popovers do this deliberately, so that reading an article never throws away something you had half-typed in the dialog behind it. The desktop app was handing every one of those to your system browser, where you are not signed in, so the article you wanted turned into a login page.\n\nIt now opens a second Diariz window instead, and you stay signed in. Links that genuinely point somewhere else - GitHub, a website mentioned in a meeting, an email address - still go to your browser or mail app, as they should.",
+    fixed: [
+      "A link that opens in a second window - the question-mark help popovers, which do this on purpose so you do not lose unsaved work - now opens a second **Diariz** window instead of your browser, where you were asked to sign in again. Links to other sites still open in your browser.",
+    ],
+  },
+  {
+    version: "0.265.10",
+    date: "2026-09-02",
+    pr: 731,
+    headline: "Help and release notes open in Diariz, not a login screen",
+    summary:
+      "Two small things in the About box. The Browse help, Release notes and GitHub links have moved from the bottom of the dialog to the top right, level with the Diariz icon, so they are visible without scrolling past the feature table to find them.\n\nMore usefully, Browse help and Release notes now open inside Diariz. Both are ordinary pages of the app sitting behind your login, but they were opening in a new tab - which in the desktop app and the installed web app means leaving for your system browser, where you are not signed in and are asked to log in again to read a help page. They now open in place, as they always should have. The same fix applies to the Browse help link on the empty recording panel.\n\nThe GitHub link is genuinely somewhere else, so it still opens in your browser.",
+    changed: [
+      "The About box links (Browse help, Release notes, GitHub) have moved from the bottom of the dialog to the top right, level with the icon.",
+    ],
+    fixed: [
+      "**Browse help** and **Release notes** now open inside Diariz instead of your system browser, where the desktop and installed apps asked you to sign in again. GitHub still opens in your browser.",
+    ],
+  },
+  {
     version: "0.265.9",
     date: "2026-09-02",
     pr: 729,
