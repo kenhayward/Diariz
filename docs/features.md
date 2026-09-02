@@ -153,8 +153,10 @@ notes window and the first-run connect window.
 - **Meeting screenshots (desktop app).** Capture the screen while a recording is running, from a
 **configurable global hotkey**, the **tray menu**, or a button in the app itself. The first capture of each
 meeting opens a picker overlay so you choose **a whole monitor or a dragged rectangle**; every later capture
-in that meeting reuses the same area, and a "Change capture area" action lets you redefine it mid-meeting
-(the choice resets for the next recording). A live strip of this meeting's captures sits in the recorder's
+in that meeting reuses the same area, and a "Change capture area" action lets you redefine it mid-meeting.
+Finishing the drag **captures straight away** - drawing a rectangle round part of the screen is how you ask
+for a shot of it, so it is not a separate step - while cancelling with Escape captures nothing, and neither
+does an area chosen after the recording has ended (the choice resets for the next recording). A live strip of this meeting's captures sits in the recorder's
 notes popover, so a mis-aimed capture area is caught during the meeting instead of after it. Each capture
 stores a full PNG (long edge capped at 2560 pixels) plus a JPEG thumbnail, and both count toward your
 storage quota. Screenshots then appear **inline in the transcript** at the moment they were taken, as

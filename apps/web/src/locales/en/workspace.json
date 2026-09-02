@@ -269,7 +269,7 @@
   "screenshotCaptureNeedsArea": "Set a capture area first",
   "screenshotLimitReached": "Reached the limit of {{max}} screenshots for this recording - this capture was not kept.",
   "screenshotCaptureArea": "Change capture area",
-  "screenshotCaptureAreaHint": "Choose which screen or which part of it is captured",
+  "screenshotCaptureAreaHint": "Draw the screen area to capture - a screenshot is taken as soon as you finish",
   "screenshotAutoCapture": "Auto-capture",
   "screenshotAutoCaptureOn": "Auto-capture is on",
   "screenshotAutoCaptureHint": "Capture the screen automatically each time it changes",

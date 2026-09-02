@@ -269,7 +269,7 @@
   "screenshotCaptureNeedsArea": "Définissez d'abord une zone de capture",
   "screenshotLimitReached": "Limite de {{max}} captures atteinte pour cet enregistrement - cette capture n'a pas été conservée.",
   "screenshotCaptureArea": "Changer la zone de capture",
-  "screenshotCaptureAreaHint": "Choisir quel écran ou quelle partie est capturé",
+  "screenshotCaptureAreaHint": "Dessinez la zone d'écran à capturer - une capture est prise dès que vous avez fini",
   "screenshotAutoCapture": "Capture automatique",
   "screenshotAutoCaptureOn": "La capture automatique est activée",
   "screenshotAutoCaptureHint": "Capturer l'écran automatiquement à chaque changement",

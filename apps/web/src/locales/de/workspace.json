@@ -269,7 +269,7 @@
   "screenshotCaptureNeedsArea": "Zuerst einen Aufnahmebereich festlegen",
   "screenshotLimitReached": "Limit von {{max}} Screenshots für diese Aufnahme erreicht - dieser Screenshot wurde nicht gespeichert.",
   "screenshotCaptureArea": "Aufnahmebereich ändern",
-  "screenshotCaptureAreaHint": "Auswählen, welcher Bildschirm oder welcher Teil davon aufgenommen wird",
+  "screenshotCaptureAreaHint": "Den aufzunehmenden Bildschirmbereich aufziehen - der Screenshot wird sofort danach erstellt",
   "screenshotAutoCapture": "Automatisch aufnehmen",
   "screenshotAutoCaptureOn": "Automatische Aufnahme ist aktiv",
   "screenshotAutoCaptureHint": "Den Bildschirm automatisch bei jeder Änderung aufnehmen",
