@@ -9,6 +9,20 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.265.10",
+    date: "2026-09-02",
+    pr: 731,
+    headline: "Help and release notes open in Diariz, not a login screen",
+    summary:
+      "Two small things in the About box. The Browse help, Release notes and GitHub links have moved from the bottom of the dialog to the top right, level with the Diariz icon, so they are visible without scrolling past the feature table to find them.\n\nMore usefully, Browse help and Release notes now open inside Diariz. Both are ordinary pages of the app sitting behind your login, but they were opening in a new tab - which in the desktop app and the installed web app means leaving for your system browser, where you are not signed in and are asked to log in again to read a help page. They now open in place, as they always should have. The same fix applies to the Browse help link on the empty recording panel.\n\nThe GitHub link is genuinely somewhere else, so it still opens in your browser.",
+    changed: [
+      "The About box links (Browse help, Release notes, GitHub) have moved from the bottom of the dialog to the top right, level with the icon.",
+    ],
+    fixed: [
+      "**Browse help** and **Release notes** now open inside Diariz instead of your system browser, where the desktop and installed apps asked you to sign in again. GitHub still opens in your browser.",
+    ],
+  },
+  {
     version: "0.265.9",
     date: "2026-09-02",
     pr: 729,
