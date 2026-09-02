@@ -13,6 +13,12 @@ whisperx==3.8.6
 pyannote.audio>=4.0.0
 
 # Still the pre-1.0 hub line, now because whisperx requires it rather than because pyannote does.
+#
+# transformers 5.x is therefore NOT available, and the block is arithmetic rather than caution:
+# transformers 5.10.0 requires `huggingface-hub>=1.5.0,<2.0`, and whisperx 3.8.6 requires
+# `huggingface-hub<1.0.0`. Checked against the published metadata of both, not inferred. A Dependabot
+# offer of transformers 5.x cannot be taken until whisperx lifts its hub cap - so decline it there
+# rather than trying it here.
 # transformers>=4.48 is whisperx's floor; 4.53.x remains the lowest 4.x clearing every fixable
 # advisory (the ReDoS/input-validation set, all first patched at <=4.53.0). The three that remain need
 # transformers>=5 and are dismissed as unreachable - all "attacker-controlled model repo / malicious
