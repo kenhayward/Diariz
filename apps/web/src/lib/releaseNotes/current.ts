@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.265.9",
+    date: "2026-09-02",
+    pr: 729,
+    headline: "The test that looked like a ghost for a month",
+    summary:
+      "A month ago a test started failing about once in every eight runs of the suite, always exactly one test, and always passing again the moment it was run a second time. It was raised as an intermittent fault and hunted three times, across more than a hundred instrumented runs, without ever being caught.\n\nIt was never a fault. One test checks that the published description of the API still matches the copy kept for the integrations, and when they differ it rewrites that copy and fails to tell you. Rewriting it is what makes the next run pass - so a test doing exactly its job was indistinguishable from a flaky one, and the only condition it can fail under is having just changed the API, which is why no amount of re-running an untouched checkout ever reproduced it.\n\nThe message it prints now says all of that, in place of one line that read like noise. Nothing about Diariz changes; the next person to see it will know in seconds what took three investigations to work out.",
+    fixed: [
+      "A test that repairs the thing it checks, and so failed once and passed on every retry, now says plainly that it is not a flake and what to do about it. It had been open as an unidentified intermittent failure since early August.",
+    ],
+  },
+  {
     version: "0.265.8",
     date: "2026-09-02",
     pr: 725,
