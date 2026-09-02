@@ -184,8 +184,9 @@ public sealed class TranscriptSearch : ITranscriptSearch
     /// of 40 is sized for an unfiltered top-10, but this query always post-filters (by room membership, and
     /// sometimes by recording scope) - a walk that stops at 40 candidates can hand back fewer rows than were
     /// asked for, or miss true neighbours entirely. Scaled off the requested limit and clamped into pgvector's
-    /// permitted 1..1000 range. Public as a test seam so the recall test tunes the ANN path exactly as
-    /// production does, rather than hardcoding a second copy of the number.</summary>
+    /// permitted 1..1000 range. Public as a test seam, so a test tunes the ANN path exactly as production
+    /// does rather than hardcoding a second copy of the number. (It was the recall test that needed that;
+    /// that test was removed in issue #726, and TranscriptSearchTests covers the clamp directly.)</summary>
     public static int EfSearch(int limit) => Math.Clamp(limit * 8, 100, 1000);
 
     /// <summary>The share of all placed recordings a caller must be able to see before the approximate index is
