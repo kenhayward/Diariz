@@ -17,6 +17,14 @@ import type { Epoch } from "./types";
 /// top of `archive.ts`, and extend ARCHIVED_SPINE.
 export const EPOCHS: Epoch[] = [
   {
+    id: "the-live-meeting",
+    title: "Reading the meeting while you are still in it",
+    from: "0.260.0",
+    to: "0.266.2",
+    summary:
+      "Diariz stopped being something you looked at afterwards. Over this span a recording became durable while the meeting was still running, then readable, then attributed - and finally fast enough to keep up.\n\nThe audio goes to the server as you speak rather than in one upload at the end, so a crashed tab or a flat battery no longer costs the meeting. On top of that came the live transcript: open the notes panel mid-meeting and the text fills in as people talk, and the assistant will answer questions about a conversation that has not finished. Then names - a voice keeps one identity across the whole meeting rather than resetting every thirty seconds, and an enrolled voice is named rather than numbered, while recognising someone live never quietly trains the shared voiceprint.\n\nThe last stretch was making it affordable. Diarization turned out to be about four fifths of what a live chunk costs, and pairing whisperx 3.8 with pyannote 4 runs the same pipeline on the same audio many times faster - the difference between live transcription keeping up and pausing itself on modest hardware.\n\nAround it, the ordinary work of making a new feature trustworthy: a recording stamped with the time you actually made it, a finished meeting no longer looking untranscribed, completion surviving a merge and an export, help and the release notes opening where you are rather than at a login screen, and a run of tests that had been failing for reasons of their own rather than finding anything.",
+  },
+  {
     id: "review-voice-matches",
     title: "Review Voice Matches",
     from: "0.249.0",
@@ -248,6 +256,29 @@ export const EPOCHS: Epoch[] = [
 ///
 /// `epochs.test.ts` pins this to ARCHIVE exactly, so it cannot drift.
 export const ARCHIVED_SPINE: ReadonlyArray<{ version: string; date: string }> = [
+  { version: "0.266.2", date: "2026-09-02" },
+  { version: "0.266.1", date: "2026-09-02" },
+  { version: "0.266.0", date: "2026-09-02" },
+  { version: "0.265.11", date: "2026-09-02" },
+  { version: "0.265.10", date: "2026-09-02" },
+  { version: "0.265.9", date: "2026-09-02" },
+  { version: "0.265.8", date: "2026-09-02" },
+  { version: "0.265.7", date: "2026-09-02" },
+  { version: "0.265.6", date: "2026-09-02" },
+  { version: "0.265.5", date: "2026-09-01" },
+  { version: "0.265.4", date: "2026-09-01" },
+  { version: "0.265.3", date: "2026-09-01" },
+  { version: "0.265.2", date: "2026-09-01" },
+  { version: "0.265.1", date: "2026-09-01" },
+  { version: "0.265.0", date: "2026-09-01" },
+  { version: "0.264.0", date: "2026-09-01" },
+  { version: "0.263.1", date: "2026-09-01" },
+  { version: "0.263.0", date: "2026-09-01" },
+  { version: "0.262.2", date: "2026-09-01" },
+  { version: "0.262.1", date: "2026-09-01" },
+  { version: "0.262.0", date: "2026-08-29" },
+  { version: "0.261.0", date: "2026-08-28" },
+  { version: "0.260.0", date: "2026-08-28" },
   { version: "0.259.13", date: "2026-08-28" },
   { version: "0.259.12", date: "2026-08-28" },
   { version: "0.259.11", date: "2026-08-28" },
