@@ -4101,6 +4101,44 @@ public class RecordingsControllerTests
     }
 
     [Fact]
+    public async Task Merge_CarriesCompletionOntoTheSurvivor()
+    {
+        // Merging two halves of one meeting is a filing operation, so it must not reopen work someone has
+        // already finished. Losing the tick is not merely a display fault on one panel: the action re-enters
+        // the cross-meeting Actions tab as outstanding, where "Hide completed" no longer hides it, so the
+        // user is told they still owe something they have done.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var early = await SeedMergeable(db, userId, DateTimeOffset.UtcNow.AddMinutes(-5), 1000, "Hello");
+        var later = await SeedMergeable(db, userId, DateTimeOffset.UtcNow, 2000, "World");
+        var doneAt = DateTimeOffset.UtcNow.AddMinutes(-2);
+        db.RecordingActions.Add(new RecordingAction
+        {
+            Id = Guid.NewGuid(), RecordingId = later.Id, Text = "Book the room", Ordinal = 0,
+            Completed = true, CompletedAt = doneAt,
+        });
+        db.RecordingActions.Add(new RecordingAction
+        {
+            Id = Guid.NewGuid(), RecordingId = later.Id, Text = "Chase the invoice", Ordinal = 1,
+        });
+        await db.SaveChangesAsync();
+
+        await Build(db, userId, new FakeJobQueue()).Merge(new MergeRecordingsRequest([later.Id, early.Id]));
+
+        var moved = await db.RecordingActions.Where(a => a.RecordingId == early.Id).ToListAsync();
+        var done = moved.Single(a => a.Text == "Book the room");
+        Assert.True(done.Completed);
+        // The date travels with the tick. A completed action carrying no date reads as finished at no
+        // particular time, and the panel shows a tick with nothing beside it.
+        Assert.Equal(doneAt, done.CompletedAt);
+        // And an action nobody ticked must not arrive completed - the copy has to carry the real value,
+        // not simply default everything to done.
+        var open = moved.Single(a => a.Text == "Chase the invoice");
+        Assert.False(open.Completed);
+        Assert.Null(open.CompletedAt);
+    }
+
+    [Fact]
     public async Task Merge_IntoEarliest_BuildsMergedTranscript_SetsMerging_AndEnqueuesJob()
     {
         using var db = TestDb.Create();

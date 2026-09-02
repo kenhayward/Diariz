@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.265.6",
+    date: "2026-09-02",
+    pr: 722,
+    headline: "Merging a meeting no longer reopens finished work",
+    summary:
+      "Ticking an action item as done, and then merging that meeting into another, lost the tick. The action itself came through the merge intact - its wording, its owner, its deadline - but arrived un-ticked, with its completion date blank.\n\nThat is worse than it sounds. Merging two halves of one meeting is a filing job, not a reason to reopen anything, and the reopened item does not just look wrong on the meeting page: it comes back in your cross-meeting Actions list as outstanding, where Hide completed no longer hides it. So Diariz told you that you still owed something you had already finished, and kept telling you.\n\nCompletion now travels with the action through a merge, the date along with the tick, exactly as the wording and owner always did. Existing merged recordings are not revisited - anything already reopened this way needs ticking again.",
+    fixed: [
+      "Merging recordings kept each action item's wording, owner and deadline but dropped whether it was **done**, so finished work reappeared as outstanding in the Actions list and could not be hidden. The tick and its completion date now survive a merge.",
+    ],
+  },
+  {
     version: "0.265.5",
     date: "2026-09-01",
     pr: 721,

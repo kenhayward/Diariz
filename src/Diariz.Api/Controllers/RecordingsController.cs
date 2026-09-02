@@ -2249,10 +2249,15 @@ public class RecordingsController : ControllerBase
             {
                 Id = Guid.NewGuid(), RecordingId = survivor.Id,
                 Text = a.Text, Actor = a.Actor, Deadline = a.Deadline, Ordinal = nextActionOrdinal++,
-                // A pinned action stays pinned on the survivor - merging is a filing operation, and losing
-                // the pin would silently drop it out of the Actions tab. (Completed/CompletedAt are also
-                // dropped here; that is issue #676, a separate pre-existing bug, deliberately not fixed here.)
-                Pinned = a.Pinned,
+                // Curation state travels with the action, because merging is a filing operation and must
+                // not reopen work the user has already dealt with. A dropped pin silently removes an action
+                // from the Actions tab; a dropped tick is worse, putting a finished action back into the
+                // cross-meeting list as outstanding where "Hide completed" no longer hides it, so the user
+                // is told they still owe something they have done (issue #676).
+                //
+                // Completed and CompletedAt move together on purpose: a tick with no date reads as
+                // finished at no particular time, and the panel renders it with nothing beside it.
+                Pinned = a.Pinned, Completed = a.Completed, CompletedAt = a.CompletedAt,
             });
             mergedAnyAction = true;
         }
