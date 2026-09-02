@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { renderMarkdown } from "../lib/markdown";
 import { APP_VERSION, BUILD_COMMIT } from "../lib/version";
@@ -33,26 +32,29 @@ export default function AboutModal({ onClose }: { onClose: () => void }) {
               <p className="text-sm text-gray-500 dark:text-gray-400">{TAGLINE}</p>
             </div>
           </div>
-          {/* Help and the release notes are app routes, so they navigate IN PLACE. As `target="_blank"`
-              they left the app for the system browser, where the user is not signed in and both pages sit
-              behind the login - the same fault PanelModal and SettingsModal already record for the admin
-              panels, missed here. Closing the dialog on the way keeps it from sitting over the page it
-              just navigated to. GitHub is genuinely external and keeps its new tab. */}
+          {/* All three open a window of their own, and for Help and the release notes that is now safe:
+              PR #732 taught the desktop shell to open same-origin popups itself rather than handing them
+              to the system browser, where nobody is signed in. They were briefly made to navigate in place
+              (#731) because the shell could not yet do that; in place turned out to be the wrong answer
+              anyway - it replaces the app with a full-screen page and, since Help lost its "back to app"
+              link, leaves no way back. GitHub is genuinely external and goes to the browser. */}
           <div className="ml-auto flex flex-wrap items-center justify-end gap-4 text-sm">
-            <Link
-              to="/help"
-              onClick={onClose}
+            <a
+              href="/help"
+              target="_blank"
+              rel="noopener noreferrer"
               className="text-blue-600 hover:underline dark:text-blue-400"
             >
               {t("help:browseHelp")}
-            </Link>
-            <Link
-              to="/release-notes"
-              onClick={onClose}
+            </a>
+            <a
+              href="/release-notes"
+              target="_blank"
+              rel="noopener noreferrer"
               className="text-blue-600 hover:underline dark:text-blue-400"
             >
               {t("releaseNotesLink")}
-            </Link>
+            </a>
             <a
               href={GITHUB_URL}
               target="_blank"

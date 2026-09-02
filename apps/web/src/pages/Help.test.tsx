@@ -85,8 +85,17 @@ describe("Help page", () => {
     expect(within(screen.getByRole("navigation")).getByText("Getting started")).toBeTruthy();
   });
 
-  it("offers a way back to the app", () => {
+  it("has no in-app back link, because it is always opened in a window of its own", () => {
+    // It used to carry one. Every route into Help now opens a separate window - the account menu
+    // (window.open), the About box, the empty-recording panel and the `?` popover's read-more (all
+    // target="_blank", which the desktop shell keeps same-origin since PR #732). In that window a "back
+    // to app" link does not go back to anything: it turns the help window into a second app window,
+    // which is what the link was reported for.
+    //
+    // The invariant this guards is the other half of that: if a new link to /help ever navigates IN
+    // PLACE, the reader lands on a full-screen page with no way out. Adding the link back is not the fix
+    // for that - making the new entry point open its own window is.
     renderAt("/help");
-    expect(screen.getByRole("link", { name: /back to app/i })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /back to app/i })).toBeNull();
   });
 });
