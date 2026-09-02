@@ -1006,7 +1006,7 @@ public class RecordingsController : ControllerBase
             .ToList();
         var actions = rec.Actions
             .OrderBy(a => a.Ordinal)
-            .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal))
+            .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal, a.Completed, a.CompletedAt, a.Pinned))
             .ToList();
 
         var name = rec.Name ?? rec.Title;
@@ -2467,7 +2467,7 @@ public class RecordingsController : ControllerBase
         var minutes = current.MeetingMinutes?.Text;
         var actions = rec.Actions
             .OrderBy(a => a.Ordinal)
-            .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal))
+            .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal, a.Completed, a.CompletedAt, a.Pinned))
             .ToList();
 
         var labels = await ExportLabelsAsync();

@@ -11,5 +11,6 @@
   "text": "Text",
   "none": "(none)",
   "sentFromDiariz": "Sent from Diariz",
-  "subject": "Transcript for {name}"
+  "subject": "Transcript for {name}",
+  "done": "Done"
 }

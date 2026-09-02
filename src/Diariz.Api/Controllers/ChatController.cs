@@ -565,7 +565,7 @@ public class ChatController : ControllerBase
                 .ToList() ?? [];
             var actions = rec.Actions
                 .OrderBy(a => a.Ordinal)
-                .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal))
+                .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal, a.Completed, a.CompletedAt, a.Pinned))
                 .ToList();
 
             // Include any extracted actions alongside the transcript so the model can answer about them.
@@ -609,7 +609,7 @@ public class ChatController : ControllerBase
             join p in _db.RoomRecordings on r.Id equals p.RecordingId
             where p.RoomId == roomId && p.SectionId.HasValue && allIds.Contains(p.SectionId.Value)
             orderby r.CreatedAt, a.Ordinal
-            select new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal)).ToListAsync(ct);
+            select new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal, a.Completed, a.CompletedAt, a.Pinned)).ToListAsync(ct);
 
         var text = ChatFolderContext.BuildText(
             section.Summary?.Text, section.Minutes?.Text, TranscriptFormatter.ActionsForChat(actions));

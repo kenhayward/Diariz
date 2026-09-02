@@ -9,6 +9,18 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.265.8",
+    date: "2026-09-02",
+    pr: 725,
+    headline: "Finished work no longer leaves Diariz looking unfinished",
+    summary:
+      "An action item you had ticked off still went out looking like work you owed. Export or email a transcript and the finished action sat in the list with the others, nothing marking it as done - and the assistant was given the same undifferentiated list, so asking what was still outstanding could return things you had already finished.\n\nInside Diariz the tick was right there on screen. It was the same action, described two different ways depending on whether you were looking at it or sending it somewhere.\n\nCompleted actions are now marked wherever a meeting leaves the app - in exported and emailed transcripts, in the context the assistant reads, and in formula runs. The marker sits on the action itself and is translated, so the exports keep their existing layout.",
+    fixed: [
+      "Exported and emailed transcripts now mark an action item that has been ticked **Done**, instead of listing it indistinguishably from an outstanding one.",
+      "The assistant is told which action items are already finished, so asking what is outstanding no longer returns completed work. The same applies to formula runs.",
+    ],
+  },
+  {
     version: "0.265.7",
     date: "2026-09-02",
     pr: 727,

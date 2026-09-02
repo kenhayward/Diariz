@@ -471,9 +471,14 @@ public record UpdateAttachmentContentRequest(string Content);
 // ---- Action items (extracted from a transcript; user-editable) ----
 // Completed/CompletedAt default so export/chat projections that don't track completion stay unchanged;
 // the detail + actions-list projections pass the real values.
+/// <summary>An action item as it leaves the API.
+/// <para>Completed, CompletedAt and Pinned deliberately carry <b>no defaults</b>. They used to, and five
+/// projections quietly omitted them - so exports, emailed transcripts, the assistant's context and formula
+/// runs all reported every action as outstanding, however many the user had ticked off (issue #723). A
+/// default turned "this projection forgot" into silence; without one the compiler asks.</para></summary>
 public record RecordingActionDto(
     Guid Id, string Text, string Actor, string Deadline, int Ordinal,
-    bool Completed = false, DateTimeOffset? CompletedAt = null, bool Pinned = false);
+    bool Completed, DateTimeOffset? CompletedAt, bool Pinned);
 public record CreateRecordingActionRequest(string? Text, string? Actor, string? Deadline);
 public record UpdateRecordingActionRequest(string? Text, string? Actor, string? Deadline);
 

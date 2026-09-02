@@ -39,7 +39,7 @@ public static class TranscriptEmail
             sb.Append("<tr><th align=\"left\">").Append(Enc(s10n.Action)).Append("</th><th align=\"left\">")
               .Append(Enc(s10n.Actor)).Append("</th><th align=\"left\">").Append(Enc(s10n.Deadline)).Append("</th></tr>");
             foreach (var a in actions)
-                sb.Append("<tr><td>").Append(Enc(a.Text).Replace("\n", "<br>")).Append("</td><td>")
+                sb.Append("<tr><td>").Append(Enc(a.Completed ? $"[{s10n.Done}] {a.Text.Trim()}" : a.Text).Replace("\n", "<br>")).Append("</td><td>")
                   .Append(Enc(a.Actor)).Append("</td><td>")
                   .Append(Enc(a.Deadline)).Append("</td></tr>");
             sb.Append("</table>");

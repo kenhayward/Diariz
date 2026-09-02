@@ -28,7 +28,7 @@ public static class TranscriptFormatter
         {
             sb.Append(s10n.Actions).Append('\n');
             foreach (var a in actions)
-                sb.Append('\n').Append(a.Text.Trim()).Append('\n')
+                sb.Append('\n').Append(ActionText(a, s10n)).Append('\n')
                   .Append(s10n.Actor).Append(": ").Append(Dash(a.Actor))
                   .Append("   ").Append(s10n.Deadline).Append(": ").Append(Dash(a.Deadline)).Append('\n');
             sb.Append('\n');
@@ -62,7 +62,7 @@ public static class TranscriptFormatter
               .Append("| ").Append(new string('-', 60)).Append(" | ").Append(new string('-', 18))
               .Append(" | ").Append(new string('-', 22)).Append(" |\n");
             foreach (var a in actions)
-                sb.Append("| ").Append(Md(a.Text)).Append(" | ").Append(Md(a.Actor))
+                sb.Append("| ").Append(Md(ActionText(a, s10n))).Append(" | ").Append(Md(a.Actor))
                   .Append(" | ").Append(Md(a.Deadline)).Append(" |\n");
             sb.Append('\n');
         }
@@ -121,7 +121,7 @@ public static class TranscriptFormatter
             sb.Append(Bold(s10n.Actions)).Append(@"\par").Append('\n');
             sb.Append(Row(true, actionCols, Bold(s10n.Action), Bold(s10n.Actor), Bold(s10n.Deadline)));
             foreach (var a in actions)
-                sb.Append(Row(false, actionCols, Rtf(a.Text), Rtf(a.Actor), Rtf(a.Deadline)));
+                sb.Append(Row(false, actionCols, Rtf(ActionText(a, s10n)), Rtf(a.Actor), Rtf(a.Deadline)));
             sb.Append(@"\par").Append('\n');
         }
         sb.Append(Bold(s10n.Transcript)).Append(@"\par").Append('\n');
@@ -147,6 +147,14 @@ public static class TranscriptFormatter
         return sb.ToString();
     }
 
+    /// <summary>An action's text, prefixed with the localised Done marker when it has been ticked off.
+    /// <para>The marker goes on the text rather than into a new column so that every format says the same
+    /// thing the same way, and the markdown and RTF action tables keep the column widths they already
+    /// have. Without it a finished action leaves Diariz indistinguishable from an outstanding one
+    /// (issue #723).</para></summary>
+    private static string ActionText(RecordingActionDto a, ExportStrings s10n) =>
+        a.Completed ? $"[{s10n.Done}] {a.Text.Trim()}" : a.Text.Trim();
+
     /// <summary>Compact "- action (Actor: x; Deadline: y)" lines under an "Actions:" heading — used to feed
     /// extracted actions to the chat LLM alongside the transcript. Empty when there are no actions.</summary>
     public static string ActionsForChat(IReadOnlyList<RecordingActionDto> actions)
@@ -155,7 +163,8 @@ public static class TranscriptFormatter
         var sb = new StringBuilder("Actions:\n");
         foreach (var a in actions)
         {
-            sb.Append("- ").Append(a.Text.Trim());
+            // Literal rather than localised: this is prompt text for the model, not user-facing copy.
+            sb.Append("- ").Append(a.Completed ? "[Done] " : "").Append(a.Text.Trim());
             var actor = a.Actor.Trim();
             var deadline = a.Deadline.Trim();
             if (actor.Length > 0 || deadline.Length > 0)

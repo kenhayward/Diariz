@@ -476,7 +476,7 @@ public static class FormulaRunProcessor
             .ToList() ?? [];
         var actions = rec.Actions
             .OrderBy(a => a.Ordinal)
-            .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal))
+            .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal, a.Completed, a.CompletedAt, a.Pinned))
             .ToList();
 
         return new FormulaContextData(
