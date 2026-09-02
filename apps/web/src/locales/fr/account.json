@@ -368,7 +368,7 @@
   "changeFixed": "Corrigé",
   "aboutAria": "À propos de Diariz",
   "aboutVersion": "Version {{version}}",
-  "releaseNotesLink": "Notes de version →",
+  "releaseNotesLink": "Notes de version",
   "githubLink": "GitHub →",
   "minutesModeLabel": "Génération du compte rendu",
   "minutesModeSingle": "Un seul appel (moins de jetons)",

@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useTour } from "../lib/tour";
 
@@ -33,14 +32,17 @@ export default function EmptyDetail() {
           >
             {isNew ? t("takeTour") : t("account:showTour")}
           </button>
-          {/* In place, not a new tab: /help is an app route behind the login, so a new tab leaves the
-              desktop shell and the installed PWA for the system browser where nobody is signed in. */}
-          <Link
-            to="/help"
+          {/* Its own window, like every other route into Help. The shell keeps same-origin popups
+              (PR #732), so this no longer lands on a sign-in page - and Help has no "back to app" link
+              any more, so navigating in place here would strand the reader. */}
+          <a
+            href="/help"
+            target="_blank"
+            rel="noopener noreferrer"
             className="text-sm text-blue-600 hover:underline dark:text-blue-400"
           >
             {t("help:browseHelp")}
-          </Link>
+          </a>
         </div>
       </div>
     </div>

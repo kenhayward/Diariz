@@ -46,9 +46,6 @@ export default function Help() {
         </div>
         {/* Not a heading: the article's own title is the page's h1, so the chrome must not compete. */}
         <span className="ml-auto text-base font-semibold text-gray-700 dark:text-gray-200">{t("title")}</span>
-        <Link to="/" className="text-sm text-indigo-600 hover:underline dark:text-indigo-400">
-          {t("backToApp")}
-        </Link>
       </header>
 
       <div className="flex min-h-0 flex-1">

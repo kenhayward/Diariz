@@ -18,19 +18,23 @@ describe("AboutModal", () => {
     // Version is injected from version.json at build/test time.
     expect(within(dialog).getByText(new RegExp(`version ${APP_VERSION.replace(/\./g, "\\.")}`, "i"))).toBeTruthy();
 
-    // Help and the release notes are app routes and must navigate IN PLACE. As new tabs they left the
-    // desktop shell and the installed PWA for the system browser, where nobody is signed in and both
-    // pages sit behind the login. The absence of target="_blank" is the whole point of the assertion.
+    // All three open a window of their own. For Help and the release notes that is only correct because
+    // the desktop shell now keeps same-origin popups instead of handing them to the system browser
+    // (PR #732) - and it is necessary because Help no longer has a "back to app" link, so navigating in
+    // place would strand the reader on a full-screen page.
     const notes = within(dialog).getByRole("link", { name: /release notes/i });
     expect(notes.getAttribute("href")).toBe("/release-notes");
-    expect(notes.getAttribute("target")).toBeNull();
+    expect(notes.getAttribute("target")).toBe("_blank");
     const help = within(dialog).getByRole("link", { name: /browse help/i });
     expect(help.getAttribute("href")).toBe("/help");
-    expect(help.getAttribute("target")).toBeNull();
-    // GitHub is genuinely external, so it keeps its new tab.
+    expect(help.getAttribute("target")).toBe("_blank");
     const github = within(dialog).getByRole("link", { name: /github/i });
     expect(github.getAttribute("href")).toMatch(/github\.com/);
     expect(github.getAttribute("target")).toBe("_blank");
+
+    // The trailing arrow means "this leaves Diariz". Only GitHub does now.
+    expect(notes.textContent).not.toContain("→");
+    expect(github.textContent).toContain("→");
 
     // Key disclaimers + copyright.
     expect(within(dialog).getByText(/non-commercial/i)).toBeTruthy();
