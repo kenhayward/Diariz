@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.265.7",
+    date: "2026-09-02",
+    pr: 727,
+    headline: "A search test that was really testing the hardware",
+    summary:
+      "A test covering the index behind semantic search was failing on the build server while passing on a developer machine, on changes that had nothing to do with search. Because it is one of the checks that gates merging, it was holding up unrelated work.\n\nIt was not a fault in Diariz, and it was not random. The index is a deliberately approximate one: it trades a little accuracy for a lot of speed, and how much accuracy it gives up depends partly on the machine that built it. The test measured that accuracy and required a fixed figure, so it was really asking a question about the hardware. The same query over the same data scored near-perfect on one machine and around half on another.\n\nThe measurement has been removed. What it was there to protect - that a search never quietly loses results you are entitled to see because of who you are or which meeting you asked about - is still covered, by tests that do not depend on the machine underneath them.",
+    fixed: [
+      "Removed a test that required a fixed accuracy figure from an approximate search index. The figure depends on the machine, so it failed on the build server and passed locally, blocking unrelated changes. The behaviour it guarded is still covered.",
+    ],
+  },
+  {
     version: "0.265.6",
     date: "2026-09-02",
     pr: 722,
