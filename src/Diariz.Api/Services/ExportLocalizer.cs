@@ -61,7 +61,8 @@ public class JsonExportLocalizer : IExportLocalizer
             V("sentFromDiariz", en.SentFromDiariz),
             V("subject", en.Subject),
             V("meetingMinutes", en.MeetingMinutes),
-            V("minutesSubject", en.MinutesSubject));
+            V("minutesSubject", en.MinutesSubject),
+            V("done", en.Done));
     }
 
     private Dictionary<string, string> Resolve(string? culture)

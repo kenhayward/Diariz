@@ -13,5 +13,6 @@
   "sentFromDiariz": "Gesendet von Diariz",
   "subject": "Transkription für {name}",
   "meetingMinutes": "Besprechungsprotokoll",
-  "minutesSubject": "Besprechungsprotokoll für {name}"
+  "minutesSubject": "Besprechungsprotokoll für {name}",
+  "done": "Erledigt"
 }

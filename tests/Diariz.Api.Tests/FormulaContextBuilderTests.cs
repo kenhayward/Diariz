@@ -16,7 +16,7 @@ public class FormulaContextBuilderTests
         Summary: "A concise summary.",
         Minutes: "# Minutes\n\nBody.",
         NoteLines: ["Ask about budget"],
-        Actions: [new RecordingActionDto(Guid.NewGuid(), "Send report", "Bob", "Friday", 0)]);
+        Actions: [new RecordingActionDto(Guid.NewGuid(), "Send report", "Bob", "Friday", 0, Completed: false, CompletedAt: null, Pinned: false)]);
 
     [Fact]
     public void Build_TranscriptFlag_IncludesTranscriptSection()

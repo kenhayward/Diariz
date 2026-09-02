@@ -19,7 +19,11 @@ public record ExportStrings(
     string SentFromDiariz,
     string Subject,
     string MeetingMinutes,
-    string MinutesSubject)
+    string MinutesSubject,
+    /// <summary>Marks an action item the user has already ticked off, so a finished action leaving Diariz
+    /// does not read as outstanding. Rendered onto the action's own text rather than as an extra column,
+    /// which keeps the markdown and RTF tables their existing shape.</summary>
+    string Done)
 {
     /// <summary>The authoritative English labels — the default when no localizer is supplied (keeps the
     /// formatters usable on their own) and the fallback for any key a translation omits.</summary>
@@ -38,7 +42,8 @@ public record ExportStrings(
         SentFromDiariz: "Sent from Diariz",
         Subject: "Transcript for {name}",
         MeetingMinutes: "Meeting Minutes",
-        MinutesSubject: "Meeting minutes for {name}");
+        MinutesSubject: "Meeting minutes for {name}",
+        Done: "Done");
 
     /// <summary>The email subject for a recording, with <c>{name}</c> substituted.</summary>
     public string SubjectFor(string name) => Subject.Replace("{name}", name);

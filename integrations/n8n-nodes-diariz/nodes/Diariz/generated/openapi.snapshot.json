@@ -2959,7 +2959,6 @@
             "type": "string"
           },
           "completed": {
-            "default": false,
             "type": "boolean"
           },
           "completedAt": {
@@ -2985,7 +2984,6 @@
             ]
           },
           "pinned": {
-            "default": false,
             "type": "boolean"
           },
           "text": {
@@ -2997,7 +2995,10 @@
           "text",
           "actor",
           "deadline",
-          "ordinal"
+          "ordinal",
+          "completed",
+          "completedAt",
+          "pinned"
         ],
         "type": "object"
       },

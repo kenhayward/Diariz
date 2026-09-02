@@ -13,5 +13,6 @@
   "sentFromDiariz": "Envoyé depuis Diariz",
   "subject": "Transcription de {name}",
   "meetingMinutes": "Compte rendu de réunion",
-  "minutesSubject": "Compte rendu de réunion de {name}"
+  "minutesSubject": "Compte rendu de réunion de {name}",
+  "done": "Terminé"
 }

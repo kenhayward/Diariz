@@ -13,5 +13,6 @@
   "sentFromDiariz": "Enviado desde Diariz",
   "subject": "Transcripción de {name}",
   "meetingMinutes": "Acta de la reunión",
-  "minutesSubject": "Acta de la reunión de {name}"
+  "minutesSubject": "Acta de la reunión de {name}",
+  "done": "Hecho"
 }

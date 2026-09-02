@@ -44,7 +44,7 @@ public class TranscriptEmailTests
     {
         var html = TranscriptEmail.BuildHtml("X", "Sum", [Seg("A", 0, "hi")],
         [
-            new RecordingActionDto(Guid.NewGuid(), "Send the report", "Bob", "Friday", 0),
+            new RecordingActionDto(Guid.NewGuid(), "Send the report", "Bob", "Friday", 0, Completed: false, CompletedAt: null, Pinned: false),
         ]);
 
         Assert.Contains("<strong>Actions</strong>", html);

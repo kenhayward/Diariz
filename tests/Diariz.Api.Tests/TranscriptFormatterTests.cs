@@ -13,8 +13,16 @@ public class TranscriptFormatterTests
 
     private static readonly IReadOnlyList<RecordingActionDto> Actions =
     [
-        new RecordingActionDto(Guid.NewGuid(), "Send the report", "Bob", "Friday", 0),
-        new RecordingActionDto(Guid.NewGuid(), "Book the room", "", "", 1),
+        new RecordingActionDto(Guid.NewGuid(), "Send the report", "Bob", "Friday", 0, Completed: false, CompletedAt: null, Pinned: false),
+        new RecordingActionDto(Guid.NewGuid(), "Book the room", "", "", 1, Completed: false, CompletedAt: null, Pinned: false),
+    ];
+
+    /// <summary>One finished action and one still open, for the surfaces that have to tell them apart.</summary>
+    private static readonly IReadOnlyList<RecordingActionDto> MixedActions =
+    [
+        new RecordingActionDto(Guid.NewGuid(), "Send the report", "Bob", "Friday", 0,
+            Completed: true, CompletedAt: new DateTimeOffset(2026, 9, 1, 9, 0, 0, TimeSpan.Zero), Pinned: false),
+        new RecordingActionDto(Guid.NewGuid(), "Book the room", "", "", 1, Completed: false, CompletedAt: null, Pinned: false),
     ];
 
     [Fact]
@@ -184,6 +192,37 @@ public class TranscriptFormatterTests
         Assert.StartsWith("Actions:\n", text);
         Assert.Contains("- Send the report (Actor: Bob; Deadline: Friday)", text);
         Assert.Contains("- Book the room\n", text); // no actor/deadline → no parenthetical
+    }
+
+    [Fact]
+    public void EveryExportFormat_MarksACompletedAction_AndLeavesAnOpenOneUnmarked()
+    {
+        // A ticked action leaving Diariz must not read as outstanding. The marker goes on the action's own
+        // text rather than in a new column, so the markdown and RTF tables keep their shape and every
+        // format says the same thing the same way.
+        var text = TranscriptFormatter.ToText("Team Sync", "s", Segments, MixedActions);
+        Assert.Contains("[Done] Send the report", text);
+        Assert.DoesNotContain("[Done] Book the room", text);
+
+        var md = TranscriptFormatter.ToMarkdown("Team Sync", "s", Segments, MixedActions);
+        Assert.Contains("[Done] Send the report", md);
+        Assert.DoesNotContain("[Done] Book the room", md);
+
+        var rtf = TranscriptFormatter.ToRtf("Team Sync", "s", Segments, MixedActions);
+        Assert.Contains("[Done] Send the report", rtf);
+        Assert.DoesNotContain("[Done] Book the room", rtf);
+    }
+
+    [Fact]
+    public void ActionsForChat_MarksACompletedAction_SoTheAssistantDoesNotReportItAsOutstanding()
+    {
+        // The assistant is asked what is still outstanding. Handed an undifferentiated list it answers with
+        // work that is already done, which is the whole point of this marker.
+        var text = TranscriptFormatter.ActionsForChat(MixedActions);
+
+        Assert.Contains("- [Done] Send the report (Actor: Bob; Deadline: Friday)", text);
+        Assert.Contains("- Book the room\n", text);
+        Assert.DoesNotContain("[Done] Book the room", text);
     }
 
     [Fact]

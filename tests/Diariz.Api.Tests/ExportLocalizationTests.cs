@@ -12,7 +12,7 @@ public class ExportLocalizationTests
 
     private static readonly IReadOnlyList<RecordingActionDto> Actions =
     [
-        new RecordingActionDto(Guid.NewGuid(), "Send the report", "Bob", "Friday", 0),
+        new RecordingActionDto(Guid.NewGuid(), "Send the report", "Bob", "Friday", 0, Completed: false, CompletedAt: null, Pinned: false),
     ];
 
     // ---- JsonExportLocalizer ----
