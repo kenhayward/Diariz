@@ -4,7 +4,15 @@ import { hubCounts } from "./hubCounts";
 const rec = (over: Partial<Parameters<typeof hubCounts>[0]> = {}) => ({
   durationMs: 60_000,
   speakers: [{ label: "SPEAKER_00" }, { label: "SPEAKER_01" }],
-  current: { segments: [{ id: "s1" }, { id: "s2" }, { id: "s3" }] },
+  // Segments carry their speaker, as the real DTO does - the speaker count is derived from them,
+  // so a fixture without one silently counts a single `undefined`.
+  current: {
+    segments: [
+      { id: "s1", speaker: "SPEAKER_00" },
+      { id: "s2", speaker: "SPEAKER_01" },
+      { id: "s3", speaker: "SPEAKER_00" },
+    ],
+  },
   actions: [{ completed: false }, { completed: false }, { completed: true }],
   ...over,
 });
@@ -62,5 +70,50 @@ describe("hubCounts", () => {
       formulaRuns: 0,
       screenshots: 0,
     });
+  });
+});
+
+describe("the speaker count", () => {
+  it("counts the speakers in the transcript, not every row the recording has ever had", () => {
+    // Reported from a real meeting: the tile said 12 speakers, the Speakers page said 4, and 4 was
+    // right. Speaker rows are keyed (recording, label) and deliberately never deleted - that is what
+    // makes a rename survive a re-transcribe - so a recording that was live-captured and then
+    // transcribed again accumulates the union of every label it has ever had. Counting rows counts
+    // history; the tile has to agree with the section it links to.
+    const counts = hubCounts(
+      {
+        durationMs: 60_000,
+        speakers: [
+          { label: "SPEAKER_00" }, { label: "SPEAKER_01" }, { label: "SPEAKER_02" },
+          { label: "SPEAKER_03" }, { label: "SPEAKER_04" }, { label: "SPEAKER_05" },
+        ],
+        current: {
+          segments: [
+            { speaker: "SPEAKER_00" }, { speaker: "SPEAKER_01" },
+            { speaker: "SPEAKER_00" }, { speaker: "SPEAKER_02" },
+          ],
+        },
+        actions: [],
+      },
+      [], [], [],
+    );
+
+    expect(counts.speakers).toBe(3);
+  });
+
+  it("reports no speakers when there is no transcript yet", () => {
+    // A recording still transcribing has rows seeded but nothing to attribute, and "6 speakers" over an
+    // empty transcript is a promise the page cannot keep.
+    const counts = hubCounts(
+      {
+        durationMs: 60_000,
+        speakers: [{ label: "SPEAKER_00" }, { label: "SPEAKER_01" }],
+        current: null,
+        actions: [],
+      },
+      [], [], [],
+    );
+
+    expect(counts.speakers).toBe(0);
   });
 });

@@ -5,7 +5,7 @@
 type RecordingLike = {
   durationMs: number;
   speakers: unknown[];
-  current: { segments: unknown[] } | null;
+  current: { segments: { speaker: string }[] } | null;
   actions: { completed: boolean }[];
 };
 
@@ -33,7 +33,12 @@ export function hubCounts(
     durationMs: rec.durationMs,
     actionsOpen: rec.actions.filter((a) => !a.completed).length,
     actionsDone: rec.actions.filter((a) => a.completed).length,
-    speakers: rec.speakers.length,
+    // The speakers heard in THIS transcript, not every Speaker row the recording has ever had.
+    // Those rows are keyed (recording, label) and never deleted - that is what makes a rename survive a
+    // re-transcribe - so a recording that was live-captured and then transcribed again holds the union
+    // of every label it has ever carried. Counting rows counted history: one four-speaker meeting
+    // reported twelve, while the Speakers page it links to correctly showed four.
+    speakers: new Set((rec.current?.segments ?? []).map((s) => s.speaker)).size,
     notes: notes.length,
     files: attachments.length,
     formulaRuns: formulaResults.length,
