@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useTour } from "../lib/tour";
 
@@ -32,14 +33,14 @@ export default function EmptyDetail() {
           >
             {isNew ? t("takeTour") : t("account:showTour")}
           </button>
-          <a
-            href="/help"
-            target="_blank"
-            rel="noopener noreferrer"
+          {/* In place, not a new tab: /help is an app route behind the login, so a new tab leaves the
+              desktop shell and the installed PWA for the system browser where nobody is signed in. */}
+          <Link
+            to="/help"
             className="text-sm text-blue-600 hover:underline dark:text-blue-400"
           >
             {t("help:browseHelp")}
-          </a>
+          </Link>
         </div>
       </div>
     </div>
