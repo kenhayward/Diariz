@@ -14,7 +14,16 @@ namespace Diariz.Api.Tests;
 /// document. The node's long tail of operations is generated from this file, so an endpoint added, renamed or
 /// removed here must be regenerated into the node rather than silently drifting.
 /// The fix for a failure is to commit the regenerated snapshot and run <c>npm run generate</c> in
-/// <c>integrations/n8n-nodes-diariz</c>, never to edit the snapshot by hand.</summary>
+/// <c>integrations/n8n-nodes-diariz</c>, never to edit the snapshot by hand.
+///
+/// <para><b>This test repairs the thing it checks, which makes a real failure look like a flake.</b> On a
+/// mismatch it rewrites the snapshot and then fails, so the very next run passes with nothing changed by
+/// hand. That is the whole of issue #482: "exactly one test fails, re-running immediately passes" was
+/// filed as an unidentified intermittent fault and hunted across 100+ instrumented runs, all of which ran
+/// against an unchanged tree - where this test cannot fail, because the document and the snapshot are
+/// identical by construction. It only ever fires when the API surface has moved since the snapshot was
+/// committed, which is why it was only ever seen mid-session and never on CI. The failure message says so
+/// at length; do not shorten it back into something that reads as noise.</para></summary>
 public class OpenApiSnapshotTests
 {
     private static readonly string SnapshotPath = Path.Combine(
@@ -52,9 +61,17 @@ public class OpenApiSnapshotTests
         if (current != expected)
         {
             File.WriteAllText(full, normalized);
+            var nl = Environment.NewLine;
             Assert.Fail(
-                $"OpenAPI snapshot regenerated at {full}. Run 'npm run generate' in " +
-                $"integrations/n8n-nodes-diariz, then commit both files.{Environment.NewLine}" +
+                $"The published API no longer matches the committed OpenAPI snapshot.{nl}{nl}" +
+                $"THIS IS EXPECTED IF YOU HAVE JUST CHANGED THE API, AND IT IS NOT A FLAKY TEST.{nl}" +
+                $"The snapshot has been REWRITTEN in your working tree, so re-running now passes. That pass " +
+                $"means the file was regenerated, NOT that this failure was spurious - see issue #482, where " +
+                $"exactly that fail-then-pass was hunted for weeks as an intermittent fault.{nl}{nl}" +
+                $"To finish the job:{nl}" +
+                $"  1. run 'npm run generate' in integrations/n8n-nodes-diariz{nl}" +
+                $"  2. commit BOTH the regenerated snapshot and generated/index.ts{nl}{nl}" +
+                $"Regenerated at {full}{nl}" +
                 FirstDifference(current, expected));
         }
     }
