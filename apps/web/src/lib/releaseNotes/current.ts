@@ -9,6 +9,22 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.266.2",
+    date: "2026-09-02",
+    pr: 734,
+    headline: "Help and the release notes get a window of their own",
+    summary:
+      "Help and the release notes now always open in a window of their own, from wherever you reach them - the account menu, the About box, the empty recording panel, or a question-mark popover.\n\nThe last two releases fixed these opening in your browser and asking you to sign in again. That fix made them open in place instead, which turned out to be worse in one respect: they replace the app with a full-screen page, and the release notes offered no way back at all short of restarting Diariz. Now that the desktop app knows how to open a second window of its own, they simply do that, and the app you were using is still sitting there behind.\n\nHelp has lost its Back to app link along the way. It was only ever there because Help sometimes took over the window; in a window of its own it did not go back to anything, it turned that window into a second copy of the app. Close the window instead.\n\nThe small arrow after Release notes has gone too. It meant that the link leaves Diariz, which it no longer does. GitHub keeps its arrow, because it still does.",
+    changed: [
+      "**Help** and **Release notes** open in a separate window from every route into them, instead of replacing the app.",
+      "Help no longer shows a **Back to app** link - it opens in its own window, so there is nothing to go back to.",
+      "The arrow after **Release notes** has gone, since it no longer leaves Diariz. **GitHub** keeps its arrow.",
+    ],
+    fixed: [
+      "Opening the release notes left no way back to Diariz without restarting it.",
+    ],
+  },
+  {
     version: "0.266.1",
     date: "2026-09-02",
     pr: 734,
