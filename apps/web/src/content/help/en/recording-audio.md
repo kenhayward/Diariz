@@ -199,6 +199,22 @@ and stops accepting new lines. That is deliberate - a note typed with nowhere to
 saved when it was not. Bring the main window back and it picks up where it left off. Everything you
 had already typed is safe.
 
+## Choosing what gets captured
+
+Screenshots come from a capture area: a whole screen, or a rectangle you draw on one. Press the capture
+area button beside the screenshot count - in the notes panel or in the separate notes window - and an
+overlay covers every screen so you can drag out the part you want, or click a screen to take all of it.
+Press Escape to back out without changing anything.
+
+Finishing that drag takes a screenshot straight away. Choosing an area is how you say "capture this", so
+you do not have to draw the rectangle and then press capture as a second step. If you only wanted to
+re-aim for later, delete the shot from the strip below the buttons. Cancelling with Escape captures
+nothing.
+
+After that the capture button, the tray item and the hotkey all take a shot of that same area, so
+repeated captures of the same window need no aiming at all. Changing the area turns auto-capture off,
+since the old rectangle no longer describes what you want watched.
+
 ## Capturing slides automatically
 
 If you are sitting in a presentation, you do not have to take a screenshot of every slide yourself. Turn

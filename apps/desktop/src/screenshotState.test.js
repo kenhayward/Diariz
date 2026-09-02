@@ -10,6 +10,7 @@ const {
   normalizeAccelerator,
   canCapture,
   shouldStartCapture,
+  shouldCaptureAfterAreaChange,
   notificationForCaptureFailure,
   notificationForHotkeyUnavailable,
   acceleratorKeyFromDomCode,
@@ -403,4 +404,29 @@ test("hotkeyUnavailableSaveError centralizes the save-time 'already in use' copy
   const message = hotkeyUnavailableSaveError();
   assert.ok(message.length > 0);
   assert.ok(!/[–—]/.test(message), "no em or en dashes in user-facing text");
+});
+
+test("finishing an area selection captures straight away", () => {
+  assert.equal(
+    shouldCaptureAfterAreaChange({ displayId: 1, selection: null }, { phase: "recording", ready: true }),
+    true,
+  );
+});
+
+test("cancelling the area picker captures nothing", () => {
+  assert.equal(shouldCaptureAfterAreaChange(null, { phase: "recording", ready: true }), false);
+});
+
+test("an area chosen after the recording ended captures nothing", () => {
+  assert.equal(
+    shouldCaptureAfterAreaChange({ displayId: 1, selection: null }, { phase: "idle", ready: true }),
+    false,
+  );
+});
+
+test("an area chosen while the renderer is reloading captures nothing", () => {
+  assert.equal(
+    shouldCaptureAfterAreaChange({ displayId: 1, selection: null }, { phase: "recording", ready: false }),
+    false,
+  );
 });

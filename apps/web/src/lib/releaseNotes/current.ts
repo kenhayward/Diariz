@@ -9,6 +9,18 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.267.0",
+    date: "2026-09-02",
+    pr: 743,
+    headline: "Drawing a capture area takes the screenshot",
+    summary:
+      "Choosing a capture area in the notes panel now takes a screenshot the moment you finish drawing it.\n\nNobody drags a rectangle across their screen for its own sake - they do it because they want a picture of what is inside it. Until now that took two steps: draw the area, watch the overlay disappear with nothing to show for it, then find the capture button and press it. The second step was pure ceremony, and the pause in between was long enough to lose the slide you were aiming at.\n\nThe pick is now the request. Cancelling with Escape still captures nothing, and neither does an area chosen after the recording has ended - a shot you did not ask for is worse than one you have to ask for twice. This applies wherever you choose an area: the notes popover, the separate notes window, and the tray item.",
+    changed: [
+      "Finishing a capture-area selection now takes a screenshot immediately, instead of only setting the area for a later capture.",
+      "The capture area button's hint says what it now does - a screenshot is taken as soon as you finish drawing.",
+    ],
+  },
+  {
     version: "0.266.4",
     date: "2026-09-02",
     pr: 740,

@@ -59,6 +59,22 @@ function shouldStartCapture(capture, now) {
   return now - last >= CAPTURE_COOLDOWN_MS;
 }
 
+/// Whether finishing a capture-area selection should be followed immediately by a capture.
+///
+/// Drawing a rectangle round part of the screen is not something anyone does for its own sake - it is
+/// how the user says "capture this", and every previous version made them say it twice (draw, then press
+/// capture) with nothing happening in between. So the pick itself is the request.
+///
+/// Two situations still capture nothing, and they are the reason this is a predicate rather than an
+/// unconditional call: `target` is null when the picker was cancelled (Escape), where firing a capture
+/// would be the opposite of what was asked; and the recording can end - or the renderer start reloading -
+/// while the picker sits open, since the pick has no time limit and there would be nothing left to send
+/// the bytes to.
+function shouldCaptureAfterAreaChange(target, recorderState) {
+  if (!target) return false;
+  return canCapture(recorderState);
+}
+
 /// Native-notification copy for a failed screenshot capture, by reason. Pure so it's
 /// unit-testable; main.js shows it via Electron's Notification, mirroring updateState's
 /// notificationForUpdate / desktopAuth's notificationForAuthError.
@@ -312,6 +328,7 @@ module.exports = {
   isValidAccelerator,
   normalizeAccelerator,
   shouldStartCapture,
+  shouldCaptureAfterAreaChange,
   notificationForCaptureFailure,
   notificationForHotkeyUnavailable,
   acceleratorKeyFromDomCode,

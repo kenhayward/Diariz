@@ -50,6 +50,7 @@ const {
   isValidAccelerator,
   canCapture,
   shouldStartCapture,
+  shouldCaptureAfterAreaChange,
   notificationForCaptureFailure,
   notificationForHotkeyUnavailable,
   acceleratorFromKeyDescriptor,
@@ -1316,7 +1317,12 @@ async function changeCaptureArea() {
     if (!canCapture(recorder)) setCaptureTarget(null); // recording ended while the picker was open
   } catch {
     notifyCaptureFailed("error");
+    return;
   }
+  // Drawing the area IS the request for a shot - see shouldCaptureAfterAreaChange. This runs after
+  // the picker has already settled and put its overlays away, so the screen underneath is whatever the
+  // user was looking at when they drew the rectangle, not the picker.
+  if (shouldCaptureAfterAreaChange(captureTarget, recorder)) await captureScreenshot();
 }
 
 ipcMain.handle("screenshot:capture", () => {

@@ -269,7 +269,7 @@
   "screenshotCaptureNeedsArea": "Primero define un área de captura",
   "screenshotLimitReached": "Se alcanzó el límite de {{max}} capturas para esta grabación - esta captura no se guardó.",
   "screenshotCaptureArea": "Cambiar área de captura",
-  "screenshotCaptureAreaHint": "Elegir qué pantalla o qué parte de ella se captura",
+  "screenshotCaptureAreaHint": "Dibuja el área de pantalla a capturar - la captura se toma en cuanto termines",
   "screenshotAutoCapture": "Captura automática",
   "screenshotAutoCaptureOn": "La captura automática está activada",
   "screenshotAutoCaptureHint": "Capturar la pantalla automáticamente cada vez que cambie",
