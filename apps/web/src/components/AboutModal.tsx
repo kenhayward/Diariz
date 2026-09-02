@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { renderMarkdown } from "../lib/markdown";
 import { APP_VERSION, BUILD_COMMIT } from "../lib/version";
@@ -21,12 +22,45 @@ export default function AboutModal({ onClose }: { onClose: () => void }) {
         className="max-h-[85vh] w-[60vw] min-w-80 max-w-5xl overflow-y-auto rounded-lg border bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-900"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Identity */}
-        <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="" className="h-10 w-auto" />
-          <div>
-            <h2 className="text-xl font-semibold dark:text-gray-100">Diariz</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">{TAGLINE}</p>
+        {/* Identity, with the links opposite it rather than buried under the disclaimers. `items-center`
+            rather than `items-start` so the link row sits level with the logo: the identity block is the
+            same 40px height as the icon, so centring against it centres against the icon. */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <img src="/logo.png" alt="" className="h-10 w-auto" />
+            <div>
+              <h2 className="text-xl font-semibold dark:text-gray-100">Diariz</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{TAGLINE}</p>
+            </div>
+          </div>
+          {/* Help and the release notes are app routes, so they navigate IN PLACE. As `target="_blank"`
+              they left the app for the system browser, where the user is not signed in and both pages sit
+              behind the login - the same fault PanelModal and SettingsModal already record for the admin
+              panels, missed here. Closing the dialog on the way keeps it from sitting over the page it
+              just navigated to. GitHub is genuinely external and keeps its new tab. */}
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-4 text-sm">
+            <Link
+              to="/help"
+              onClick={onClose}
+              className="text-blue-600 hover:underline dark:text-blue-400"
+            >
+              {t("help:browseHelp")}
+            </Link>
+            <Link
+              to="/release-notes"
+              onClick={onClose}
+              className="text-blue-600 hover:underline dark:text-blue-400"
+            >
+              {t("releaseNotesLink")}
+            </Link>
+            <a
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline dark:text-blue-400"
+            >
+              {t("githubLink")}
+            </a>
           </div>
         </div>
 
@@ -40,34 +74,6 @@ export default function AboutModal({ onClose }: { onClose: () => void }) {
           className="chat-md mt-4 space-y-2 text-sm text-gray-700 dark:text-gray-300 [&_strong]:font-semibold"
           dangerouslySetInnerHTML={{ __html: renderMarkdown(CAPABILITIES) }}
         />
-
-        {/* Links */}
-        <div className="mt-4 flex flex-wrap gap-4 text-sm">
-          <a
-            href="/help"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 hover:underline dark:text-blue-400"
-          >
-            {t("help:browseHelp")}
-          </a>
-          <a
-            href="/release-notes"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 hover:underline dark:text-blue-400"
-          >
-            {t("releaseNotesLink")}
-          </a>
-          <a
-            href={GITHUB_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 hover:underline dark:text-blue-400"
-          >
-            {t("githubLink")}
-          </a>
-        </div>
 
         {/* Disclaimers */}
         <div className="mt-4 border-t pt-3 text-xs leading-relaxed text-gray-500 dark:border-gray-700 dark:text-gray-400">
