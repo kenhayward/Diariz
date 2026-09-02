@@ -78,7 +78,7 @@ See **[docs/features.md](docs/features.md)** for the full prose description of e
 | :--- | :--- | :--- |
 | API / auth / orchestration | ASP.NET Core (C#) + EF Core + SignalR | [src/Diariz.Api](src/Diariz.Api) |
 | Domain model + migrations | EF Core + Postgres/pgvector | [src/Diariz.Domain](src/Diariz.Domain) |
-| Transcription + diarization + voiceprints | Python: WhisperX (large-v3) + pyannote 3.1 + SpeechBrain ECAPA (GPU) | [src/Diariz.Worker](src/Diariz.Worker) |
+| Transcription + diarization + voiceprints | Python: WhisperX (large-v3) + pyannote 4 + SpeechBrain ECAPA (GPU) | [src/Diariz.Worker](src/Diariz.Worker) |
 | Web UI | React + TypeScript + Vite + Tailwind | [apps/web](apps/web) |
 | Desktop app | Electron thin shell — Windows system-tray + **macOS (beta) menu-bar** (first-run server config, mic + system audio, tray recording; auto-update on Windows, manual update check on macOS) | [apps/desktop](apps/desktop) |
 | Orchestration | docker-compose (postgres/pgvector, redis, minio) | [deploy](deploy) |

@@ -1,20 +1,28 @@
 # torch / torchaudio are installed from the CUDA wheel index in the Dockerfile.
-whisperx==3.3.1
+whisperx==3.8.6
 
-# Pin the Hugging Face libs to the pre-1.0 era. whisperx 3.3.1 leaves these
-# unpinned, so a fresh build otherwise drifts to the latest majors — but
-# huggingface_hub 1.0 (Oct 2025) dropped the `@validate_hf_hub_args` shim that
-# maps the `use_auth_token` kwarg pyannote.audio 3.3.2 still passes to
-# hf_hub_download, and transformers>=5 requires huggingface_hub>=1.0. So the 4.x
-# transformers line is the ceiling until pyannote stops passing use_auth_token.
+# whisperx 3.8 targets pyannote.audio 4, and that is the point of this pairing rather than an incidental
+# bump: the identical diarization pipeline on identical audio runs about 15x faster under pyannote 4
+# than under 3.3.2 (measured on one 60 s window: 35.6s -> 2.3s). Diarization is ~79% of what a live
+# chunk costs, so this is the difference between live transcription keeping up and pausing itself.
 #
-# 4.53.x is the lowest 4.x that clears every fixable transformers advisory
-# (the ReDoS/input-validation set, all first patched at <=4.53.0); it needs
-# huggingface_hub>=0.30,<1.0, and 0.35.3 is comfortably inside pyannote's
-# `huggingface-hub>=0.13.0`. The three remaining advisories need transformers>=5
-# and are dismissed as unreachable - they are all "attacker-controlled model
-# repo / malicious checkpoint" paths, and this worker only ever loads fixed,
-# server-configured models and never trains.
+# It also dissolves the constraint the old pins existed for. whisperx 3.3.1 + pyannote 3.3.2 passed
+# `use_auth_token` to hf_hub_download, which huggingface_hub 1.0 removed - so transformers and the hub
+# had to be held below their majors. pyannote 4 does not pass it, so those ceilings are no longer load
+# bearing; they are kept here only because whisperx 3.8.6 itself asks for `huggingface-hub<1.0.0`.
+pyannote.audio>=4.0.0
+
+# Still the pre-1.0 hub line, now because whisperx requires it rather than because pyannote does.
+#
+# transformers 5.x is therefore NOT available, and the block is arithmetic rather than caution:
+# transformers 5.10.0 requires `huggingface-hub>=1.5.0,<2.0`, and whisperx 3.8.6 requires
+# `huggingface-hub<1.0.0`. Checked against the published metadata of both, not inferred. A Dependabot
+# offer of transformers 5.x cannot be taken until whisperx lifts its hub cap - so decline it there
+# rather than trying it here.
+# transformers>=4.48 is whisperx's floor; 4.53.x remains the lowest 4.x clearing every fixable
+# advisory (the ReDoS/input-validation set, all first patched at <=4.53.0). The three that remain need
+# transformers>=5 and are dismissed as unreachable - all "attacker-controlled model repo / malicious
+# checkpoint" paths, and this worker only ever loads fixed, server-configured models and never trains.
 transformers==4.53.3
 huggingface_hub==0.35.3
 

@@ -33,7 +33,7 @@ infrastructure services.
 |---|---|---|---|
 | **API** | ASP.NET Core (**.NET 10**), EF Core, SignalR, AWS S3 SDK, MailKit, OpenIddict (OAuth AS) | `src/Diariz.Api` | Auth, orchestration, persistence, audio storage/streaming, summarisation + chat + action-extraction, SignalR notifications, OAuth 2.1 server for the MCP web connector |
 | **Domain** | EF Core + Npgsql + pgvector | `src/Diariz.Domain` | Entities, `DiarizDbContext`, migrations (compiled into the API) |
-| **Worker** | Python: WhisperX (large-v3), pyannote 3.1, SpeechBrain ECAPA, CUDA | `src/Diariz.Worker` | GPU transcription → alignment → diarization → per-speaker voiceprints |
+| **Worker** | Python: WhisperX (large-v3), pyannote 4, SpeechBrain ECAPA, CUDA | `src/Diariz.Worker` | GPU transcription → alignment → diarization → per-speaker voiceprints |
 | **Web** | React 19 + TypeScript + Vite + Tailwind v4 | `apps/web` | SPA UI (served by nginx in Docker); **installable as a PWA** in Chromium - the only app-like client on Linux, which has no desktop build |
 | **Desktop** | Electron thin shell - Windows tray + **macOS (beta) menu-bar** | `apps/desktop` | Mic + system audio (Windows loopback / macOS ScreenCaptureKit), tray recording; auto-update on Windows, manual update check on macOS; loads the web app from the server origin |
 | **n8n node** | TypeScript, zero runtime dependencies, MIT | `integrations/n8n-nodes-diariz` | Published npm package (`n8n-nodes-diariz`) installed into a **user's own n8n**, not deployed with Diariz: a self-registering webhook trigger and a full REST action node. **Mirrors `version.json`** so the node's number names the Diariz version it wraps. |
@@ -415,7 +415,7 @@ three-second window the case for that work is weak.
      `Recording.TranscriptionLanguage` ?? `UserSettings.TranscriptionLanguage` and mapped from the platform's BCP-47
      tag by `SupportedLanguages.ToWhisperCode` (Whisper does not know "pt-BR"); null = let Whisper detect it.
 3. **Transcribe.** The worker `XREADGROUP`s a job, downloads the blob from MinIO to a temp file, then runs
-   **WhisperX (large-v3)** → **word-alignment** → **pyannote 3.1 diarization** (honouring optional
+   **WhisperX (large-v3)** → **word-alignment** → **pyannote 4 diarization** (honouring optional
    min/max speaker hints) → optional **ECAPA per-speaker voiceprints** (SpeechBrain, 192-d, L2-normalised).
    It measures duration and rejects audio over `MAX_AUDIO_SECONDS`.
    - **Language.** A job's `Language` is passed to Whisper and skips its auto-detection. Detection reads the
@@ -3170,11 +3170,15 @@ the least likely to hold.
 
 ## GPU / worker notes
 
-The worker pins a **CUDA 12.8 (cu128)** torch stack so it runs on Blackwell / RTX 50-series (sm_120). Three
-non-obvious pins make whisperx 3.3.1 work (`ctranslate2==4.6.3`, `transformers==4.53.3` +
-`huggingface_hub==0.35.3`, and a `torch.load(weights_only=False)` shim for pyannote checkpoints). The Hugging
-Face pair is capped below `huggingface_hub` 1.0 / `transformers` 5.x: hub 1.0 dropped the shim that maps the
-`use_auth_token` kwarg pyannote.audio 3.3.2 still passes to `hf_hub_download`. Diarization
+The worker pins a **CUDA 12.8 (cu128)** torch stack so it runs on Blackwell / RTX 50-series (sm_120), and runs
+**whisperx 3.8.6 + pyannote.audio 4 + torch 2.8**. That pairing is a performance decision, not housekeeping:
+the same diarization pipeline on the same audio is **~17x faster** under pyannote 4 (32.1s -> 1.9s on a 60 s
+window), and diarization was ~79% of a live chunk's cost - so it is what makes the live transcript keep up.
+Still load-bearing: `ctranslate2==4.6.3` (sm_120; now a floor whisperx allows rather than a cap it forces),
+apt `libpython3.10` (torchcodec's native library), and the `torch.load(weights_only=False)` shim for the
+pyannote checkpoints. The `transformers` / `huggingface_hub` ceilings are no longer about pyannote - 3.3.2
+passing `use_auth_token` was what forced them - and remain only because whisperx 3.8.6 asks for
+`huggingface-hub<1.0.0`. Diarization
 is **gated on Hugging Face**: you must set `HF_TOKEN` and accept the pyannote 3.1 + segmentation-3.0 terms, or
 jobs fail. CPU-only is possible (`DEVICE=cpu COMPUTE_TYPE=int8`, slow). Models load **lazily and are cached**
 across jobs. Real working-set VRAM is ~9 GB during transcription (large-v3 + align + pyannote). See the README

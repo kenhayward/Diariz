@@ -93,9 +93,20 @@ def _get_diarizer():
             raise RuntimeError(
                 "HF_TOKEN is required for pyannote diarization. Set it and accept the "
                 "pyannote/speaker-diarization-3.1 model terms on Hugging Face.")
-        _diarize_model = whisperx.DiarizationPipeline(
-            use_auth_token=config.HF_TOKEN, device=config.DEVICE)
+        _diarize_model = _DiarizationPipeline(
+            model_name=config.DIARIZATION_MODEL, token=config.HF_TOKEN, device=config.DEVICE)
     return _diarize_model
+
+
+def _DiarizationPipeline(**kwargs):
+    """whisperx 3.8's diarization entry point, imported at call time.
+
+    Two things moved with the pyannote 4 upgrade and both are silent at import: it is no longer
+    re-exported as `whisperx.DiarizationPipeline` (it lives in `whisperx.diarize`), and `use_auth_token`
+    became `token`. Imported here rather than at module scope so the test suite - which stubs whisperx
+    wholesale - can substitute it without needing the real package."""
+    from whisperx.diarize import DiarizationPipeline
+    return DiarizationPipeline(**kwargs)
 
 
 def _get_embedder():

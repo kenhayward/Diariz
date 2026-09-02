@@ -46,6 +46,10 @@ class Config:
     # Gated so it degrades gracefully when off (the API simply skips identification).
     SAMPLE_RATE = 16000  # whisperx.load_audio resamples to 16 kHz
     ENABLE_SPEAKER_EMBEDDINGS = os.getenv("ENABLE_SPEAKER_EMBEDDINGS", "1") not in ("0", "false", "False", "")
+    # The pyannote pipeline used for diarization. community-1 was measured at the same speed as 3.1
+    # under pyannote 4 (2.39s vs 2.34s on a 60 s window), so 3.1 is kept as the known quantity -
+    # the 15x came from the pyannote/torch upgrade, not from changing pipeline.
+    DIARIZATION_MODEL = os.getenv("DIARIZATION_MODEL", "pyannote/speaker-diarization-3.1")
     EMBED_MODEL = os.getenv("EMBED_MODEL", "speechbrain/spkrec-ecapa-voxceleb")  # 192-d, Apache-2.0
     # Cap on pooled audio per speaker. Raised from 30 s so a hand-picked selection is actually used;
     # ECAPA on 120 s vs 30 s costs a rounding error on GPU and the vectors stay comparable with centroids

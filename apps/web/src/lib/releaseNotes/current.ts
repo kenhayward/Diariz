@@ -9,6 +9,19 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.266.0",
+    date: "2026-09-02",
+    pr: 730,
+    headline: "Live transcription stops falling behind",
+    summary:
+      "Live transcription has been running far too slowly on modest hardware - falling minutes behind and pausing itself mid-meeting rather than showing text that was already stale. The cause turned out not to be the transcription at all. Working out who is speaking was taking about four fifths of the work, and almost all of that was the age of the libraries doing it rather than the job itself.\n\nThe speech libraries are now current. On the same audio and the same graphics card, working out the speakers went from 32 seconds to under 2 - about seventeen times faster - and a half minute of meeting now takes around 5 seconds to process rather than 40. In a real meeting, text appears about 6 to 8 seconds after it is spoken, where before it could be minutes behind and often gave up entirely.\n\nNothing about how Diariz behaves has changed, and there is nothing to set up. The same models produce the same transcripts and the same speaker names - they simply run at a sensible speed. Machines that were comfortably keeping up will not notice; machines that were not should stop falling behind.",
+    changed: [
+      "Working out who is speaking is about **seventeen times faster** - and that was four fifths of the work behind a live transcript.",
+      "A half minute of meeting now takes roughly 5 seconds to process instead of 40, so the live transcript keeps up on hardware where it used to pause itself.",
+      "The speech libraries the transcription worker uses are now current. Same models, same transcripts, same speaker names - only faster.",
+    ],
+  },
+  {
     version: "0.265.11",
     date: "2026-09-02",
     pr: 732,

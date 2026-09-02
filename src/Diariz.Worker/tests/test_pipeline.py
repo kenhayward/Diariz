@@ -508,3 +508,30 @@ def test_window_helpers_consume_exactly_what_shape_segments_produces():
     # 3100 in window time, minus the 3000 of prepended overlap, plus the 30000 offset.
     assert shifted[0]["StartMs"] == 30100
     assert shifted[0]["EndMs"] == 33000
+
+
+def test_diarizer_is_built_against_the_pyannote_4_era_whisperx_api(monkeypatch):
+    """whisperx 3.8 moved diarization and renamed its auth kwarg. Both changes are silent at import.
+
+    `whisperx.DiarizationPipeline` is no longer re-exported at the top level - it lives in
+    `whisperx.diarize` - and `use_auth_token` became `token`. The first fails with an AttributeError on
+    the first job rather than at startup; the second would be accepted as an unexpected kwarg by
+    nothing at all, so it fails too. Neither is caught by importing the module, which is why this test
+    asserts the call rather than the import.
+    """
+    seen = {}
+
+    class FakePipeline:
+        def __init__(self, **kwargs):
+            seen.update(kwargs)
+
+    monkeypatch.setattr(pipeline, "_diarize_model", None, raising=False)
+    monkeypatch.setattr(pipeline.config, "HF_TOKEN", "hf-token")
+    monkeypatch.setattr(pipeline.config, "DEVICE", "cuda")
+    monkeypatch.setattr(pipeline, "_DiarizationPipeline", FakePipeline, raising=False)
+
+    pipeline._get_diarizer()
+
+    assert seen.get("token") == "hf-token", "whisperx 3.8 takes `token`, not `use_auth_token`"
+    assert seen.get("device") == "cuda"
+    assert "use_auth_token" not in seen
