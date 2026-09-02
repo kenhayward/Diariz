@@ -275,6 +275,10 @@ services:
       DEVICE: ${WORKER_DEVICE:-cuda}
       COMPUTE_TYPE: ${WORKER_COMPUTE_TYPE:-float16}
       WHISPER_MODEL: ${WHISPER_MODEL:-large-v3}
+      # Live chunks only: false skips diarization while the meeting runs. Diarization is ~79% of a
+      # live chunk's cost, so this is the escape hatch for a GPU that cannot keep up - live text with
+      # no speaker names. The full pass after Stop still diarizes the whole recording.
+      LIVE_DIARIZE: ${LIVE_DIARIZE:-true}
       # WhisperX transcription batch size. Lower it (8/4) to cut peak VRAM on smaller GPUs.
       BATCH_SIZE: ${BATCH_SIZE:-16}
       # Reject audio longer than this many seconds (0 = unlimited). 14400 = 4 h.

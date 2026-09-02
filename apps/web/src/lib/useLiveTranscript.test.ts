@@ -134,4 +134,19 @@ describe("nextLiveState", () => {
 
     expect(after).toBe(s);
   });
+
+  it("treats UNKNOWN as nobody, rather than as somebody called UNKNOWN", () => {
+    // With live diarization switched off (a slow GPU), every segment comes back attributed to
+    // "UNKNOWN" - that is the label the pipeline has always used for unattributed speech. Rendered
+    // literally it would put the word UNKNOWN above every line, which reads as a speaker's name and is
+    // worse than the honest blank the panel already handles.
+    const s = nextLiveState(fresh(), {
+      kind: "append",
+      recordingId: RECORDING,
+      sequence: 0,
+      segments: [{ ...seg(0, "nobody attributed", 0), speaker: "UNKNOWN" }],
+    });
+
+    expect(s.transcript.segments[0].speaker).toBeUndefined();
+  });
 });

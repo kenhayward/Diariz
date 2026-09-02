@@ -45,6 +45,14 @@ export function emptyLiveTranscript(recordingId: string): LiveTranscript {
 }
 
 /// Fold one append into the transcript. Idempotent per sequence, and order-independent.
+/// "UNKNOWN" is the pipeline's label for speech nobody was attributed to - what every segment carries
+/// when live diarization is switched off for a GPU that cannot keep up. Rendered literally it would put
+/// the word above every line and read as somebody's name, which is worse than the blank the panel
+/// already handles. Normalised here rather than in the component so it holds wherever segments enter.
+function withoutUnknownSpeaker(s: LiveSegment): LiveSegment {
+  return s.speaker && s.speaker !== "UNKNOWN" ? s : { ...s, speaker: undefined };
+}
+
 export function applyAppend(state: LiveTranscript, append: LiveAppend): LiveTranscript {
   // The hub is per user, not per recording, so events for another meeting reach this page too - a
   // running capture and a recording being read at the same time is an ordinary thing to do.
@@ -53,7 +61,7 @@ export function applyAppend(state: LiveTranscript, append: LiveAppend): LiveTran
   // Drop everything previously seen for this chunk, then take what arrived. A redelivery is then a
   // no-op and a correction replaces cleanly, however many lines it now has.
   const kept = state.segments.filter((s) => s.sequence !== append.sequence);
-  const merged = [...kept, ...append.segments].sort(
+  const merged = [...kept, ...append.segments.map(withoutUnknownSpeaker)].sort(
     (a, b) => a.startMs - b.startMs || a.endMs - b.endMs,
   );
 

@@ -36,6 +36,13 @@ class Config:
     # diarization and voiceprints are PyTorch and run on either backend unchanged.
     ASR_BACKEND = os.getenv("ASR_BACKEND", "whisperx")  # "whisperx" | "whisper"
     WHISPER_MODEL = os.getenv("WHISPER_MODEL", "large-v3")
+
+    # Whether a LIVE chunk is diarized. Measured on a 4070 Laptop, diarization is about 79% of what a
+    # live chunk costs - 22s of a 40s chunk - and every attempt to make it cheaper cost speaker identity
+    # anyway, so on a GPU that cannot keep up the honest choice is to stop doing it rather than to do it
+    # badly. Off means live text with no speaker names; the full pass at Stop still diarizes the whole
+    # recording, so nothing is lost permanently. Does not affect full-recording transcription.
+    LIVE_DIARIZE = os.getenv("LIVE_DIARIZE", "true").strip().lower() not in ("0", "false", "no")
     BATCH_SIZE = int(os.getenv("BATCH_SIZE", "16"))
     HF_TOKEN = os.getenv("HF_TOKEN", "")  # required for pyannote diarization
     # Reject audio longer than this many seconds (protects the GPU worker from huge uploads).

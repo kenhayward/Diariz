@@ -508,3 +508,58 @@ def test_window_helpers_consume_exactly_what_shape_segments_produces():
     # 3100 in window time, minus the 3000 of prepended overlap, plus the 30000 offset.
     assert shifted[0]["StartMs"] == 30100
     assert shifted[0]["EndMs"] == 33000
+
+
+def test_transcribe_window_can_skip_diarization(monkeypatch):
+    """The escape hatch for a GPU that cannot keep up.
+
+    Diarization is ~79% of what a live chunk costs (measured: 22s of a 40s chunk on a 4070 Laptop), and
+    every attempt to make it cheaper has cost speaker identity anyway. So the honest option is to make
+    it a choice: text now and no live speaker names, rather than names nobody sees because the
+    transcript paused. The full pass at Stop still diarizes the whole recording, so nothing is lost
+    permanently - only the live view goes without.
+
+    Skipping it must take the speaker EMBEDDINGS with it: they are produced from diarization's own
+    turns, and pooling them for a speaker that was never separated would hand the stitcher a vector
+    describing the whole room.
+    """
+    calls = {"diarize": 0, "speakers": 0}
+    monkeypatch.setattr(pipeline.config, "LIVE_DIARIZE", False)
+    monkeypatch.setattr(pipeline, "_asr", lambda audio, language: {
+        "language": "en",
+        "segments": [{"start": 0.0, "end": 2.0, "text": "hello", "words": []}]})
+    monkeypatch.setattr(pipeline, "_get_align", lambda lang: None)
+    monkeypatch.setattr(pipeline, "_diarize",
+                        lambda *a, **k: calls.__setitem__("diarize", calls["diarize"] + 1))
+    monkeypatch.setattr(pipeline, "_extract_speakers",
+                        lambda *a, **k: calls.__setitem__("speakers", calls["speakers"] + 1) or [])
+    monkeypatch.setattr(pipeline.whisperx, "load_audio",
+                        lambda path: np.zeros(int(1.0 * 16000), dtype="float32"))
+
+    out = pipeline.transcribe_window("ignored.webm", offset_ms=0, overlap_ms=0)
+
+    assert calls["diarize"] == 0, "diarization must not run when it is switched off"
+    assert calls["speakers"] == 0, "and neither must the per-speaker embeddings it feeds"
+    assert out["speakers"] == []
+    assert len(out["segments"]) == 1
+    assert out["segments"][0]["Speaker"] == "UNKNOWN", (
+        "a segment nobody was attributed to says so, rather than borrowing a label")
+
+
+def test_transcribe_window_diarizes_by_default(monkeypatch):
+    """On unless switched off: live speaker names are the point of phase 3."""
+    calls = {"diarize": 0}
+    monkeypatch.setattr(pipeline.config, "LIVE_DIARIZE", True)
+    monkeypatch.setattr(pipeline, "_asr", lambda audio, language: {
+        "language": "en", "segments": [{"start": 0.0, "end": 2.0, "text": "hello", "words": []}]})
+    monkeypatch.setattr(pipeline, "_get_align", lambda lang: None)
+    monkeypatch.setattr(pipeline, "_diarize",
+                        lambda *a, **k: calls.__setitem__("diarize", calls["diarize"] + 1) or "d")
+    monkeypatch.setattr(pipeline.whisperx, "assign_word_speakers", lambda d, r: r)
+    monkeypatch.setattr(pipeline, "_extract_speakers", lambda *a, **k: [])
+    monkeypatch.setattr(pipeline.whisperx, "load_audio",
+                        lambda path: np.zeros(int(1.0 * 16000), dtype="float32"))
+
+    pipeline.transcribe_window("ignored.webm", offset_ms=0, overlap_ms=0)
+
+    assert calls["diarize"] == 1

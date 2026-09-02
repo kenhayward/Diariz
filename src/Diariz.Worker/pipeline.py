@@ -266,15 +266,23 @@ def transcribe_window(audio_path: str, offset_ms: float = 0, overlap_ms: float =
             result = whisperx.align(asr["segments"], align_model, metadata, audio, config.DEVICE,
                                     return_char_alignments=False)
 
-    with telemetry.span("ai.diarize", "diarize"):
-        diarize_segments = _diarize(audio, None, None)
-        result = whisperx.assign_word_speakers(diarize_segments, result)
+    # Diarization is the expensive part of a live chunk by a wide margin, and it can be switched off
+    # (LIVE_DIARIZE) for a GPU that cannot keep up. The embeddings go with it rather than being computed
+    # anyway: they are pooled from diarization's own turns, so without it they would describe the whole
+    # room rather than one voice - a vector the stitcher would be worse off having.
+    if config.LIVE_DIARIZE:
+        with telemetry.span("ai.diarize", "diarize"):
+            diarize_segments = _diarize(audio, None, None)
+            result = whisperx.assign_word_speakers(diarize_segments, result)
 
     with telemetry.span("ai.shape", "shape"):
         segments = _shape_segments(result["segments"])
 
-    with telemetry.span("ai.embeddings", "embeddings"):
-        speakers = _extract_speakers(audio, segments)
+    if config.LIVE_DIARIZE:
+        with telemetry.span("ai.embeddings", "embeddings"):
+            speakers = _extract_speakers(audio, segments)
+    else:
+        speakers = []
 
     segments = _trim_to_window(segments, overlap_ms)
     segments = _offset_segments(segments, offset_ms, overlap_ms)
