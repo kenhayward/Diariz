@@ -9,6 +9,23 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.269.0",
+    date: "2026-09-03",
+    pr: 745,
+    headline: "Send the meeting you are in, or a capture from it, straight to the chat",
+    summary:
+      "The live notes panel gains a **Use in chat** button and a **Chat** button on every screen capture, so you can ask the assistant about a meeting while you are still in it without leaving the panel or copying anything out.\n\nUse in chat does not paste your transcript into the prompt. It hands the chat the recording itself, so every question you ask is answered against the transcript as it stands at that moment rather than a snapshot that went stale the second the meeting carried on. The server already knows a recording that is still running is unfinished and says so to the model, which is why it will not report an argument still in progress as settled. The pill stays put once attached, so a follow-up question needs no second press - and it deliberately stays after you stop, because \"summarise the meeting I just had\" is usually the next thing you want.\n\nCaptures reach the chat the same way, either from the button on the thumbnail or by dragging the thumbnail into the chat prompt. For that to work at all, a capture taken while the recording is streaming is now uploaded as you take it instead of waiting for you to press Stop. Nothing is lost if that upload fails - the capture stays where it was and goes up with the rest at the end, exactly as before.",
+    added: [
+      "**Use in chat** in the live notes panel puts the meeting you are recording into the chat prompt as sticky context, and confirms in place without closing the panel or moving your cursor.",
+      "A **Chat** button on every capture in the panel, and drag-to-chat from the thumbnail, so a slide can be asked about while it is still on screen.",
+      "A **Live meeting** pill in the chat composer, removable, that rides every question until you take it off.",
+    ],
+    changed: [
+      "Screen captures taken while a recording is streaming now upload as they are taken rather than waiting for Stop. A capture the server refuses is kept and sent with the rest at the end, as before.",
+      "Deleting a capture that has already uploaded now removes the server's copy too.",
+    ],
+  },
+  {
     version: "0.268.0",
     date: "2026-09-03",
     pr: 744,

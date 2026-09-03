@@ -491,6 +491,10 @@ export interface ShotView {
   id: string;
   capturedAtMs: number;
   thumb: Blob;
+  /// The id the server gave this capture, once it has one. Only a capture the server already holds can
+  /// be sent to the chat or dragged into it, because the chat references a capture by id and the server
+  /// loads its pixels from object storage - so this is what the Chat button is gated on.
+  serverId?: string;
 }
 
 /// A screen capture taken during a recording (desktop client only). capturedAtMs is the offset into the

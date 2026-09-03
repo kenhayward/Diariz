@@ -119,6 +119,7 @@ import Recorder, { MAX_LIVE_SCREENSHOTS } from "./Recorder";
 import { requestRecording } from "../lib/recordRequest";
 import { startSilenceWatcher } from "../lib/silenceWatcher";
 import { ToastProvider } from "../lib/toast";
+import { onChatLiveRecordingAttached, onChatScreenshotAttached } from "../lib/chatAttachments";
 
 // jsdom has no MediaRecorder; a minimal stub lets start() run without capturing real audio.
 class FakeMediaRecorder {
@@ -192,15 +193,27 @@ function expectOpaqueFloatingPanel(panel: HTMLElement) {
 /// It lives in its own file because capturing what is published means replacing `useNotesPopout`, and
 /// the recorder suite has a test that exercises the real one.
 let published: import("../lib/notesChannel").NotesState | null = null;
+/// The handlers the recorder gives the pop-out. Captured so a test can drive the RELAY path directly -
+/// the pop-out's messages arrive here, not through anything this window renders, so nothing on screen
+/// can stand in for them.
+let relayed: import("../lib/useNotesPopout").NotesPopoutHandlers | null = null;
 vi.mock("../lib/useNotesPopout", () => ({
-  useNotesPopout: ({ state }: { state: import("../lib/notesChannel").NotesState }) => {
+  useNotesPopout: ({
+    state,
+    handlers,
+  }: {
+    state: import("../lib/notesChannel").NotesState;
+    handlers: import("../lib/useNotesPopout").NotesPopoutHandlers;
+  }) => {
     published = state;
+    relayed = handlers;
     return { poppedOut: false, popOut: vi.fn(), notifyClosed: vi.fn() };
   },
 }));
 
 beforeEach(() => {
   published = null;
+  relayed = null;
   hubHandlers = null;
   hubFactory = () => ({
     start: () => Promise.resolve(),
@@ -280,5 +293,47 @@ describe("what the recorder publishes to the pop-out window", () => {
     act(() => hubHandlers!.onLiveTranscriptDegraded!({ recordingId: "live-10", sequence: 3 }));
 
     await waitFor(() => expect(published?.liveDegraded).toBe(true));
+  });
+});
+
+describe("what the recorder does with the pop-out's chat requests", () => {
+  it("sends nothing for a capture the server has not got", async () => {
+    // The pop-out decides whether to offer its Chat button from a published snapshot, so it can ask for
+    // a capture whose upload had not landed when that snapshot was taken. Acting on it would put an id
+    // the server cannot resolve into the chat, and the chat would answer about a capture that is not
+    // there. The pop-out's own button is inert for this case; this is the guard behind it.
+    (api.beginLive as Mock).mockResolvedValue({ id: "live-11", sessionId: "s11", status: "Live" });
+    const attached: unknown[] = [];
+    const off = onChatScreenshotAttached((shot) => attached.push(shot));
+    try {
+      render(<Recorder onUploaded={() => {}} />);
+      fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+      await screen.findByRole("button", { name: /^stop$/i });
+      await waitFor(() => expect(relayed).toBeTruthy());
+
+      act(() => relayed!.onShotToChat("a-capture-that-never-uploaded"));
+
+      expect(attached).toEqual([]);
+    } finally {
+      off();
+    }
+  });
+
+  it("relays the running meeting from the pop-out to the chat in this window", async () => {
+    (api.beginLive as Mock).mockResolvedValue({ id: "live-12", sessionId: "s12", status: "Live" });
+    const attached: string[] = [];
+    const off = onChatLiveRecordingAttached((id) => attached.push(id));
+    try {
+      render(<Recorder onUploaded={() => {}} />);
+      fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+      await screen.findByRole("button", { name: /^stop$/i });
+      await waitFor(() => expect(relayed).toBeTruthy());
+
+      act(() => relayed!.onTranscriptToChat());
+
+      expect(attached).toEqual(["live-12"]);
+    } finally {
+      off();
+    }
   });
 });

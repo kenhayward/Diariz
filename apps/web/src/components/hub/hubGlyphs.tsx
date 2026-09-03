@@ -56,3 +56,25 @@ export const IconCheck = ({ size }: { size?: number } = {}) => (
     <path d="M5 13l4 4L19 7" />
   </Glyph>
 );
+
+/// A speech bubble with an arrow leaving it: send this into the chat.
+export const IconChatArrow = ({ size }: { size?: number } = {}) => (
+  <Glyph size={size}>
+    <path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.4 8.9 8.9 0 0 1-3.9-.9L3 21l1.9-5.4a8.4 8.4 0 0 1-.9-3.8 8.4 8.4 0 0 1 8.5-8.4 8.4 8.4 0 0 1 8.5 8.4Z" />
+    <path d="M8.5 12h7M12.5 9l3 3-3 3" />
+  </Glyph>
+);
+
+/// A right arrow, for the capture overlay's Chat button where the bubble would be illegible at 11px.
+export const IconArrowRight = ({ size }: { size?: number } = {}) => (
+  <Glyph size={size}>
+    <path d="M5 12h13M13 6l6 6-6 6" />
+  </Glyph>
+);
+
+/// Six dots: the universal "this can be dragged" mark.
+export const IconGrip = ({ size }: { size?: number } = {}) => (
+  <Glyph size={size}>
+    <path d="M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01" />
+  </Glyph>
+);

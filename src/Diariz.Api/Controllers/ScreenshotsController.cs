@@ -88,8 +88,9 @@ public class ScreenshotsController : ControllerBase
         "thumbnail, which the client generates - the server does not resize. `capturedAtMs` positions it in " +
         "the transcript, so send the point in the recording rather than a wall-clock time.\n\n" +
         "Both blobs count against your storage quota, and the pair is capped by the platform's screenshot " +
-        "limit; either being exceeded returns 413. Captures can only be attached once the recording exists, " +
-        "which is why the desktop client holds mid-meeting captures until the audio has uploaded. Owner only.")]
+        "limit; either being exceeded returns 413. Captures can only be attached once the recording exists. " +
+        "Under a live session the recording exists from the first second, so the desktop client posts each " +
+        "capture as it is taken; without one it holds them until the audio has uploaded. Owner only.")]
     [RequestSizeLimit(50L * 1024 * 1024)]
     public async Task<ActionResult<ScreenshotDto>> Create(
         Guid recordingId,

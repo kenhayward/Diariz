@@ -4,6 +4,7 @@ import {
   loadPendingScreenshots,
   removePendingScreenshot,
   setPendingScreenshotsRecordingId,
+  setPendingScreenshotServerId,
   clearPendingScreenshots,
   type PendingShot,
 } from "./pendingScreenshots";
@@ -75,6 +76,32 @@ describe("pendingScreenshots", () => {
     const loaded = await loadPendingScreenshots("u-del");
     expect(loaded?.shots).toHaveLength(1);
     expect(loaded?.shots[0].id).toBe(second.id);
+  });
+
+  it("records that a capture is already on the server, without rewriting its neighbours", async () => {
+    // The serverId has to be DURABLE, not just in memory: a crash mid-meeting is recovered from this
+    // stash, and a recovered capture with no mark on it would be uploaded a second time and appear on
+    // the recording twice.
+    const a = shot(1_000);
+    const b = shot(2_000);
+    await addPendingScreenshot("u-server", a);
+    await addPendingScreenshot("u-server", b);
+
+    await setPendingScreenshotServerId("u-server", a.id, "srv-1");
+
+    const stash = await loadPendingScreenshots("u-server");
+    expect(stash?.shots.map((s) => s.serverId)).toEqual(["srv-1", undefined]);
+    // And the image data survived the update, rather than the record being replaced by a stub.
+    expect(stash?.shots[0].width).toBe(1920);
+    expect(await stash?.shots[0].full.arrayBuffer()).toEqual(await a.full.arrayBuffer());
+  });
+
+  it("ignores a serverId written for a capture that has already been deleted", async () => {
+    // The upload is fire-and-forget from the capture hot path, so it can land after the user has
+    // deleted the capture it belongs to. Re-creating the record would put a deleted capture back.
+    await setPendingScreenshotServerId("u-gone", "never-stashed", "srv-9");
+
+    expect(await loadPendingScreenshots("u-gone")).toBeNull();
   });
 
   it("updates only the recordingId without touching the stashed captures", async () => {

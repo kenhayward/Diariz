@@ -125,6 +125,10 @@ export interface MultiKeyedStash<T> {
   /// insertion order of the *primary* key, not capture order) - callers that care about order should
   /// sort by their own timestamp field after listing.
   list(key: string): Promise<T[]>;
+  /// One record by its primary key, or null when there is none. Reads a single record rather than
+  /// listing a key's whole set, which for a stash of image blobs is the difference between pulling one
+  /// capture into memory and pulling the meeting's worth.
+  get(primaryKey: string): Promise<T | null>;
   /// Delete exactly one record by its primary key.
   remove(primaryKey: string): Promise<void>;
   /// Delete every record whose index field equals `key`.
@@ -157,6 +161,9 @@ export function createMultiKeyedStash<T>(
           s.index(indexName).getAll(IDBKeyRange.only(key)),
         )) ?? []
       );
+    },
+    async get(primaryKey: string): Promise<T | null> {
+      return withStore<T>(dbName, storeName, upgrade, "readonly", (s) => s.get(primaryKey));
     },
     async remove(primaryKey: string): Promise<void> {
       await withStore(dbName, storeName, upgrade, "readwrite", (s) => s.delete(primaryKey));

@@ -22,7 +22,7 @@ vi.mock("../auth", () => ({
 
 import Workspace from "./Workspace";
 import { TOUR_STEPS } from "../lib/onboarding";
-import { attachScreenshotToChat } from "../lib/chatAttachments";
+import { attachLiveRecordingToChat, attachScreenshotToChat } from "../lib/chatAttachments";
 
 function renderWorkspace(initial = "/") {
   return render(
@@ -87,6 +87,17 @@ describe("Workspace", () => {
 
     expect(screen.getByText("CHAT").closest(".hidden")).toBeNull();
     expect(localStorage.getItem("diariz.panels.right")).toBe("true");
+  });
+
+  /// Same reveal for the running meeting sent over from the live notes panel. Its pill lands in the same
+  /// composer, and a "Use in chat" that appeared to do nothing would simply be pressed again.
+  it("expands the chat panel when the running meeting is sent to chat", () => {
+    renderWorkspace();
+    expect(screen.getByText("CHAT").closest(".hidden")).toBeTruthy();
+
+    act(() => attachLiveRecordingToChat("live-1"));
+
+    expect(screen.getByText("CHAT").closest(".hidden")).toBeNull();
   });
 
   it("expands the chat panel when requested", () => {

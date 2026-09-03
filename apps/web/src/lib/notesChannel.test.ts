@@ -50,6 +50,8 @@ const noopHandlers = {
   onDeleteShot: vi.fn(),
   onCapture: vi.fn(),
   onChangeArea: vi.fn(),
+  onShotToChat: vi.fn(),
+  onTranscriptToChat: vi.fn(),
   onClientClosed: vi.fn(),
 };
 
@@ -168,6 +170,36 @@ describe("notesChannel", () => {
     expect(handlers.onDeleteShot).toHaveBeenCalledWith("s1");
     expect(handlers.onCapture).toHaveBeenCalledTimes(1);
     expect(handlers.onChangeArea).toHaveBeenCalledTimes(1);
+  });
+
+  it("relays a capture and the running meeting to the host rather than attaching them itself", () => {
+    // Invisible when broken: chatAttachments is an in-TAB pub/sub, so publishing from the pop-out would
+    // reach no subscribers - the chat panel is in the other window - and silently do nothing.
+    const channel = makeBus();
+    const handlers = { ...noopHandlers, getState: () => state() };
+    createNotesHost(handlers, { channel: channel() });
+    const client = createNotesClient(
+      { onState: vi.fn(), onEnded: vi.fn(), onDisconnected: vi.fn() },
+      { channel: channel() },
+    );
+
+    client.shotToChat("shot-7");
+    client.transcriptToChat();
+
+    expect(handlers.onShotToChat).toHaveBeenCalledWith("shot-7");
+    expect(handlers.onTranscriptToChat).toHaveBeenCalledTimes(1);
+  });
+
+  it("publishes which recording is streaming, so the pop-out can say why a capture cannot be sent", () => {
+    const channel = makeBus();
+    createNotesHost(
+      { ...noopHandlers, getState: () => state({ liveRecordingId: "live-1" }) },
+      { channel: channel() },
+    );
+    const onState = vi.fn();
+    createNotesClient({ onState, onEnded: vi.fn(), onDisconnected: vi.fn() }, { channel: channel() });
+
+    expect(onState.mock.calls[0][0].liveRecordingId).toBe("live-1");
   });
 
   it("reports a disconnect after three unanswered pings", () => {

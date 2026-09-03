@@ -11,7 +11,7 @@ import { SelectionProvider } from "../lib/selection";
 import { MoveClipboardProvider } from "../lib/moveClipboard";
 import { useRoom } from "../lib/rooms";
 import { useResizableWidth } from "../lib/useResizableWidth";
-import { onChatScreenshotAttached } from "../lib/chatAttachments";
+import { onChatLiveRecordingAttached, onChatScreenshotAttached } from "../lib/chatAttachments";
 
 function usePersistedBool(key: string, fallback: boolean): [boolean, (v: boolean) => void] {
   const [value, setValue] = useState<boolean>(() => {
@@ -58,6 +58,11 @@ export default function Workspace() {
   // enough - re-subscribing on every render would only churn the listener set.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => onChatScreenshotAttached(() => setRightOpen(true)), []);
+
+  // Same reveal for the running meeting sent here from the live notes panel: its pill is in the same
+  // composer, and "Use in chat" that appeared to do nothing would just be pressed again.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => onChatLiveRecordingAttached(() => setRightOpen(true)), []);
 
   function startResize(e: React.MouseEvent) {
     e.preventDefault();

@@ -38,11 +38,37 @@ Your choice is remembered, and it is stored with a conversation when you save on
 you back on the model it was using. If your administrator later stops offering that model, the
 conversation falls back to the standard one rather than failing.
 
+## Asking about the meeting you are still in
+
+While a recording is running, the notes panel has a **Use in chat** button. Press it and the meeting is
+attached to the chat as a "Live meeting" pill, and you can ask about it without leaving the panel or
+copying anything out. The panel stays open and your cursor stays where it was, so you can carry on taking
+notes.
+
+What is attached is the meeting itself, not a copy of the transcript as it looked when you pressed the
+button. Every question you ask is answered against the transcript as it stands at that moment, and Diariz
+tells the model the meeting has not finished - so it will not tell you something was decided while the
+people in the room are still arguing about it.
+
+The pill stays until you take it off, so a second and third question need no second press. It also stays
+after you stop recording, which is deliberate: the same meeting is then a finished one, and "summarise
+what we just agreed" is usually the next thing you want. The X on the pill removes it.
+
+The button is only there when the transcript is running live. Without it there is nothing for the chat to
+read yet.
+
 ## Asking about a screenshot
 
 If a meeting has screen captures, there are two ways to put one in front of the model. Open the capture
 full size and click the speech-bubble button in its toolbar - "Add to chat context" - or, from the
-Screenshots section on the Notes tab, drag a thumbnail into the chat box. Either way it appears as a small
+Screenshots section on the Notes tab, drag a thumbnail into the chat box.
+
+**You can do this during the meeting too.** Every capture in the live notes panel has a small **Chat**
+button on its thumbnail, and the thumbnail itself can be dragged into the chat box, so you can ask about
+a slide while it is still on screen. A capture that has only just been taken may say "Still uploading"
+for a moment - it becomes available as soon as it has reached the server. If the recording is not
+streaming to the server at all, the button says the capture will be available once the recording is
+saved, which is at the moment you press Stop. Either way it appears as a small
 thumbnail above where you type. Ask your question as usual and the picture goes across with it, so you can
 ask what a diagram shows or have a slide read back to you.
 

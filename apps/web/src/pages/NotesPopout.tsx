@@ -114,6 +114,13 @@ export default function NotesPopout() {
           onEdit={(id, text) => client?.edit(id, text)}
           onDelete={(id) => client?.remove(id)}
           onDeleteShot={(id) => client?.removeShot(id)}
+          // Relayed, never done here. `chatAttachments` is an in-TAB pub/sub and the chat panel lives
+          // in the main window, so publishing from this one would reach no subscribers and silently do
+          // nothing - which is why this file must not import that module at all
+          // (asserted in bundleBoundary.test.ts).
+          onTranscriptToChat={live ? () => client?.transcriptToChat() : undefined}
+          onShotToChat={live ? (id) => client?.shotToChat(id) : undefined}
+          liveRecordingId={state.liveRecordingId}
           // Disabled rather than hidden: a note typed into a dead channel must not look accepted, but
           // the box vanishing would read as the notes themselves having gone.
           disabled={!live}

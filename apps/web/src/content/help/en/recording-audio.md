@@ -211,6 +211,11 @@ had already typed is safe.
 
 ## Choosing what gets captured
 
+While a recording is streaming to the server, each capture is sent up **as you take it** rather than
+waiting for you to press Stop. You will not notice it happening, and nothing is lost if it fails - the
+capture stays where it is and goes up with the rest at the end. What it buys you is that the capture can
+be sent to the chat during the meeting: see "Asking about a screenshot" in the chat help.
+
 Screenshots come from a capture area: a whole screen, or a rectangle you draw on one. Press the capture
 area button beside the screenshot count - in the notes panel or in the separate notes window - and an
 overlay covers every screen so you can drag out the part you want, or click a screen to take all of it.

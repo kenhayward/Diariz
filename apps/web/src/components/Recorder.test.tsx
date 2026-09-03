@@ -16,7 +16,7 @@ let hubFactory: (...args: unknown[]) => unknown = () => ({
 
 vi.mock("../lib/api", () => ({
   api: {
-    upload: vi.fn(), createNotes: vi.fn(), createScreenshot: vi.fn(),
+    upload: vi.fn(), createNotes: vi.fn(), createScreenshot: vi.fn(), deleteScreenshot: vi.fn(),
     renameRecording: vi.fn(), putCalendarLink: vi.fn(),
     // Live capture defaults to unavailable, so every pre-existing test exercises the fallback
     // path - which is exactly the behaviour that must not change.
@@ -38,6 +38,7 @@ vi.mock("../lib/pendingScreenshots", () => ({
   loadPendingScreenshots: vi.fn().mockResolvedValue(null),
   removePendingScreenshot: vi.fn().mockResolvedValue(undefined),
   setPendingScreenshotsRecordingId: vi.fn().mockResolvedValue(undefined),
+  setPendingScreenshotServerId: vi.fn().mockResolvedValue(undefined),
   clearPendingScreenshots: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../lib/uploadContext", () => ({ useUpload: () => ({ uploadFiles: vi.fn() }) }));
@@ -108,11 +109,13 @@ import {
   loadPendingScreenshots,
   removePendingScreenshot,
   setPendingScreenshotsRecordingId,
+  setPendingScreenshotServerId,
   clearPendingScreenshots,
 } from "../lib/pendingScreenshots";
 import type { PendingShot } from "../lib/pendingScreenshots";
 import Recorder, { MAX_LIVE_SCREENSHOTS } from "./Recorder";
 import { requestRecording } from "../lib/recordRequest";
+import { onChatLiveRecordingAttached, onChatScreenshotAttached } from "../lib/chatAttachments";
 import { startSilenceWatcher } from "../lib/silenceWatcher";
 import { ToastProvider } from "../lib/toast";
 
@@ -2639,5 +2642,244 @@ describe("Recorder overflow menu", () => {
 
     expect(row.getAttribute("title")).toBe("Set a capture area first");
     expect(row.getAttribute("aria-disabled")).toBe("true");
+  });
+});
+
+describe("captures under a live session go to the server as they are taken", () => {
+  // Without a live session the recording does not exist until Stop, so a capture has nowhere to go and
+  // waits in the stash exactly as it always did. With one, the recording exists from the first second -
+  // and a capture the server already holds is one the user can send to chat mid-meeting.
+  let emit: ((payload: unknown) => void) | null = null;
+  function installShell() {
+    emit = null;
+    (window as unknown as { diariz?: unknown }).diariz = {
+      canCaptureScreenshot: true,
+      onScreenshotCaptured: (cb: (payload: unknown) => void) => {
+        emit = cb;
+        return () => {
+          emit = null;
+        };
+      },
+    };
+  }
+  const capture = () =>
+    act(() => {
+      emit!({ full: new Uint8Array([1, 2, 3]), thumb: new Uint8Array([4]), width: 800, height: 600 });
+    });
+
+  async function startLive(id = "live-shot") {
+    (api.beginLive as Mock).mockResolvedValue({ id, sessionId: "s-shot", status: "Live" });
+    installShell();
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
+    (getStream as Mock).mockResolvedValue(fakeSession);
+    (api.upload as Mock).mockResolvedValue({ id: "rec-new" });
+    (api.createScreenshot as Mock).mockResolvedValue({ id: "srv-1" });
+    (api.deleteScreenshot as Mock).mockResolvedValue(undefined);
+    (api.putChunk as Mock).mockResolvedValue(undefined);
+    (api.finalizeLive as Mock).mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    delete (window as unknown as { diariz?: unknown }).diariz;
+    (api.beginLive as Mock).mockRejectedValue(new Error("no live"));
+  });
+
+  it("uploads a capture to the live recording once, and records the id it was given", async () => {
+    await startLive("live-9");
+
+    capture();
+
+    await waitFor(() => expect(api.createScreenshot).toHaveBeenCalledTimes(1));
+    expect((api.createScreenshot as Mock).mock.calls[0][0]).toBe("live-9");
+    await waitFor(() =>
+      expect(setPendingScreenshotServerId).toHaveBeenCalledWith("u1", expect.any(String), "srv-1"),
+    );
+  });
+
+  it("sends nothing to the server without a live session", async () => {
+    // The recording does not exist yet, so there is nothing to attach a capture to. It waits for Stop
+    // exactly as it always has.
+    (api.beginLive as Mock).mockRejectedValue(new Error("no live"));
+    installShell();
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+
+    capture();
+
+    await waitFor(() => expect(addPendingScreenshot).toHaveBeenCalledTimes(1));
+    expect(api.createScreenshot).not.toHaveBeenCalled();
+  });
+
+  it("uploads a burst of captures one at a time, in the order they were taken", async () => {
+    // Auto-capture can fire several in a second. Twenty concurrent multipart POSTs out of the capture
+    // hot path would compete with the audio chunks the same recording is streaming.
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const order: number[] = [];
+    (api.createScreenshot as Mock).mockImplementation(async (_id: string, shot: { capturedAtMs: number }) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      order.push(shot.capturedAtMs);
+      await Promise.resolve();
+      inFlight -= 1;
+      return { id: `srv-${order.length}` };
+    });
+    await startLive();
+
+    capture();
+    capture();
+    capture();
+
+    await waitFor(() => expect(api.createScreenshot).toHaveBeenCalledTimes(3));
+    expect(maxInFlight).toBe(1);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+
+  it("leaves a capture the server refused in the stash, for attach-on-stop to retry", async () => {
+    // A 413 (the recording is at its screenshot quota) or a network blip must not lose the capture.
+    // The existing attach-on-stop path and its retry banner already cover exactly this.
+    (api.createScreenshot as Mock).mockRejectedValueOnce(new Error("413"));
+    await startLive();
+
+    capture();
+
+    await waitFor(() => expect(api.createScreenshot).toHaveBeenCalledTimes(1));
+    expect(setPendingScreenshotServerId).not.toHaveBeenCalled();
+    expect(addPendingScreenshot).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips a recovered capture the server already has, and sends the ones it does not", async () => {
+    // This is the case the persisted serverId exists for. A crash mid-meeting is recovered from the
+    // stash; a recovered capture with no mark on it would be posted a second time and appear on the
+    // recording twice. Nothing else in the attach path can tell the two apart.
+    (loadPendingRecording as Mock).mockResolvedValue(pending);
+    (api.upload as Mock).mockResolvedValue({ id: "rec-recovered" });
+    (loadPendingScreenshots as Mock).mockResolvedValue({
+      userId: "u1",
+      recordingId: null,
+      updatedAt: Date.now(),
+      shots: [
+        { id: "sent", capturedAtMs: 1_000, width: 8, height: 6, full: new Blob(["a"]), thumb: new Blob(["b"]), serverId: "srv-already" },
+        { id: "unsent", capturedAtMs: 2_000, width: 8, height: 6, full: new Blob(["c"]), thumb: new Blob(["d"]) },
+      ],
+    });
+    try {
+      render(<Recorder onUploaded={() => {}} />);
+      fireEvent.click(await screen.findByRole("button", { name: /upload now/i }));
+
+      await waitFor(() => expect(api.createScreenshot).toHaveBeenCalledTimes(1));
+      expect((api.createScreenshot as Mock).mock.calls[0][1]).toMatchObject({ capturedAtMs: 2_000 });
+      // The one the server already holds is dropped from the stash rather than left there forever.
+      await waitFor(() => expect(removePendingScreenshot).toHaveBeenCalledWith("u1", "sent"));
+      // `attachProgress` counts this same filtered array, so "uploading screenshots 1/2" for one real
+      // upload cannot happen while this holds - they are the same variable, not two that agree.
+    } finally {
+      (loadPendingScreenshots as Mock).mockResolvedValue(null);
+      (loadPendingRecording as Mock).mockResolvedValue(null);
+    }
+  });
+
+  it("removes the server's copy when an uploaded capture is deleted", async () => {
+    await startLive("live-del");
+    capture();
+    await waitFor(() => expect(api.createScreenshot).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(await screen.findByRole("button", { name: /delete screenshot/i }));
+
+    await waitFor(() => expect(api.deleteScreenshot).toHaveBeenCalledWith("live-del", "srv-1"));
+  });
+
+  it("deletes nothing on the server for a capture that never got there", async () => {
+    (api.createScreenshot as Mock).mockRejectedValueOnce(new Error("413"));
+    await startLive();
+    capture();
+    await waitFor(() => expect(api.createScreenshot).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(await screen.findByRole("button", { name: /delete screenshot/i }));
+
+    expect(api.deleteScreenshot).not.toHaveBeenCalled();
+  });
+});
+
+describe("the recorder is what actually reaches the chat", () => {
+  // The popover calls these directly and the pop-out relays them here over the channel, so both routes
+  // land on the same two functions. What they must get right is the PAIR: the chat addresses a capture
+  // as {recordingId, screenshotId} and the server loads its pixels from object storage, so sending the
+  // panel's own id - which is what the pop-out knows the capture by - would reference nothing.
+  let emit: ((payload: unknown) => void) | null = null;
+  function installShell() {
+    emit = null;
+    (window as unknown as { diariz?: unknown }).diariz = {
+      canCaptureScreenshot: true,
+      onScreenshotCaptured: (cb: (payload: unknown) => void) => {
+        emit = cb;
+        return () => {
+          emit = null;
+        };
+      },
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
+    (getStream as Mock).mockResolvedValue(fakeSession);
+    (api.upload as Mock).mockResolvedValue({ id: "rec-new" });
+    (api.createScreenshot as Mock).mockResolvedValue({ id: "srv-1" });
+    (api.putChunk as Mock).mockResolvedValue(undefined);
+    (api.beginLive as Mock).mockResolvedValue({ id: "live-7", sessionId: "s7", status: "Live" });
+  });
+
+  afterEach(() => {
+    delete (window as unknown as { diariz?: unknown }).diariz;
+    (api.beginLive as Mock).mockRejectedValue(new Error("no live"));
+  });
+
+  it("puts the running meeting into the chat as an id, not as pasted text", async () => {
+    const attached: string[] = [];
+    const off = onChatLiveRecordingAttached((id) => attached.push(id));
+    try {
+      render(<Recorder onUploaded={() => {}} />);
+      fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+      await screen.findByTestId("notes-popover");
+
+      fireEvent.click(await screen.findByRole("button", { name: /use in chat/i }));
+
+      expect(attached).toEqual(["live-7"]);
+    } finally {
+      off();
+    }
+  });
+
+  it("sends a capture as the recording-and-server-id pair the chat can resolve", async () => {
+    const attached: { recordingId: string; screenshotId: string }[] = [];
+    const off = onChatScreenshotAttached((shot) => attached.push(shot));
+    try {
+      installShell();
+      render(<Recorder onUploaded={() => {}} />);
+      fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+      await screen.findByTestId("notes-popover");
+      act(() => {
+        emit!({ full: new Uint8Array([1]), thumb: new Uint8Array([2]), width: 8, height: 6 });
+      });
+      await waitFor(() => expect(api.createScreenshot).toHaveBeenCalledTimes(1));
+
+      fireEvent.click(await screen.findByRole("button", { name: /^chat$/i }));
+
+      // "srv-1", not the browser-minted capture id the panel addresses it by.
+      expect(attached).toEqual([{ recordingId: "live-7", screenshotId: "srv-1" }]);
+    } finally {
+      off();
+    }
   });
 });

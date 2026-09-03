@@ -1417,6 +1417,22 @@ row per capture; entity in `src/Diariz.Domain/Entities/MeetingScreenshot.cs`, mi
 button in the web app itself - all three funnel through the same main-process `captureScreenshot()`, which
 is a no-op unless a recording is actually running (`canCapture(recorder)`).
 
+**When a capture reaches the server depends on whether the meeting is streaming.** A capture is only
+attachable once the recording row exists. Without a live session that is not until the audio uploads at
+Stop, so captures wait in an IndexedDB stash and `attachScreenshots` posts them afterwards. **Under a live
+session the recording exists from the first second**, so `Recorder.addLiveShot` posts each capture as it is
+taken, records the returned id as `PendingShot.serverId`, and `attachScreenshots` skips anything carrying
+one. That `serverId` is **persisted in the stash, not merely held in memory** — a crash mid-meeting is
+recovered from the stash, and a recovered capture with no mark on it would be posted a second time and
+appear on the recording twice. The uploads are fire-and-forget from the capture hot path but strictly
+sequential (a promise chain), because auto-capture can fire several a second and twenty concurrent
+multipart POSTs would compete with the audio chunks the same recording is streaming. A failure leaves
+`serverId` unset, which simply puts the capture back on the attach-on-stop path and its existing retry
+banner. Deleting an uploaded capture also deletes the server's copy. This is what makes the live notes
+panel's per-capture **Chat** button and drag-to-chat possible at all: the chat addresses a capture as
+`{recordingId, screenshotId}` and the server loads its pixels from object storage, so a capture that is
+still only a blob in the browser has nothing to reference.
+
 **Capture-area contract: main owns the capture and the area, the renderer owns the pause-aware clock.**
 `apps/desktop/src/main.js` picks the target and grabs the pixels - it has no idea what time it is in the
 meeting. On the **first** capture of a recording it opens a full-screen overlay per display
@@ -3157,7 +3173,8 @@ the least likely to hold.
   The two windows talk over a **`BroadcastChannel("diariz.live-notes")`**, which is origin-scoped, so being
   same-origin is the whole of the auth story. The **main window is the host**: it owns the recorder, the note
   lines, the capture stash and the recorded clock. The pop-out is a remote control — it sends
-  `add`/`edit`/`delete`/`deleteShot`/`capture`/`changeArea`/`toggle-auto-capture` and receives a whole-state
+  `add`/`edit`/`delete`/`deleteShot`/`capture`/`changeArea`/`toggle-auto-capture`/`shotToChat`/`transcriptToChat`
+  and receives a whole-state
   snapshot back. It **never stamps a timestamp**: `capturedAtMs` is pause-aware and produced only by the host.
   The `add` message carries an **optional `atMs`**, which is a *request* for a moment rather than a stamp —
   it is how the pop-out pins a note to a transcript line said earlier, and the host still writes the value.
@@ -3181,6 +3198,14 @@ the least likely to hold.
   pure `lib/notesStream.ts` into one timeline ordered by `atMs`, with the composer docked beneath it. The
   merge is **recomputed, never appended to** — `useLiveTranscript` replaces its segment array wholesale on
   every append, so an accumulated list would duplicate corrected lines and strand deleted ones.
+  **`shotToChat` / `transcriptToChat` are relayed, not acted on in the pop-out**, and this is the one place
+  where getting it wrong is completely silent: `lib/chatAttachments.ts` is an in-**tab** subscriber set (a
+  plain module-level pub/sub, deliberately not a BroadcastChannel), and the pop-out is a second
+  `BrowserWindow` with its own module registry and no chat panel in it — so publishing there reaches an
+  empty set and does nothing at all, with no error and a button that looks like it worked. Importing that
+  module into `pages/NotesPopout.tsx` compiles, type-checks and passes every other test, so the module
+  graph is asserted directly in `lib/chatAttachmentsBoundary.test.ts`. The host resolves a capture's
+  **server** id from its panel id before attaching — the pop-out only ever knows the latter.
 
 ## GPU / worker notes
 

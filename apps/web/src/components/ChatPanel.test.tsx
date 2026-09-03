@@ -36,7 +36,7 @@ vi.mock("../lib/api", () => ({
 import { api } from "../lib/api";
 import { fromPrompt } from "../lib/formulaTemplate";
 import ChatPanel from "./ChatPanel";
-import { attachScreenshotToChat, attachTextToChat } from "../lib/chatAttachments";
+import { attachLiveRecordingToChat, attachScreenshotToChat, attachTextToChat } from "../lib/chatAttachments";
 
 const sharedRoom: RoomListItem = {
   id: "room-s", name: "Engineering", kind: 1, icon: null, color: null,
@@ -1177,5 +1177,119 @@ describe("ChatPanel - attached text is kept in the thread", () => {
 
       expect(api.chatAttachmentFromLibrary).not.toHaveBeenCalled();
     });
+  });
+});
+
+
+describe("ChatPanel - the running meeting as context", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mock(api.listRecordings).mockResolvedValue([rec("rec-1", "Standup")]);
+    mock(api.getUserSettings).mockResolvedValue({
+      apiBase: null, model: "gpt-oss", hasApiKey: false, defaultApiBase: null, defaultModel: "gpt-oss",
+      contextWindow: 131072, chatModel: "test-model", chatModelId: null,
+    });
+    mock(api.listChatModels).mockResolvedValue(CHAT_MODELS);
+    mock(api.listChatConversations).mockResolvedValue([]);
+    mock(api.chatStream).mockImplementation(async (_body: any, h: any) => {
+      h.onToken("ok");
+      return { model: "gpt-oss", contextUsed: 1, contextTotal: 100 };
+    });
+  });
+
+  async function renderReady(route = "/recordings/rec-1") {
+    renderPanel(route);
+    await waitFor(() => expect(api.listChatModels).toHaveBeenCalled());
+  }
+
+  async function ask(text: string) {
+    const box = screen.getByLabelText("Chat message");
+    await act(async () => {
+      fireEvent.focus(box);
+      fireEvent.change(box, { target: { value: text } });
+      fireEvent.click(screen.getByRole("button", { name: /^send$/i }));
+    });
+  }
+
+  it("shows a pill once the running meeting is attached", async () => {
+    await renderReady();
+
+    act(() => attachLiveRecordingToChat("live-1"));
+
+    expect(await screen.findByText(/live meeting/i)).toBeTruthy();
+  });
+
+  it("sends the live recording id with the next question", async () => {
+    // The id, not a paste of the transcript. The server resolves it at the moment the question is asked
+    // and frames a recording still in progress as unfinished, so what the model reads is current.
+    await renderReady("/");
+    act(() => attachLiveRecordingToChat("live-1"));
+
+    await ask("what have we agreed so far");
+
+    expect(api.chatStream).toHaveBeenCalledWith(
+      expect.objectContaining({ recordingIds: ["live-1"] }),
+      expect.anything(),
+    );
+  });
+
+  it("sends the id exactly once when it is also the recording being viewed", async () => {
+    // Otherwise the same meeting would be loaded twice into a context budget it is already filling.
+    await renderReady("/recordings/rec-1");
+    act(() => attachLiveRecordingToChat("rec-1"));
+
+    await ask("anything");
+
+    const sent = (api.chatStream as unknown as { mock: { calls: any[][] } }).mock.calls[0][0];
+    expect(sent.recordingIds).toEqual(["rec-1"]);
+  });
+
+  it("rides every turn until it is removed", async () => {
+    // Sticky like the screenshot tray: someone asking three questions about the meeting they are in
+    // should not have to re-attach it between each one.
+    await renderReady("/");
+    act(() => attachLiveRecordingToChat("live-1"));
+
+    await ask("first");
+    await ask("second");
+
+    const calls = (api.chatStream as unknown as { mock: { calls: any[][] } }).mock.calls;
+    expect(calls).toHaveLength(2);
+    expect(calls[1][0].recordingIds).toEqual(["live-1"]);
+  });
+
+  it("drops it from the next question once removed", async () => {
+    await renderReady("/");
+    act(() => attachLiveRecordingToChat("live-1"));
+    expect(await screen.findByText(/live meeting/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /remove the live meeting/i }));
+    await ask("after removal");
+
+    const sent = (api.chatStream as unknown as { mock: { calls: any[][] } }).mock.calls[0][0];
+    expect(sent.recordingIds).toEqual([]);
+  });
+
+  it("attaching the same meeting twice leaves one pill", async () => {
+    await renderReady("/");
+
+    act(() => attachLiveRecordingToChat("live-1"));
+    act(() => attachLiveRecordingToChat("live-1"));
+
+    expect(screen.getAllByText(/live meeting/i)).toHaveLength(1);
+  });
+
+  it("keeps sending the meeting after it has ended", async () => {
+    // Deliberately not cleared when the recording stops. The same id is then a finished recording, the
+    // server drops the in-progress framing on its own, and "tell me about the meeting I just had" is
+    // the natural next question rather than a new attachment gesture.
+    await renderReady("/");
+    act(() => attachLiveRecordingToChat("live-1"));
+
+    await ask("mid-meeting");
+    await ask("after it stopped");
+
+    const calls = (api.chatStream as unknown as { mock: { calls: any[][] } }).mock.calls;
+    expect(calls[1][0].recordingIds).toEqual(["live-1"]);
   });
 });

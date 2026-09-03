@@ -1,9 +1,10 @@
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import CaptureControls from "./CaptureControls";
 import { CaptureRow, NoteRow, TranscriptRow, useShotPreviews } from "./notesStreamRows";
 import { buildStream, stampColumnPx, streamCounts, type StreamFilter } from "../../lib/notesStream";
 import { formatDuration } from "../../lib/format";
+import { IconChatArrow, IconCheck } from "./hubGlyphs";
 import type { LiveSegment, LiveTranscript } from "../../lib/liveTranscript";
 import type { MeetingNote, ShotView } from "../../lib/types";
 
@@ -43,11 +44,25 @@ export type LiveNotesStreamProps = {
   /// `popover` is the 400px inline panel (fixed 300px stream, 13px input, smaller thumbnails); `window`
   /// is the detached one, where the stream takes the height that is going spare.
   variant: "popover" | "window";
-  /// The left end of the action row. Empty in PR A; "Use in chat" lands here.
+  /// An extra control at the left end of the action row, beside "Use in chat".
   actionSlot?: ReactNode;
-  /// The right end of the status line, for a transient confirmation.
+  /// An extra element at the right end of the status line, beside the capture confirmation.
   statusSlot?: ReactNode;
+  /// Put the running meeting into the chat prompt. Absent hides the button entirely - without a live
+  /// session there is no server-side transcript to reference, exactly as the Transcript tab used to be
+  /// hidden when nothing was being transcribed.
+  onTranscriptToChat?: () => void;
+  /// Put one capture into the chat prompt, by the id it carries in this panel.
+  onShotToChat?: (id: string) => void;
+  /// The recording currently streaming, when there is one. Gates the drag payload and decides which of
+  /// the two reasons a capture's Chat button gives when it cannot act.
+  liveRecordingId?: string;
 };
+
+/// How long a confirmation stays before the control comes back. Long enough to be read without looking
+/// for it, short enough that the button is there again before the next thought.
+const TRANSCRIPT_SENT_MS = 2_600;
+const CAPTURE_SENT_MS = 2_400;
 
 const VARIANTS = {
   popover: { streamHeight: 300, inputFontSize: 13, thumbWidth: 150, thumbHeight: 84, autoFocus: true },
@@ -91,6 +106,9 @@ export default function LiveNotesStream({
   variant,
   actionSlot,
   statusSlot,
+  onTranscriptToChat,
+  onShotToChat,
+  liveRecordingId,
 }: LiveNotesStreamProps) {
   const { t } = useTranslation("workspace");
   const { t: tr } = useTranslation("recordings");
@@ -133,6 +151,23 @@ export default function LiveNotesStream({
     if (el) wasAtTail.current = el.scrollTop + el.clientHeight >= el.scrollHeight - TAIL_SLACK_PX;
   }
 
+  // ---- Confirmations ----
+
+  // Transient, and cleared on unmount: the panel is a popover the user can close mid-confirmation, and a
+  // timer writing to a gone component is exactly the update React complains about.
+  const [transcriptSent, setTranscriptSent] = useState(false);
+  const [captureSent, setCaptureSent] = useState(false);
+  useEffect(() => {
+    if (!transcriptSent) return;
+    const id = setTimeout(() => setTranscriptSent(false), TRANSCRIPT_SENT_MS);
+    return () => clearTimeout(id);
+  }, [transcriptSent]);
+  useEffect(() => {
+    if (!captureSent) return;
+    const id = setTimeout(() => setCaptureSent(false), CAPTURE_SENT_MS);
+    return () => clearTimeout(id);
+  }, [captureSent]);
+
   // ---- Composer ----
 
   function pin(atMs: number) {
@@ -149,6 +184,11 @@ export default function LiveNotesStream({
     // the same old moment, which is the one mistake this control can make invisibly.
     setPinnedAtMs(null);
   }
+
+  // Hidden without a live transcript, exactly as the Transcript tab used to be: with no live session
+  // there is no server-side transcript for the chat to reference, so the button would attach a meeting
+  // the model can read nothing of.
+  const canSendTranscript = Boolean(onTranscriptToChat && liveTranscript);
 
   const status = liveDegraded
     ? { short: tr("liveStatusPaused"), long: tr("liveTranscriptDegraded") }
@@ -178,8 +218,32 @@ export default function LiveNotesStream({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: variant === "window" ? 1 : undefined }}>
-      {(actionSlot || capture) && (
+      {(actionSlot || capture || canSendTranscript) && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 14px 8px" }}>
+          {/* Replaced in place by its own confirmation rather than confirming somewhere else: the user is
+              looking at the button they just pressed, and the panel deliberately does not close or move
+              focus to the chat - they are in a meeting. */}
+          {canSendTranscript &&
+            (transcriptSent ? (
+              <span role="status" style={{ ...actionPill, ...sentPill }}>
+                <IconCheck size={14} />
+                {t("notesTranscriptSent")}
+              </span>
+            ) : (
+              <button
+                type="button"
+                className="hub-tags-pill"
+                title={t("notesUseInChatHint")}
+                onClick={() => {
+                  onTranscriptToChat?.();
+                  setTranscriptSent(true);
+                }}
+                style={{ ...actionPill, border: "1px solid var(--hub-blue-soft-border)", color: "var(--hub-blue-text)", cursor: "pointer" }}
+              >
+                <IconChatArrow size={15} />
+                {t("notesUseInChat")}
+              </button>
+            ))}
           {actionSlot}
           {capture && (
             <div style={{ marginLeft: "auto" }}>
@@ -290,6 +354,15 @@ export default function LiveNotesStream({
                 thumbWidth={v.thumbWidth}
                 thumbHeight={v.thumbHeight}
                 onDelete={onDeleteShot}
+                liveRecordingId={liveRecordingId}
+                onToChat={
+                  onShotToChat
+                    ? (id) => {
+                        onShotToChat(id);
+                        setCaptureSent(true);
+                      }
+                    : undefined
+                }
               />
             );
           })
@@ -331,7 +404,14 @@ export default function LiveNotesStream({
             >
               {status.short}
             </span>
-            <span style={{ marginLeft: "auto" }}>{statusSlot}</span>
+            <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+              {captureSent && (
+                <span role="status" style={{ fontSize: 11, fontWeight: 600, color: "var(--hub-green-text)" }}>
+                  {t("notesCaptureSent")}
+                </span>
+              )}
+              {statusSlot}
+            </span>
           </div>
         )}
 
@@ -408,6 +488,26 @@ export default function LiveNotesStream({
     </div>
   );
 }
+
+const actionPill: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 7,
+  height: 30,
+  padding: "0 11px",
+  borderRadius: 9,
+  fontSize: 12,
+  fontWeight: 600,
+  background: "var(--hub-blue-soft-bg)",
+  border: "1px solid var(--hub-blue-soft-border)",
+  color: "var(--hub-blue-text)",
+};
+
+const sentPill: React.CSSProperties = {
+  background: "var(--hub-green-soft-bg)",
+  border: "1px solid var(--hub-green-soft-border)",
+  color: "var(--hub-green-text)",
+};
 
 const stampBadge: React.CSSProperties = {
   flexShrink: 0,

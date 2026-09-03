@@ -764,5 +764,14 @@
   "notesPinToMoment": "Écrire une note sur ce moment",
   "notesUnpin": "Suivre de nouveau l'horloge",
   "notesEnterHint": "Appuyez sur Entrée pour enregistrer la note",
-  "notesFilterLabel": "Filtrer le flux"
+  "notesFilterLabel": "Filtrer le flux",
+  "notesUseInChat": "Utiliser dans le chat",
+  "notesUseInChatHint": "Envoyer tout ce qui a été transcrit jusqu'ici au chat comme contexte",
+  "notesTranscriptSent": "Transcription envoyée au chat",
+  "notesCaptureChat": "Chat",
+  "notesCaptureChatHint": "Ajouter cette capture au chat",
+  "notesCaptureSent": "Capture ajoutée au chat",
+  "notesCaptureChatUploading": "Envoi en cours",
+  "notesCaptureChatNoLive": "Disponible une fois l'enregistrement sauvegardé",
+  "notesDragToChat": "glisser vers le chat"
 }

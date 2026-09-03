@@ -23,6 +23,14 @@ export interface PendingShot {
   height: number;
   full: Blob;
   thumb: Blob;
+  /// The id the server gave this capture, once it has been uploaded. Set only under a live session,
+  /// where the recording already exists and a capture can be sent as it is taken rather than waiting
+  /// for the audio upload at Stop.
+  ///
+  /// Persisted rather than kept in memory, and that is the whole point of it: a crash mid-meeting is
+  /// recovered from this stash, and a recovered capture with no mark on it would be uploaded a second
+  /// time and appear on the recording twice.
+  serverId?: string;
 }
 
 /// A capture as stored in the item store: the same fields as `PendingShot`, plus the user id used to
@@ -82,6 +90,22 @@ export async function loadPendingScreenshots(userId: string): Promise<PendingScr
 export async function removePendingScreenshot(userId: string, id: string): Promise<void> {
   void userId; // primary key (id) already uniquely identifies the record; kept for a symmetric call shape
   await itemsStash.remove(id);
+}
+
+/// Mark one stashed capture as already uploaded, writing that one record rather than the whole set.
+///
+/// A no-op when the capture is no longer stashed. The upload is fire-and-forget from the capture hot
+/// path, so its result can land after the user has deleted the capture it belongs to - and putting the
+/// record back would resurrect a capture they got rid of.
+export async function setPendingScreenshotServerId(
+  userId: string,
+  id: string,
+  serverId: string,
+): Promise<void> {
+  void userId; // the primary key already identifies the record; kept for a symmetric call shape
+  const stored = await itemsStash.get(id);
+  if (!stored) return;
+  await itemsStash.add({ ...stored, serverId });
 }
 
 /// Update just the recordingId meta (set once the audio has uploaded but the attach failed, so a retry
