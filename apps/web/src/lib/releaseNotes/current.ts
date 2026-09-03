@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.270.4",
+    date: "2026-09-03",
+    pr: 754,
+    headline: "A long meeting no longer gets heavier as it goes",
+    summary:
+      "Live transcription was doing work proportional to the whole meeting every time a new piece of transcript arrived, on both sides. The server renumbered every line it had ever written; the browser downloaded the entire recording - speakers, action items, the calendar link, the summary, the minutes - to draw a handful of new lines. Neither showed up on a short meeting, and both got steadily heavier on a long one.\n\nBoth now do work proportional to what has just arrived instead. Nothing about the transcript looks or behaves differently; it simply stops costing more as the meeting runs on.\n\nThis is groundwork. It is what makes it safe to send transcript up in much smaller pieces, which is the change that will actually bring the live text closer to the moment it was said.",
+    fixed: [
+      "Live transcription renumbered every line of the transcript each time a new piece arrived, and the browser refetched the entire recording to render it - so a ninety-minute meeting cost far more per update than a five-minute one.",
+    ],
+  },
+  {
     version: "0.270.3",
     date: "2026-09-03",
     pr: 752,

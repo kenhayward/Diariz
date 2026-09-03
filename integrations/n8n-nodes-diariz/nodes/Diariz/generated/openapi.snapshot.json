@@ -1842,6 +1842,70 @@
         ],
         "type": "object"
       },
+      "LiveTranscriptDto": {
+        "properties": {
+          "recordingId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/LiveTranscriptLineDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "recordingId",
+          "segments"
+        ],
+        "type": "object"
+      },
+      "LiveTranscriptLineDto": {
+        "properties": {
+          "endMs": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "speaker": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "speakerIsSuggestion": {
+            "type": "boolean"
+          },
+          "startMs": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "startMs",
+          "endMs",
+          "text",
+          "speaker",
+          "speakerIsSuggestion"
+        ],
+        "type": "object"
+      },
       "LoginRequest": {
         "properties": {
           "email": {
@@ -10375,6 +10439,48 @@
           }
         },
         "summary": "Abandon a live recording",
+        "tags": [
+          "Recordings"
+        ]
+      }
+    },
+    "/api/recordings/{id}/live-transcript": {
+      "get": {
+        "description": "The current transcript and nothing else: each line's text, its position in the recording, and who said it where the speaker has been named. Intended for polling or re-reading while a meeting runs - it is what the live notes panel calls when the hub reports new text.\n\nReturns the **whole** transcript every time rather than a delta, so a missed event repairs itself on the next read. Before the first chunk has been transcribed the segment list is empty, which is a normal opening state rather than a 404. Readable by anyone who can read the recording.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveTranscriptDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveTranscriptDto"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveTranscriptDto"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "The transcript of a meeting in progress",
         "tags": [
           "Recordings"
         ]

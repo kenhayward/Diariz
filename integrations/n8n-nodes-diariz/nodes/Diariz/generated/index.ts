@@ -2038,6 +2038,19 @@ const GENERATED: GeneratedResource[] = [
         "returnsArray": false
       },
       {
+        "value": "theTranscriptOfAMeetingInProgress",
+        "displayName": "The transcript of a meeting in progress",
+        "description": "The current transcript and nothing else: each line's text, its position in the recording, and who said it where the speaker has been named. Intended for polling or re-reading while a meeting runs - it is what the live notes panel calls when the hub reports new text.",
+        "method": "GET",
+        "path": "/api/recordings/{id}/live-transcript",
+        "pathParams": [
+          "id"
+        ],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": false
+      },
+      {
         "value": "uploadARecording",
         "displayName": "Upload a recording",
         "description": "Multipart form upload that stores the audio and immediately queues transcription; the response comes back before any transcribing has happened, with status Uploaded. Poll the recording or subscribe to the recording.transcribed webhook for the result.",

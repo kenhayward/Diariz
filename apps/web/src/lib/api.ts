@@ -114,6 +114,7 @@ import type {
   OcrStatus,
   SegmentWord,
   SegmentSpeakerDto,
+  LiveTranscriptResponse,
 } from "./types";
 
 const TOKEN_KEY = "diariz.token";
@@ -365,6 +366,18 @@ export const api = {
 
   async getRecording(id: string): Promise<RecordingDetail> {
     const { data } = await http.get<RecordingDetail>(`/api/recordings/${id}`);
+    return data;
+  },
+
+  /// The transcript of a meeting still running, and nothing else.
+  ///
+  /// Deliberately not `getRecording`: that returns the metadata, speakers, action items, calendar link,
+  /// visible rooms, summary and meeting minutes as well, and the live panel was calling it every time a
+  /// chunk landed - a payload that grows all meeting, fetched every few seconds, to draw a handful of
+  /// new lines. This returns the whole transcript each time for the same reason the old call did: an
+  /// append event is a signal to re-read, so a missed one repairs itself on the next.
+  async getLiveTranscript(id: string): Promise<LiveTranscriptResponse> {
+    const { data } = await http.get<LiveTranscriptResponse>(`/api/recordings/${id}/live-transcript`);
     return data;
   },
 

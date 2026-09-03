@@ -76,21 +76,21 @@ export function useLiveTranscript(recordingId: string | null, recordedMs: () => 
       if (inFlight.current.has(e.sequence)) return;
       inFlight.current.add(e.sequence);
       try {
-        const detail = await api.getRecording(e.recordingId);
-        // A speaker is a suggestion when the server is asking rather than asserting. That lives on the
-        // speaker, not the segment, so it is looked up by label - the same label the segments carry.
-        const suggested = new Set(
-          (detail.speakers ?? []).filter((sp) => sp.suggestedPersonId).map((sp) => sp.label),
-        );
-        const segments = (detail.current?.segments ?? []).map((s) => ({
+        // The transcript alone, not the whole recording. `getRecording` also carries the metadata,
+        // speakers, action items, calendar link, visible rooms, summary and meeting minutes - a payload
+        // that grows all meeting, and this runs every time a chunk lands. The server resolves the
+        // speaker name and its suggestion flag, which this used to do here by fetching every speaker
+        // and matching labels.
+        const live = await api.getLiveTranscript(e.recordingId);
+        const segments = live.segments.map((s) => ({
           id: s.id,
           startMs: s.startMs,
           endMs: s.endMs,
-          text: s.revised ?? s.original,
+          text: s.text,
           sequence: e.sequence,
-          // Falls back to nothing rather than to the raw label: an unstitched label is worse than none.
-          speaker: s.speakerDisplay || undefined,
-          speakerIsSuggestion: suggested.has(s.speaker) || undefined,
+          // Undefined rather than null, because that is what "no speaker" means to the panel.
+          speaker: s.speaker ?? undefined,
+          speakerIsSuggestion: s.speakerIsSuggestion || undefined,
         }));
         // The fetch returns the WHOLE transcript, so it replaces rather than appends - which also
         // makes a missed event self-healing: the next one that lands repairs the gap.

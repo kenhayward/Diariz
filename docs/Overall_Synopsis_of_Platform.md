@@ -3082,6 +3082,8 @@ the least likely to hold.
   remainder by `OffsetMs - prefixMs`** so the times it returns are relative to the whole recording
   rather than the window. The overlap exists to stop a word being cut in half at a chunk boundary and is a
   property of the **decode window only** - nothing overlapping is ever stored.
+  **Per-chunk work is constant, not proportional to the meeting.** Two things used to grow with it (issue #753). The callback assigned `Segment.Ordinal` by reading and renumbering EVERY segment in the transcription on every chunk; it now numbers the arriving chunk alone into its own band of 10,000 (`Sequence * 10000 + i`, sorted within the chunk by recording time), which is correct because chunks are contiguous and non-overlapping — the same invariant the finalise concatenation already depends on. And the browser refetched the WHOLE recording per chunk; it now reads **`GET /api/recordings/{id}/live-transcript`**, which returns the transcript alone with speaker names and suggestion flags already resolved. That endpoint still returns the whole transcript rather than a delta, which is what keeps a missed hub event self-healing.
+
   **`prefixMs` is measured, not taken from the job.** The worker joins the bytes it is about to prepend,
   decodes them and uses that length (`worker._prefix_duration_ms`); the job's `OverlapMs` - the previous
   chunk's recorded-clock span as the browser measured it - is only a fallback for when the measurement

@@ -136,6 +136,122 @@ public class LiveChunkCallbackTests
     }
 
     [Fact]
+    public async Task Ordinals_DoNotDependOnHowMuchOfTheMeetingCameBefore()
+    {
+        // The property that makes the per-chunk cost constant (#753). The old assignment read every
+        // segment in the transcription and renumbered the lot on every chunk, so the work grew with the
+        // meeting - quadratic over its length, and multiplied directly by any move to shorter chunks.
+        //
+        // Asserting the VALUES are stable would not catch it: renumbering produced the same numbers it
+        // already had. What separates the two is whether the arriving chunk's ordinals can be worked out
+        // from the chunk alone. If they can, the read is unnecessary by construction.
+        using var db = TestDb.Create();
+        var rec = await SeedLive(db, Guid.NewGuid());
+        var c = Build(db);
+
+        await c.LiveChunk(Result(rec, Guid.Empty, 0, ("SPEAKER_00", 0, 3000, "opening")));
+        var trId = (await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id)).Id;
+
+        // A lot of meeting happens.
+        for (var seq = 1; seq <= 20; seq++)
+        {
+            await c.LiveChunk(Result(rec, trId, seq,
+                ("SPEAKER_00", seq * 30_000, seq * 30_000 + 3000, $"chunk {seq} a"),
+                ("SPEAKER_01", seq * 30_000 + 4000, seq * 30_000 + 7000, $"chunk {seq} b")));
+        }
+
+        var late = await db.Segments
+            .Where(s => s.TranscriptionId == trId && s.ChunkSequence == 20)
+            .OrderBy(s => s.StartMs).Select(s => s.Ordinal).ToListAsync();
+
+        // Now the same chunk into a transcription with almost nothing in front of it.
+        using var fresh = TestDb.Create();
+        var rec2 = await SeedLive(fresh, Guid.NewGuid());
+        var c2 = Build(fresh);
+        await c2.LiveChunk(Result(rec2, Guid.Empty, 0, ("SPEAKER_00", 0, 3000, "opening")));
+        var trId2 = (await fresh.Transcriptions.SingleAsync(t => t.RecordingId == rec2.Id)).Id;
+        await c2.LiveChunk(Result(rec2, trId2, 20,
+            ("SPEAKER_00", 600_000, 603_000, "chunk 20 a"),
+            ("SPEAKER_01", 604_000, 607_000, "chunk 20 b")));
+
+        var alone = await fresh.Segments
+            .Where(s => s.TranscriptionId == trId2 && s.ChunkSequence == 20)
+            .OrderBy(s => s.StartMs).Select(s => s.Ordinal).ToListAsync();
+
+        Assert.Equal(late, alone);
+    }
+
+    [Fact]
+    public async Task Ordinals_LeaveEarlierChunksAlone()
+    {
+        // The same property from the other side: a chunk arriving must not rewrite rows it has nothing
+        // to say about.
+        using var db = TestDb.Create();
+        var rec = await SeedLive(db, Guid.NewGuid());
+        var c = Build(db);
+
+        await c.LiveChunk(Result(rec, Guid.Empty, 0, ("SPEAKER_00", 0, 3000, "first")));
+        var trId = (await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id)).Id;
+        var before = await db.Segments.Where(s => s.TranscriptionId == trId)
+            .Select(s => new { s.Original, s.Ordinal }).ToListAsync();
+
+        await c.LiveChunk(Result(rec, trId, 1, ("SPEAKER_00", 30_000, 33_000, "second")));
+
+        var after = await db.Segments.Where(s => s.TranscriptionId == trId && s.ChunkSequence == 0)
+            .Select(s => new { s.Original, s.Ordinal }).ToListAsync();
+        Assert.Equal(before.Select(x => x.Ordinal), after.Select(x => x.Ordinal));
+    }
+
+    [Fact]
+    public async Task Ordinals_AreTheSameOnARedelivery()
+    {
+        // Every chunk arrives at least once and may arrive twice. Ordinals derived from the chunk are
+        // idempotent by construction; ones counted across a growing table were not obliged to be.
+        using var db = TestDb.Create();
+        var rec = await SeedLive(db, Guid.NewGuid());
+        var c = Build(db);
+
+        await c.LiveChunk(Result(rec, Guid.Empty, 0, ("SPEAKER_00", 0, 3000, "hello")));
+        var trId = (await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id)).Id;
+        await c.LiveChunk(Result(rec, trId, 1, ("SPEAKER_00", 30_000, 33_000, "world")));
+        var first = await db.Segments.Where(s => s.TranscriptionId == trId)
+            .OrderBy(s => s.StartMs).Select(s => s.Ordinal).ToListAsync();
+
+        await c.LiveChunk(Result(rec, trId, 1, ("SPEAKER_00", 30_000, 33_000, "world")));
+
+        var second = await db.Segments.Where(s => s.TranscriptionId == trId)
+            .OrderBy(s => s.StartMs).Select(s => s.Ordinal).ToListAsync();
+        Assert.Equal(first, second);
+    }
+
+    [Fact]
+    public async Task Ordinals_RiseStrictlyWithRecordingTime_AcrossChunkBoundaries()
+    {
+        // What the ordinal band is FOR. Numbering each chunk from its own base only reads correctly if
+        // the base is far enough apart that a chunk's later segments cannot land on the next chunk's
+        // first - so this is the case with several segments either side of a boundary, which a
+        // one-segment-per-chunk test cannot see.
+        using var db = TestDb.Create();
+        var rec = await SeedLive(db, Guid.NewGuid());
+        var c = Build(db);
+
+        await c.LiveChunk(Result(rec, Guid.Empty, 0,
+            ("SPEAKER_00", 0, 3000, "a"), ("SPEAKER_01", 4000, 7000, "b"), ("SPEAKER_00", 8000, 11_000, "c")));
+        var trId = (await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id)).Id;
+        await c.LiveChunk(Result(rec, trId, 1,
+            ("SPEAKER_00", 12_000, 15_000, "d"), ("SPEAKER_01", 16_000, 19_000, "e")));
+
+        var byTime = await db.Segments.Where(s => s.TranscriptionId == trId)
+            .OrderBy(s => s.StartMs).Select(s => new { s.Original, s.Ordinal }).ToListAsync();
+
+        Assert.Equal(["a", "b", "c", "d", "e"], byTime.Select(x => x.Original));
+        // Strictly increasing, so a sort by Ordinal reproduces the meeting exactly rather than nearly.
+        for (var i = 1; i < byTime.Count; i++)
+            Assert.True(byTime[i].Ordinal > byTime[i - 1].Ordinal,
+                $"ordinal {byTime[i].Ordinal} for \"{byTime[i].Original}\" does not follow {byTime[i - 1].Ordinal}");
+    }
+
+    [Fact]
     public async Task NoSegments_IsNormalMidMeeting_AndDoesNotFailTheRecording()
     {
         // Silence is not the whole-recording "no speech was detected" failure. Nobody talking for

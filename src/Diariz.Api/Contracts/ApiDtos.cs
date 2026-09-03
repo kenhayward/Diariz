@@ -357,6 +357,24 @@ public record TranscriptionDto(
     /// else declines it.</summary>
     bool IsProvisional = false);
 
+/// <summary>One line of the transcript of a meeting that is still running, with everything the live
+/// panel draws already resolved: the text to show, who said it, and whether that name is a guess.
+///
+/// <para>Speaker resolution happens here rather than in the browser, which used to fetch every speaker on
+/// the recording and match labels itself. <c>Speaker</c> is null for a label the server has not put a
+/// name to - an unstitched label is worse than no name at all.</para></summary>
+public record LiveTranscriptLineDto(
+    Guid Id, long StartMs, long EndMs, string Text, string? Speaker, bool SpeakerIsSuggestion);
+
+/// <summary>The transcript of a meeting in progress, and nothing else.
+///
+/// <para>Deliberately the <b>whole</b> transcript rather than a delta: an append event is a signal to
+/// re-read, so a missed one repairs itself on the next. What this drops against the full recording-detail
+/// read the panel used to make is everything that is not the transcript - metadata, action items, the
+/// calendar link, the visible rooms, the summary, the meeting minutes - which was being fetched every few
+/// seconds to render a handful of new lines.</para></summary>
+public record LiveTranscriptDto(Guid RecordingId, IReadOnlyList<LiveTranscriptLineDto> Segments);
+
 public record RecordingDetailDto(
     Guid Id,
     string Title,

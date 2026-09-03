@@ -33,6 +33,15 @@ public class LiveChunkCallbackController(
     private readonly WorkerOptions _opts = opts.Value;
     private readonly LiveCaptureOptions _live = live?.Value ?? new LiveCaptureOptions();
 
+    /// <summary>How many ordinals each chunk owns. A chunk's segments are numbered
+    /// <c>Sequence * OrdinalStride + i</c>, which is what makes the assignment cost proportional to the
+    /// arriving chunk rather than to the whole meeting (issue #753).
+    /// <para>The band only has to be wider than any chunk's segment count. Chunks are capped at 45 s and
+    /// a measured 45 s chunk holds about ten segments, so 10,000 is four orders of magnitude of room. If
+    /// one ever overflowed, its later segments would sort into the next chunk's band - ordering would
+    /// degrade at that seam, and nothing would break.</para></summary>
+    private const int OrdinalStride = 10_000;
+
     private bool SecretOk =>
         Request.Headers.TryGetValue("X-Worker-Secret", out var v) && v == _opts.CallbackSecret;
 
@@ -86,8 +95,24 @@ public class LiveChunkCallbackController(
         // they are mapped onto labels that hold for the whole meeting before anything is stored.
         var sessionOf = await StitchAsync(rec, transcription, body, isRedelivery);
 
-        foreach (var s in body.Segments)
+        // Ordinal is what every reader sorts by, and it is assigned from THIS CHUNK alone: sorted within
+        // the chunk by recording time, then numbered into the chunk's own band. Nothing else is read and
+        // nothing already written is touched, which is what keeps the per-chunk cost flat over a long
+        // meeting - see OrdinalStride and issue #753.
+        //
+        // Correct because chunks are contiguous and non-overlapping in recording time, so sequence order
+        // IS time order across chunks. That is not a coincidence to lean on lightly - it is the same
+        // invariant the canonical audio depends on, since the finalise step concatenates the chunks in
+        // sequence and would duplicate or drop audio if they overlapped or left gaps.
+        //
+        // Sorting within the chunk is the part that is not implied by sequence: a chunk's own segments
+        // can arrive out of time order, and reading order has to follow the meeting rather than the list.
+        var ordered = body.Segments
+            .OrderBy(s => s.StartMs).ThenBy(s => s.EndMs)
+            .ToList();
+        for (var i = 0; i < ordered.Count; i++)
         {
+            var s = ordered[i];
             var chunkLabel = string.IsNullOrWhiteSpace(s.Speaker) ? "UNKNOWN" : s.Speaker;
             db.Segments.Add(new Segment
             {
@@ -99,7 +124,7 @@ public class LiveChunkCallbackController(
                 Original = TranscriptText.Normalize(s.Text),
                 WordsJson = SegmentWords.Serialize(s.Words),
                 ChunkSequence = body.Sequence,
-                Ordinal = 0,   // assigned below, across the whole transcription
+                Ordinal = body.Sequence * OrdinalStride + i,
             });
         }
 
@@ -131,15 +156,6 @@ public class LiveChunkCallbackController(
         // chunk - provisional text, a short window, a centroid still forming - is the worst possible
         // input to it.
         await IdentifyAsync(rec, transcription);
-
-        // Ordinal is what every reader sorts by, and chunks can complete out of order under retry - so
-        // it is assigned across the whole transcription by recording time, not by arrival.
-        var all = await db.Segments
-            .Where(s => s.TranscriptionId == transcription.Id)
-            .OrderBy(s => s.StartMs).ThenBy(s => s.EndMs)
-            .ToListAsync();
-        for (var i = 0; i < all.Count; i++) all[i].Ordinal = i;
-        await db.SaveChangesAsync();
 
         await hub.NotifyLiveTranscriptAsync(rec.UserId, rec.Id, transcription.Id, body.Sequence);
         return Ok();

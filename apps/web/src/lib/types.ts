@@ -476,6 +476,24 @@ export interface RecordingAction {
 
 /// One line of the user's own meeting notes. capturedAtMs = offset into the recording clock
 /// (null = pre-meeting/post-hoc); immutable after capture.
+/// One line of the transcript of a meeting in progress, as the server resolves it: the text to show, and
+/// who said it where a name is known. `speaker` is null for a label nobody has put a name to - an
+/// unstitched label is worse than no name at all - and `speakerIsSuggestion` marks a name the server is
+/// asking about rather than asserting.
+export interface LiveTranscriptLine {
+  id: string;
+  startMs: number;
+  endMs: number;
+  text: string;
+  speaker: string | null;
+  speakerIsSuggestion: boolean;
+}
+
+export interface LiveTranscriptResponse {
+  recordingId: string;
+  segments: LiveTranscriptLine[];
+}
+
 export interface MeetingNote {
   id: string;
   text: string;

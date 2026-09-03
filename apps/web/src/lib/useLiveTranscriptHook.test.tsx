@@ -3,29 +3,24 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import { useLiveTranscript } from "./useLiveTranscript";
 import { api } from "./api";
 
-vi.mock("./api", () => ({ api: { getRecording: vi.fn() } }));
+vi.mock("./api", () => ({ api: { getLiveTranscript: vi.fn() } }));
 
 const RECORDING = "rec-1";
 
+/// What the narrow live-transcript endpoint returns: the lines, already resolved. The speaker name and
+/// its suggestion flag are the server's answer now - this used to be a whole recording detail that the
+/// hook joined against a speaker list itself.
 function detail(recordingId: string, texts: string[]) {
   return {
-    id: recordingId,
-    status: "Live",
-    speakers: [{ label: "SPEAKER_00", displayName: "Ada", suggestedPersonId: null }],
-    current: {
-      id: "t1",
-      version: 1,
-      isProvisional: true,
-      segments: texts.map((text, i) => ({
-        id: `s${i}`,
-        speaker: "SPEAKER_00",
-        speakerDisplay: "Ada",
-        startMs: i * 3000,
-        endMs: i * 3000 + 2500,
-        original: text,
-        revised: null,
-      })),
-    },
+    recordingId,
+    segments: texts.map((text, i) => ({
+      id: `s${i}`,
+      startMs: i * 3000,
+      endMs: i * 3000 + 2500,
+      text,
+      speaker: "Ada",
+      speakerIsSuggestion: false,
+    })),
   };
 }
 
@@ -39,7 +34,7 @@ describe("useLiveTranscript, driven the way the recorder drives it", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("shows text for a recording that started AFTER the hook mounted", async () => {
-    (api.getRecording as ReturnType<typeof vi.fn>).mockResolvedValue(
+    (api.getLiveTranscript as ReturnType<typeof vi.fn>).mockResolvedValue(
       detail(RECORDING, ["shall we start"]),
     );
 
@@ -55,6 +50,35 @@ describe("useLiveTranscript, driven the way the recorder drives it", () => {
     await waitFor(() =>
       expect(result.current.transcript?.segments.map((s) => s.text)).toEqual(["shall we start"]),
     );
+  });
+
+  it("carries the speaker and whether the name is only a guess", async () => {
+    // The server resolves both; the panel renders a guess in italics with a trailing "?" rather than
+    // stating it. Nothing else joins those two ends, so dropping either here would leave a coin flip
+    // presented with the authority of a confirmed name.
+    (api.getLiveTranscript as ReturnType<typeof vi.fn>).mockResolvedValue({
+      recordingId: RECORDING,
+      segments: [
+        { id: "s0", startMs: 0, endMs: 2500, text: "certain", speaker: "Ada", speakerIsSuggestion: false },
+        { id: "s1", startMs: 3000, endMs: 5500, text: "unsure", speaker: "Grace", speakerIsSuggestion: true },
+        { id: "s2", startMs: 6000, endMs: 8500, text: "nobody", speaker: null, speakerIsSuggestion: false },
+      ],
+    });
+
+    const { result, rerender } = renderHook(({ id }) => useLiveTranscript(id, () => 0), {
+      initialProps: { id: null as string | null },
+    });
+
+    rerender({ id: RECORDING });
+    await act(async () => {
+      await result.current.onAppend({ recordingId: RECORDING, sequence: 0 });
+    });
+
+    await waitFor(() => expect(result.current.transcript?.segments).toHaveLength(3));
+    const segs = result.current.transcript!.segments;
+    expect(segs.map((s) => s.speaker)).toEqual(["Ada", "Grace", undefined]);
+    expect(segs[1].speakerIsSuggestion).toBe(true);
+    expect(segs[0].speakerIsSuggestion).toBeFalsy();
   });
 
   it("marks itself degraded for a recording that started after mount", async () => {
@@ -73,7 +97,7 @@ describe("useLiveTranscript, driven the way the recorder drives it", () => {
   });
 
   it("clears the previous meeting's text when a second recording starts", async () => {
-    (api.getRecording as ReturnType<typeof vi.fn>).mockResolvedValue(
+    (api.getLiveTranscript as ReturnType<typeof vi.fn>).mockResolvedValue(
       detail(RECORDING, ["from the first meeting"]),
     );
 
