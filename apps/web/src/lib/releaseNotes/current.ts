@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.270.1",
+    date: "2026-09-03",
+    pr: 748,
+    headline: "The separate notes window stops being sent the same thing over and over",
+    summary:
+      "While a recording was running with the notes popped out into their own window, the main window was sending that window a complete copy of everything - every note, and a thumbnail of every screen capture you had taken - four times a second, for the whole meeting.\n\nIt was invisible: the notes window showed the right thing, and nothing looked slow. But a long meeting with a lot of captures meant the same pile of images being packed up and handed over 240 times a minute to say nothing had changed. On a machine already busy recording, encoding and streaming audio, that is work worth not doing.\n\nThe window is now told something only when there is something to tell it - a note filed, a capture taken, the recording paused, a new piece of transcript. Its clock is unaffected: it has been running on its own since the window gained one, which is exactly why the constant updates were unnecessary.",
+    fixed: [
+      "The separate notes window was sent the entire notes state - including a thumbnail of every screen capture - four times a second for the length of the recording, rather than when something it shows had actually changed.",
+    ],
+  },
+  {
     version: "0.270.0",
     date: "2026-09-03",
     pr: 746,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage, getToken } from "../lib/api";
 import { userIdFromToken } from "../lib/jwt";
@@ -1032,38 +1032,77 @@ export default function Recorder({
 
   const shellBridge = (window as unknown as { diariz?: TrayBridge }).diariz;
 
-  // Rebuilt on every render the pop-out cares about; useNotesPopout republishes when it changes.
-  const notesState: NotesState = {
-    lines: notes.lines,
-    // Only what the pop-out renders. The full-resolution PNG stays in this window.
-    shots: liveShots.map((s) => ({
-      id: s.id,
-      capturedAtMs: s.capturedAtMs,
-      thumb: s.thumb,
-      // Present only for a capture the server already holds, which is what lets the pop-out know
-      // whether its Chat button can do anything and, if not, which of the two reasons to give.
-      serverId: s.serverId,
-    })),
-    canCapture: canCaptureScreenshots(),
-    captureAreaSet,
-    autoCapture,
-    canAutoCapture: canAutoCapture(),
-    recording,
-    // Sent rather than fetched: the pop-out never calls the API, and two windows reading the same
-    // meeting independently could disagree about it.
-    liveTranscript: live.transcript ?? undefined,
-    liveLagSeconds: live.lagSeconds,
-    liveDegraded: live.degraded,
-    // Which recording is streaming, so the pop-out can tell a capture that is still uploading from one
-    // that has nowhere to go. It never calls anything with it - that window makes no API calls.
-    liveRecordingId: liveRecordingId ?? undefined,
-    // A reading of the recorded clock plus the wall-clock moment it was taken - never a ticking value.
-    // The pop-out extrapolates between publishes, which is what keeps its clock smooth once this window
-    // is hidden to the tray and Chromium throttles our timers to roughly 1 Hz (the same throttling that
-    // put the liveness poll in the client rather than here - see notesChannel's header). `running` is
-    // what freezes it over a pause, and resuming re-renders this, so a fresh reading crosses with it.
-    clock: { recordedMs: elapsed, atWallMs: Date.now(), running: recording && !paused },
-  };
+  /// Everything the pop-out renders, republished by `useNotesPopout` whenever this object changes.
+  ///
+  /// **Memoised on what the pop-out actually draws, and nothing else.** The hook republishes on
+  /// `[poppedOut, state]`, so an object literal rebuilt every render is a broadcast every render - and
+  /// the elapsed ticker re-renders this component every 250ms for the length of the recording. That put
+  /// the ENTIRE state on the channel four times a second for the whole meeting, every capture's JPEG
+  /// thumbnail `Blob` included, and nothing about it was visible: the pop-out rendered correctly and
+  /// every test passed. `RecorderPopoutPublish.test.tsx` counts distinct published objects, which is the
+  /// only thing that shows it.
+  ///
+  /// The clock is read INSIDE the memo, from the timing ref rather than from the `elapsed` state, and
+  /// that is what makes the memo sound rather than a nicety: `elapsed` is the ticking value whose churn
+  /// this exists to stop, so using it here would put it in the dependency list and reinstate the defect
+  /// exactly. Reading the ref is what lets the ticking value stay out. It also pairs `recordedMs` with
+  /// `atWallMs` at one instant, which is what the pop-out's `recordedMs + (Date.now() - atWallMs)`
+  /// assumes - though the ~250ms skew the alternative would cause is invisible at the second granularity
+  /// the clock is rendered at, so no test pins that half; the dependency list is what the tests cover.
+  ///
+  /// A reading that goes stale between publishes is not a problem but the whole design: the client
+  /// extrapolates from it, which is also what keeps its clock smooth once this window is hidden to the
+  /// tray and Chromium throttles our timers to roughly 1 Hz. Pause and resume both change `paused`, so a
+  /// fresh reading crosses with them.
+  const notesState: NotesState = useMemo(
+    () => ({
+      lines: notes.lines,
+      // Only what the pop-out renders. The full-resolution PNG stays in this window.
+      shots: liveShots.map((s) => ({
+        id: s.id,
+        capturedAtMs: s.capturedAtMs,
+        thumb: s.thumb,
+        // Present only for a capture the server already holds, which is what lets the pop-out know
+        // whether its Chat button can do anything and, if not, which of the two reasons to give.
+        serverId: s.serverId,
+      })),
+      // Not dependencies: both read `window.diariz`, which is fixed for the life of the page - a shell
+      // does not grow a capture bridge halfway through a meeting.
+      canCapture: canCaptureScreenshots(),
+      canAutoCapture: canAutoCapture(),
+      captureAreaSet,
+      autoCapture,
+      recording,
+      // Sent rather than fetched: the pop-out never calls the API, and two windows reading the same
+      // meeting independently could disagree about it.
+      liveTranscript: live.transcript ?? undefined,
+      liveLagSeconds: live.lagSeconds,
+      liveDegraded: live.degraded,
+      // Which recording is streaming, so the pop-out can tell a capture that is still uploading from one
+      // that has nowhere to go. It never calls anything with it - that window makes no API calls.
+      liveRecordingId: liveRecordingId ?? undefined,
+      clock: {
+        recordedMs: timing.elapsedMs(timingRef.current, Date.now()),
+        atWallMs: Date.now(),
+        running: recording && !paused,
+      },
+    }),
+    [
+      notes.lines,
+      liveShots,
+      captureAreaSet,
+      autoCapture,
+      recording,
+      paused,
+      live.transcript,
+      live.lagSeconds,
+      live.degraded,
+      // Redundant in practice and kept for clarity: `useLiveTranscript` is keyed on this id and mints a
+      // fresh transcript whenever it changes, so `live.transcript` above already moves in lockstep with
+      // it. Nothing pins that coupling, so leaving it out would be relying on it.
+      liveRecordingId,
+    ],
+  );
 
   const { poppedOut, popOut, notifyClosed } = useNotesPopout({
     state: notesState,
