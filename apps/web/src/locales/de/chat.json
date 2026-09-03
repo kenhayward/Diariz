@@ -121,5 +121,7 @@
   "attachedScreenshot": "Angehaengter Screenshot",
   "removeScreenshot": "Screenshot entfernen",
   "selectVisionModel": "Waehlen Sie ein Vision-Modell",
-  "dropScreenshot": "Ablegen, um zur Eingabe hinzuzufuegen"
+  "dropScreenshot": "Ablegen, um zur Eingabe hinzuzufuegen",
+  "liveMeetingContext": "Laufende Besprechung",
+  "removeLiveMeeting": "Die laufende Besprechung aus dem Chat-Kontext entfernen"
 }

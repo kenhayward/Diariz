@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { formatDuration } from "../../lib/format";
-import { IconClose, IconPencil, IconPlus } from "./hubGlyphs";
+import { IconArrowRight, IconClose, IconGrip, IconPencil, IconPlus } from "./hubGlyphs";
+import { SCREENSHOT_DRAG_TYPE } from "../../lib/dragTypes";
 import type { LiveSegment } from "../../lib/liveTranscript";
 import type { MeetingNote, ShotView } from "../../lib/types";
 
@@ -249,6 +250,8 @@ export function CaptureRow({
   thumbWidth,
   thumbHeight,
   onDelete,
+  onToChat,
+  liveRecordingId,
 }: {
   shot: ShotView;
   /// Made by the panel, not here: one object URL per capture for the life of the capture set, so a row
@@ -258,8 +261,24 @@ export function CaptureRow({
   thumbWidth: number;
   thumbHeight: number;
   onDelete: (id: string) => void;
+  /// Send this capture to the chat prompt. Absent where there is no chat to send it to - which is not
+  /// the same as "cannot yet": the button still renders, and says which of the two it is.
+  onToChat?: (id: string) => void;
+  /// The meeting being recorded, when one is streaming. Needed for the drag payload, which addresses a
+  /// capture by the pair the chat composer already parses.
+  liveRecordingId?: string;
 }) {
   const { t } = useTranslation("workspace");
+
+  // The chat references a capture by id and the server loads its pixels from object storage, so a
+  // capture that is still only a blob in this browser has nothing to reference. The two ways that
+  // happens read very differently to a user, so they get different words rather than one grey button.
+  const chatReason = shot.serverId
+    ? undefined
+    : liveRecordingId
+      ? t("notesCaptureChatUploading")
+      : t("notesCaptureChatNoLive");
+  const draggable = Boolean(shot.serverId && liveRecordingId);
 
   return (
     <li
@@ -271,6 +290,24 @@ export function CaptureRow({
         <img
           src={previewUrl}
           alt={t("screenshotAlt", { time: formatDuration(shot.capturedAtMs) })}
+          draggable={draggable}
+          onDragStart={
+            draggable
+              ? (e) => {
+                  // The exact payload `ChatPanel.onDropOnComposer` already parses, under our own MIME
+                  // type - `dragHasFiles` excludes it, so no upload zone lights up on the way past.
+                  e.dataTransfer.setData(
+                    SCREENSHOT_DRAG_TYPE,
+                    JSON.stringify({
+                      recordingId: liveRecordingId,
+                      screenshotId: shot.serverId,
+                      capturedAtMs: shot.capturedAtMs,
+                    }),
+                  );
+                  e.dataTransfer.effectAllowed = "copy";
+                }
+              : undefined
+          }
           style={{
             display: "block",
             width: thumbWidth,
@@ -279,8 +316,32 @@ export function CaptureRow({
             borderRadius: 8,
             border: "1px solid var(--hub-border)",
             background: "var(--hub-surface)",
+            cursor: draggable ? "grab" : undefined,
           }}
         />
+        {draggable && (
+          <span
+            data-testid="capture-drag-hint"
+            aria-hidden
+            style={{
+              position: "absolute",
+              top: 4,
+              left: 4,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 3,
+              padding: "2px 5px",
+              borderRadius: 5,
+              background: "rgba(6, 11, 22, 0.72)",
+              color: "#fff",
+              fontSize: 9,
+              fontWeight: 500,
+            }}
+          >
+            <IconGrip size={9} />
+            {t("notesDragToChat")}
+          </span>
+        )}
         <div
           style={{
             position: "absolute",
@@ -294,6 +355,38 @@ export function CaptureRow({
             background: "linear-gradient(transparent, rgba(6, 11, 22, 0.85))",
           }}
         >
+          {onToChat && (
+            <button
+              type="button"
+              aria-label={t("notesCaptureChat")}
+              // Inert by handler rather than `disabled`: Chromium does not dispatch mouse events to a
+              // disabled control, so its `title` never renders - and the reason is the whole point here.
+              aria-disabled={chatReason ? true : undefined}
+              title={chatReason ?? t("notesCaptureChatHint")}
+              onClick={() => {
+                if (chatReason) return;
+                onToChat(shot.id);
+              }}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 3,
+                height: 22,
+                padding: "0 7px",
+                borderRadius: 6,
+                border: "none",
+                background: "rgba(47, 107, 237, 0.9)",
+                color: "#fff",
+                fontSize: 10,
+                fontWeight: 600,
+                cursor: chatReason ? "not-allowed" : "pointer",
+                opacity: chatReason ? 0.5 : 1,
+              }}
+            >
+              {t("notesCaptureChat")}
+              <IconArrowRight size={11} />
+            </button>
+          )}
           <button
             type="button"
             aria-label={t("screenshotDelete")}

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
+  attachLiveRecordingToChat,
+  onChatLiveRecordingAttached,
   attachScreenshotToChat,
   attachTextToChat,
   onChatScreenshotAttached,
@@ -86,5 +88,47 @@ describe("chatAttachments - extracted text", () => {
 
     offText();
     offShot();
+  });
+
+  /// A THIRD channel, for the same reason the text one is separate from the image one: it carries an
+  /// entirely different thing to a different place. A capture rides as pixels into the screenshot tray;
+  /// extracted text lands in the context pill; a live recording is neither - it is an id the SERVER
+  /// resolves, so the transcript the model reads is always current rather than a paste that went stale
+  /// the moment the meeting carried on.
+  it("carries a live recording id to whoever is listening", () => {
+    const on = vi.fn();
+    const off = onChatLiveRecordingAttached(on);
+
+    attachLiveRecordingToChat("rec-live");
+
+    expect(on).toHaveBeenCalledWith("rec-live");
+    off();
+  });
+
+  it("stops delivering once unsubscribed", () => {
+    const on = vi.fn();
+    onChatLiveRecordingAttached(on)();
+
+    attachLiveRecordingToChat("rec-live");
+
+    expect(on).not.toHaveBeenCalled();
+  });
+
+  it("publishing a live recording to nobody does not throw", () => {
+    expect(() => attachLiveRecordingToChat("rec-live")).not.toThrow();
+  });
+
+  it("keeps the live-recording channel apart from the other two", () => {
+    const onText = vi.fn();
+    const onShot = vi.fn();
+    const onLive = vi.fn();
+    const offs = [onChatTextAttached(onText), onChatScreenshotAttached(onShot), onChatLiveRecordingAttached(onLive)];
+
+    attachLiveRecordingToChat("rec-live");
+
+    expect(onText).not.toHaveBeenCalled();
+    expect(onShot).not.toHaveBeenCalled();
+    expect(onLive).toHaveBeenCalledTimes(1);
+    offs.forEach((off) => off());
   });
 });

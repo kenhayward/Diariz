@@ -251,3 +251,42 @@ describe("NotesPopover one stream", () => {
     expect(onAdd).toHaveBeenCalledWith("a thought", undefined);
   });
 });
+
+describe("NotesPopover chat actions", () => {
+  const transcript = {
+    recordingId: "live-1",
+    highestSequence: 0,
+    segments: [{ id: "s1", startMs: 0, endMs: 3000, text: "shall we make a start", sequence: 0 }],
+  };
+
+  it("sends the running meeting to the chat", () => {
+    const onTranscriptToChat = vi.fn();
+    renderPopover({ liveTranscript: transcript, liveRecordingId: "live-1", onTranscriptToChat });
+
+    fireEvent.click(screen.getByRole("button", { name: /use in chat/i }));
+
+    expect(onTranscriptToChat).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers nothing to send when nothing is being transcribed", () => {
+    renderPopover({ onTranscriptToChat: vi.fn() });
+
+    expect(screen.queryByRole("button", { name: /use in chat/i })).toBeNull();
+  });
+
+  it("sends the capture the user clicked", () => {
+    const onShotToChat = vi.fn();
+    const uploaded = { ...shot(1_000), serverId: "srv-1" };
+    renderPopover({
+      ...shell,
+      shots: [uploaded],
+      liveTranscript: transcript,
+      liveRecordingId: "live-1",
+      onShotToChat,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^chat$/i }));
+
+    expect(onShotToChat).toHaveBeenCalledWith(uploaded.id);
+  });
+});

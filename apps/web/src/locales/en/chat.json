@@ -121,5 +121,7 @@
   "attachedScreenshot": "Attached screenshot",
   "removeScreenshot": "Remove screenshot",
   "selectVisionModel": "Select a vision model",
-  "dropScreenshot": "Drop to add to the prompt"
+  "dropScreenshot": "Drop to add to the prompt",
+  "liveMeetingContext": "Live meeting",
+  "removeLiveMeeting": "Remove the live meeting from the chat context"
 }

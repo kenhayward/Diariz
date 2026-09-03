@@ -48,6 +48,13 @@ export type NotesPopoverProps = {
   /// Detach the notes into their own always-on-top window. Absent in a plain browser, which is what
   /// hides the control - only the desktop shell can pin a window above a full-screen call.
   onPopOut?: () => void;
+  /// Put the running meeting into the chat prompt. Hidden without a live transcript, since there would
+  /// be no server-side transcript for the chat to read.
+  onTranscriptToChat?: () => void;
+  /// Put one capture into the chat prompt, by the id it carries here.
+  onShotToChat?: (id: string) => void;
+  /// The recording currently streaming, when there is one.
+  liveRecordingId?: string;
 };
 
 const headerButton: React.CSSProperties = {
@@ -91,6 +98,9 @@ export default function NotesPopover({
   autoCapture,
   onToggleAutoCapture,
   onPopOut,
+  onTranscriptToChat,
+  onShotToChat,
+  liveRecordingId,
 }: NotesPopoverProps) {
   const { t } = useTranslation("workspace");
 
@@ -154,6 +164,9 @@ export default function NotesPopover({
           liveTranscript={liveTranscript}
           liveLagSeconds={liveLagSeconds}
           liveDegraded={liveDegraded}
+          onTranscriptToChat={onTranscriptToChat}
+          onShotToChat={onShotToChat}
+          liveRecordingId={liveRecordingId}
           // The two capture handlers arrive together or not at all (the recorder gates both on one
           // `canCaptureScreenshots()` check), so a half-supplied pair hides the capture controls rather
           // than rendering a row with a gap in it.

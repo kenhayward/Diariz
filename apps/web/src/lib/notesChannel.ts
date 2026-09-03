@@ -54,6 +54,11 @@ export interface NotesState {
   /// own (they change `recording`/`paused`, which re-renders the state), so `running` and a fresh
   /// `atWallMs` reach the client exactly when they need to.
   clock?: { recordedMs: number; atWallMs: number; running: boolean };
+  /// The recording currently streaming to the server, when there is one. The pop-out needs it to decide
+  /// whether a capture's Chat button can act - and, when it cannot, which of the two reasons to give
+  /// ("still uploading" versus "once the recording is saved", which are entirely different situations).
+  /// It never uses the id to call anything: this window makes no API calls at all.
+  liveRecordingId?: string;
 }
 
 type HostMessage = { type: "state"; state: NotesState } | { type: "ended" };
@@ -68,6 +73,12 @@ type ClientMessage =
   | { type: "capture" }
   | { type: "toggle-auto-capture" }
   | { type: "changeArea" }
+  /// Send one capture, or the running meeting, to the chat prompt. Relayed to the host rather than done
+  /// here for a reason that is invisible when broken: `chatAttachments` is an in-TAB pub/sub, so a
+  /// publish from this window would reach no subscribers at all and simply do nothing - the chat panel
+  /// lives in the main window. A silent no-op, not an error.
+  | { type: "shotToChat"; id: string }
+  | { type: "transcriptToChat" }
   | { type: "closing" };
 
 /// The slice of BroadcastChannel used here, so tests can supply a fake.
@@ -99,6 +110,11 @@ export interface NotesHostHandlers {
   onCapture(): void;
   onToggleAutoCapture(): void;
   onChangeArea(): void;
+  /// Put one capture, addressed by the id it carries in the panel, into the chat prompt. The host looks
+  /// up its server id - the pop-out is never told to work with anything but panel ids.
+  onShotToChat(id: string): void;
+  /// Put the running meeting into the chat prompt.
+  onTranscriptToChat(): void;
   /// The pop-out window is going away; restore the inline popover. Must be idempotent - it arrives from
   /// the client's own `closing` message AND from the shell noticing the window was destroyed, and
   /// either may be first, or missing entirely.
@@ -155,6 +171,12 @@ export function createNotesHost(
       case "changeArea":
         handlers.onChangeArea();
         break;
+      case "shotToChat":
+        handlers.onShotToChat(m.id);
+        break;
+      case "transcriptToChat":
+        handlers.onTranscriptToChat();
+        break;
       case "closing":
         handlers.onClientClosed();
         break;
@@ -188,6 +210,8 @@ export interface NotesClient {
   capture(): void;
   toggleAutoCapture(): void;
   changeArea(): void;
+  shotToChat(id: string): void;
+  transcriptToChat(): void;
   /// Tell the host this window is going away.
   close(): void;
   dispose(): void;
@@ -237,6 +261,8 @@ export function createNotesClient(
     capture: () => send({ type: "capture" }),
     toggleAutoCapture: () => send({ type: "toggle-auto-capture" }),
     changeArea: () => send({ type: "changeArea" }),
+    shotToChat: (id) => send({ type: "shotToChat", id }),
+    transcriptToChat: () => send({ type: "transcriptToChat" }),
     close: () => send({ type: "closing" }),
     dispose: () => {
       clearInterval(timer);

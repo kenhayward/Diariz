@@ -173,7 +173,14 @@ behind a divider, so a click aimed at close cannot land on it; **zoom and pan** 
 pointer, a zoom cluster, double-click, keyboard shortcuts, drag once zoomed in) let a dense capture be read
 at native resolution and scrolled around instead of downloading it. The Notes tab also lists a recording's
 captures in a collapsed Screenshots section, from where one can be **dragged into the chat prompt** to ask
-a vision-capable model about it. A note or screenshot sitting between two turns by the same speaker now stops those
+a vision-capable model about it.
+  **A capture can reach the chat during the meeting.** While a recording is streaming to the server, each
+  capture is **uploaded as it is taken** rather than held in the browser until Stop, so the live notes panel
+  can offer a **Chat** button on it and let its thumbnail be dragged into the chat prompt there and then.
+  A capture the server refuses - a full quota, a network blip - simply stays where it was and goes up with
+  the rest at the end, so the worst case is the behaviour that shipped before. Deleting an already-uploaded
+  capture removes the server's copy too, and a capture that is still on its way says so rather than sitting
+  there as a dead button. A note or screenshot sitting between two turns by the same speaker now stops those
 turns from being merged past it.
 - **Extract text from a screenshot (OCR).** Where a Platform Administrator has routed a model to the **OCR**
 call type, the capture viewer gains two extract buttons: one puts the text into the **chat prompt**, the other
@@ -627,7 +634,14 @@ replies, a context-usage dial, PDF/text attachments, and saved conversations —
 OpenAI-compatible LLM endpoint (see **AI models** below), with the API key encrypted at rest. The chat's context is
 **inferred from what you're viewing** rather than picked from a list: the label reads **Current Transcript**,
 **Current Folder**, or **Selected Transcripts** (2+ ticked in the list) and updates when you click into the
-box. When a **folder** is open, chat is about that folder — its roll-up **summary, minutes, and aggregated
+box.
+  **The meeting you are in right now.** The live notes panel has a **Use in chat** button that attaches the
+  running meeting to the prompt as a sticky pill. It sends the recording, not a paste of the transcript, so
+  every question is answered against the transcript **as it stands at that moment** rather than a snapshot
+  that went stale the second the meeting carried on - and the server tells the model the meeting is still in
+  progress, so it will not report an argument still being had as settled. The pill rides every question until
+  you remove it, and deliberately stays after you stop recording: the same recording is then a finished one,
+  and "summarise the meeting I just had" is usually the next thing you want. When a **folder** is open, chat is about that folder — its roll-up **summary, minutes, and aggregated
 actions** are the context, and "Include attachments" pulls in every attachment across the folder and its
 sub-folders.
   **Choosing a model.** Where an administrator has marked more than one model as available for chat (see

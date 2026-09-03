@@ -12,7 +12,11 @@ import { useActiveRecordingId, useActiveSectionId } from "../lib/activeRoute";
 import { useRoomBasePath } from "../lib/rooms";
 import { useSelection } from "../lib/selection";
 import { ATTACHMENT_DRAG_TYPE, SCREENSHOT_DRAG_TYPE, type AttachmentDragPayload } from "../lib/dragTypes";
-import { onChatScreenshotAttached, onChatTextAttached } from "../lib/chatAttachments";
+import {
+  onChatLiveRecordingAttached,
+  onChatScreenshotAttached,
+  onChatTextAttached,
+} from "../lib/chatAttachments";
 import {
   inferCurrentContext, currentContextLabelKey, currentContextRequest, type CurrentContext,
 } from "../lib/chatContext";
@@ -195,6 +199,21 @@ export default function ChatPanel() {
   useEffect(() => onChatScreenshotAttached((shot) =>
     addShot({ recordingId: shot.recordingId, screenshotId: shot.screenshotId })), []);
 
+  /// The meeting currently being recorded, put here from the live notes panel's "Use in chat".
+  ///
+  /// An id, not text. The server resolves it when the question is asked and prefixes a recording still
+  /// in status Live with "This meeting is IN PROGRESS and still being recorded", so what the model reads
+  /// is the transcript as it stands rather than a paste that went stale the moment the meeting carried
+  /// on. It also keeps out of the single-origin context pill, which a transcript would either accumulate
+  /// into on every press or fight the OCR/file attachment for.
+  ///
+  /// Sticky, like the screenshot tray: it rides every turn until removed, and is deliberately NOT
+  /// cleared when the recording stops - the same id is then a finished recording, the server drops the
+  /// in-progress framing on its own, and "tell me about the meeting I just had" is the natural next
+  /// question rather than a new gesture.
+  const [liveRecordingId, setLiveRecordingId] = useState<string | null>(null);
+  useEffect(() => onChatLiveRecordingAttached((id) => setLiveRecordingId(id)), []);
+
   /// Merge new text into the single context pill, whether it came from OCR, the paperclip, or an attachment
   /// dragged in.
   ///
@@ -344,10 +363,18 @@ ${text}`;
   });
 
   // The context actually sent: a folder (section id) or a set of recording ids, from the chosen mode.
-  const { recordingIds, sectionId } =
+  const { recordingIds: chosenRecordingIds, sectionId } =
     contextMode === "current"
       ? currentContextRequest(frozenCurrent)
       : { recordingIds: [] as string[], sectionId: null };
+  // The running meeting joins whatever else is in context, deduped: sending the same id twice would
+  // spend a context budget the meeting is already filling on a second copy of itself. It is sent even
+  // under `contextMode: "all"` - the server dedupes against the search set, and the recording is the one
+  // thing the user explicitly asked about.
+  const recordingIds =
+    liveRecordingId && !chosenRecordingIds.includes(liveRecordingId)
+      ? [...chosenRecordingIds, liveRecordingId]
+      : chosenRecordingIds;
   const hasContext = recordingIds.length > 0 || sectionId != null;
 
   // For a folder context the recording ids are expanded server-side (recordingIds is empty here), so /context
@@ -1218,6 +1245,29 @@ ${text}`;
           <p className="mt-2 px-1 text-xs italic text-gray-400 dark:text-gray-500">
             {interim || t("dictateHearing")}
           </p>
+        )}
+
+        {/* The meeting being recorded right now, if it was sent here from the live notes panel. */}
+        {liveRecordingId && (
+          <div className="mt-2 flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+              <span
+                aria-hidden
+                className="inline-block h-1.5 w-1.5 rounded-full bg-red-500"
+                style={{ animation: "blink 1.2s infinite" }}
+              />
+              {t("liveMeetingContext")}
+              <button
+                type="button"
+                aria-label={t("removeLiveMeeting")}
+                title={t("removeLiveMeeting")}
+                onClick={() => setLiveRecordingId(null)}
+                className="ml-0.5 text-blue-700/70 hover:text-blue-900 dark:text-blue-200/70 dark:hover:text-blue-100"
+              >
+                x
+              </button>
+            </span>
+          </div>
         )}
 
         {/* Attached screen captures, and the reason they cannot be sent yet. */}

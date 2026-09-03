@@ -12,6 +12,8 @@ const client = {
   removeShot: vi.fn(),
   capture: vi.fn(),
   changeArea: vi.fn(),
+  shotToChat: vi.fn(),
+  transcriptToChat: vi.fn(),
   close: vi.fn(),
   dispose: vi.fn(),
 };
@@ -283,5 +285,73 @@ describe("NotesPopout clock", () => {
     act(() => handlers.onState(state()));
 
     expect(screen.getByTestId("notes-elapsed").textContent).toBe("0:00");
+  });
+});
+
+describe("NotesPopout - the chat lives in the other window", () => {
+  const live = (over: Partial<NotesState> = {}) =>
+    state({
+      liveTranscript: {
+        recordingId: "live-1",
+        highestSequence: 0,
+        segments: [{ id: "s1", startMs: 0, endMs: 3000, text: "shall we make a start", sequence: 0 }],
+      },
+      liveRecordingId: "live-1",
+      ...over,
+    });
+
+  it("asks the host to send the running meeting rather than attaching it here", () => {
+    render(<NotesPopout />);
+    act(() => handlers.onState(live()));
+
+    fireEvent.click(screen.getByRole("button", { name: /use in chat/i }));
+
+    expect(client.transcriptToChat).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks the host to send a capture, naming it by the id it carries here", () => {
+    render(<NotesPopout />);
+    act(() =>
+      handlers.onState(
+        live({
+          canCapture: true,
+          captureAreaSet: true,
+          shots: [{ id: "shot-1", capturedAtMs: 1_000, thumb: new Blob(["t"]), serverId: "srv-1" }],
+        }),
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^chat$/i }));
+
+    expect(client.shotToChat).toHaveBeenCalledWith("shot-1");
+  });
+
+  it("says a capture is still uploading rather than sending one the server does not have", () => {
+    render(<NotesPopout />);
+    act(() =>
+      handlers.onState(
+        live({
+          canCapture: true,
+          captureAreaSet: true,
+          shots: [{ id: "shot-1", capturedAtMs: 1_000, thumb: new Blob(["t"]) }],
+        }),
+      ),
+    );
+
+    const button = screen.getByRole("button", { name: /^chat$/i });
+    fireEvent.click(button);
+
+    expect(client.shotToChat).not.toHaveBeenCalled();
+    expect(button.getAttribute("title")).toMatch(/still uploading/i);
+  });
+
+  it("offers nothing to send once contact with the host is lost", () => {
+    // A click would travel nowhere, and a button that silently does nothing is worse than no button.
+    render(<NotesPopout />);
+    act(() => handlers.onState(live()));
+
+    act(() => handlers.onDisconnected());
+
+    expect(screen.queryByRole("button", { name: /use in chat/i })).toBeNull();
   });
 });

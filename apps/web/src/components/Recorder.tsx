@@ -27,6 +27,7 @@ import {
 import { connectTrayRecorder, type RecorderState, type TrayBridge } from "../lib/trayRecorder";
 import { setCapturing } from "../lib/captureState";
 import { useNotesPopout } from "../lib/useNotesPopout";
+import { attachLiveRecordingToChat, attachScreenshotToChat } from "../lib/chatAttachments";
 import type { NotesState } from "../lib/notesChannel";
 import { onRecordingRequested, type CalendarEventContext, type RecordingRequest } from "../lib/recordRequest";
 import {
@@ -96,6 +97,7 @@ import {
   loadPendingScreenshots,
   removePendingScreenshot,
   setPendingScreenshotsRecordingId,
+  setPendingScreenshotServerId,
   clearPendingScreenshots,
   type PendingScreenshots,
   type PendingShot,
@@ -291,6 +293,9 @@ export default function Recorder({
   // for note lines - both a ref (read inside upload()/attachScreenshots(), which may run before state has
   // flushed) and state (to re-render the strip) are kept in step by addLiveShot/deleteLiveShot.
   const liveShotsRef = useRef<PendingShot[]>([]);
+  /// Serialises the per-capture uploads that run while a live session is streaming. A promise chain
+  /// rather than a queue array: there is nothing to inspect or cancel, only an order to keep.
+  const shotUploadChain = useRef<Promise<void>>(Promise.resolve());
   const [liveShots, setLiveShots] = useState<PendingShot[]>([]);
   // Captures whose audio uploaded but whose attach failed - drives the retry banner.
   const [shotsAttach, setShotsAttach] = useState<PendingScreenshots | null>(null);
@@ -752,6 +757,40 @@ export default function Recorder({
     liveShotsRef.current = next;
     setLiveShots(next);
     if (userId) void addPendingScreenshot(userId, stamped);
+    uploadLiveShot(stamped);
+  }
+
+  /// Send one capture to the server while the meeting is still running.
+  ///
+  /// Only possible under a live session: without one the recording does not exist until the audio
+  /// uploads at Stop, so there is nothing to attach a capture to and it waits in the stash exactly as it
+  /// always did. With one, the recording exists from the first second - and a capture the server already
+  /// holds is a capture the user can send to the chat mid-meeting, which is the whole reason for this.
+  ///
+  /// Fire-and-forget from the capture hot path, but strictly SEQUENTIAL: auto-capture can fire several
+  /// in a second, and twenty concurrent multipart POSTs would compete with the audio chunks the same
+  /// recording is streaming. A failure (a 413 at the screenshot quota, a network blip) leaves `serverId`
+  /// unset, which puts the capture back on the attach-on-stop path and its existing retry banner - so
+  /// the worst case is the behaviour that shipped before this.
+  function uploadLiveShot(shot: PendingShot) {
+    const live = liveRef.current;
+    if (!live) return;
+    const recordingId = live.recordingId;
+    shotUploadChain.current = shotUploadChain.current
+      .then(async () => {
+        // Re-read the ref rather than trusting the array captured above: the user may have deleted this
+        // capture while it sat in the queue, and uploading it then would put it back on the recording.
+        if (!liveShotsRef.current.some((s) => s.id === shot.id)) return;
+        const created = await api.createScreenshot(recordingId, shot);
+        const withId = (s: PendingShot) => (s.id === shot.id ? { ...s, serverId: created.id } : s);
+        liveShotsRef.current = liveShotsRef.current.map(withId);
+        setLiveShots((prev) => prev.map(withId));
+        if (userId) await setPendingScreenshotServerId(userId, shot.id, created.id);
+      })
+      .catch(() => {
+        // Deliberately silent. Attach-on-stop still has this capture and will send it, and a toast per
+        // failed capture during a meeting would be noise about something already handled.
+      });
   }
 
   /// The per-capture delete button. Filters the *current* ref, not a value captured at render time, so
@@ -762,11 +801,16 @@ export default function Recorder({
   /// Addressed by id rather than position, because the pop-out notes window renders its own copy of
   /// this strip - there the gap between render and click is a whole window boundary wide.
   function deleteLiveShot(id: string) {
+    const gone = liveShotsRef.current.find((s) => s.id === id);
     const next = liveShotsRef.current.filter((s) => s.id !== id);
     if (next.length === liveShotsRef.current.length) return;
     liveShotsRef.current = next;
     setLiveShots(next);
     if (userId) void removePendingScreenshot(userId, id);
+    // Only when the server actually has it. Fire-and-forget: a failed delete leaves an orphan the user
+    // can remove from the recording's Notes tab afterwards, which beats blocking the panel on it.
+    const live = liveRef.current;
+    if (gone?.serverId && live) void api.deleteScreenshot(live.recordingId, gone.serverId).catch(() => {});
   }
 
   /// Attach captures to the created recording. Success clears the durable stash; failure keeps the
@@ -778,7 +822,13 @@ export default function Recorder({
   /// store already *is* the un-uploaded remainder, and a retry can't re-post captures the server already
   /// has.
   async function attachScreenshots(recordingId: string, fromRetry?: PendingScreenshots) {
-    const shots = fromRetry ? fromRetry.shots : liveShotsRef.current;
+    const all = fromRetry ? fromRetry.shots : liveShotsRef.current;
+    // A capture uploaded during a live session is already on the recording. Posting it again would put
+    // a duplicate on the transcript - which is exactly what the recovery path would do after a crash if
+    // `serverId` were only ever held in memory, hence its being persisted in the stash.
+    const alreadySent = all.filter((s) => s.serverId);
+    const shots = all.filter((s) => !s.serverId);
+    if (userId) for (const s of alreadySent) void removePendingScreenshot(userId, s.id);
     if (shots.length === 0) {
       if (userId) void clearPendingScreenshots(userId);
       return;
@@ -905,6 +955,29 @@ export default function Recorder({
     };
   }, []);
 
+  // ---- Sending the running meeting, and its captures, to the chat ----
+
+  /// `liveRecordingId` above is the state the transcript panel already runs off - state rather than
+  /// `liveRef`, which is a ref and would leave these buttons disabled until something else re-rendered.
+
+  /// "Use in chat": put the running meeting into the chat prompt as sticky context.
+  ///
+  /// The recording id, not the transcript text. The server already prefixes a recording in status Live
+  /// with "This meeting is IN PROGRESS and still being recorded", and resolves the id when the question
+  /// is asked - so what the model reads is current rather than a paste that went stale the moment the
+  /// meeting carried on.
+  function sendTranscriptToChat() {
+    if (liveRecordingId) attachLiveRecordingToChat(liveRecordingId);
+  }
+
+  /// One capture into the chat prompt. Addressed by its panel id, because that is the only id the
+  /// pop-out knows; the server id it needs is looked up here, where the shots actually live.
+  function sendShotToChat(id: string) {
+    const shot = liveShotsRef.current.find((s) => s.id === id);
+    if (!shot?.serverId || !liveRecordingId) return;
+    attachScreenshotToChat({ recordingId: liveRecordingId, screenshotId: shot.serverId });
+  }
+
   // ---- Pop-out notes window (desktop shell only) ----
 
   const shellBridge = (window as unknown as { diariz?: TrayBridge }).diariz;
@@ -913,7 +986,14 @@ export default function Recorder({
   const notesState: NotesState = {
     lines: notes.lines,
     // Only what the pop-out renders. The full-resolution PNG stays in this window.
-    shots: liveShots.map((s) => ({ id: s.id, capturedAtMs: s.capturedAtMs, thumb: s.thumb })),
+    shots: liveShots.map((s) => ({
+      id: s.id,
+      capturedAtMs: s.capturedAtMs,
+      thumb: s.thumb,
+      // Present only for a capture the server already holds, which is what lets the pop-out know
+      // whether its Chat button can do anything and, if not, which of the two reasons to give.
+      serverId: s.serverId,
+    })),
     canCapture: canCaptureScreenshots(),
     captureAreaSet,
     autoCapture,
@@ -924,6 +1004,9 @@ export default function Recorder({
     liveTranscript: live.transcript ?? undefined,
     liveLagSeconds: live.lagSeconds,
     liveDegraded: live.degraded,
+    // Which recording is streaming, so the pop-out can tell a capture that is still uploading from one
+    // that has nowhere to go. It never calls anything with it - that window makes no API calls.
+    liveRecordingId: liveRecordingId ?? undefined,
     // A reading of the recorded clock plus the wall-clock moment it was taken - never a ticking value.
     // The pop-out extrapolates between publishes, which is what keeps its clock smooth once this window
     // is hidden to the tray and Chromium throttles our timers to roughly 1 Hz (the same throttling that
@@ -943,6 +1026,8 @@ export default function Recorder({
       onCapture: requestCapture,
       onChangeArea: requestChangeArea,
       onToggleAutoCapture: requestToggleAutoCapture,
+      onShotToChat: sendShotToChat,
+      onTranscriptToChat: sendTranscriptToChat,
     },
   });
 
@@ -1740,6 +1825,9 @@ export default function Recorder({
               // Only the shell can pin a window above a full-screen call, so a plain browser gets no
               // control at all rather than one that opens a tab it cannot float.
               onPopOut={shellBridge?.openNotesPopout ? popOut : undefined}
+              onTranscriptToChat={sendTranscriptToChat}
+              onShotToChat={sendShotToChat}
+              liveRecordingId={liveRecordingId ?? undefined}
             />
           </div>
         )}

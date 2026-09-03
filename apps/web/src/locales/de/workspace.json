@@ -764,5 +764,14 @@
   "notesPinToMoment": "Eine Notiz zu diesem Moment schreiben",
   "notesUnpin": "Wieder der Uhr folgen",
   "notesEnterHint": "Enter drücken, um die Notiz abzulegen",
-  "notesFilterLabel": "Stream filtern"
+  "notesFilterLabel": "Stream filtern",
+  "notesUseInChat": "Im Chat verwenden",
+  "notesUseInChatHint": "Alles bisher Transkribierte als Kontext in den Chat übernehmen",
+  "notesTranscriptSent": "Transkript an den Chat gesendet",
+  "notesCaptureChat": "Chat",
+  "notesCaptureChatHint": "Diese Aufnahme dem Chat hinzufügen",
+  "notesCaptureSent": "Aufnahme dem Chat hinzugefügt",
+  "notesCaptureChatUploading": "Wird noch hochgeladen",
+  "notesCaptureChatNoLive": "Verfügbar, sobald die Aufnahme gespeichert ist",
+  "notesDragToChat": "in den Chat ziehen"
 }

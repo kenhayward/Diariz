@@ -121,5 +121,7 @@
   "attachedScreenshot": "Captura adjunta",
   "removeScreenshot": "Quitar captura",
   "selectVisionModel": "Seleccione un modelo con vision",
-  "dropScreenshot": "Suelte para anadirla al mensaje"
+  "dropScreenshot": "Suelte para anadirla al mensaje",
+  "liveMeetingContext": "Reunión en directo",
+  "removeLiveMeeting": "Quitar la reunión en directo del contexto del chat"
 }

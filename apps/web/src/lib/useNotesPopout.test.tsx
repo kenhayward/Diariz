@@ -30,6 +30,8 @@ const handlers = () => ({
   onDeleteShot: vi.fn(),
   onCapture: vi.fn(),
   onChangeArea: vi.fn(),
+  onShotToChat: vi.fn(),
+  onTranscriptToChat: vi.fn(),
 });
 
 /// Exposes the hook's return value to the test through a button label and two escape hatches.
@@ -95,6 +97,8 @@ describe("useNotesPopout", () => {
       captured.onDeleteShot("s1");
       captured.onCapture();
       captured.onChangeArea();
+      captured.onShotToChat("shot-7");
+      captured.onTranscriptToChat();
     });
 
     expect(on.onAdd).toHaveBeenCalledWith("from the pop-out", undefined);
@@ -106,6 +110,10 @@ describe("useNotesPopout", () => {
     expect(on.onDeleteShot).toHaveBeenCalledWith("s1");
     expect(on.onCapture).toHaveBeenCalledTimes(1);
     expect(on.onChangeArea).toHaveBeenCalledTimes(1);
+    // The chat lives in this window, not the pop-out's, so both of these have to come back here to be
+    // acted on - a publish from over there would reach no subscribers at all.
+    expect(on.onShotToChat).toHaveBeenCalledWith("shot-7");
+    expect(on.onTranscriptToChat).toHaveBeenCalledTimes(1);
   });
 
   it("reads the current state, not the one captured when hosting began", () => {

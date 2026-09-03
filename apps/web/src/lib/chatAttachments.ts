@@ -66,3 +66,31 @@ export function onChatTextAttached(listener: TextListener): () => void {
     textListeners.delete(listener);
   };
 }
+
+type LiveRecordingListener = (recordingId: string) => void;
+
+const liveRecordingListeners = new Set<LiveRecordingListener>();
+
+/// Put the meeting currently being recorded into the chat prompt as sticky context.
+///
+/// A THIRD channel, on the same reasoning that separates the two above: it carries a different thing to
+/// a different place. What crosses here is a recording **id**, not text - and that is the whole design.
+///
+/// The server already frames a recording in status `Live` with "This meeting is IN PROGRESS and still
+/// being recorded" (`ChatContextBuilder`), and a live session creates the recording from the first
+/// second, so an id is resolved against the transcript as it stands *at the moment the question is
+/// asked*. A pasted snapshot would be stale the moment the meeting carried on, and it would also have to
+/// go somewhere: the composer's context pill is single-origin, so a transcript pasted into it would
+/// either accumulate a second copy on every press or fight the OCR/file pill with a confirm dialog.
+export function attachLiveRecordingToChat(recordingId: string): void {
+  // Iterate a copy, for the same reason as the channels above.
+  for (const listener of [...liveRecordingListeners]) listener(recordingId);
+}
+
+/// Subscribe to the running meeting being sent to chat. Returns the unsubscribe function.
+export function onChatLiveRecordingAttached(listener: LiveRecordingListener): () => void {
+  liveRecordingListeners.add(listener);
+  return () => {
+    liveRecordingListeners.delete(listener);
+  };
+}

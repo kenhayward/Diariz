@@ -121,5 +121,7 @@
   "attachedScreenshot": "Capture jointe",
   "removeScreenshot": "Retirer la capture",
   "selectVisionModel": "Selectionnez un modele de vision",
-  "dropScreenshot": "Deposez pour l'ajouter au message"
+  "dropScreenshot": "Deposez pour l'ajouter au message",
+  "liveMeetingContext": "Réunion en direct",
+  "removeLiveMeeting": "Retirer la réunion en direct du contexte du chat"
 }

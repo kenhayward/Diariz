@@ -500,3 +500,148 @@ describe("LiveNotesStream auto-scroll", () => {
     expect(list.scrollTop).toBe(100);
   });
 });
+
+
+describe("LiveNotesStream - the running meeting into the chat", () => {
+  it("offers nothing to send when nothing is being transcribed", () => {
+    // Without a live session there is no server-side transcript for the chat to reference, exactly as
+    // the Transcript tab used to be hidden when nothing was being transcribed.
+    renderStream({ onTranscriptToChat: vi.fn() });
+
+    expect(screen.queryByRole("button", { name: /use in chat/i })).toBeNull();
+  });
+
+  it("hands the running meeting to the host and confirms in place", () => {
+    // Replaced in place rather than confirming elsewhere: the user is looking at the button they just
+    // pressed, and the panel deliberately neither closes nor moves focus - they are in a meeting.
+    vi.useFakeTimers();
+    try {
+      const onTranscriptToChat = vi.fn();
+      renderStream({ liveTranscript: transcript({ startMs: 0 }), onTranscriptToChat });
+
+      fireEvent.click(screen.getByRole("button", { name: /use in chat/i }));
+
+      expect(onTranscriptToChat).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole("status").textContent).toMatch(/transcript sent to chat/i);
+      expect(screen.queryByRole("button", { name: /use in chat/i })).toBeNull();
+
+      act(() => vi.advanceTimersByTime(2_600));
+
+      expect(screen.getByRole("button", { name: /use in chat/i })).toBeTruthy();
+      expect(screen.queryByText(/transcript sent to chat/i)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("leaves the composer where it was rather than taking focus to the chat", () => {
+    const onTranscriptToChat = vi.fn();
+    renderStream({ liveTranscript: transcript({ startMs: 0 }), onTranscriptToChat });
+    composer().focus();
+
+    fireEvent.click(screen.getByRole("button", { name: /use in chat/i }));
+
+    expect(document.activeElement).toBe(composer());
+  });
+});
+
+describe("LiveNotesStream - a capture into the chat", () => {
+  const withServerId = (over: Partial<ShotView> = {}): ShotView => ({
+    ...shot(1_000),
+    serverId: "srv-1",
+    ...over,
+  });
+
+  it("sends the capture the user clicked, and confirms on the status line", () => {
+    vi.useFakeTimers();
+    try {
+      const onShotToChat = vi.fn();
+      const uploaded = withServerId();
+      renderStream({
+        shots: [uploaded],
+        capture,
+        liveTranscript: transcript({ startMs: 0 }),
+        liveRecordingId: "live-1",
+        onShotToChat,
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: /^chat$/i }));
+
+      expect(onShotToChat).toHaveBeenCalledWith(uploaded.id);
+      expect(screen.getByText(/capture added to chat/i)).toBeTruthy();
+
+      act(() => vi.advanceTimersByTime(2_400));
+
+      expect(screen.queryByText(/capture added to chat/i)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("says a capture is still uploading rather than greying out silently", () => {
+    // Inert by handler, not `disabled`: Chromium does not dispatch mouse events to a disabled control,
+    // so its title never renders and the user is left with a dead button and no explanation.
+    const onShotToChat = vi.fn();
+    renderStream({ shots: [shot(1_000)], capture, liveRecordingId: "live-1", onShotToChat });
+
+    const button = screen.getByRole("button", { name: /^chat$/i });
+    fireEvent.click(button);
+
+    expect(onShotToChat).not.toHaveBeenCalled();
+    expect(button.getAttribute("title")).toMatch(/still uploading/i);
+  });
+
+  it("says a capture waits for the recording to be saved when nothing is streaming", () => {
+    // A different situation entirely from "still uploading": without a live session the recording does
+    // not exist yet, so no amount of waiting during the meeting will make this capture sendable.
+    const onShotToChat = vi.fn();
+    renderStream({ shots: [shot(1_000)], capture, onShotToChat });
+
+    const button = screen.getByRole("button", { name: /^chat$/i });
+    fireEvent.click(button);
+
+    expect(onShotToChat).not.toHaveBeenCalled();
+    expect(button.getAttribute("title")).toMatch(/once the recording is saved/i);
+  });
+
+  it("offers no Chat button at all where there is no chat to send to", () => {
+    renderStream({ shots: [withServerId()], capture, liveRecordingId: "live-1" });
+
+    expect(screen.queryByRole("button", { name: /^chat$/i })).toBeNull();
+  });
+});
+
+describe("LiveNotesStream - dragging a capture", () => {
+  it("carries the pair the chat composer already parses", () => {
+    const uploaded: ShotView = { ...shot(7_000), serverId: "srv-7" };
+    renderStream({ shots: [uploaded], capture, liveRecordingId: "live-1" });
+
+    const setData = vi.fn();
+    fireEvent.dragStart(screen.getByRole("img"), {
+      dataTransfer: { setData, effectAllowed: "none" },
+    });
+
+    expect(setData).toHaveBeenCalledWith(
+      "application/x-diariz-screenshot",
+      JSON.stringify({ recordingId: "live-1", screenshotId: "srv-7", capturedAtMs: 7_000 }),
+    );
+  });
+
+  it("does not offer a capture the server does not have yet as draggable", () => {
+    // Dropping it would put an id the server cannot resolve into the chat.
+    renderStream({ shots: [shot(1_000)], capture, liveRecordingId: "live-1" });
+
+    expect(screen.getByRole("img").getAttribute("draggable")).toBe("false");
+    expect(screen.queryByTestId("capture-drag-hint")).toBeNull();
+  });
+
+  it("shows the drag hint only on a capture that can actually be dragged", () => {
+    renderStream({
+      shots: [{ ...shot(1_000), serverId: "srv-1" }, shot(2_000)],
+      capture,
+      liveRecordingId: "live-1",
+    });
+
+    expect(screen.getAllByTestId("capture-drag-hint")).toHaveLength(1);
+  });
+});

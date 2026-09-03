@@ -764,5 +764,14 @@
   "notesPinToMoment": "Write a note about this moment",
   "notesUnpin": "Follow the clock again",
   "notesEnterHint": "Press Enter to file the note",
-  "notesFilterLabel": "Filter the stream"
+  "notesFilterLabel": "Filter the stream",
+  "notesUseInChat": "Use in chat",
+  "notesUseInChatHint": "Send everything transcribed so far into the chat prompt as context",
+  "notesTranscriptSent": "Transcript sent to chat",
+  "notesCaptureChat": "Chat",
+  "notesCaptureChatHint": "Add this capture to the chat prompt",
+  "notesCaptureSent": "Capture added to chat",
+  "notesCaptureChatUploading": "Still uploading",
+  "notesCaptureChatNoLive": "Available once the recording is saved",
+  "notesDragToChat": "drag to chat"
 }
