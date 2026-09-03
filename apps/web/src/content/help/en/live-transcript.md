@@ -1,23 +1,38 @@
 ---
 title: The live transcript
-summary: While you are recording, a Transcript tab in the notes panel fills in as the meeting runs. It is provisional, it does not name speakers yet, and the full transcript replaces it when you stop.
+summary: While you are recording, the transcript fills in on the notes panel's single timeline as the meeting runs, each line stamped with the moment it was said. It is provisional, and the full transcript replaces it when you stop.
 group: getting-started
 order: 30
 ---
 
 Diariz writes the transcript while the meeting is happening, so you no longer have to wait for the
-end to check what was said. Open the notes panel while you are recording and there is a **Transcript**
-tab beside your notes.
+end to check what was said. Open the notes panel while you are recording and it is there.
+
+There is no separate tab for it. The transcript lands on the same stream as your own notes and your
+screen captures, in the order everything happened, so what was said and what you wrote about it sit
+next to each other. If you want only your own lines for a moment, the **Notes** chip at the top
+narrows the stream to them.
 
 ## What you see
 
-Text appears roughly every half minute, a little behind the conversation. Above it is a status line
-telling you where things stand:
+Each line carries the time it was said, and text appears roughly every half minute, a little behind
+the conversation. Under the stream is a status line telling you where things stand:
 
 - **Live** - the transcript has caught up with the meeting.
-- **A few seconds behind** - normal. The transcriber works on the audio in slices, so it is always a
-  little behind whoever is talking.
-- **Paused** - live transcription has stopped for now. See below.
+- **Live - transcript 16s behind** - normal. The transcriber works on the audio in slices, so it is
+  always a little behind whoever is talking. Hover the line for the longer explanation.
+- **Live transcript paused** - live transcription has stopped for now. See below.
+
+## Writing a note about something that was just said
+
+Hover any transcript line and a small **+** appears at the end of it. Press it and the box you type in
+is pinned to that line's moment: whatever you write next is filed there rather than wherever the clock
+has reached. It is the ordinary case - you hear something, and by the time you have finished listening
+and started typing, half a minute has gone by.
+
+The pin shows as the time on the left of the box. It releases itself the moment you press Enter, so
+the next note follows the clock again. If you change your mind, click the pinned time and it lets go
+without filing anything.
 
 ## You can ask about a meeting you are still in
 
@@ -72,7 +87,7 @@ minutes stale and letting you believe it is current.
 full transcript still arrives when you stop. The only thing you lose is the running view of it, and it
 resumes on its own once the backlog clears.
 
-## If the transcript tab is empty
+## If nothing appears
 
 - Give it a minute. Nothing appears until the first slice has been transcribed.
 - If you are recording in a language Diariz has been told to expect, and nobody has spoken yet, there

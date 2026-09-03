@@ -102,6 +102,40 @@ describe("useLiveNotes", () => {
     });
   });
 
+  it("stamps a line at the moment the caller names, not at the moment it was typed", () => {
+    // Someone hears a sentence, then writes about it forty seconds later. The note belongs beside what
+    // it is about, so the panel can hand over the moment it was pinned to.
+    render(<Harness />);
+
+    stamp = 61_000;
+    act(() => api.add("about that earlier point", 20_000));
+
+    expect(rendered()).toBe("about that earlier point@20000");
+  });
+
+  it("still numbers a pinned line by the list's length, not by where it lands in time", () => {
+    // `ordinal` records the order lines were written, which is what the server orders them by on
+    // attach. A stamp taken from earlier in the meeting must not renumber anything.
+    render(<Harness />);
+    stamp = 30_000;
+    act(() => api.add("written first"));
+    act(() => api.add("written second", 5_000));
+
+    expect(api.snapshot().map((l) => l.ordinal)).toEqual([0, 1]);
+    expect(api.snapshot().map((l) => l.capturedAtMs)).toEqual([30_000, 5_000]);
+  });
+
+  it("mirrors a pinned stamp to the durable stash, so a crash keeps it", () => {
+    render(<Harness />);
+
+    stamp = 61_000;
+    act(() => api.add("pinned", 12_000));
+
+    expect(savePendingNotes).toHaveBeenCalledWith(
+      expect.objectContaining({ lines: [{ text: "pinned", capturedAtMs: 12_000 }] }),
+    );
+  });
+
   it("reset clears the lines and the durable stash", async () => {
     render(<Harness />);
     act(() => api.add("gone"));

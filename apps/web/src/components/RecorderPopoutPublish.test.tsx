@@ -224,6 +224,51 @@ describe("what the recorder publishes to the pop-out window", () => {
     await waitFor(() => expect(published?.liveTranscript?.recordingId).toBe("live-9"));
   });
 
+  it("sends the recorded clock as a reading the pop-out can tick for itself", async () => {
+    // A reading plus the wall-clock moment it was taken, never a ticking value. The pop-out extrapolates
+    // between publishes, which is what lets its clock stay smooth while Chromium throttles this window's
+    // timers to roughly 1 Hz once it is hidden to the tray.
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+
+    await waitFor(() => expect(published?.clock).toBeTruthy());
+    expect(published!.clock!.running).toBe(true);
+    expect(published!.clock!.atWallMs).toBeGreaterThan(0);
+    expect(published!.clock!.recordedMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("stops the pop-out's clock while the recording is paused", async () => {
+    // The pop-out must not go on counting a meeting that is not being recorded. `running: false` is what
+    // freezes it; without it the detached window would drift ahead of the stamp on every note filed.
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+    await waitFor(() => expect(published?.clock?.running).toBe(true));
+
+    fireEvent.click(screen.getByRole("button", { name: /pause/i }));
+
+    await waitFor(() => expect(published?.clock?.running).toBe(false));
+  });
+
+  it("republishes a fresh reading on resume, so the pop-out does not extrapolate across the gap", async () => {
+    // Resuming without a new `atWallMs` would leave the client extrapolating from a reading taken before
+    // the pause, adding the whole paused interval to the clock the moment it started again.
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+    await waitFor(() => expect(published?.clock?.running).toBe(true));
+
+    fireEvent.click(screen.getByRole("button", { name: /pause/i }));
+    await waitFor(() => expect(published?.clock?.running).toBe(false));
+    const whilePaused = published!.clock!;
+
+    fireEvent.click(screen.getByRole("button", { name: /resume/i }));
+
+    await waitFor(() => expect(published?.clock?.running).toBe(true));
+    expect(published!.clock!.atWallMs).toBeGreaterThanOrEqual(whilePaused.atWallMs);
+  });
+
   it("sends the paused state rather than a hardcoded false", async () => {
     (api.beginLive as Mock).mockResolvedValue({ id: "live-10", sessionId: "s10", status: "Live" });
 

@@ -89,6 +89,7 @@ describe("useNotesPopout", () => {
 
     act(() => {
       captured.onAdd("from the pop-out");
+      captured.onAdd("pinned to a line", 20_000);
       captured.onEdit("n1", "revised");
       captured.onDelete("n1");
       captured.onDeleteShot("s1");
@@ -96,7 +97,10 @@ describe("useNotesPopout", () => {
       captured.onChangeArea();
     });
 
-    expect(on.onAdd).toHaveBeenCalledWith("from the pop-out");
+    expect(on.onAdd).toHaveBeenCalledWith("from the pop-out", undefined);
+    // A note the pop-out pinned to an earlier moment must reach the host with that moment attached -
+    // the host still stamps, it is just told which second to use.
+    expect(on.onAdd).toHaveBeenCalledWith("pinned to a line", 20_000);
     expect(on.onEdit).toHaveBeenCalledWith("n1", "revised");
     expect(on.onDelete).toHaveBeenCalledWith("n1");
     expect(on.onDeleteShot).toHaveBeenCalledWith("s1");

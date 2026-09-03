@@ -44,6 +44,16 @@ export interface NotesState {
   /// different things about the same meeting.
   liveLagSeconds?: number;
   liveDegraded?: boolean;
+  /// The recorded clock as a reading plus the wall-clock moment it was taken, NOT a ticking value. The
+  /// client derives what to display as `recordedMs + (running ? Date.now() - atWallMs : 0)` on its own
+  /// 1s interval.
+  ///
+  /// This shape exists because the host republishes the WHOLE state - every capture's thumbnail blob
+  /// included - on every change. An `elapsedMs` that ticked would rebroadcast the meeting's captures
+  /// several times a second for the length of the meeting. Pause and resume already republish on their
+  /// own (they change `recording`/`paused`, which re-renders the state), so `running` and a fresh
+  /// `atWallMs` reach the client exactly when they need to.
+  clock?: { recordedMs: number; atWallMs: number; running: boolean };
 }
 
 type HostMessage = { type: "state"; state: NotesState } | { type: "ended" };
@@ -51,7 +61,7 @@ type HostMessage = { type: "state"; state: NotesState } | { type: "ended" };
 type ClientMessage =
   | { type: "hello" }
   | { type: "ping" }
-  | { type: "add"; text: string }
+  | { type: "add"; text: string; atMs?: number }
   | { type: "edit"; id: string; text: string }
   | { type: "delete"; id: string }
   | { type: "deleteShot"; id: string }
@@ -79,7 +89,10 @@ function open(channel?: ChannelLike): ChannelLike {
 // ---- Host (the main window) ----
 
 export interface NotesHostHandlers {
-  onAdd(text: string): void;
+  /// `atMs` present means the client pinned the note to a moment; absent means it follows the clock,
+  /// and the host stamps it. Deliberately optional rather than defaulted to zero - a zero would file
+  /// every ordinary note at the very start of the meeting.
+  onAdd(text: string, atMs?: number): void;
   onEdit(id: string, text: string): void;
   onDelete(id: string): void;
   onDeleteShot(id: string): void;
@@ -122,7 +135,7 @@ export function createNotesHost(
         publish();
         break;
       case "add":
-        handlers.onAdd(m.text);
+        handlers.onAdd(m.text, m.atMs);
         break;
       case "edit":
         handlers.onEdit(m.id, m.text);
@@ -168,7 +181,7 @@ export interface NotesClientHandlers {
 }
 
 export interface NotesClient {
-  add(text: string): void;
+  add(text: string, atMs?: number): void;
   edit(id: string, text: string): void;
   remove(id: string): void;
   removeShot(id: string): void;
@@ -217,7 +230,7 @@ export function createNotesClient(
   send({ type: "hello" });
 
   return {
-    add: (text) => send({ type: "add", text }),
+    add: (text, atMs) => send({ type: "add", text, atMs }),
     edit: (id, text) => send({ type: "edit", id, text }),
     remove: (id) => send({ type: "delete", id }),
     removeShot: (id) => send({ type: "deleteShot", id }),

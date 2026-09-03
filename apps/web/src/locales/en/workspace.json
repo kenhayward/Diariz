@@ -233,7 +233,6 @@
   "notesCancel": "Cancel",
   "notesJump": "Jump to {{time}} in the transcript",
   "liveNotesTitle": "Notes while recording",
-  "liveNotesHint": "Each line is stamped at the moment you press Enter.",
   "liveNotesToggle": "Notes",
   "noteSpeakerYou": "You",
   "liveNotesClose": "Close notes",
@@ -754,5 +753,16 @@
   "suggestionExcludedCount_other": "{{count}} segments left out of the voiceprint",
   "suggestionRestoreExcluded": "Restore",
   "suggestionTrainsFrom": "Confirming trains from {{kept}} of {{total}} segments",
-  "liveTranscriptTab": "Transcript"
+  "liveNotesRecording": "Recording",
+  "notesPopoutTitle": "Diariz - live notes",
+  "notesComposerPlaceholder": "Note this moment...",
+  "notesFilterAll": "Everything",
+  "notesFilterNotes": "Notes {{n}}",
+  "notesFilterCaptures": "Captures {{n}}",
+  "notesFilterNotesOnly": "notes only",
+  "notesFilterCapturesOnly": "captures only",
+  "notesPinToMoment": "Write a note about this moment",
+  "notesUnpin": "Follow the clock again",
+  "notesEnterHint": "Press Enter to file the note",
+  "notesFilterLabel": "Filter the stream"
 }

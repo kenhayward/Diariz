@@ -233,7 +233,6 @@
   "notesCancel": "Annuler",
   "notesJump": "Aller à {{time}} dans la transcription",
   "liveNotesTitle": "Notes pendant l'enregistrement",
-  "liveNotesHint": "Chaque ligne est horodatée au moment où vous appuyez sur Entrée.",
   "liveNotesToggle": "Notes",
   "noteSpeakerYou": "Vous",
   "liveNotesClose": "Fermer les notes",
@@ -754,5 +753,16 @@
   "suggestionExcludedCount_other": "{{count}} passages exclus de l'empreinte vocale",
   "suggestionRestoreExcluded": "Restaurer",
   "suggestionTrainsFrom": "Confirmer entraine sur {{kept}} passages sur {{total}}",
-  "liveTranscriptTab": "Transcription"
+  "liveNotesRecording": "Enregistrement",
+  "notesPopoutTitle": "Diariz - notes en direct",
+  "notesComposerPlaceholder": "Noter ce moment...",
+  "notesFilterAll": "Tout",
+  "notesFilterNotes": "Notes {{n}}",
+  "notesFilterCaptures": "Captures {{n}}",
+  "notesFilterNotesOnly": "notes seulement",
+  "notesFilterCapturesOnly": "captures seulement",
+  "notesPinToMoment": "Écrire une note sur ce moment",
+  "notesUnpin": "Suivre de nouveau l'horloge",
+  "notesEnterHint": "Appuyez sur Entrée pour enregistrer la note",
+  "notesFilterLabel": "Filtrer le flux"
 }

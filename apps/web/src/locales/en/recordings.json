@@ -25,5 +25,8 @@
   "liveTranscriptSpeakerGuess": "Diariz thinks this is who is speaking, but is not certain. The finished transcript confirms it.",
   "liveTranscriptBehind": "Transcribing as you talk, about {{seconds}}s behind. This text is not final.",
   "liveTranscriptDegraded": "The live transcript has paused. Recording is unaffected, and the full transcript will be ready after the meeting.",
-  "liveTranscriptEmpty": "Waiting for the first transcript. It takes a moment to arrive, and about half a minute of the meeting at a time after that."
+  "liveTranscriptEmpty": "Waiting for the first transcript. It takes a moment to arrive, and about half a minute of the meeting at a time after that.",
+  "liveStatusLive": "Live",
+  "liveStatusBehind": "Live - transcript {{seconds}}s behind",
+  "liveStatusPaused": "Live transcript paused"
 }

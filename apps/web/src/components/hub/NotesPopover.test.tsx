@@ -22,6 +22,7 @@ const baseProps: NotesPopoverProps = {
   onDelete: () => {},
   shots: [],
   onDeleteShot: () => {},
+  elapsedMs: 0,
 };
 
 // The desktop shell's half of the props: both capture handlers arrive together (Recorder gates them on
@@ -197,35 +198,56 @@ describe("NotesPopover pop-out control", () => {
   });
 });
 
-describe("NotesPopover live transcript tab", () => {
+describe("NotesPopover one stream", () => {
   const transcript = {
     recordingId: "rec-1",
     highestSequence: 0,
     segments: [{ id: "0-0", startMs: 0, endMs: 3000, text: "shall we make a start", sequence: 0 }],
   };
 
-  it("offers no transcript tab when live transcription is not running", () => {
-    // An older server, or a deployment without the hardware for it. An empty tab that never fills
-    // would be worse than no tab: it promises something that is not coming.
-    renderPopover();
-    expect(screen.queryByRole("tab", { name: /transcript/i })).toBeNull();
+  it("offers no tabs at all", () => {
+    // The Notes / Transcript tabs are gone. What someone wants while a meeting runs is to see what was
+    // just said and write about it in one movement, and the tab put a click between those two things.
+    renderPopover({ liveTranscript: transcript, ...shell });
+
+    expect(screen.queryAllByRole("tab")).toHaveLength(0);
   });
 
-  it("shows notes first, with the transcript a tab away", () => {
-    // Notes are what someone opened this to write; the transcript is a reference beside them.
-    renderPopover({ liveTranscript: transcript });
+  it("shows a transcript line, a note and a capture in one list", () => {
+    renderPopover({
+      liveTranscript: transcript,
+      lines: [{ id: "n1", text: "my point", capturedAtMs: 5_000, ordinal: 0, createdAt: "2026-09-03T10:00:00.000Z" }],
+      shots: [shot(9_000)],
+      ...shell,
+    });
 
-    expect(screen.getByRole("tab", { name: /transcript/i }).getAttribute("aria-selected")).toBe("false");
-    expect(screen.queryAllByTestId("live-transcript-line")).toHaveLength(0);
+    const stream = screen.getByTestId("notes-stream");
+    expect(stream.querySelectorAll('[data-testid="stream-transcript"]')).toHaveLength(1);
+    expect(stream.querySelectorAll('[data-testid="stream-note"]')).toHaveLength(1);
+    expect(stream.querySelectorAll('[data-testid="stream-capture"]')).toHaveLength(1);
   });
 
-  it("switches to the transcript when the tab is chosen", () => {
-    renderPopover({ liveTranscript: transcript });
+  it("shows the transcript without a tab to reach it", () => {
+    renderPopover({ liveTranscript: transcript, ...shell });
 
-    fireEvent.click(screen.getByRole("tab", { name: /transcript/i }));
+    expect(screen.getByText("shall we make a start")).toBeTruthy();
+  });
 
-    expect(screen.getAllByTestId("live-transcript-line").map((n) => n.textContent))
-      .toEqual(["shall we make a start"]);
+  it("carries the composer's stamp and the header clock off the recorded clock", () => {
+    renderPopover({ elapsedMs: 3_904_000, ...shell });
+
+    expect(screen.getByTestId("notes-elapsed").textContent).toBe("1:05:04");
+    expect(screen.getByTestId("composer-stamp").textContent).toBe("1:05:04");
+  });
+
+  it("files a note through the host, stamped or not", () => {
+    const onAdd = vi.fn();
+    renderPopover({ onAdd, elapsedMs: 61_000, ...shell });
+
+    const box = screen.getByLabelText(/note this moment/i);
+    fireEvent.change(box, { target: { value: "a thought" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+
+    expect(onAdd).toHaveBeenCalledWith("a thought", undefined);
   });
 });
-

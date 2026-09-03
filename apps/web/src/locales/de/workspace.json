@@ -233,7 +233,6 @@
   "notesCancel": "Abbrechen",
   "notesJump": "Zu {{time}} im Transkript springen",
   "liveNotesTitle": "Notizen während der Aufnahme",
-  "liveNotesHint": "Jede Zeile wird in dem Moment gestempelt, in dem Sie die Eingabetaste drücken.",
   "liveNotesToggle": "Notizen",
   "noteSpeakerYou": "Sie",
   "liveNotesClose": "Notizen schließen",
@@ -754,5 +753,16 @@
   "suggestionExcludedCount_other": "{{count}} Abschnitte nicht im Stimmabdruck",
   "suggestionRestoreExcluded": "Wiederherstellen",
   "suggestionTrainsFrom": "Bestaetigen schult mit {{kept}} von {{total}} Abschnitten",
-  "liveTranscriptTab": "Transkript"
+  "liveNotesRecording": "Aufnahme",
+  "notesPopoutTitle": "Diariz - Live-Notizen",
+  "notesComposerPlaceholder": "Diesen Moment notieren...",
+  "notesFilterAll": "Alles",
+  "notesFilterNotes": "Notizen {{n}}",
+  "notesFilterCaptures": "Aufnahmen {{n}}",
+  "notesFilterNotesOnly": "nur Notizen",
+  "notesFilterCapturesOnly": "nur Aufnahmen",
+  "notesPinToMoment": "Eine Notiz zu diesem Moment schreiben",
+  "notesUnpin": "Wieder der Uhr folgen",
+  "notesEnterHint": "Enter drücken, um die Notiz abzulegen",
+  "notesFilterLabel": "Stream filtern"
 }

@@ -1,51 +1,40 @@
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import HubPopover from "./HubPopover";
-import NotesSection from "../NotesSection";
-import ShotStrip from "./ShotStrip";
-import CaptureControls from "./CaptureControls";
-import LiveTranscriptPanel from "./LiveTranscriptPanel";
+import LiveNotesStream from "./LiveNotesStream";
+import { IconClose, IconPopOut } from "./hubGlyphs";
+import { formatDuration } from "../../lib/format";
 import type { LiveTranscript } from "../../lib/liveTranscript";
 import type { MeetingNote } from "../../lib/types";
 import type { PendingShot } from "../../lib/pendingScreenshots";
-
-const IconPopOut = () => (
-  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true" focusable="false"
-    stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
-  </svg>
-);
-
-const IconClose = () => (
-  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true" focusable="false"
-    stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-    <path d="M6 6l12 12M18 6L6 18" />
-  </svg>
-);
 
 export type NotesPopoverProps = {
   open: boolean;
   onClose: () => void;
   lines: MeetingNote[];
-  onAdd: (text: string) => void;
+  /// `atMs` present means the note was pinned to a moment earlier in the meeting; absent means it
+  /// follows the recorded clock, which only the host can read.
+  onAdd: (text: string, atMs?: number) => void;
   onEdit: (id: string, text: string) => void;
   onDelete: (id: string) => void;
   shots: PendingShot[];
   /// Delete one capture, addressed by id rather than position - captures can arrive at any moment, so
   /// an index read at render time may not be the one the user clicked by the time the click lands.
   onDeleteShot: (id: string) => void;
+  /// The recorded clock, in ms. Drives the header's elapsed time and the composer's stamp badge.
+  elapsedMs: number;
   /// The transcript of the meeting in progress, or absent when live transcription is not running -
   /// an older server, a deployment without the hardware for it, or a capture that began before the
-  /// server could be reached. Absent hides the tab entirely rather than showing an empty one.
+  /// server could be reached. Absent hides the status line; the stream itself still runs.
   liveTranscript?: LiveTranscript;
   /// How far behind the meeting the transcript is, in whole seconds.
   liveLagSeconds?: number;
   /// The server has stopped transcribing live. Capture is unaffected.
   liveDegraded?: boolean;
-  /// Absent in a plain browser, which is what hides the whole screenshot area.
+  /// Absent in a plain browser, which is what hides the whole capture area.
   onChangeCaptureArea?: () => void;
-  /// Takes a screenshot without closing the popover. Absent in a plain browser, same as onChangeCaptureArea:
-  /// the two arrive together (both gated on the shell bridge), so either one missing hides the section.
+  /// Takes a screenshot without closing the popover. Absent in a plain browser, same as
+  /// onChangeCaptureArea: the two arrive together (both gated on the shell bridge), so either one
+  /// missing hides the capture controls and the Captures chip.
   onCapture?: () => void;
   /// Whether this recording has a capture area yet. Capturing without one opens the area picker, and BOTH
   /// buttons then no-op until that picker is dismissed - which reads as the popover having frozen. So capture
@@ -61,11 +50,27 @@ export type NotesPopoverProps = {
   onPopOut?: () => void;
 };
 
+const headerButton: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 28,
+  height: 28,
+  borderRadius: 8,
+  border: "none",
+  background: "transparent",
+  color: "var(--hub-muted)",
+  cursor: "pointer",
+};
+
 /**
- * The "Notes while recording" popover: a title (with a blinking red recording dot), a subtitle, and the shared
- * NotesSection input + list. It reuses the Recorder's live-notes state/durability/attach-on-stop wholesale -
- * the same `lines` + add/edit/delete callbacks the floating LiveNotesPanel used - so behaviour is unchanged;
- * only the presentation moved into the hub popover. Opened from the pencil icon button while recording.
+ * The "Notes while recording" popover: a header carrying the recording dot and the elapsed clock, and
+ * under it the shared `LiveNotesStream` - notes, captures and the live transcript on one stamped
+ * timeline, with the composer docked at the bottom.
+ *
+ * There used to be a Notes tab and a Transcript tab here. The tabs are gone: what someone wants while a
+ * meeting runs is to see what was just said and write about it in the same movement, and a tab put a
+ * click between those two things at exactly the moment they had least attention to spare.
  */
 export default function NotesPopover({
   open,
@@ -76,6 +81,7 @@ export default function NotesPopover({
   onDelete,
   shots,
   onDeleteShot,
+  elapsedMs,
   liveTranscript,
   liveLagSeconds,
   liveDegraded,
@@ -88,18 +94,27 @@ export default function NotesPopover({
 }: NotesPopoverProps) {
   const { t } = useTranslation("workspace");
 
-  const [activeTab, setActiveTab] = useState<"notes" | "transcript">("notes");
-
   return (
     <HubPopover open={open} onClose={onClose} width={400} anchorClassName="right-0" ariaLabel={t("liveNotesTitle")}>
-      <div data-testid="notes-popover" style={{ padding: 18, display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div data-testid="notes-popover" style={{ display: "flex", flexDirection: "column" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 14px 0" }}>
           <span
             aria-hidden
             style={{ width: 9, height: 9, borderRadius: "50%", background: "var(--hub-red)", animation: "blink 1.2s infinite" }}
           />
-          <span style={{ fontFamily: "system-ui", fontWeight: 700, fontSize: 17, color: "var(--hub-text)" }}>
-            {t("liveNotesTitle")}
+          <span style={{ fontFamily: "system-ui", fontWeight: 700, fontSize: 15, color: "var(--hub-text)" }}>
+            {t("liveNotesRecording")}
+          </span>
+          <span
+            data-testid="notes-elapsed"
+            style={{
+              fontFamily: "ui-monospace, Menlo, monospace",
+              fontWeight: 500,
+              fontSize: 13,
+              color: "var(--hub-muted)",
+            }}
+          >
+            {formatDuration(elapsedMs)}
           </span>
           {onPopOut && (
             <button
@@ -107,20 +122,8 @@ export default function NotesPopover({
               aria-label={t("notesPopOut")}
               title={t("notesPopOut")}
               onClick={onPopOut}
-              style={{
-                // Whichever control comes first carries the auto margin, so the pair stays right-aligned.
-                marginLeft: "auto",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 28,
-                height: 28,
-                borderRadius: 8,
-                border: "none",
-                background: "transparent",
-                color: "var(--hub-muted)",
-                cursor: "pointer",
-              }}
+              // Whichever control comes first carries the auto margin, so the pair stays right-aligned.
+              style={{ ...headerButton, marginLeft: "auto" }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hub-surface-hover)")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >
@@ -131,90 +134,41 @@ export default function NotesPopover({
             type="button"
             aria-label={t("liveNotesClose")}
             onClick={onClose}
-            style={{
-              marginLeft: onPopOut ? 0 : "auto",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 28,
-              height: 28,
-              borderRadius: 8,
-              border: "none",
-              background: "transparent",
-              color: "var(--hub-muted)",
-              cursor: "pointer",
-            }}
+            style={{ ...headerButton, marginLeft: onPopOut ? 0 : "auto" }}
             onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hub-surface-hover)")}
             onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
           >
             <IconClose />
           </button>
         </div>
-        <p style={{ margin: 0, fontFamily: "system-ui", fontWeight: 400, fontSize: 13, color: "var(--hub-muted)" }}>
-          {t("liveNotesHint")}
-        </p>
-        {liveTranscript && (
-          <div role="tablist" style={{ display: "flex", gap: 4 }}>
-            {(["notes", "transcript"] as const).map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                role="tab"
-                aria-selected={activeTab === tab}
-                onClick={() => setActiveTab(tab)}
-                style={{
-                  border: "none",
-                  background: activeTab === tab ? "var(--hub-surface-hover)" : "transparent",
-                  color: activeTab === tab ? "var(--hub-text)" : "var(--hub-muted)",
-                  fontFamily: "system-ui",
-                  fontSize: 13,
-                  fontWeight: activeTab === tab ? 700 : 400,
-                  padding: "4px 10px",
-                  borderRadius: 8,
-                  cursor: "pointer",
-                }}
-              >
-                {tab === "notes" ? t("liveNotesTitle") : t("liveTranscriptTab")}
-              </button>
-            ))}
-          </div>
-        )}
-        <div style={{ maxHeight: 320, overflowY: "auto" }}>
-          {liveTranscript && activeTab === "transcript" ? (
-            <LiveTranscriptPanel
-              transcript={liveTranscript}
-              lagSeconds={liveLagSeconds ?? 0}
-              degraded={liveDegraded ?? false}
-            />
-          ) : (
-            <NotesSection notes={lines} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} />
-          )}
-        </div>
-        {onChangeCaptureArea && onCapture && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 6,
-              borderTop: "1px solid var(--hub-border)",
-              paddingTop: 8,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontFamily: "system-ui", fontWeight: 600, fontSize: 12, color: "var(--hub-text-2)" }}>
-                {t("screenshots")} ({shots.length})
-              </span>
-              <CaptureControls
-                captureAreaSet={captureAreaSet}
-                autoCapture={autoCapture}
-                onToggleAutoCapture={onToggleAutoCapture}
-                onCapture={onCapture}
-                onChangeArea={onChangeCaptureArea}
-              />
-            </div>
-            <ShotStrip shots={shots} onDelete={onDeleteShot} />
-          </div>
-        )}
+
+        <LiveNotesStream
+          variant="popover"
+          lines={lines}
+          shots={shots}
+          elapsedMs={elapsedMs}
+          onAdd={onAdd}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onDeleteShot={onDeleteShot}
+          liveTranscript={liveTranscript}
+          liveLagSeconds={liveLagSeconds}
+          liveDegraded={liveDegraded}
+          // The two capture handlers arrive together or not at all (the recorder gates both on one
+          // `canCaptureScreenshots()` check), so a half-supplied pair hides the capture controls rather
+          // than rendering a row with a gap in it.
+          capture={
+            onChangeCaptureArea && onCapture
+              ? {
+                  captureAreaSet,
+                  autoCapture,
+                  onToggleAutoCapture,
+                  onCapture,
+                  onChangeArea: onChangeCaptureArea,
+                }
+              : undefined
+          }
+        />
       </div>
     </HubPopover>
   );

@@ -89,9 +89,11 @@ that selection plays, so you can stop it without waiting for it to finish. The *
 every row** is the same assignment dropdown as the Speakers panel, so you can name a voice (or enrol a new
 person) at the moment you hear them, without leaving the transcript.
 - **Live transcript while the meeting runs.** The transcript no longer waits for the meeting to end.
-  Open the notes panel while recording and there is a **Transcript** tab beside your notes, filling
-  in roughly every half minute with what has been said, so you can check what someone said twenty
-  minutes ago while they are still in the room. The **assistant can be asked about a meeting that is
+  Open the notes panel while recording and it fills in roughly every half minute with what has been
+  said, so you can check what someone said twenty minutes ago while they are still in the room. It is
+  not a separate tab: the lines land on **one stream** beside your own notes and your screen captures,
+  in the order everything happened, and **each line carries the moment it was said** - which is what
+  lets you pin a note of your own to a sentence from four minutes ago. The **assistant can be asked about a meeting that is
   still going** - it is told explicitly that the transcript is partial and ends mid-meeting, so it
   will not describe something as decided or final when the people in the room are still arguing
   about it. **Speakers are named as the meeting runs**: a voice keeps one identity from start to
@@ -125,7 +127,12 @@ calendar **suggests** it came from, ready to accept in one click. It only appear
 show.
 - **Notes & enhanced notes.** Take your own note lines for a meeting — sparse trigger phrases, questions,
 observations. A **live notes panel** while recording stamps each line at the second you wrote it (crash-safe,
-lands on the recording's **Notes** tab after upload); you can also jot **prep notes on an upcoming Google Calendar
+lands on the recording's **Notes** tab after upload). That panel is **one stamped stream** - your notes, your
+screen captures and the live transcript interleaved in the order they happened, with the box you type into
+fixed at the bottom of it and filter chips to narrow it to notes or captures alone. Hovering a transcript
+line reveals a **plus** that pins the composer to that moment, so a thought you have forty seconds late is
+still filed forty seconds back; the pin releases itself once you press Enter, and clicking the pinned time
+releases it without filing anything; you can also jot **prep notes on an upcoming Google Calendar
 meeting** from its preview page (they attach to the recording once it is linked). In the **desktop app** that live
 panel can be **popped out into its own small window**, always on top, so it stays readable over a full-screen Teams
 or Zoom call on a single monitor - the same panel, the same timestamps, the same screenshot buttons, and it keeps
