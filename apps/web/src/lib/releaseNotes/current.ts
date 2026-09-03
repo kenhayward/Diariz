@@ -11,7 +11,7 @@ export const RECENT: Release[] = [
   {
     version: "0.268.0",
     date: "2026-09-03",
-    pr: 745,
+    pr: 744,
     headline: "Notes, captures and the live transcript on one timeline",
     summary:
       "The notes panel you use while recording no longer has tabs. Your notes, your screen captures and the live transcript now share a single stamped stream, with the box you type into fixed at the bottom of it.\n\nThe tabs were asking the wrong thing of you. What actually happens in a meeting is that you hear a sentence and want to write about it, and the Transcript tab put a click between those two moments at exactly the point you had the least attention to spare - and once you had clicked, the notes you were writing were the thing you could no longer see. Everything is now one list in the order it happened, so a note sits directly under the sentence it was about and a capture sits where the slide went up.\n\nEvery transcript line carries the time it was said, and hovering one reveals a small plus. Pressing it pins the composer to that moment, so a thought you have forty seconds late is still filed forty seconds back rather than wherever the clock has got to. The pin releases itself once you press Enter, and clicking the pinned time releases it without filing anything.\n\nThe separate notes window gets all of this too, and its clock now runs on its own rather than waiting for the main window to tell it the time - which matters, because that window is hidden behind your call precisely when you are using it.",
