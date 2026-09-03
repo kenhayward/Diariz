@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { formatDuration } from "../../lib/format";
-import { IconArrowRight, IconClose, IconGrip, IconPencil, IconPlus } from "./hubGlyphs";
-import { SCREENSHOT_DRAG_TYPE } from "../../lib/dragTypes";
+import { IconArrowRight, IconClose, IconPencil, IconPlus } from "./hubGlyphs";
 import type { LiveSegment } from "../../lib/liveTranscript";
 import type { MeetingNote, ShotView } from "../../lib/types";
 
@@ -264,8 +263,9 @@ export function CaptureRow({
   /// Send this capture to the chat prompt. Absent where there is no chat to send it to - which is not
   /// the same as "cannot yet": the button still renders, and says which of the two it is.
   onToChat?: (id: string) => void;
-  /// The meeting being recorded, when one is streaming. Needed for the drag payload, which addresses a
-  /// capture by the pair the chat composer already parses.
+  /// The meeting being recorded, when one is streaming. Decides which of the two reasons the Chat
+  /// button gives when it cannot act - "still uploading" and "once the recording is saved" are
+  /// different situations, and only one of them is worth waiting through.
   liveRecordingId?: string;
 }) {
   const { t } = useTranslation("workspace");
@@ -278,7 +278,6 @@ export function CaptureRow({
     : liveRecordingId
       ? t("notesCaptureChatUploading")
       : t("notesCaptureChatNoLive");
-  const draggable = Boolean(shot.serverId && liveRecordingId);
 
   return (
     <li
@@ -290,24 +289,11 @@ export function CaptureRow({
         <img
           src={previewUrl}
           alt={t("screenshotAlt", { time: formatDuration(shot.capturedAtMs) })}
-          draggable={draggable}
-          onDragStart={
-            draggable
-              ? (e) => {
-                  // The exact payload `ChatPanel.onDropOnComposer` already parses, under our own MIME
-                  // type - `dragHasFiles` excludes it, so no upload zone lights up on the way past.
-                  e.dataTransfer.setData(
-                    SCREENSHOT_DRAG_TYPE,
-                    JSON.stringify({
-                      recordingId: liveRecordingId,
-                      screenshotId: shot.serverId,
-                      capturedAtMs: shot.capturedAtMs,
-                    }),
-                  );
-                  e.dataTransfer.effectAllowed = "copy";
-                }
-              : undefined
-          }
+          // Deliberately NOT draggable, unlike the thumbnails on a finished recording's Notes tab.
+          // There, the chat composer and the thumbnail are both on the page and a drag between them
+          // works. Here the notes panel sits OVER the composer and holds focus, so the drop has nowhere
+          // to land - the gesture starts, finds no target, and does nothing. An affordance that cannot
+          // be completed is worse than none, and the Chat button below does the same job reliably.
           style={{
             display: "block",
             width: thumbWidth,
@@ -316,32 +302,8 @@ export function CaptureRow({
             borderRadius: 8,
             border: "1px solid var(--hub-border)",
             background: "var(--hub-surface)",
-            cursor: draggable ? "grab" : undefined,
           }}
         />
-        {draggable && (
-          <span
-            data-testid="capture-drag-hint"
-            aria-hidden
-            style={{
-              position: "absolute",
-              top: 4,
-              left: 4,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 3,
-              padding: "2px 5px",
-              borderRadius: 5,
-              background: "rgba(6, 11, 22, 0.72)",
-              color: "#fff",
-              fontSize: 9,
-              fontWeight: 500,
-            }}
-          >
-            <IconGrip size={9} />
-            {t("notesDragToChat")}
-          </span>
-        )}
         <div
           style={{
             position: "absolute",

@@ -188,7 +188,10 @@ captures in a collapsed Screenshots section, from where one can be **dragged int
 a vision-capable model about it.
   **A capture can reach the chat during the meeting.** While a recording is streaming to the server, each
   capture is **uploaded as it is taken** rather than held in the browser until Stop, so the live notes panel
-  can offer a **Chat** button on it and let its thumbnail be dragged into the chat prompt there and then.
+  can offer a **Chat** button on it there and then. That panel's thumbnails are deliberately **not**
+  draggable, unlike the ones on a finished recording's Notes tab: the panel sits over the chat composer and
+  holds focus, so the drop would have nowhere to land, and an affordance that cannot complete is worse than
+  none.
   A capture the server refuses - a full quota, a network blip - simply stays where it was and goes up with
   the rest at the end, so the worst case is the behaviour that shipped before. Deleting an already-uploaded
   capture removes the server's copy too, and a capture that is still on its way says so rather than sitting
@@ -652,8 +655,10 @@ box.
   every question is answered against the transcript **as it stands at that moment** rather than a snapshot
   that went stale the second the meeting carried on - and the server tells the model the meeting is still in
   progress, so it will not report an argument still being had as settled. The pill rides every question until
-  you remove it, and deliberately stays after you stop recording: the same recording is then a finished one,
-  and "summarise the meeting I just had" is usually the next thing you want. When a **folder** is open, chat is about that folder — its roll-up **summary, minutes, and aggregated
+  you remove it, and clears itself when you stop the recording - it says "Live meeting", and one outliving
+  the thing it names would just read as stale. A finished recording is asked about the ordinary way, by
+  opening it. Stopping one recording clears only its own pill, so a second meeting started meanwhile keeps
+  its own. When a **folder** is open, chat is about that folder — its roll-up **summary, minutes, and aggregated
 actions** are the context, and "Include attachments" pulls in every attachment across the folder and its
 sub-folders.
   **Choosing a model.** Where an administrator has marked more than one model as available for chat (see

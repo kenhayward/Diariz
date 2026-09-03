@@ -3235,6 +3235,11 @@ the least likely to hold.
   module into `pages/NotesPopout.tsx` compiles, type-checks and passes every other test, so the module
   graph is asserted directly in `lib/chatAttachmentsBoundary.test.ts`. The host resolves a capture's
   **server** id from its panel id before attaching — the pop-out only ever knows the latter.
+  The chat's live pill is **cleared when that recording stops** (`detachLiveRecordingFromChat`, a fourth
+  channel), and the stop **names its recording** so an earlier meeting's stop cannot drop a later one's
+  pill. Captures in this panel are deliberately **not draggable**, unlike the ones on a finished
+  recording's Notes tab: the panel is layered over the chat composer and holds focus, so the drop has
+  nowhere to land and the gesture silently does nothing.
 
 ## GPU / worker notes
 

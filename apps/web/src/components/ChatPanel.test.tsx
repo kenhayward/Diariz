@@ -36,7 +36,12 @@ vi.mock("../lib/api", () => ({
 import { api } from "../lib/api";
 import { fromPrompt } from "../lib/formulaTemplate";
 import ChatPanel from "./ChatPanel";
-import { attachLiveRecordingToChat, attachScreenshotToChat, attachTextToChat } from "../lib/chatAttachments";
+import {
+  attachLiveRecordingToChat,
+  attachScreenshotToChat,
+  attachTextToChat,
+  detachLiveRecordingFromChat,
+} from "../lib/chatAttachments";
 
 const sharedRoom: RoomListItem = {
   id: "room-s", name: "Engineering", kind: 1, icon: null, color: null,
@@ -1256,6 +1261,61 @@ describe("ChatPanel - the running meeting as context", () => {
     const calls = (api.chatStream as unknown as { mock: { calls: any[][] } }).mock.calls;
     expect(calls).toHaveLength(2);
     expect(calls[1][0].recordingIds).toEqual(["live-1"]);
+  });
+
+  it("drops it from the next question once removed", async () => {
+    await renderReady("/");
+    act(() => attachLiveRecordingToChat("live-1"));
+    expect(await screen.findByText(/live meeting/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /remove the live meeting/i }));
+    await ask("after removal");
+
+    const sent = (api.chatStream as unknown as { mock: { calls: any[][] } }).mock.calls[0][0];
+    expect(sent.recordingIds).toEqual([]);
+  });
+
+  it("attaching the same meeting twice leaves one pill", async () => {
+    await renderReady("/");
+
+    act(() => attachLiveRecordingToChat("live-1"));
+    act(() => attachLiveRecordingToChat("live-1"));
+
+    expect(screen.getAllByText(/live meeting/i)).toHaveLength(1);
+  });
+
+  it("drops the pill when the recording it names is stopped", async () => {
+    // A meeting that has stopped is not live, and a pill still calling itself one is claiming
+    // something that has stopped being true.
+    await renderReady();
+    act(() => attachLiveRecordingToChat("live-1"));
+    expect(await screen.findByText(/live meeting/i)).toBeTruthy();
+
+    act(() => detachLiveRecordingFromChat("live-1"));
+
+    expect(screen.queryByText(/live meeting/i)).toBeNull();
+  });
+
+  it("sends nothing about the stopped meeting on the next question", async () => {
+    await renderReady("/");
+    act(() => attachLiveRecordingToChat("live-1"));
+    act(() => detachLiveRecordingFromChat("live-1"));
+
+    await ask("after it stopped");
+
+    const sent = (api.chatStream as unknown as { mock: { calls: any[][] } }).mock.calls[0][0];
+    expect(sent.recordingIds).toEqual([]);
+  });
+
+  it("keeps a newer meeting's pill when an older one's stop arrives", async () => {
+    // Stopping one recording and starting another is an ordinary thing to do, and the stop can land
+    // after the second has already been attached.
+    await renderReady();
+    act(() => attachLiveRecordingToChat("live-2"));
+
+    act(() => detachLiveRecordingFromChat("live-1"));
+
+    expect(await screen.findByText(/live meeting/i)).toBeTruthy();
   });
 
   it("drops it from the next question once removed", async () => {

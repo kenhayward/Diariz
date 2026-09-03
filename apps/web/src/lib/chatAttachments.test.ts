@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   attachLiveRecordingToChat,
+  detachLiveRecordingFromChat,
   onChatLiveRecordingAttached,
+  onChatLiveRecordingDetached,
   attachScreenshotToChat,
   attachTextToChat,
   onChatScreenshotAttached,
@@ -129,6 +131,57 @@ describe("chatAttachments - extracted text", () => {
     expect(onText).not.toHaveBeenCalled();
     expect(onShot).not.toHaveBeenCalled();
     expect(onLive).toHaveBeenCalledTimes(1);
+    offs.forEach((off) => off());
+  });
+
+  /// The other end of the live-recording channel. A meeting that has stopped is no longer live, and a
+  /// pill still calling itself one is claiming something that has stopped being true.
+  it("tells listeners when the meeting it named has ended", () => {
+    const on = vi.fn();
+    const off = onChatLiveRecordingDetached(on);
+
+    detachLiveRecordingFromChat("rec-live");
+
+    expect(on).toHaveBeenCalledWith("rec-live");
+    off();
+  });
+
+  it("names which recording ended, so a later one is not cleared by an earlier one's stop", () => {
+    const on = vi.fn();
+    const off = onChatLiveRecordingDetached(on);
+
+    detachLiveRecordingFromChat("rec-one");
+    detachLiveRecordingFromChat("rec-two");
+
+    expect(on.mock.calls.map((c) => c[0])).toEqual(["rec-one", "rec-two"]);
+    off();
+  });
+
+  it("stops delivering the end once unsubscribed", () => {
+    const on = vi.fn();
+    onChatLiveRecordingDetached(on)();
+
+    detachLiveRecordingFromChat("rec-live");
+
+    expect(on).not.toHaveBeenCalled();
+  });
+
+  it("ending a meeting nobody is listening for does not throw", () => {
+    expect(() => detachLiveRecordingFromChat("rec-live")).not.toThrow();
+  });
+
+  it("keeps attach and detach apart", () => {
+    const onAttach = vi.fn();
+    const onDetach = vi.fn();
+    const offs = [onChatLiveRecordingAttached(onAttach), onChatLiveRecordingDetached(onDetach)];
+
+    attachLiveRecordingToChat("rec-live");
+    expect(onDetach).not.toHaveBeenCalled();
+
+    detachLiveRecordingFromChat("rec-live");
+    expect(onAttach).toHaveBeenCalledTimes(1);
+    expect(onDetach).toHaveBeenCalledTimes(1);
+
     offs.forEach((off) => off());
   });
 });

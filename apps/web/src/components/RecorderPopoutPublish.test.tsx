@@ -119,7 +119,11 @@ import Recorder, { MAX_LIVE_SCREENSHOTS } from "./Recorder";
 import { requestRecording } from "../lib/recordRequest";
 import { startSilenceWatcher } from "../lib/silenceWatcher";
 import { ToastProvider } from "../lib/toast";
-import { onChatLiveRecordingAttached, onChatScreenshotAttached } from "../lib/chatAttachments";
+import {
+  onChatLiveRecordingAttached,
+  onChatLiveRecordingDetached,
+  onChatScreenshotAttached,
+} from "../lib/chatAttachments";
 
 // jsdom has no MediaRecorder; a minimal stub lets start() run without capturing real audio.
 class FakeMediaRecorder {
@@ -323,6 +327,27 @@ describe("what the recorder does with the pop-out's chat requests", () => {
       expect(attached).toEqual([]);
     } finally {
       off();
+    }
+  });
+
+  it("tells the chat the meeting has stopped, naming which one", async () => {
+    // The chat's pill says "Live meeting". Once the recording has stopped there is no live transcript
+    // any more, so a pill still calling it one is claiming something that has stopped being true.
+    (api.beginLive as Mock).mockResolvedValue({ id: "live-13", sessionId: "s13", status: "Live" });
+    (api.finalizeLive as Mock).mockResolvedValue(undefined);
+    const ended: string[] = [];
+    const off = onChatLiveRecordingDetached((id) => ended.push(id));
+    try {
+      render(<Recorder onUploaded={() => {}} />);
+      fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+      await screen.findByRole("button", { name: /^stop$/i });
+
+      fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+      await waitFor(() => expect(ended).toEqual(["live-13"]));
+    } finally {
+      off();
+      (api.beginLive as Mock).mockRejectedValue(new Error("no live"));
     }
   });
 
