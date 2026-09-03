@@ -95,7 +95,13 @@ person) at the moment you hear them, without leaving the transcript.
   runs to the room can be tuned against real meetings without shipping a new version of the app. The
   cost of short pieces lands on speaker names rather than words: working out who is talking compares
   voices across a stretch of audio, and less of it means a voice may be split in two early on and
-  rejoined a little later, in front of you. It is
+  rejoined a little later, in front of you.
+  **A dedicated live worker (optional).** Live work already jumps the queue ahead of recordings waiting
+  to be transcribed, but not ahead of one already being transcribed - and a long recording takes over a
+  minute, during which live text visibly stalls and then arrives in a rush. An administrator can run a
+  second transcription container that handles nothing but live meetings
+  (`docker compose --profile live-worker up -d`), so the two never compete. It is off by default because
+  it holds a second copy of the models in VRAM; nothing changes for anyone if it is left off. It is
   not a separate tab: the lines land on **one stream** beside your own notes and your screen captures,
   in the order everything happened, and **each line carries the moment it was said** - which is what
   lets you pin a note of your own to a sentence from four minutes ago. The **assistant can be asked about a meeting that is

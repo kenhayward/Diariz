@@ -3082,6 +3082,17 @@ the least likely to hold.
   remainder by `OffsetMs - prefixMs`** so the times it returns are relative to the whole recording
   rather than the window. The overlap exists to stop a word being cut in half at a chunk boundary and is a
   property of the **decode window only** - nothing overlapping is ever stored.
+  **A live chunk can still wait behind an in-flight full transcription, and there is a switch for it.**
+  The priority read bounds live latency by the job ALREADY RUNNING rather than by queue depth, which
+  is usually enough - but that job can be a 60-minute transcription, measured at roughly 75 s, and
+  the live text of a meeting in progress visibly stalls for its duration. Setting `LIVE_ONLY=1` makes
+  a worker consume `live-chunk-jobs` and nothing else (`worker.reclaimable_streams`), and
+  `docker compose --profile live-worker up -d` starts a second container in that mode. Same
+  `CONSUMER_GROUP` on purpose, so Redis hands each chunk to exactly one worker and a busy general
+  one is simply not reading; the same `workercache` volume, so the weights are shared rather than
+  downloaded twice. **Off by default**: it holds a second copy of the model weights (~9 GB working
+  set), which a card with headroom will not notice and an 8 GB one cannot afford.
+
   **Chunk length is the dominant term in live latency, and it is a server setting.** A word spoken at
   the START of a chunk cannot leave the browser until that chunk closes, so `maxMs` IS the worst-case
   wait before anything is sent - everything downstream (upload, queue, GPU, delivery) measured at

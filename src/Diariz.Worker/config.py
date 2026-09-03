@@ -15,6 +15,17 @@ class Config:
     # ahead of the others (see worker.run_loop) - a live chunk queued behind an hour of audio would
     # arrive long after the meeting it belongs to had ended.
     LIVE_CHUNK_STREAM_KEY = os.getenv("LIVE_CHUNK_STREAM_KEY", "live-chunk-jobs")
+    # Consume ONLY live chunks, ignoring full transcriptions, merges and voiceprints.
+    #
+    # The general worker already reads the live stream first, which bounds live latency by the job
+    # already running rather than by queue depth - but that job can be a 60-minute transcription,
+    # measured at roughly 75 s. A second container in this mode removes that tail: whichever worker is
+    # free takes the chunk, and a busy general worker is simply not reading.
+    #
+    # Same CONSUMER_GROUP as the general worker on purpose, so Redis hands each chunk to exactly one of
+    # them. The cost is a second copy of the model weights in VRAM, which is not free on a small card.
+    LIVE_ONLY = os.getenv("LIVE_ONLY", "").strip().lower() in ("1", "true", "yes")
+
     CONSUMER_GROUP = os.getenv("CONSUMER_GROUP", "workers")
     CONSUMER_NAME = os.getenv("CONSUMER_NAME", "worker-1")
 

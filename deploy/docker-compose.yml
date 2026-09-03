@@ -300,6 +300,66 @@ services:
               count: all
               capabilities: [gpu]
 
+  # A second worker that consumes ONLY live chunks (profile: live-worker).
+  #
+  # The general worker above already reads the live stream first, which bounds live latency by the job
+  # ALREADY RUNNING rather than by queue depth. That is usually enough - but the job already running can
+  # be a 60-minute transcription, measured at roughly 75 s, and a live chunk waiting behind one is the
+  # difference between a transcript that keeps up and one that visibly stalls mid-meeting.
+  #
+  # Same CONSUMER_GROUP as the general worker on purpose: Redis hands each chunk to exactly one of them,
+  # so whichever is free takes it and a busy general worker is simply not reading.
+  #
+  # NOT started by default. It holds a SECOND copy of the model weights (~9 GB working set during
+  # transcription), which a card with headroom will not notice and a small one cannot afford. Start it
+  # with:  docker compose --profile live-worker up -d
+  live-worker:
+    profiles: ["live-worker"]
+    build:
+      context: ../src/Diariz.Worker
+    restart: unless-stopped
+    depends_on:
+      redis: { condition: service_healthy }
+      minio: { condition: service_started }
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python3", "healthcheck.py"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    environment:
+      # The whole difference from the general worker: read live chunks and nothing else.
+      LIVE_ONLY: "1"
+      REDIS_URL: "redis://redis:6379/0"
+      S3_ENDPOINT: "http://minio:9000"
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: "recordings"
+      API_BASE_URL: "http://api:8080"
+      CALLBACK_SECRET: ${CALLBACK_SECRET}
+      HF_TOKEN: ${HF_TOKEN}
+      DEVICE: ${WORKER_DEVICE:-cuda}
+      COMPUTE_TYPE: ${WORKER_COMPUTE_TYPE:-float16}
+      WHISPER_MODEL: ${WHISPER_MODEL:-large-v3}
+      BATCH_SIZE: ${BATCH_SIZE:-16}
+      MAX_AUDIO_SECONDS: ${MAX_AUDIO_SECONDS:-14400}
+      ENABLE_SPEAKER_EMBEDDINGS: ${ENABLE_SPEAKER_EMBEDDINGS:-1}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-development}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-1.0}
+    volumes:
+      # The same cache volume as the general worker: the weights are identical, so this shares the
+      # download rather than pulling another ~4 GB.
+      - workercache:/root/.cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
 volumes:
   pgdata:
   miniodata:

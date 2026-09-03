@@ -114,6 +114,11 @@ cd deploy
 cp .env.example .env        # fill in JWT_KEY, CALLBACK_SECRET, HF_TOKEN, seed user
 docker compose up --build   # web UI at http://localhost:8081, API at http://localhost:8080
 
+# 1b. (optional) A second worker that handles ONLY live meetings, so live transcript
+#     never waits behind a recording already being transcribed. Costs a second copy of
+#     the model weights in VRAM (~9 GB working set), so it is off by default.
+docker compose --profile live-worker up -d
+
 # 2. (dev alternative to the bundled UI) Vite dev server with hot reload,
 #    proxying /api and /hubs to the API.
 cd ../apps/web

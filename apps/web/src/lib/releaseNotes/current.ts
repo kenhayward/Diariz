@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.271.1",
+    date: "2026-09-03",
+    pr: 756,
+    headline: "The live transcript can stop waiting behind a finished meeting",
+    summary:
+      "Live transcript work already jumps the queue ahead of finished recordings waiting to be transcribed. What it could not jump was a recording already being transcribed - and a long one takes over a minute, during which the live text of a meeting happening right now visibly stalls and then arrives in a rush.\n\nAn administrator can now run a second transcription service that handles nothing but live meetings, so the two never compete. Whichever service is free picks the work up, and one busy with an hour-long recording is simply not looking. It is off by default and turned on with a single command, because it holds a second copy of the transcription models in graphics memory - free on a card with room to spare, and not something to switch on blindly on a small one.\n\nNothing changes for anyone if it is left off.",
+    added: [
+      "An optional second transcription service dedicated to live meetings, so live text never waits behind a recording already being transcribed. Off by default; see the deployment guide.",
+    ],
+  },
+  {
     version: "0.271.0",
     date: "2026-09-03",
     pr: 755,
