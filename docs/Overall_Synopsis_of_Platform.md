@@ -3205,7 +3205,15 @@ the least likely to hold.
   (`{ recordedMs, atWallMs, running }`) rather than a ticking `elapsedMs`: the pop-out extrapolates between
   publishes on its own 1 s interval, so its clock stays smooth while the host is throttled, and a paused
   recording freezes it via `running` rather than by the absence of publishes. A ticking value would also make
-  the host rebroadcast the whole state — every capture's thumbnail `Blob` included — on every tick. The
+  the host rebroadcast the whole state — every capture's thumbnail `Blob` included — on every tick.
+  **`notesState` is `useMemo`d on exactly what the pop-out draws**, and that is load-bearing rather than an
+  optimisation: the hook republishes on `[poppedOut, state]`, so an object literal rebuilt each render is a
+  broadcast each render, and the elapsed ticker re-renders the recorder every 250ms for the length of the
+  recording — which is what it did until 0.270.1 (issue #747). The clock is read inside the memo from the
+  timing ref rather than from the `elapsed` state, because using that state would put the ticking value in
+  the dependency list and reinstate the whole thing. `RecorderPopoutPublish.test.tsx` counts DISTINCT
+  published objects, which is the only way the fault is visible: the pop-out rendered correctly throughout.
+  The
   pop-out
   has its own narrow preload (`notes-preload.js`); reusing `preload.js` would register a second
   `onTrayCommand` listener and a tray "Stop" would drive two recorders. That preload now also carries

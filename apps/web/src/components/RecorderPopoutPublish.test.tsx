@@ -197,6 +197,11 @@ let published: import("../lib/notesChannel").NotesState | null = null;
 /// the pop-out's messages arrive here, not through anything this window renders, so nothing on screen
 /// can stand in for them.
 let relayed: import("../lib/useNotesPopout").NotesPopoutHandlers | null = null;
+/// Every DISTINCT state object the recorder has handed the hook. `useNotesPopout` republishes on
+/// `[poppedOut, state]`, so one entry here is one broadcast of the whole state - thumbnail blobs
+/// included - over the channel. Counting objects rather than renders is the point: a render that
+/// produces the same object publishes nothing.
+let publishedVersions: import("../lib/notesChannel").NotesState[] = [];
 vi.mock("../lib/useNotesPopout", () => ({
   useNotesPopout: ({
     state,
@@ -207,6 +212,7 @@ vi.mock("../lib/useNotesPopout", () => ({
   }) => {
     published = state;
     relayed = handlers;
+    if (state !== publishedVersions[publishedVersions.length - 1]) publishedVersions.push(state);
     return { poppedOut: false, popOut: vi.fn(), notifyClosed: vi.fn() };
   },
 }));
@@ -214,6 +220,7 @@ vi.mock("../lib/useNotesPopout", () => ({
 beforeEach(() => {
   published = null;
   relayed = null;
+  publishedVersions = [];
   hubHandlers = null;
   hubFactory = () => ({
     start: () => Promise.resolve(),
@@ -336,4 +343,123 @@ describe("what the recorder does with the pop-out's chat requests", () => {
       off();
     }
   });
+});
+
+describe("how often the recorder rebroadcasts the whole meeting", () => {
+  // `useNotesPopout` republishes on `[poppedOut, state]`, and `state` was an object literal rebuilt on
+  // every render. The elapsed ticker re-renders this component every 250ms for the length of the
+  // recording, so the pop-out was being sent the ENTIRE state - every capture's JPEG thumbnail Blob
+  // included, up to MAX_LIVE_SCREENSHOTS of them - four times a second for the whole meeting.
+  //
+  // Nothing about it was visible: the pop-out rendered correctly, every other test passed, and the
+  // comment on NotesState.clock describes the model the code was supposed to have ("the host
+  // republishes on every change"). Counting distinct published objects is the only thing that shows it.
+
+  async function startLive(id = "live-churn") {
+    (api.beginLive as Mock).mockResolvedValue({ id, sessionId: "s-churn", status: "Live" });
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+    await waitFor(() => expect(published?.recording).toBe(true));
+  }
+
+  afterEach(() => {
+    (api.beginLive as Mock).mockRejectedValue(new Error("no live"));
+  });
+
+  it("sends nothing new while only the clock is moving", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await startLive();
+      const before = publishedVersions.length;
+
+      // One act scope per tick, because that is what a browser does - four separate 250ms fires, four
+      // separate renders. Advancing the whole second inside one scope lets React batch them into a
+      // single render, which would hide three quarters of the churn.
+      for (let i = 0; i < 4; i++) {
+        await act(async () => {
+          vi.advanceTimersByTime(250);
+        });
+      }
+
+      expect(publishedVersions.length).toBe(before);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("sends a capture the moment it is taken", async () => {
+    // `liveShots` earns its place in the dependency list here. Without this the detached window would
+    // simply never show a capture taken while it was open, with nothing anywhere to say why.
+    let emit: ((payload: unknown) => void) | null = null;
+    (window as unknown as { diariz?: unknown }).diariz = {
+      canCaptureScreenshot: true,
+      onScreenshotCaptured: (cb: (payload: unknown) => void) => {
+        emit = cb;
+        return () => {
+          emit = null;
+        };
+      },
+    };
+    try {
+      await startLive();
+      const before = publishedVersions.length;
+
+      act(() => {
+        emit!({ full: new Uint8Array([1]), thumb: new Uint8Array([2]), width: 8, height: 6 });
+      });
+
+      await waitFor(() => expect(published?.shots).toHaveLength(1));
+      expect(publishedVersions.length).toBeGreaterThan(before);
+    } finally {
+      delete (window as unknown as { diariz?: unknown }).diariz;
+    }
+  });
+
+  it("tells the pop-out the recording has ended, with no live session to carry the news", async () => {
+    // `recording` earns its place in the dependency list, and it takes a recording with NO live capture
+    // to show it: under a live session `liveRecordingId` clears at the same moment, which changes the
+    // transcript and recomputes the state anyway. On the fallback path nothing else moves.
+    //
+    // It matters because `useNotesPopout` closes the detached window on `!state.recording`. A state that
+    // stopped changing here would leave that window floating over the desktop after the meeting, still
+    // accepting notes with nowhere for them to go.
+    (api.beginLive as Mock).mockRejectedValue(new Error("no live"));
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+    await waitFor(() => expect(published?.recording).toBe(true));
+    expect(published?.liveTranscript).toBeUndefined();
+
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(published?.recording).toBe(false));
+  });
+
+  it("still sends the pop-out a note the moment it is filed", async () => {
+    // The other half. A state that never changed identity would be worse than one that changes too
+    // often - the detached window would simply stop updating.
+    await startLive();
+    const before = publishedVersions.length;
+
+    const box = await screen.findByLabelText(/note this moment/i);
+    fireEvent.change(box, { target: { value: "a thought" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+
+    await waitFor(() => expect(publishedVersions.length).toBeGreaterThan(before));
+    expect(published?.lines.map((l) => l.text)).toEqual(["a thought"]);
+  });
+
+  it("still sends a fresh clock reading when the recording is paused", async () => {
+    // Pause is the one moment the clock's own value has to cross, because `running: false` is what
+    // freezes the pop-out's ticking - and the reading it freezes at must be the real one.
+    await startLive();
+    const before = publishedVersions.length;
+
+    fireEvent.click(screen.getByRole("button", { name: /pause/i }));
+
+    await waitFor(() => expect(published?.clock?.running).toBe(false));
+    expect(publishedVersions.length).toBeGreaterThan(before);
+  });
+
 });
