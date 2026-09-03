@@ -50,9 +50,9 @@ button. Every question you ask is answered against the transcript as it stands a
 tells the model the meeting has not finished - so it will not tell you something was decided while the
 people in the room are still arguing about it.
 
-The pill stays until you take it off, so a second and third question need no second press. It also stays
-after you stop recording, which is deliberate: the same meeting is then a finished one, and "summarise
-what we just agreed" is usually the next thing you want. The X on the pill removes it.
+The pill stays until you take it off, so a second and third question need no second press. It goes on its
+own when you stop the recording, because at that point the meeting is not live any more - to ask about a
+finished meeting, open it and ask as usual. The X on the pill removes it sooner.
 
 The button is only there when the transcript is running live. Without it there is nothing for the chat to
 read yet.
@@ -64,8 +64,9 @@ full size and click the speech-bubble button in its toolbar - "Add to chat conte
 Screenshots section on the Notes tab, drag a thumbnail into the chat box.
 
 **You can do this during the meeting too.** Every capture in the live notes panel has a small **Chat**
-button on its thumbnail, and the thumbnail itself can be dragged into the chat box, so you can ask about
-a slide while it is still on screen. A capture that has only just been taken may say "Still uploading"
+button on its thumbnail, so you can ask about a slide while it is still on screen. There is no dragging
+from that panel - it sits on top of the chat box, so there would be nowhere to drop it - but the button
+does the same thing. A capture that has only just been taken may say "Still uploading"
 for a moment - it becomes available as soon as it has reached the server. If the recording is not
 streaming to the server at all, the button says the capture will be available once the recording is
 saved, which is at the moment you press Stop. Either way it appears as a small

@@ -72,12 +72,6 @@ export const IconArrowRight = ({ size }: { size?: number } = {}) => (
   </Glyph>
 );
 
-/// Six dots: the universal "this can be dragged" mark.
-export const IconGrip = ({ size }: { size?: number } = {}) => (
-  <Glyph size={size}>
-    <path d="M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01" />
-  </Glyph>
-);
 
 /// A pin: keep this window above the others.
 export const IconPin = ({ size }: { size?: number } = {}) => (

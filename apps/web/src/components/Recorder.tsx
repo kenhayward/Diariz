@@ -27,7 +27,11 @@ import {
 import { connectTrayRecorder, type RecorderState, type TrayBridge } from "../lib/trayRecorder";
 import { setCapturing } from "../lib/captureState";
 import { useNotesPopout } from "../lib/useNotesPopout";
-import { attachLiveRecordingToChat, attachScreenshotToChat } from "../lib/chatAttachments";
+import {
+  attachLiveRecordingToChat,
+  attachScreenshotToChat,
+  detachLiveRecordingFromChat,
+} from "../lib/chatAttachments";
 import type { NotesState } from "../lib/notesChannel";
 import { onRecordingRequested, type CalendarEventContext, type RecordingRequest } from "../lib/recordRequest";
 import {
@@ -1421,6 +1425,9 @@ export default function Recorder({
     if (!live) return false;
     liveRef.current = null;
     setLiveRecordingId(null);
+    // The chat's "Live meeting" pill names this recording, and it has stopped being live. Named rather
+    // than a bare clear, so stopping one meeting cannot drop the pill for a different one.
+    detachLiveRecordingFromChat(live.recordingId);
     try {
       const tail = new Blob(chunksRef.current.slice(liveFragmentsSentRef.current), { type: "audio/webm" });
       await live.finish(timing.elapsedMs(timingRef.current, Date.now()), tail);

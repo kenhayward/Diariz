@@ -9,6 +9,20 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.270.2",
+    date: "2026-09-03",
+    pr: 751,
+    headline: "The live meeting leaves the chat when the meeting does",
+    summary:
+      "Two corrections to the live notes panel, both from using it in a real meeting.\n\nThe **Live meeting** pill in the chat now disappears when you press Stop. It used to stay, on the theory that \"summarise the meeting I just had\" is the natural next question - but a pill labelled Live outliving the thing it names just reads as stale, and a finished recording can be asked about the ordinary way by opening it. Stopping one recording only clears its own pill, so starting a second meeting and stopping the first in the wrong order cannot take the wrong one away.\n\nThe **drag to chat** handle has gone from captures in the live notes panel. It could not work: the notes panel sits over the chat composer and holds focus, so there was nowhere for the drag to land. The **Chat** button on the same thumbnail does the same job and does it reliably. Dragging a thumbnail from a finished recording's Notes tab is unaffected - there the composer and the thumbnail are both on the page, and it works.",
+    fixed: [
+      "The Live meeting pill stayed in the chat after the recording was stopped, still calling a finished meeting live.",
+    ],
+    changed: [
+      "Captures in the live notes panel no longer offer a drag-to-chat handle, which could not complete - the panel covers the chat composer. The Chat button on the capture is unchanged.",
+    ],
+  },
+  {
     version: "0.270.1",
     date: "2026-09-03",
     pr: 748,

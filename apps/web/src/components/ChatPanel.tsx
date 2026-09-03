@@ -14,6 +14,7 @@ import { useSelection } from "../lib/selection";
 import { ATTACHMENT_DRAG_TYPE, SCREENSHOT_DRAG_TYPE, type AttachmentDragPayload } from "../lib/dragTypes";
 import {
   onChatLiveRecordingAttached,
+  onChatLiveRecordingDetached,
   onChatScreenshotAttached,
   onChatTextAttached,
 } from "../lib/chatAttachments";
@@ -207,12 +208,20 @@ export default function ChatPanel() {
   /// on. It also keeps out of the single-origin context pill, which a transcript would either accumulate
   /// into on every press or fight the OCR/file attachment for.
   ///
-  /// Sticky, like the screenshot tray: it rides every turn until removed, and is deliberately NOT
-  /// cleared when the recording stops - the same id is then a finished recording, the server drops the
-  /// in-progress framing on its own, and "tell me about the meeting I just had" is the natural next
-  /// question rather than a new gesture.
+  /// Sticky while the meeting runs: it rides every turn until removed. It is cleared when that
+  /// recording STOPS, though - the pill says "Live meeting", and one outliving the thing it names is
+  /// claiming something that has stopped being true. (0.269.0 kept it past the stop, on the reasoning
+  /// that "summarise the meeting I just had" is the natural next question; in use the pill just read as
+  /// stale. A finished recording can still be asked about the ordinary way, by opening it.)
+  ///
+  /// The stop names its recording, so an earlier meeting's stop arriving after a later one has been
+  /// attached cannot clear the newer pill.
   const [liveRecordingId, setLiveRecordingId] = useState<string | null>(null);
   useEffect(() => onChatLiveRecordingAttached((id) => setLiveRecordingId(id)), []);
+  useEffect(
+    () => onChatLiveRecordingDetached((id) => setLiveRecordingId((current) => (current === id ? null : current))),
+    [],
+  );
 
   /// Merge new text into the single context pill, whether it came from OCR, the paperclip, or an attachment
   /// dragged in.

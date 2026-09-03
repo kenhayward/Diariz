@@ -611,38 +611,25 @@ describe("LiveNotesStream - a capture into the chat", () => {
   });
 });
 
-describe("LiveNotesStream - dragging a capture", () => {
-  it("carries the pair the chat composer already parses", () => {
-    const uploaded: ShotView = { ...shot(7_000), serverId: "srv-7" };
-    renderStream({ shots: [uploaded], capture, liveRecordingId: "live-1" });
+describe("LiveNotesStream - captures are not draggable", () => {
+  it("offers no drag handle, because the drag cannot land", () => {
+    // The chat composer is behind the notes panel, which holds focus - the panel sits over it, so a
+    // thumbnail dragged from here has nowhere to be dropped. An affordance that cannot be completed is
+    // worse than none: the Chat button does the same job and does it reliably.
+    renderStream({ shots: [{ ...shot(7_000), serverId: "srv-7" }], capture, liveRecordingId: "live-1" });
 
-    const setData = vi.fn();
-    fireEvent.dragStart(screen.getByRole("img"), {
-      dataTransfer: { setData, effectAllowed: "none" },
-    });
-
-    expect(setData).toHaveBeenCalledWith(
-      "application/x-diariz-screenshot",
-      JSON.stringify({ recordingId: "live-1", screenshotId: "srv-7", capturedAtMs: 7_000 }),
-    );
-  });
-
-  it("does not offer a capture the server does not have yet as draggable", () => {
-    // Dropping it would put an id the server cannot resolve into the chat.
-    renderStream({ shots: [shot(1_000)], capture, liveRecordingId: "live-1" });
-
-    expect(screen.getByRole("img").getAttribute("draggable")).toBe("false");
     expect(screen.queryByTestId("capture-drag-hint")).toBeNull();
+    expect(screen.getByRole("img").getAttribute("draggable")).not.toBe("true");
   });
 
-  it("shows the drag hint only on a capture that can actually be dragged", () => {
-    renderStream({
-      shots: [{ ...shot(1_000), serverId: "srv-1" }, shot(2_000)],
-      capture,
-      liveRecordingId: "live-1",
-    });
+  it("still offers the Chat button, which is what actually sends it", () => {
+    const onShotToChat = vi.fn();
+    const uploaded = { ...shot(7_000), serverId: "srv-7" };
+    renderStream({ shots: [uploaded], capture, liveRecordingId: "live-1", onShotToChat });
 
-    expect(screen.getAllByTestId("capture-drag-hint")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: /^chat$/i }));
+
+    expect(onShotToChat).toHaveBeenCalledWith(uploaded.id);
   });
 });
 

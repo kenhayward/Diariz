@@ -94,3 +94,26 @@ export function onChatLiveRecordingAttached(listener: LiveRecordingListener): ()
     liveRecordingListeners.delete(listener);
   };
 }
+
+const liveRecordingEndedListeners = new Set<LiveRecordingListener>();
+
+/// The recording named here has stopped, so anything presenting it as live should stop saying so.
+///
+/// Its own channel rather than an `attach(null)`, because the two are different events: attaching is
+/// the user asking for something, and this is the world changing underneath what they asked for. A
+/// subscriber that only cares about one of them should not have to discriminate.
+///
+/// The id is carried so a stop cannot clear a pill for a *different* meeting - stopping one recording
+/// and starting another is an ordinary thing to do, and the second one's pill must survive the first
+/// one's stop arriving late.
+export function detachLiveRecordingFromChat(recordingId: string): void {
+  for (const listener of [...liveRecordingEndedListeners]) listener(recordingId);
+}
+
+/// Subscribe to the running meeting ending. Returns the unsubscribe function.
+export function onChatLiveRecordingDetached(listener: LiveRecordingListener): () => void {
+  liveRecordingEndedListeners.add(listener);
+  return () => {
+    liveRecordingEndedListeners.delete(listener);
+  };
+}
