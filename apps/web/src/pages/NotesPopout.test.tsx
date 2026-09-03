@@ -1,11 +1,12 @@
 import { render, screen, fireEvent, act } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import NotesPopout from "./NotesPopout";
 import type { NotesState, NotesClientHandlers } from "../lib/notesChannel";
 
 // One client instance shared with the test, so the test can drive the page the way the host would.
 const client = {
   add: vi.fn(),
+  toggleAutoCapture: vi.fn(),
   edit: vi.fn(),
   remove: vi.fn(),
   removeShot: vi.fn(),
@@ -35,6 +36,17 @@ const state = (over: Partial<NotesState> = {}): NotesState => ({
   ...over,
 });
 
+const withTranscript = (startMs: number, text: string, speaker?: string): NotesState =>
+  state({
+    liveTranscript: {
+      recordingId: "rec-1",
+      highestSequence: 0,
+      segments: [{ id: "s1", startMs, endMs: startMs + 3000, text, sequence: 0, speaker }],
+    },
+  });
+
+const composer = () => screen.getByLabelText(/note this moment/i) as HTMLInputElement;
+
 beforeEach(() => vi.clearAllMocks());
 
 describe("NotesPopout", () => {
@@ -58,11 +70,11 @@ describe("NotesPopout", () => {
     render(<NotesPopout />);
     act(() => handlers.onState(state()));
 
-    const box = screen.getByPlaceholderText(/add a note/i);
-    fireEvent.change(box, { target: { value: "Second point" } });
-    fireEvent.keyDown(box, { key: "Enter" });
+    fireEvent.change(composer(), { target: { value: "Second point" } });
+    fireEvent.keyDown(composer(), { key: "Enter" });
 
-    expect(client.add).toHaveBeenCalledWith("Second point");
+    // No stamp: the host reads its own pause-aware clock, which this window cannot.
+    expect(client.add).toHaveBeenCalledWith("Second point", undefined);
     // The host owns the list. Nothing appears here until it publishes the stamped line back.
     expect(screen.queryByText("Second point")).toBeNull();
   });
@@ -71,12 +83,12 @@ describe("NotesPopout", () => {
     render(<NotesPopout />);
     act(() => handlers.onState(state()));
 
-    fireEvent.click(screen.getByRole("button", { name: /edit/i }));
-    fireEvent.change(screen.getByLabelText(/edit/i), { target: { value: "Revised" } });
+    fireEvent.click(screen.getByRole("button", { name: /edit note/i }));
+    fireEvent.change(screen.getByLabelText(/edit note/i), { target: { value: "Revised" } });
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
     expect(client.edit).toHaveBeenCalledWith("n1", "Revised");
 
-    fireEvent.click(screen.getByRole("button", { name: /delete/i }));
+    fireEvent.click(screen.getByRole("button", { name: /delete note/i }));
     expect(client.remove).toHaveBeenCalledWith("n1");
   });
 
@@ -98,7 +110,7 @@ describe("NotesPopout", () => {
     act(() => handlers.onDisconnected());
 
     expect(screen.getByText(/lost contact/i)).toBeTruthy();
-    expect((screen.getByPlaceholderText(/add a note/i) as HTMLInputElement).disabled).toBe(true);
+    expect(composer().disabled).toBe(true);
   });
 
   it("comes back to life when the host answers again", () => {
@@ -109,7 +121,7 @@ describe("NotesPopout", () => {
     act(() => handlers.onState(state()));
 
     expect(screen.queryByText(/lost contact/i)).toBeNull();
-    expect((screen.getByPlaceholderText(/add a note/i) as HTMLInputElement).disabled).toBe(false);
+    expect(composer().disabled).toBe(false);
   });
 
   it("hides the capture controls when the shell cannot capture", () => {
@@ -147,37 +159,39 @@ describe("NotesPopout", () => {
     expect(client.close).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the live transcript in a tab, like the inline panel does", () => {
-    // The detached window is the one someone uses precisely BECAUSE a call has the screen, so it is the
-    // window that most needs the transcript - and it was the only one without it.
+  it("sends a pinned note across with the moment it was pinned to", () => {
+    // The pop-out is the window someone uses BECAUSE a call has the screen, so it is the one that most
+    // needs to write about something said a moment ago. The host still stamps - it is told which moment.
     render(<NotesPopout />);
-    act(() =>
-      handlers.onState(
-        state({
-          liveTranscript: {
-            recordingId: "rec-1",
-            highestSequence: 0,
-            segments: [
-              { id: "s1", startMs: 0, endMs: 3000, text: "shall we make a start", sequence: 0, speaker: "Ada" },
-            ],
-          },
-        }),
-      ),
-    );
+    act(() => handlers.onState(withTranscript(20_000, "the warehouse integration")));
 
-    fireEvent.click(screen.getByRole("tab", { name: /transcript/i }));
+    fireEvent.click(screen.getByRole("button", { name: /write a note about this moment/i }));
+    fireEvent.change(composer(), { target: { value: "about that" } });
+    fireEvent.keyDown(composer(), { key: "Enter" });
 
-    expect(screen.getByText("shall we make a start")).toBeTruthy();
-    expect(screen.getByTestId("live-transcript-speaker").textContent).toBe("Ada");
+    expect(client.add).toHaveBeenCalledWith("about that", 20_000);
   });
 
-  it("shows no transcript tab when the host is not sending one", () => {
-    // A recording started before the host could begin a live capture has no transcript to show, and an
-    // empty tab would suggest one is coming when none is.
+  it("shows the live transcript inline, with no tab to reach it", () => {
+    // The detached window is the one someone uses precisely BECAUSE a call has the screen, so it is the
+    // window that most needs the transcript in front of them rather than one click away.
+    render(<NotesPopout />);
+    act(() => handlers.onState(withTranscript(0, "shall we make a start", "Ada")));
+
+    expect(screen.queryAllByRole("tab")).toHaveLength(0);
+    expect(screen.getByText("shall we make a start")).toBeTruthy();
+    expect(screen.getByTestId("stream-speaker").textContent).toBe("Ada");
+    // And the note the host sent is on the same list, which is the whole point of the redesign.
+    expect(screen.getByText("First point")).toBeTruthy();
+  });
+
+  it("shows no status line when the host is not transcribing", () => {
+    // A recording started before the host could begin a live capture has no transcript coming, and a
+    // green "Live" dot over one that never arrives would be a lie.
     render(<NotesPopout />);
     act(() => handlers.onState(state()));
 
-    expect(screen.queryByRole("tab", { name: /transcript/i })).toBeNull();
+    expect(screen.queryByTestId("live-transcript-status")).toBeNull();
   });
 
   it("passes the lag and paused state through, so both windows say the same thing", () => {
@@ -193,7 +207,81 @@ describe("NotesPopout", () => {
       ),
     );
 
-    fireEvent.click(screen.getByRole("tab", { name: /transcript/i }));
     expect(screen.getByTestId("live-transcript-status").textContent).toMatch(/paused/i);
+  });
+
+  it("tells the capture row why it is inert when the host has gone", () => {
+    render(<NotesPopout />);
+    act(() => handlers.onState(state({ canCapture: true, captureAreaSet: true })));
+
+    act(() => handlers.onDisconnected());
+
+    expect(
+      screen.getByRole("button", { name: /capture screenshot/i }).getAttribute("title"),
+    ).toMatch(/not connected/i);
+  });
+});
+
+describe("NotesPopout clock", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const clocked = (over: Partial<NonNullable<NotesState["clock"]>> = {}) =>
+    state({ clock: { recordedMs: 61_000, atWallMs: Date.now(), running: true, ...over } });
+
+  it("ticks the recorded clock for itself between publishes", () => {
+    // Deliberately not driven by the host's publishes: once the main window is hidden to the tray
+    // Chromium throttles its timers, so a clock waiting on a broadcast would stutter exactly when this
+    // window is the one being looked at.
+    render(<NotesPopout />);
+    act(() => handlers.onState(clocked()));
+    expect(screen.getByTestId("notes-elapsed").textContent).toBe("1:01");
+
+    act(() => vi.advanceTimersByTime(3_000));
+
+    expect(screen.getByTestId("notes-elapsed").textContent).toBe("1:04");
+  });
+
+  it("freezes while the recording is paused", () => {
+    render(<NotesPopout />);
+    act(() => handlers.onState(clocked({ running: false })));
+
+    act(() => vi.advanceTimersByTime(10_000));
+
+    expect(screen.getByTestId("notes-elapsed").textContent).toBe("1:01");
+  });
+
+  it("shows a paused clock at the reading it was paused at, however old that reading is", () => {
+    // The pause may have started minutes ago - the host does not republish while nothing changes. A
+    // paused clock that extrapolated from when the pause began would count the whole pause as meeting
+    // time, and every note filed after it would carry a stamp that never happened.
+    render(<NotesPopout />);
+
+    act(() =>
+      handlers.onState(
+        state({ clock: { recordedMs: 61_000, atWallMs: Date.now() - 300_000, running: false } }),
+      ),
+    );
+
+    expect(screen.getByTestId("notes-elapsed").textContent).toBe("1:01");
+  });
+
+  it("takes up the host's fresh reading on resume rather than extrapolating across the pause", () => {
+    render(<NotesPopout />);
+    act(() => handlers.onState(clocked()));
+    act(() => vi.advanceTimersByTime(5_000));
+
+    // The host republishes on resume with the recorded time it actually reached and a new wall moment.
+    act(() => handlers.onState(state({ clock: { recordedMs: 66_000, atWallMs: Date.now(), running: true } })));
+
+    expect(screen.getByTestId("notes-elapsed").textContent).toBe("1:06");
+  });
+
+  it("shows zero rather than crashing when the host sends no clock at all", () => {
+    // An older main window that predates the clock. The notes must still work.
+    render(<NotesPopout />);
+    act(() => handlers.onState(state()));
+
+    expect(screen.getByTestId("notes-elapsed").textContent).toBe("0:00");
   });
 });

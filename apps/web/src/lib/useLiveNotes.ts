@@ -8,8 +8,9 @@ export interface LiveNotes {
   /// The lines as they are *now*. `upload()` reads them after its first await, when React state can
   /// still be a render behind, so a rendered value would be wrong there.
   snapshot(): MeetingNote[];
-  /// Commit a line, stamped from the caller's recorded clock.
-  add(text: string): void;
+  /// Commit a line. Stamped from the caller's recorded clock, unless `atMs` names the moment instead -
+  /// which is how a note gets pinned to something said earlier in the meeting.
+  add(text: string, atMs?: number): void;
   /// Change a line's text. The stamp is immutable - it records when the thought was had, not when it
   /// was last tidied up.
   edit(id: string, text: string): void;
@@ -61,11 +62,14 @@ export function useLiveNotes({
     lines,
     snapshot: () => linesRef.current,
 
-    add(text: string) {
+    add(text: string, atMs?: number) {
       const line: MeetingNote = {
         id: crypto.randomUUID(),
         text,
-        capturedAtMs: stampMs(),
+        // `ordinal` still counts from the list length rather than from the stamp: it records the order
+        // the lines were WRITTEN, which is what the server sorts them by on attach. Pinning a note to
+        // an earlier moment moves where it reads, not when it was thought of.
+        capturedAtMs: atMs ?? stampMs(),
         ordinal: linesRef.current.length,
         createdAt: new Date().toISOString(),
       };

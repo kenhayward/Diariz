@@ -182,6 +182,16 @@ The notes popover lets you jot lines while recording. Each line is stamped with 
 it, so it later links to that exact moment in the transcript. Notes survive a crash and attach to the
 recording once it uploads.
 
+Your notes are not on their own in there. The panel is one stream, in the order things happened: your
+notes, the screen captures you take, and the live transcript as it arrives. The box you type in stays
+at the bottom of it and does not move as lines come in. The chips along the top narrow the stream to
+just your notes, or just your captures, when the meeting gets busy.
+
+To write about something said a moment ago, hover the transcript line and press the **+** at the end
+of it. The box is then pinned to that line's moment, and what you type is filed there instead of at
+the current time. Press Enter and the pin releases on its own; click the pinned time to let it go
+without filing anything.
+
 ### Keeping notes visible during a call (desktop app)
 
 On one screen, a call usually wants the whole display, which leaves nowhere to type. In the desktop

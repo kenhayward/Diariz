@@ -36,7 +36,7 @@ export function useNotesPopout({
     if (!poppedOut) return;
     const host = createNotesHost({
       getState: () => stateRef.current,
-      onAdd: (text) => handlersRef.current.onAdd(text),
+      onAdd: (text, atMs) => handlersRef.current.onAdd(text, atMs),
       onEdit: (id, text) => handlersRef.current.onEdit(id, text),
       onDelete: (id) => handlersRef.current.onDelete(id),
       onDeleteShot: (id) => handlersRef.current.onDeleteShot(id),

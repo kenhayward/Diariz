@@ -25,5 +25,8 @@
   "liveTranscriptSpeakerGuess": "Diariz vermutet diese Person, ist aber nicht sicher. Das fertige Transkript bestaetigt es.",
   "liveTranscriptBehind": "Transkription lauft mit, etwa {{seconds}}s im Ruckstand. Dieser Text ist nicht endgultig.",
   "liveTranscriptDegraded": "Das Live-Transkript pausiert. Die Aufnahme lauft weiter, das vollstandige Transkript folgt nach dem Meeting.",
-  "liveTranscriptEmpty": "Warten auf das erste Transkript. Es dauert einen Moment, danach etwa eine halbe Minute des Meetings auf einmal."
+  "liveTranscriptEmpty": "Warten auf das erste Transkript. Es dauert einen Moment, danach etwa eine halbe Minute des Meetings auf einmal.",
+  "liveStatusLive": "Live",
+  "liveStatusBehind": "Live - Transkript {{seconds}}s im Rückstand",
+  "liveStatusPaused": "Live-Transkript pausiert"
 }

@@ -141,3 +141,43 @@ body {
 .hub-tags-pill:hover {
   background: rgba(47, 107, 237, 0.28);
 }
+
+/* The live notes stream's row backgrounds. Here rather than in the component's inline `style` for the
+   reason the Tags pill above gives: an inline `background` beats this file's `:hover` whatever the
+   cascade says, so a hover written inline is dead code. These four values are theme-dependent literals
+   with no `--hub-*` token behind them (the tokens cover surfaces and text, not row tints), which is why
+   the light values sit on `:root` and the dark ones under `.dark` rather than resolving a variable. */
+.hub-stream-row:hover {
+  background: rgba(15, 23, 42, 0.04);
+}
+.dark .hub-stream-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.hub-note-row {
+  background: rgba(47, 107, 237, 0.06);
+}
+.dark .hub-note-row {
+  background: rgba(47, 107, 237, 0.08);
+}
+/* An unselected filter chip. The selected one carries `--hub-surface-hover` inline and never uses this. */
+.hub-chip:hover {
+  background: var(--hub-surface-hover);
+  color: var(--hub-text-2);
+}
+/* Delete controls: red only once the pointer is on them, so a row of them does not read as a warning. */
+.hub-row-delete:hover {
+  background: rgba(229, 72, 77, 0.16);
+  color: var(--hub-red-text);
+}
+/* A row control that appears on hover. Kept out of the component's inline `style` for the same reason
+   as everything else in this block: an inline `opacity: 0` beats this rule and the button would never
+   appear. It stays in the tab order while invisible, and shows itself when focused. */
+.hub-row-reveal {
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+.hub-stream-row:hover .hub-row-reveal,
+.hub-stream-row:focus-within .hub-row-reveal,
+.hub-row-reveal:focus-visible {
+  opacity: 1;
+}

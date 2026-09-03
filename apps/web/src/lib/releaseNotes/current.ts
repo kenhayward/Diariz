@@ -9,6 +9,25 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.268.0",
+    date: "2026-09-03",
+    pr: 744,
+    headline: "Notes, captures and the live transcript on one timeline",
+    summary:
+      "The notes panel you use while recording no longer has tabs. Your notes, your screen captures and the live transcript now share a single stamped stream, with the box you type into fixed at the bottom of it.\n\nThe tabs were asking the wrong thing of you. What actually happens in a meeting is that you hear a sentence and want to write about it, and the Transcript tab put a click between those two moments at exactly the point you had the least attention to spare - and once you had clicked, the notes you were writing were the thing you could no longer see. Everything is now one list in the order it happened, so a note sits directly under the sentence it was about and a capture sits where the slide went up.\n\nEvery transcript line carries the time it was said, and hovering one reveals a small plus. Pressing it pins the composer to that moment, so a thought you have forty seconds late is still filed forty seconds back rather than wherever the clock has got to. The pin releases itself once you press Enter, and clicking the pinned time releases it without filing anything.\n\nThe separate notes window gets all of this too, and its clock now runs on its own rather than waiting for the main window to tell it the time - which matters, because that window is hidden behind your call precisely when you are using it.",
+    added: [
+      "A single stream in the notes panel: notes, screen captures and live transcript lines interleaved in the order they happened, each with its own timestamp.",
+      "Filter chips - Everything, Notes, Captures - with counts that always show the whole meeting rather than the filtered view.",
+      "A plus button on any transcript line pins the composer to that moment, so a note can be filed against something said earlier.",
+      "An elapsed clock in the panel header, and a stamp badge on the composer showing exactly when the next note will be filed.",
+    ],
+    changed: [
+      "The Notes and Transcript tabs are gone from both the notes popover and the separate notes window.",
+      "The status line under the transcript is now short enough to read at a glance; the full explanation of why live text is not final is on its tooltip.",
+      "The separate notes window ticks its own clock from a reading the main window sends, so it keeps time even while the main window is hidden to the tray.",
+    ],
+  },
+  {
     version: "0.267.0",
     date: "2026-09-02",
     pr: 743,

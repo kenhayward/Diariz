@@ -1071,9 +1071,9 @@ describe("live notes", () => {
   it("shows the notes panel while recording and commits a stamped, mirrored line", async () => {
     render(<Recorder onUploaded={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
-    await screen.findByText(/notes while recording/i); // auto-opened
+    await screen.findByTestId("notes-popover"); // auto-opened
 
-    const box = screen.getByPlaceholderText(/add a note/i);
+    const box = screen.getByLabelText(/note this moment/i);
     fireEvent.change(box, { target: { value: "budget concern" } });
     fireEvent.keyDown(box, { key: "Enter" });
     expect(await screen.findByText("budget concern")).toBeTruthy();
@@ -1094,9 +1094,9 @@ describe("live notes", () => {
   it("edits a live line in place and re-mirrors the edited set", async () => {
     render(<Recorder onUploaded={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
-    await screen.findByText(/notes while recording/i);
+    await screen.findByTestId("notes-popover");
 
-    const box = screen.getByPlaceholderText(/add a note/i);
+    const box = screen.getByLabelText(/note this moment/i);
     fireEvent.change(box, { target: { value: "chase the invoice" } });
     fireEvent.keyDown(box, { key: "Enter" });
     await screen.findByText("chase the invoice");
@@ -1120,9 +1120,9 @@ describe("live notes", () => {
   it("deletes a live line and re-mirrors what is left", async () => {
     render(<Recorder onUploaded={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
-    await screen.findByText(/notes while recording/i);
+    await screen.findByTestId("notes-popover");
 
-    const box = screen.getByPlaceholderText(/add a note/i);
+    const box = screen.getByLabelText(/note this moment/i);
     fireEvent.change(box, { target: { value: "first line" } });
     fireEvent.keyDown(box, { key: "Enter" });
     await screen.findByText("first line");
@@ -1144,8 +1144,8 @@ describe("live notes", () => {
   it("attaches committed lines to the uploaded recording and clears the stash", async () => {
     render(<Recorder onUploaded={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
-    await screen.findByText(/notes while recording/i);
-    const box = screen.getByPlaceholderText(/add a note/i);
+    await screen.findByTestId("notes-popover");
+    const box = screen.getByLabelText(/note this moment/i);
     fireEvent.change(box, { target: { value: "follow up with legal" } });
     fireEvent.keyDown(box, { key: "Enter" });
 
@@ -1163,8 +1163,8 @@ describe("live notes", () => {
     (api.createNotes as Mock).mockRejectedValueOnce(new Error("boom"));
     render(<Recorder onUploaded={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
-    await screen.findByText(/notes while recording/i);
-    const box = screen.getByPlaceholderText(/add a note/i);
+    await screen.findByTestId("notes-popover");
+    const box = screen.getByLabelText(/note this moment/i);
     fireEvent.change(box, { target: { value: "x" } });
     fireEvent.keyDown(box, { key: "Enter" });
 
@@ -1187,8 +1187,8 @@ describe("live notes", () => {
     (api.createNotes as Mock).mockRejectedValueOnce(new Error("boom"));
     render(<Recorder onUploaded={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
-    await screen.findByText(/notes while recording/i);
-    const box = screen.getByPlaceholderText(/add a note/i);
+    await screen.findByTestId("notes-popover");
+    const box = screen.getByLabelText(/note this moment/i);
     fireEvent.change(box, { target: { value: "x" } });
     fireEvent.keyDown(box, { key: "Enter" });
 
@@ -1215,8 +1215,8 @@ describe("live notes", () => {
     const onUploaded = vi.fn();
     render(<Recorder onUploaded={onUploaded} />);
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
-    await screen.findByText(/notes while recording/i);
-    const box = screen.getByPlaceholderText(/add a note/i);
+    await screen.findByTestId("notes-popover");
+    const box = screen.getByLabelText(/note this moment/i);
     fireEvent.change(box, { target: { value: "x" } });
     fireEvent.keyDown(box, { key: "Enter" });
 
@@ -1232,14 +1232,14 @@ describe("live notes", () => {
   it("closing the panel persists the preference; toggle reopens it", async () => {
     render(<Recorder onUploaded={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
-    await screen.findByText(/notes while recording/i);
+    await screen.findByTestId("notes-popover");
 
     fireEvent.click(screen.getByRole("button", { name: /close notes/i }));
-    expect(screen.queryByText(/notes while recording/i)).toBeNull();
+    expect(screen.queryByTestId("notes-popover")).toBeNull();
     expect(localStorage.getItem("diariz.recorder.notesOpen")).toBe("false");
 
     fireEvent.click(screen.getByRole("button", { name: /^notes$/i }));
-    expect(await screen.findByText(/notes while recording/i)).toBeTruthy();
+    expect(await screen.findByTestId("notes-popover")).toBeTruthy();
   });
 });
 

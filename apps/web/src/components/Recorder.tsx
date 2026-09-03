@@ -924,6 +924,12 @@ export default function Recorder({
     liveTranscript: live.transcript ?? undefined,
     liveLagSeconds: live.lagSeconds,
     liveDegraded: live.degraded,
+    // A reading of the recorded clock plus the wall-clock moment it was taken - never a ticking value.
+    // The pop-out extrapolates between publishes, which is what keeps its clock smooth once this window
+    // is hidden to the tray and Chromium throttles our timers to roughly 1 Hz (the same throttling that
+    // put the liveness poll in the client rather than here - see notesChannel's header). `running` is
+    // what freezes it over a pause, and resuming re-renders this, so a fresh reading crosses with it.
+    clock: { recordedMs: elapsed, atWallMs: Date.now(), running: recording && !paused },
   };
 
   const { poppedOut, popOut, notifyClosed } = useNotesPopout({
@@ -1720,6 +1726,9 @@ export default function Recorder({
               onDelete={notes.remove}
               shots={liveShots}
               onDeleteShot={deleteLiveShot}
+              // Already ticking at 250ms while recording (`startTicker`), so the header clock and the
+              // composer's stamp badge follow it without a second timer.
+              elapsedMs={elapsed}
               liveTranscript={live.transcript ?? undefined}
               liveLagSeconds={live.lagSeconds}
               liveDegraded={live.degraded}

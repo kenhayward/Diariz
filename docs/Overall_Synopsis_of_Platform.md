@@ -3157,16 +3157,30 @@ the least likely to hold.
   The two windows talk over a **`BroadcastChannel("diariz.live-notes")`**, which is origin-scoped, so being
   same-origin is the whole of the auth story. The **main window is the host**: it owns the recorder, the note
   lines, the capture stash and the recorded clock. The pop-out is a remote control — it sends
-  `add`/`edit`/`delete`/`deleteShot`/`capture`/`changeArea` and receives a whole-state snapshot back. It
-  **never stamps a timestamp**: `capturedAtMs` is pause-aware and produced only by the host. Screenshot
+  `add`/`edit`/`delete`/`deleteShot`/`capture`/`changeArea`/`toggle-auto-capture` and receives a whole-state
+  snapshot back. It **never stamps a timestamp**: `capturedAtMs` is pause-aware and produced only by the host.
+  The `add` message carries an **optional `atMs`**, which is a *request* for a moment rather than a stamp —
+  it is how the pop-out pins a note to a transcript line said earlier, and the host still writes the value.
+  Absent means "read your own clock", and it is deliberately optional rather than defaulted to zero, which
+  would file every ordinary note at the start of the meeting. Screenshot
   thumbnails cross as `Blob`s; the full-resolution PNG never leaves the host. Two counter-intuitive rules,
   both measured (see `docs/superpowers/specs/2026-08-13-notes-popout-window-design.md`): the window is
   always-on-top at Electron's **default** level (verified to survive another app going full screen;
   `"screen-saver"` would also float it over the lock screen), and the **liveness poll runs from the pop-out**,
   because a main window hidden to the tray has its timers throttled to roughly 1 Hz — a host heartbeat would
-  stall exactly when the feature is in use. Message *delivery* to a hidden host is not throttled. The pop-out
+  stall exactly when the feature is in use. Message *delivery* to a hidden host is not throttled. That same
+  throttling is why `NotesState.clock` is a **reading plus the wall-clock moment it was taken**
+  (`{ recordedMs, atWallMs, running }`) rather than a ticking `elapsedMs`: the pop-out extrapolates between
+  publishes on its own 1 s interval, so its clock stays smooth while the host is throttled, and a paused
+  recording freezes it via `running` rather than by the absence of publishes. A ticking value would also make
+  the host rebroadcast the whole state — every capture's thumbnail `Blob` included — on every tick. The
+  pop-out
   has its own narrow preload (`notes-preload.js`); reusing `preload.js` would register a second
-  `onTrayCommand` listener and a tray "Stop" would drive two recorders.
+  `onTrayCommand` listener and a tray "Stop" would drive two recorders. Both windows render the **same**
+  panel body, `components/hub/LiveNotesStream.tsx`: notes, captures and live-transcript lines merged by the
+  pure `lib/notesStream.ts` into one timeline ordered by `atMs`, with the composer docked beneath it. The
+  merge is **recomputed, never appended to** — `useLiveTranscript` replaces its segment array wholesale on
+  every append, so an accumulated list would duplicate corrected lines and strand deleted ones.
 
 ## GPU / worker notes
 
