@@ -3082,6 +3082,19 @@ the least likely to hold.
   remainder by `OffsetMs - prefixMs`** so the times it returns are relative to the whole recording
   rather than the window. The overlap exists to stop a word being cut in half at a chunk boundary and is a
   property of the **decode window only** - nothing overlapping is ever stored.
+  **Chunk length is the dominant term in live latency, and it is a server setting.** A word spoken at
+  the START of a chunk cannot leave the browser until that chunk closes, so `maxMs` IS the worst-case
+  wait before anything is sent - everything downstream (upload, queue, GPU, delivery) measured at
+  well under ten seconds combined, against a 5090 that is busy under 10% of a chunk's life. The
+  limits were 20 s / 45 s, chosen so pyannote had enough audio to cluster speakers in; they are now
+  **6 s / 12 s** (`Live:ChunkMinSeconds` / `ChunkMaxSeconds` / `ChunkPauseMs`), sent to the browser on
+  `BeginLive` as `LiveRecordingDto.ChunkLimits` so a deployment can retune them against real meetings
+  without a web deploy. The client **sanitises** them (`resolveChunkerLimits`) rather than trusting:
+  they come from a configuration file somebody can typo, and a maximum at or below the minimum would
+  post a chunk per animation frame. An older server sends none and the built-in defaults apply.
+  The cost is real and lands on speakers rather than words: less audio per chunk means the diarizer
+  has less to cluster, so voices split and are rejoined retroactively more often early in a meeting.
+
   **Per-chunk work is constant, not proportional to the meeting.** Two things used to grow with it (issue #753). The callback assigned `Segment.Ordinal` by reading and renumbering EVERY segment in the transcription on every chunk; it now numbers the arriving chunk alone into its own band of 10,000 (`Sequence * 10000 + i`, sorted within the chunk by recording time), which is correct because chunks are contiguous and non-overlapping — the same invariant the finalise concatenation already depends on. And the browser refetched the WHOLE recording per chunk; it now reads **`GET /api/recordings/{id}/live-transcript`**, which returns the transcript alone with speaker names and suggestion flags already resolved. That endpoint still returns the whole transcript rather than a delta, which is what keeps a missed hub event self-healing.
 
   **`prefixMs` is measured, not taken from the job.** The worker joins the bytes it is about to prepend,

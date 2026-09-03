@@ -24,9 +24,20 @@ export interface ChunkerLimits {
   pauseMs: number;
 }
 
+/// The fallback limits, used when the server does not send its own (an older API). The server's values
+/// win - see `LiveRecording.chunkLimits` - so these can be retuned without a deploy of the web app.
+///
+/// A word spoken at the START of a chunk cannot leave the browser until that chunk closes, so `maxMs` is
+/// the dominant term in live latency: everything downstream - upload, queue, GPU, delivery - measured at
+/// well under ten seconds combined, against a chunk that used to run up to 45 s.
+///
+/// They were 20 s / 45 s, chosen so pyannote had enough audio to cluster speakers in. That is a real
+/// cost of shortening them: less to cluster means speakers churn more early in a meeting and are
+/// corrected retroactively more often. It is worth paying because it is the transcript people read, and
+/// the stitcher already relabels backwards when two voices turn out to be one.
 export const DEFAULT_CHUNKER_LIMITS: ChunkerLimits = {
-  minMs: 20_000,
-  maxMs: 45_000,
+  minMs: 6_000,
+  maxMs: 12_000,
   // Shorter than the recorder's 15 s silence hint and longer than the gap between words. The
   // dictation engine uses 800 ms for the same job; kept a little tighter here because a chunk
   // boundary is cheaper to get slightly wrong than a dictated utterance.
@@ -85,4 +96,25 @@ export function shouldCut(
   if (!state.heardSpeech) return false;
   if (state.elapsedMs >= limits.maxMs) return true;
   return state.elapsedMs >= limits.minMs && state.silentMs >= limits.pauseMs;
+}
+
+/// Choose the limits to chunk with: the server's, when they make sense, otherwise the caller's own.
+///
+/// The server sends them so the latency/diarization trade-off can be retuned deployment-wide without a
+/// web deploy. It checks rather than trusts because those values come from a configuration file
+/// somebody can typo, and the failure modes are not graceful: a maximum at or below the minimum means
+/// the pause rule can never fire before the forced cut, and a non-positive maximum means every tick
+/// cuts - a chunk uploaded per animation frame.
+///
+/// All three or none. A half-applied set would be a configuration nobody chose, and harder to recognise
+/// from the outside than either end of it.
+export function resolveChunkerLimits(
+  fromServer: { minMs: number; maxMs: number; pauseMs: number } | null | undefined,
+  fallback: ChunkerLimits = DEFAULT_CHUNKER_LIMITS,
+): ChunkerLimits {
+  if (!fromServer) return fallback;
+  const { minMs, maxMs, pauseMs } = fromServer;
+  const usable =
+    [minMs, maxMs, pauseMs].every((v) => Number.isFinite(v) && v > 0) && maxMs > minMs;
+  return usable ? { minMs, maxMs, pauseMs } : fallback;
 }

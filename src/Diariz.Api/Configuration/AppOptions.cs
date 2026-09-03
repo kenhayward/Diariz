@@ -422,6 +422,22 @@ public class LiveCaptureOptions
     /// <summary>How often the reaper looks. Cheap - one projected query over live recordings only.</summary>
     public int ReaperIntervalMinutes { get; set; } = 5;
 
+    /// <summary>The shortest a chunk may be. A chunk ends at the first real pause past this, so it is
+    /// the floor on how much audio the diarizer gets to cluster speakers in - the reason the figure was
+    /// once 20 s. Shortening it is the single biggest lever on live latency and costs speaker stability
+    /// early in a meeting, which the stitcher then corrects retroactively.</summary>
+    public int ChunkMinSeconds { get; set; } = 6;
+
+    /// <summary>The longest a chunk may be, cut at regardless of what the audio is doing. This is the
+    /// dominant term in live latency: a word spoken at the start of a chunk cannot leave the browser
+    /// until the chunk closes, and everything downstream measured at well under ten seconds combined.
+    /// It also bounds somebody monologuing, who would otherwise produce one unbounded chunk.</summary>
+    public int ChunkMaxSeconds { get; set; } = 12;
+
+    /// <summary>How long the input must stay near-silent for a chunk to end there rather than mid-word.
+    /// Shorter than the gap between sentences, longer than the gap between words.</summary>
+    public int ChunkPauseMs { get; set; } = 700;
+
     /// <summary>How far the live transcript may fall behind before the API stops queueing live work for
     /// a recording. Measured, a 30 s chunk costs about 2.7 s on the production GPU, so two minutes of
     /// backlog means something is genuinely wrong rather than merely busy. 0 disables the pause: the

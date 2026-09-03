@@ -19,6 +19,10 @@ export interface LiveRecording {
   /// Echoed back so a client that lost its own copy is not locked out of its own capture.
   sessionId: string;
   status: RecordingStatus;
+  /// Where to cut one chunk of live audio and begin the next. Absent from an older server, in which case
+  /// the recorder uses its own defaults - so a shorter deployment-wide setting reaches every client
+  /// without a web deploy, and an older one still records.
+  chunkLimits?: { minMs: number; maxMs: number; pauseMs: number } | null;
 }
 
 export interface RecordingSummary {

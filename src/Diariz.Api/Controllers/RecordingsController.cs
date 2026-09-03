@@ -539,8 +539,12 @@ public class RecordingsController : ControllerBase
 
         await _hub.NotifyStatusAsync(UserId, rec.Id, rec.Status.ToString());
 
+        // The chunk limits ride along with the session so the browser does not have to ask, and so
+        // the latency/diarization trade-off can be retuned on the server without a web deploy.
         return CreatedAtAction(nameof(Get), new { id = rec.Id },
-            new LiveRecordingDto(rec.Id, req.SessionId, rec.Status));
+            new LiveRecordingDto(rec.Id, req.SessionId, rec.Status,
+                new ChunkLimitsDto(_live.ChunkMinSeconds * 1000, _live.ChunkMaxSeconds * 1000,
+                    _live.ChunkPauseMs)));
     }
 
     [HttpPut("{id:guid}/chunks/{sequence:int}")]

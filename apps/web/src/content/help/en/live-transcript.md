@@ -15,8 +15,8 @@ narrows the stream to them.
 
 ## What you see
 
-Each line carries the time it was said, and text appears roughly every half minute, a little behind
-the conversation. Under the stream is a status line telling you where things stand:
+Each line carries the time it was said, and text appears every few seconds, a little behind the
+conversation. Under the stream is a status line telling you where things stand:
 
 - **Live** - the transcript has caught up with the meeting.
 - **Live - transcript 16s behind** - normal. The transcriber works on the audio in slices, so it is
@@ -28,7 +28,7 @@ the conversation. Under the stream is a status line telling you where things sta
 Hover any transcript line and a small **+** appears at the end of it. Press it and the box you type in
 is pinned to that line's moment: whatever you write next is filed there rather than wherever the clock
 has reached. It is the ordinary case - you hear something, and by the time you have finished listening
-and started typing, half a minute has gone by.
+and started typing, the moment has passed.
 
 The pin shows as the time on the left of the box. It releases itself the moment you press Enter, so
 the next note follows the clock again. If you change your mind, click the pinned time and it lets go
@@ -89,7 +89,7 @@ resumes on its own once the backlog clears.
 
 ## If nothing appears
 
-- Give it a minute. Nothing appears until the first slice has been transcribed.
+- Give it a few seconds. Nothing appears until the first slice has been transcribed.
 - If you are recording in a language Diariz has been told to expect, and nobody has spoken yet, there
   is simply nothing to show.
 - A recording started before this feature existed has no live transcript. Only new recordings do.

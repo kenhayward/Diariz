@@ -32,6 +32,40 @@ function toBoundary(s: { tick: (d: number, l: number, p: boolean) => void }, lim
 }
 
 describe("startLiveSession", () => {
+  it("chunks on the limits the server sent with the session", async () => {
+    // The whole point of sending them: a deployment can shorten chunks - the dominant term in live
+    // latency - and every client picks it up on its next recording, with no web deploy.
+    const server = { minMs: 2_000, maxMs: 4_000, pauseMs: 300 };
+    const requestFragment = vi.fn();
+    const s = (await startLiveSession(deps({
+      begin: async () => ({ id: "rec-1", sessionId: "sess-1", chunkLimits: server }),
+      requestFragment,
+    })))!;
+
+    // Past the server's minimum but well short of the built-in one, then its shorter pause.
+    for (let t = 0; t < server.minMs + 500; t += 100) s.tick(100, 0.4, false);
+    for (let t = 0; t < server.pauseMs + 200; t += 100) s.tick(100, 0.01, false);
+
+    expect(requestFragment).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores limits that cannot work and keeps recording", async () => {
+    // A maximum at or below the minimum would cut on every tick - a chunk uploaded per animation frame.
+    // The values come from a deployment file somebody can typo, so a bad one costs the retune, not the
+    // meeting.
+    const requestFragment = vi.fn();
+    const s = (await startLiveSession(deps({
+      begin: async () => ({ id: "rec-1", sessionId: "sess-1", chunkLimits: { minMs: 9_000, maxMs: 1_000, pauseMs: 0 } }),
+      requestFragment,
+    })))!;
+
+    s.tick(100, 0.4, false);
+    expect(requestFragment).not.toHaveBeenCalled();
+
+    toBoundary(s);
+    expect(requestFragment).toHaveBeenCalledTimes(1);
+  });
+
   it("returns null when the server cannot be reached, so the recorder falls back", async () => {
     // The single most important behaviour in this module. A briefly unreachable server must cost
     // the live transcript, never the meeting - the caller buffers locally and uploads at stop.

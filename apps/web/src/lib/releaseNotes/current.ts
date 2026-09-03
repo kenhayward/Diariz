@@ -9,6 +9,19 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.271.0",
+    date: "2026-09-03",
+    pr: 755,
+    headline: "The live transcript keeps much closer to the room",
+    summary:
+      "Live transcript lines used to arrive up to about a minute after they were said. Most of that was not the transcriber working - it was audio waiting. Diariz sends your meeting up in pieces, and a piece could run up to 45 seconds before it was sent at all, so a sentence spoken at the start of one sat in your browser for three quarters of a minute before anything else could begin.\n\nThose pieces are now much shorter - 6 to 12 seconds instead of 20 to 45 - which takes the worst case from roughly 50 seconds down to under 20. The machine doing the transcribing was never the bottleneck: on the measured figures it was busy under a tenth of the time.\n\nThere is a real trade for this, and it shows up in speaker names rather than in words. Working out who is speaking needs a stretch of audio to compare voices across, and shorter pieces give it less to go on - so early in a meeting a voice may be split in two and joined up a little later, which you will see happen in front of you. The words themselves are unaffected, and the finished transcript after you stop is unchanged.\n\nThe lengths are now a server setting rather than something built into the app, so they can be tuned against real meetings without shipping a new version.",
+    changed: [
+      "Live audio is sent up in 6-12 second pieces rather than 20-45, so transcript lines appear far sooner after they are spoken.",
+      "Speaker names may be corrected more often early in a meeting, which is the cost of the shorter pieces - a voice split in two is rejoined once there is enough of it to be sure.",
+      "The piece length is now a server setting, so it can be tuned without a new release.",
+    ],
+  },
+  {
     version: "0.270.4",
     date: "2026-09-03",
     pr: 754,

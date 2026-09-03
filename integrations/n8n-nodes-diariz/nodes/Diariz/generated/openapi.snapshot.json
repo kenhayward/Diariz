@@ -894,6 +894,40 @@
         ],
         "type": "object"
       },
+      "ChunkLimitsDto": {
+        "properties": {
+          "maxMs": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "minMs": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "pauseMs": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "minMs",
+          "maxMs",
+          "pauseMs"
+        ],
+        "type": "object"
+      },
       "CompleteActionsRequest": {
         "properties": {
           "completed": {
@@ -1823,6 +1857,16 @@
       },
       "LiveRecordingDto": {
         "properties": {
+          "chunkLimits": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChunkLimitsDto"
+              }
+            ]
+          },
           "id": {
             "format": "uuid",
             "type": "string"
