@@ -40,6 +40,19 @@ contextBridge.exposeInMainWorld("diariz", {
     return () => ipcRenderer.removeListener("notes:closed", listener);
   },
 
+  /// Subscribe to a global-hotkey command routed to this window: `cb` receives { type }, where type is
+  /// "focus-composer" or "transcript-to-chat". Returns an unsubscribe function.
+  onNotesCommand: (cb) => {
+    const listener = (_event, payload) => cb(payload);
+    ipcRenderer.on("notes:command", listener);
+    return () => ipcRenderer.removeListener("notes:command", listener);
+  },
+
+  /// The accelerators actually registered, already formatted for this platform, so the panel's hint line
+  /// can render what is really held rather than a hardcoded string that goes wrong the moment a user
+  /// changes one. Resolves { capture, note, transcriptChat }.
+  loadHotkeys: () => ipcRenderer.invoke("hotkeys:load"),
+
   /// True when this shell can capture screenshots (used to show the capture affordances).
   canCaptureScreenshot: true,
 

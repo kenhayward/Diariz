@@ -57,6 +57,17 @@ export type LiveNotesStreamProps = {
   /// The recording currently streaming, when there is one. Gates the drag payload and decides which of
   /// the two reasons a capture's Chat button gives when it cannot act.
   liveRecordingId?: string;
+  /// A counter the host bumps to ask for the composer. Deliberately a number, not a boolean: two
+  /// consecutive presses of the note hotkey must both land, and `true -> true` is not a change React
+  /// would run an effect for.
+  focusRequest?: number;
+  /// The global accelerators as the shell actually registered them, already formatted for the platform.
+  /// Absent in a plain browser - and on a shell predating the notes hotkeys - which hides the hint line
+  /// rather than promising keys that do nothing.
+  hotkeys?: { capture: string; note: string; transcriptChat: string };
+  /// Draw only the status line and the composer. Compact mode in the detached window, for a call that
+  /// has taken the screen.
+  compact?: boolean;
 };
 
 /// How long a confirmation stays before the control comes back. Long enough to be read without looking
@@ -109,6 +120,9 @@ export default function LiveNotesStream({
   onTranscriptToChat,
   onShotToChat,
   liveRecordingId,
+  focusRequest,
+  hotkeys,
+  compact = false,
 }: LiveNotesStreamProps) {
   const { t } = useTranslation("workspace");
   const { t: tr } = useTranslation("recordings");
@@ -150,6 +164,16 @@ export default function LiveNotesStream({
     const el = streamRef.current;
     if (el) wasAtTail.current = el.scrollTop + el.clientHeight >= el.scrollHeight - TAIL_SLACK_PX;
   }
+
+  // The note hotkey, arriving from the shell by way of the host. Skipped on the first render, so merely
+  // opening the panel is not a request - `autoFocus` covers that - and so the detached window does not
+  // grab focus out of whatever the user was typing the moment it appears.
+  const seenFocusRequest = useRef(focusRequest);
+  useEffect(() => {
+    if (focusRequest === undefined || focusRequest === seenFocusRequest.current) return;
+    seenFocusRequest.current = focusRequest;
+    inputRef.current?.focus();
+  }, [focusRequest]);
 
   // ---- Confirmations ----
 
@@ -198,6 +222,17 @@ export default function LiveNotesStream({
           long: tr("liveTranscriptBehind", { seconds: liveLagSeconds }),
         }
       : { short: tr("liveStatusLive"), long: tr("liveTranscriptLive") };
+
+  // Omits an accelerator the shell could not register (an empty string), rather than printing a gap
+  // where a key should be.
+  const hotkeyHint =
+    hotkeys && (hotkeys.note || hotkeys.capture || hotkeys.transcriptChat)
+      ? t("notesHotkeyHint", {
+          note: hotkeys.note,
+          capture: hotkeys.capture,
+          chat: hotkeys.transcriptChat,
+        })
+      : null;
 
   const chips: { id: StreamFilter; label: string }[] = [
     { id: "all", label: t("notesFilterAll") },
@@ -260,9 +295,10 @@ export default function LiveNotesStream({
         </div>
       )}
 
-      <div
-        role="radiogroup"
-        aria-label={t("notesFilterLabel")}
+      {!compact && (
+        <div
+          role="radiogroup"
+          aria-label={t("notesFilterLabel")}
         style={{
           display: "flex",
           alignItems: "center",
@@ -297,10 +333,12 @@ export default function LiveNotesStream({
           );
         })}
         <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 500, color: "var(--hub-placeholder)" }}>
-          {filter === "notes" ? t("notesFilterNotesOnly") : filter === "captures" ? t("notesFilterCapturesOnly") : ""}
-        </span>
-      </div>
+            {filter === "notes" ? t("notesFilterNotesOnly") : filter === "captures" ? t("notesFilterCapturesOnly") : ""}
+          </span>
+        </div>
+      )}
 
+      {!compact && (
       <ul
         ref={streamRef}
         onScroll={onStreamScroll}
@@ -368,6 +406,7 @@ export default function LiveNotesStream({
           })
         )}
       </ul>
+      )}
 
       <div
         style={{
@@ -484,6 +523,15 @@ export default function LiveNotesStream({
             {"⏎"}
           </span>
         </div>
+
+        {/* Built from what the shell actually registered rather than from a literal, so the copy cannot
+            be wrong about a hotkey the user has changed - which is the one thing a hardcoded line here
+            would eventually be. Hidden entirely in a plain browser, which holds no global keys. */}
+        {hotkeyHint && (
+          <p data-testid="notes-hotkey-hint" style={{ margin: 0, fontSize: 10, color: "var(--hub-placeholder)" }}>
+            {hotkeyHint}
+          </p>
+        )}
       </div>
     </div>
   );

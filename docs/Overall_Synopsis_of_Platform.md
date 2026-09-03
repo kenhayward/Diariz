@@ -1417,6 +1417,21 @@ row per capture; entity in `src/Diariz.Domain/Entities/MeetingScreenshot.cs`, mi
 button in the web app itself - all three funnel through the same main-process `captureScreenshot()`, which
 is a no-op unless a recording is actually running (`canCapture(recorder)`).
 
+**Three global accelerators, one gate.** `HOTKEY_ACTIONS` (`screenshotState.js`) names them: `captureHotkey`
+(`CommandOrControl+Shift+9`, `capture`), `noteHotkey` (`+Shift+0`, `focus-composer`) and
+`transcriptChatHotkey` (`+Shift+8`, `transcript-to-chat`), each stored under its own key so one can be
+changed without disturbing the others. `applyShortcut()` registers all three under the same
+`canCapture(recorder)` gate, so Diariz never holds a global key while idle and `ready` going stale-false (a
+reload, the window closing) drops every one of them immediately. The capture hotkey keeps the combination it
+has always had: it is user-configurable and moving it to make room would silently break anyone who had
+learned it. The two new defaults are numbers rather than the obvious letters because a global grab lasts the
+whole meeting, and `Ctrl+Shift+N` is Chrome's incognito window and Explorer's new folder while `Ctrl+Shift+C`
+is copy in Windows Terminal and VS Code. Delivery goes through the pure `routeNotesCommand`: `focus-composer`
+follows the composer (the pop-out window when it exists, else the main window), `transcript-to-chat` is always
+the main window because the chat panel only exists there, and `capture` is handled in the main process and
+routed nowhere. The panel's hint line renders `hotkeys:load`, which is `formatAccelerator` over what is
+actually registered - a literal there would be wrong the moment a user changed one.
+
 **When a capture reaches the server depends on whether the meeting is streaming.** A capture is only
 attachable once the recording row exists. Without a live session that is not until the audio uploads at
 Stop, so captures wait in an IndexedDB stash and `attachScreenshots` posts them afterwards. **Under a live
@@ -3193,7 +3208,13 @@ the least likely to hold.
   the host rebroadcast the whole state — every capture's thumbnail `Blob` included — on every tick. The
   pop-out
   has its own narrow preload (`notes-preload.js`); reusing `preload.js` would register a second
-  `onTrayCommand` listener and a tray "Stop" would drive two recorders. Both windows render the **same**
+  `onTrayCommand` listener and a tray "Stop" would drive two recorders. That preload now also carries
+  `notes:set-always-on-top`, `notes:set-compact`, `notes:command` and `hotkeys:load`. **Compact is
+  renderer state**: the window decides what to draw (only the status line and the composer) and the shell
+  only resizes, because "just the composer band" is a layout question the main process cannot answer.
+  `trackBounds` skips while compact and the restore re-reads afterwards, so a 132px height can never be
+  written to the store - a window that reopened as a sliver with no stream in it would have no obvious
+  way back. Both windows render the **same**
   panel body, `components/hub/LiveNotesStream.tsx`: notes, captures and live-transcript lines merged by the
   pure `lib/notesStream.ts` into one timeline ordered by `atMs`, with the composer docked beneath it. The
   merge is **recomputed, never appended to** — `useLiveTranscript` replaces its segment array wholesale on

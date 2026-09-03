@@ -978,6 +978,56 @@ export default function Recorder({
     attachScreenshotToChat({ recordingId: liveRecordingId, screenshotId: shot.serverId });
   }
 
+  // ---- Global hotkeys (desktop shell only) ----
+
+  /// Bumped rather than set, because two presses of the note hotkey must both reach the composer and
+  /// `true -> true` is not a change React would act on.
+  const [notesFocusRequest, setNotesFocusRequest] = useState(0);
+  const [shellHotkeys, setShellHotkeys] = useState<{
+    capture: string;
+    note: string;
+    transcriptChat: string;
+  } | null>(null);
+
+  useEffect(() => {
+    const load = (window as unknown as { diariz?: TrayBridge }).diariz?.loadHotkeys;
+    if (!load) return;
+    let live = true;
+    // A failure leaves the hint line off rather than showing a guess: the line's whole claim is that it
+    // prints the keys really registered.
+    void load()
+      .then((h) => {
+        if (live) setShellHotkeys(h);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  // The pop-out is refreshed through refs so this subscribes once rather than resubscribing whenever the
+  // notes move between windows - a churned listener would drop a keypress landing in the gap.
+  const poppedOutRef = useRef(false);
+  const sendTranscriptRef = useRef(sendTranscriptToChat);
+  sendTranscriptRef.current = sendTranscriptToChat;
+
+  useEffect(() => {
+    const subscribe = (window as unknown as { diariz?: TrayBridge }).diariz?.onNotesCommand;
+    if (!subscribe) return;
+    return subscribe((cmd) => {
+      if (cmd.type === "transcript-to-chat") {
+        sendTranscriptRef.current();
+        return;
+      }
+      // The shell routes `focus-composer` to the pop-out whenever that window exists, so arriving here
+      // while popped out means the two disagree about it - most likely the window closed a moment ago.
+      // Doing nothing is right: opening the inline popover would be a second notes panel.
+      if (poppedOutRef.current) return;
+      if (!hub.isOpen("notes")) toggleNotes();
+      setNotesFocusRequest((n) => n + 1);
+    });
+  }, []);
+
   // ---- Pop-out notes window (desktop shell only) ----
 
   const shellBridge = (window as unknown as { diariz?: TrayBridge }).diariz;
@@ -1030,6 +1080,8 @@ export default function Recorder({
       onTranscriptToChat: sendTranscriptToChat,
     },
   });
+
+  poppedOutRef.current = poppedOut;
 
   // Popping out moves the notes into the window, so the inline popover closes. The remembered
   // preference is deliberately not touched: it records whether the popover auto-opens on the *next*
@@ -1828,6 +1880,8 @@ export default function Recorder({
               onTranscriptToChat={sendTranscriptToChat}
               onShotToChat={sendShotToChat}
               liveRecordingId={liveRecordingId ?? undefined}
+              focusRequest={notesFocusRequest}
+              hotkeys={shellHotkeys ?? undefined}
             />
           </div>
         )}

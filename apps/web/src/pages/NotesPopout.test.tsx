@@ -355,3 +355,122 @@ describe("NotesPopout - the chat lives in the other window", () => {
     expect(screen.queryByRole("button", { name: /use in chat/i })).toBeNull();
   });
 });
+
+describe("NotesPopout window controls", () => {
+  const bridge = {
+    isPopout: true,
+    setAlwaysOnTop: vi.fn().mockResolvedValue({ ok: true }),
+    setCompact: vi.fn().mockResolvedValue({ ok: true }),
+    onNotesCommand: vi.fn(() => () => {}),
+    loadHotkeys: vi.fn().mockResolvedValue({
+      capture: "Ctrl+Shift+9",
+      note: "Ctrl+Shift+0",
+      transcriptChat: "Ctrl+Shift+8",
+    }),
+  };
+
+  beforeEach(() => {
+    (window as unknown as { diarizNotes?: unknown }).diarizNotes = bridge;
+  });
+  afterEach(() => {
+    delete (window as unknown as { diarizNotes?: unknown }).diarizNotes;
+  });
+
+  /// Renders and flushes the bridge's hotkey load. That promise resolves on a microtask and sets state,
+  /// so a test that ended first would leave an update outside act - which test-setup.ts fails on.
+  async function renderReady() {
+    render(<NotesPopout />);
+    await act(async () => {});
+  }
+
+  it("starts on top, because that is how the shell creates the window", async () => {
+    // Starting at false would show a toggle that disagreed with the window until it was pressed.
+    await renderReady();
+
+    expect(screen.getByRole("button", { name: /on top/i }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("lets the window fall behind the call, and come back", async () => {
+    await renderReady();
+    const button = screen.getByRole("button", { name: /on top/i });
+
+    fireEvent.click(button);
+    expect(bridge.setAlwaysOnTop).toHaveBeenLastCalledWith(false);
+    expect(button.getAttribute("aria-pressed")).toBe("false");
+
+    fireEvent.click(button);
+    expect(bridge.setAlwaysOnTop).toHaveBeenLastCalledWith(true);
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("collapses to the composer and asks the shell to shrink, then restores both", async () => {
+    await renderReady();
+    act(() => handlers.onState(state()));
+
+    fireEvent.click(screen.getByRole("button", { name: /^compact$/i }));
+
+    expect(bridge.setCompact).toHaveBeenLastCalledWith(true);
+    expect(screen.queryByTestId("notes-stream")).toBeNull();
+    // The composer is the whole point of staying open, so it must still work.
+    expect(screen.getByLabelText(/note this moment/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /^expand$/i }));
+
+    expect(bridge.setCompact).toHaveBeenLastCalledWith(false);
+    expect(screen.getByTestId("notes-stream")).toBeTruthy();
+  });
+
+  it("puts the cursor in the composer when the note hotkey is routed here", async () => {
+    let deliver: ((cmd: { type: "focus-composer" | "transcript-to-chat" }) => void) | null = null;
+    bridge.onNotesCommand.mockImplementation((cb: (cmd: { type: string }) => void) => {
+      deliver = cb as never;
+      return () => {};
+    });
+    await renderReady();
+    act(() => handlers.onState(state()));
+    const box = screen.getByLabelText(/note this moment/i);
+    box.blur();
+
+    act(() => deliver!({ type: "focus-composer" }));
+
+    expect(document.activeElement).toBe(box);
+  });
+
+  it("leaves compact alone when the note hotkey arrives", async () => {
+    // The composer is visible either way, and expanding the window out from under a call the user is in
+    // the middle of would be the opposite of what they asked for.
+    let deliver: ((cmd: { type: "focus-composer" | "transcript-to-chat" }) => void) | null = null;
+    bridge.onNotesCommand.mockImplementation((cb: (cmd: { type: string }) => void) => {
+      deliver = cb as never;
+      return () => {};
+    });
+    await renderReady();
+    act(() => handlers.onState(state()));
+    fireEvent.click(screen.getByRole("button", { name: /^compact$/i }));
+
+    act(() => deliver!({ type: "focus-composer" }));
+
+    expect(screen.queryByTestId("notes-stream")).toBeNull();
+  });
+
+  it("shows the hotkeys the shell reports", async () => {
+    await renderReady();
+    act(() => handlers.onState(state()));
+
+    const line = await screen.findByTestId("notes-hotkey-hint");
+    expect(line.textContent).toContain("Ctrl+Shift+0");
+  });
+});
+
+describe("NotesPopout in a plain browser tab", () => {
+  it("offers no window controls it cannot honour", () => {
+    // /notes-popout is an ordinary route, so it can be opened by hand. A dead On top button there would
+    // be worse than none.
+    render(<NotesPopout />);
+    act(() => handlers.onState(state()));
+
+    expect(screen.queryByRole("button", { name: /on top/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^compact$/i })).toBeNull();
+    expect(screen.queryByTestId("notes-hotkey-hint")).toBeNull();
+  });
+});

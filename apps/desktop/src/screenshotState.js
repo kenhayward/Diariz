@@ -320,8 +320,105 @@ function hotkeyUnavailableSaveError() {
   return "That combination is already in use by another application.";
 }
 
+/// The three global accelerators the shell holds while a recording is running, each stored under its own
+/// key so a user can change any of them without disturbing the others.
+///
+/// The capture hotkey keeps the key it has always had. It is user-configurable and has shipped on
+/// Shift+9 since it existed, so moving it to make room for these two would silently break everyone who
+/// had learned it - and anyone who had chosen their own would lose that as well.
+///
+/// The two new defaults sit beside it on the number row rather than taking the obvious letters. A global
+/// shortcut is held for the WHOLE meeting, and Ctrl+Shift+N is Chrome's incognito window and Explorer's
+/// new folder, while Ctrl+Shift+C is copy in Windows Terminal and in VS Code. Taking either for an hour
+/// would be a worse surprise than an unfamiliar number.
+const HOTKEY_ACTIONS = [
+  { key: "captureHotkey", default: "CommandOrControl+Shift+9", action: "capture" },
+  { key: "noteHotkey", default: "CommandOrControl+Shift+0", action: "focus-composer" },
+  { key: "transcriptChatHotkey", default: "CommandOrControl+Shift+8", action: "transcript-to-chat" },
+];
+
+/// What to register, resolved against the store. `read` is `store.get` (or anything shaped like it), so
+/// this stays pure and testable without electron-store.
+///
+/// A stored value that would not register falls back to the default rather than being passed through:
+/// otherwise that action would end up with no hotkey at all, announced as an "already in use" failure
+/// that names a combination nothing else is actually holding.
+function accelerators(read) {
+  return HOTKEY_ACTIONS.map(({ key, default: fallback, action }) => ({
+    key,
+    accelerator: normalizeAccelerator(read(key)) ?? fallback,
+    action,
+  }));
+}
+
+/// Which window a hotkey's command should be delivered to, or null when it is not a command at all.
+///
+/// `focus-composer` follows the composer: to the pop-out when that window exists, because the whole
+/// point of the key is that the box is in front of you the instant you press it - delivering it to the
+/// main window while the notes are detached would raise the wrong window over the call and leave the
+/// composer the user was looking at without focus. `transcript-to-chat` always goes to the main window,
+/// because the chat panel only exists there. `capture` is handled in the main process and travels to
+/// neither.
+function routeNotesCommand(action, { popoutOpen } = {}) {
+  if (action === "focus-composer") return popoutOpen ? "popout" : "main";
+  if (action === "transcript-to-chat") return "main";
+  return null;
+}
+
+// How each modifier is written on screen, per platform. macOS uses the glyphs and no separator, which is
+// how every other Mac application writes a shortcut; Windows and Linux spell them out and join with "+".
+const MAC_MODIFIER_GLYPHS = new Map([
+  ["command", "⌘"],
+  ["cmd", "⌘"],
+  ["commandorcontrol", "⌘"],
+  ["cmdorctrl", "⌘"],
+  ["control", "⌃"],
+  ["ctrl", "⌃"],
+  ["shift", "⇧"],
+  ["alt", "⌥"],
+  ["option", "⌥"],
+  ["super", "⌘"],
+  ["meta", "⌘"],
+]);
+const PC_MODIFIER_NAMES = new Map([
+  ["command", "Win"],
+  ["cmd", "Win"],
+  ["commandorcontrol", "Ctrl"],
+  ["cmdorctrl", "Ctrl"],
+  ["control", "Ctrl"],
+  ["ctrl", "Ctrl"],
+  ["shift", "Shift"],
+  ["alt", "Alt"],
+  ["option", "Alt"],
+  ["super", "Win"],
+  ["meta", "Win"],
+]);
+
+/// An accelerator written the way the platform writes it, for the panel's hint line.
+///
+/// The hint renders what is ACTUALLY registered rather than a hardcoded string, so the copy cannot be
+/// wrong about a hotkey the user has changed - which a literal in the UI inevitably would be. An
+/// accelerator that would not register formats to the empty string: the line then simply omits it,
+/// rather than promising a key that does nothing.
+function formatAccelerator(accelerator, platform) {
+  const normalized = normalizeAccelerator(accelerator);
+  if (!normalized) return "";
+  const mac = platform === "darwin";
+  const segs = normalized.split("+");
+  const rendered = segs.map((seg) => {
+    const lower = seg.toLowerCase();
+    if (mac) return MAC_MODIFIER_GLYPHS.get(lower) ?? seg;
+    return PC_MODIFIER_NAMES.get(lower) ?? seg;
+  });
+  return mac ? rendered.join("") : rendered.join("+");
+}
+
 module.exports = {
   DEFAULT_ACCELERATOR,
+  HOTKEY_ACTIONS,
+  accelerators,
+  routeNotesCommand,
+  formatAccelerator,
   CAPTURE_COOLDOWN_MS,
   canCapture,
   trayScreenshotItems,

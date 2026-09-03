@@ -28,7 +28,11 @@ const { buildStartUrl, codeFromArgv, notificationForAuthError } = require("./des
 const { cropRectFor, resizeDims, clampRect, sourceForDisplay } = require("./captureTarget");
 const { reconcilePool } = require("./pickerPool");
 const { RENDERER_INVALIDATING_EVENTS } = require("./rendererReadiness");
-const { notesWindowBounds } = require("./notesWindowState");
+const {
+  notesWindowBounds,
+  compactBounds,
+  restoredBounds,
+} = require("./notesWindowState");
 const { contextMenuItems } = require("./contextMenu");
 const {
   SYNC_DEFAULTS,
@@ -56,6 +60,9 @@ const {
   acceleratorFromKeyDescriptor,
   unsupportedKeyCaptureMessage,
   hotkeyUnavailableSaveError,
+  accelerators,
+  routeNotesCommand,
+  formatAccelerator,
 } = require("./screenshotState");
 
 // In dev we load the Vite dev server directly and skip first-run setup.
@@ -69,6 +76,9 @@ let mainWindow = null;
 let setupWindow = null;
 let hotkeyWindow = null;
 let notesWindow = null;
+// The current notes window's bounds tracker, so the compact handler can ask it to re-read after a
+// restore. Reassigned each time the window is created; a no-op while there is none.
+let trackNotesBounds = () => {};
 let isQuitting = false;
 
 // Tray-driven recording state. `ready` flips true once the web app's recorder has
@@ -368,12 +378,16 @@ function showNotesPopout() {
   // the cached copy. The key is flat: every other key in this store is, and dotted keys are unproven here.
   let lastBounds = null;
   const trackBounds = () => {
+    // Never while compact. Compact is a temporary shape for a call that has taken the screen; storing it
+    // would reopen the window next time as a 132px sliver with no stream in it.
+    if (notesCompact) return;
     if (notesWindow && !notesWindow.isDestroyed()) lastBounds = notesWindow.getBounds();
   };
   notesWindow.on("move", trackBounds);
   notesWindow.on("resize", trackBounds);
   notesWindow.on("close", trackBounds);
   trackBounds(); // seed it, so a window that is never touched still remembers where it sat
+  trackNotesBounds = trackBounds;
   notesWindow.on("closed", () => {
     if (lastBounds) store.set("notesPopoutBounds", lastBounds);
     notesWindow = null;
@@ -389,6 +403,37 @@ function showNotesPopout() {
 function closeNotesPopout() {
   if (notesWindow && !notesWindow.isDestroyed()) notesWindow.close();
 }
+
+// Whether the pop-out is currently collapsed to its composer band, and the height to put back when it is
+// not. Held here rather than in the store because compact is deliberately not remembered across sessions -
+// it answers "a call has the screen right now", which the next launch knows nothing about.
+let notesCompact = false;
+let notesFullHeight = null;
+
+ipcMain.handle("notes:set-always-on-top", (_event, flag) => {
+  if (!notesWindow || notesWindow.isDestroyed()) return { ok: false };
+  notesWindow.setAlwaysOnTop(Boolean(flag));
+  return { ok: true, onTop: Boolean(flag) };
+});
+
+ipcMain.handle("notes:set-compact", (_event, flag) => {
+  if (!notesWindow || notesWindow.isDestroyed()) return { ok: false };
+  const current = notesWindow.getBounds();
+  if (flag) {
+    // Remembered before the shrink, so the restore has a real height to go back to rather than the
+    // default. Only on the way IN - a second compact request while already compact must not record the
+    // compact height as the one to restore.
+    if (!notesCompact) notesFullHeight = current.height;
+    notesCompact = true;
+    notesWindow.setBounds(compactBounds(current));
+  } else {
+    notesCompact = false;
+    notesWindow.setBounds(restoredBounds(current, notesFullHeight));
+    // The window is its real size again, so what it is now is what should be remembered.
+    trackNotesBounds();
+  }
+  return { ok: true, compact: notesCompact };
+});
 
 ipcMain.handle("notes:open", () => showNotesPopout());
 
@@ -1354,18 +1399,43 @@ let shortcutWarned = false;
 /// stale-false - reload, window close - independently of `phase`, and must drop the
 /// shortcut immediately rather than waiting for the next phase report). Returns false
 /// when the combination is already taken by other software.
+/// Deliver one hotkey command to whichever window should act on it.
+///
+/// The window is shown and focused first: these keys are pressed while a call has the screen, so the
+/// point is that the composer is in front of the user the instant the key goes down.
+function deliverNotesCommand(action) {
+  const target = routeNotesCommand(action, {
+    popoutOpen: Boolean(notesWindow && !notesWindow.isDestroyed()),
+  });
+  const win = target === "popout" ? notesWindow : target === "main" ? mainWindow : null;
+  if (!win || win.isDestroyed()) return;
+  win.show();
+  win.focus();
+  win.webContents.send("notes:command", { type: action });
+}
+
 function applyShortcut() {
   globalShortcut.unregisterAll();
   if (!canCapture(recorder)) {
     shortcutWarned = false; // leaving the armed state - the next recording gets a fresh warning
     return true;
   }
-  const accelerator = normalizeAccelerator(store.get("captureHotkey")) ?? DEFAULT_ACCELERATOR;
-  let ok;
-  try {
-    ok = globalShortcut.register(accelerator, () => void captureScreenshot());
-  } catch {
-    ok = false;
+  // All three under the same gate. Diariz never holds a global key while idle - it is the user's whole
+  // keyboard, not just ours - and `ready` can go stale-false (a reload, the window closing) independently
+  // of `phase`, which must drop every shortcut immediately rather than wait for the next phase report.
+  let ok = true;
+  for (const { accelerator, action } of accelerators((key) => store.get(key))) {
+    try {
+      // One failure does not abandon the rest: two of these working is better than none, and the single
+      // notification below covers whichever could not be held.
+      const held = globalShortcut.register(
+        accelerator,
+        action === "capture" ? () => void captureScreenshot() : () => deliverNotesCommand(action),
+      );
+      ok = ok && held;
+    } catch {
+      ok = false;
+    }
   }
   if (ok) {
     shortcutWarned = false;
@@ -1406,6 +1476,17 @@ function showHotkeyWindow() {
 }
 
 ipcMain.handle("hotkey:load", () => normalizeAccelerator(store.get("captureHotkey")) ?? DEFAULT_ACCELERATOR);
+
+/// The three accelerators as they are actually registered, formatted for this platform, for the notes
+/// panel's hint line. Formatted HERE rather than in the web app because the platform and the store both
+/// live on this side - and because a hint line built from a literal would go wrong the moment a user
+/// changed a hotkey, which is precisely the copy this replaces.
+ipcMain.handle("hotkeys:load", () => {
+  const [capture, note, transcriptChat] = accelerators((key) => store.get(key)).map((h) =>
+    formatAccelerator(h.accelerator, process.platform),
+  );
+  return { capture, note, transcriptChat };
+});
 
 // The sandboxed hotkey window can't require screenshotState.js itself, so it sends the
 // raw KeyboardEvent descriptor (modifier booleans + e.code) here and gets back the

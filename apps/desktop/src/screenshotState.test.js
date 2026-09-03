@@ -17,6 +17,10 @@ const {
   acceleratorFromKeyDescriptor,
   unsupportedKeyCaptureMessage,
   hotkeyUnavailableSaveError,
+  HOTKEY_ACTIONS,
+  accelerators,
+  routeNotesCommand,
+  formatAccelerator,
 } = require("./screenshotState");
 
 test("the default accelerator is a valid one", () => {
@@ -429,4 +433,111 @@ test("an area chosen while the renderer is reloading captures nothing", () => {
     shouldCaptureAfterAreaChange({ displayId: 1, selection: null }, { phase: "recording", ready: false }),
     false,
   );
+});
+
+// ---- Three hotkeys, not one ----
+
+test("the shell holds three accelerators, and the capture one keeps the key it always had", () => {
+  // The capture hotkey is user-configurable and has shipped on Shift+9 since it existed. Moving it to
+  // make room for the two new ones would silently break every user who had learned it - and anyone who
+  // had chosen their own would lose that too.
+  assert.deepEqual(
+    HOTKEY_ACTIONS.map((a) => [a.key, a.default, a.action]),
+    [
+      ["captureHotkey", "CommandOrControl+Shift+9", "capture"],
+      ["noteHotkey", "CommandOrControl+Shift+0", "focus-composer"],
+      ["transcriptChatHotkey", "CommandOrControl+Shift+8", "transcript-to-chat"],
+    ],
+  );
+});
+
+test("the defaults sit beside each other rather than taking letters other software owns", () => {
+  // Ctrl+Shift+N is Chrome's incognito window and Explorer's new folder; Ctrl+Shift+C is copy in
+  // Windows Terminal and VS Code. A global grab holds them for the WHOLE meeting, so the number row
+  // beside the existing 9 is chosen instead.
+  const keys = HOTKEY_ACTIONS.map((a) => a.default);
+  for (const forbidden of ["CommandOrControl+Shift+N", "CommandOrControl+Shift+C", "CommandOrControl+Shift+S"]) {
+    assert.equal(keys.includes(forbidden), false, `${forbidden} must not be a default`);
+  }
+});
+
+test("every default is an accelerator the shell would actually accept", () => {
+  for (const { default: acc } of HOTKEY_ACTIONS) {
+    assert.equal(isValidAccelerator(acc), true, acc);
+    assert.equal(normalizeAccelerator(acc), acc);
+  }
+});
+
+test("no two actions share a key or a default", () => {
+  assert.equal(new Set(HOTKEY_ACTIONS.map((a) => a.key)).size, HOTKEY_ACTIONS.length);
+  assert.equal(new Set(HOTKEY_ACTIONS.map((a) => a.default)).size, HOTKEY_ACTIONS.length);
+  assert.equal(new Set(HOTKEY_ACTIONS.map((a) => a.action)).size, HOTKEY_ACTIONS.length);
+});
+
+test("reads each accelerator from the store, falling back to its default", () => {
+  const stored = { noteHotkey: "Control+Alt+K" };
+
+  assert.deepEqual(accelerators((key) => stored[key]), [
+    { key: "captureHotkey", accelerator: "CommandOrControl+Shift+9", action: "capture" },
+    { key: "noteHotkey", accelerator: "Control+Alt+K", action: "focus-composer" },
+    { key: "transcriptChatHotkey", accelerator: "CommandOrControl+Shift+8", action: "transcript-to-chat" },
+  ]);
+});
+
+test("rubbish in the store falls back rather than being registered as-is", () => {
+  // A stored value that cannot register would leave that action with no hotkey at all and a misleading
+  // "already in use" notification.
+  const stored = { noteHotkey: "Control++0", transcriptChatHotkey: "J" };
+
+  const got = accelerators((key) => stored[key]);
+
+  assert.equal(got[1].accelerator, "CommandOrControl+Shift+0");
+  assert.equal(got[2].accelerator, "CommandOrControl+Shift+8");
+});
+
+// ---- Where each command lands ----
+
+test("a note goes to the pop-out when it is open, and to the main window when it is not", () => {
+  // The whole point of the note hotkey is that the composer is in front of you the moment you press it.
+  // Sending it to the main window while the notes are detached would raise the wrong window, over the
+  // call, and leave the composer the user was actually looking at without focus.
+  assert.equal(routeNotesCommand("focus-composer", { popoutOpen: true }), "popout");
+  assert.equal(routeNotesCommand("focus-composer", { popoutOpen: false }), "main");
+});
+
+test("transcript-to-chat always goes to the main window, because that is where the chat is", () => {
+  assert.equal(routeNotesCommand("transcript-to-chat", { popoutOpen: true }), "main");
+  assert.equal(routeNotesCommand("transcript-to-chat", { popoutOpen: false }), "main");
+});
+
+test("capture is not routed at all - the main process takes the screenshot itself", () => {
+  assert.equal(routeNotesCommand("capture", { popoutOpen: true }), null);
+  assert.equal(routeNotesCommand("capture", { popoutOpen: false }), null);
+});
+
+test("an action nobody knows about is dropped rather than sent somewhere arbitrary", () => {
+  assert.equal(routeNotesCommand("something-else", { popoutOpen: true }), null);
+  assert.equal(routeNotesCommand(undefined, {}), null);
+});
+
+// ---- How the hint line reads it back ----
+
+test("formats an accelerator the way the platform writes it", () => {
+  // The hint line renders what is ACTUALLY registered, so the copy can never be wrong about a hotkey
+  // the user has changed - which is exactly what a hardcoded string in the UI would be.
+  assert.equal(formatAccelerator("CommandOrControl+Shift+0", "win32"), "Ctrl+Shift+0");
+  assert.equal(formatAccelerator("CommandOrControl+Shift+0", "linux"), "Ctrl+Shift+0");
+  assert.equal(formatAccelerator("CommandOrControl+Shift+0", "darwin"), "⌘⇧0");
+});
+
+test("spells out the modifiers a user actually typed", () => {
+  assert.equal(formatAccelerator("Control+Alt+K", "win32"), "Ctrl+Alt+K");
+  assert.equal(formatAccelerator("Control+Alt+K", "darwin"), "⌃⌥K");
+  assert.equal(formatAccelerator("Command+Shift+9", "darwin"), "⌘⇧9");
+});
+
+test("an unusable accelerator formats to nothing rather than to a lie", () => {
+  assert.equal(formatAccelerator("", "win32"), "");
+  assert.equal(formatAccelerator(undefined, "win32"), "");
+  assert.equal(formatAccelerator("Control++0", "win32"), "");
 });

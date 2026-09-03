@@ -1,6 +1,6 @@
 "use strict";
 
-const { contextBridge } = require("electron");
+const { contextBridge, ipcRenderer } = require("electron");
 
 // The pop-out notes window's entire bridge.
 //
@@ -12,4 +12,25 @@ const { contextBridge } = require("electron");
 // `isPopout` exists so the web app can tell it is running in this window rather than a browser tab.
 contextBridge.exposeInMainWorld("diarizNotes", {
   isPopout: true,
+
+  /// Float this window above other applications, or stop. The window is created always-on-top, so the
+  /// renderer seeds its toggle to true.
+  setAlwaysOnTop: (flag) => ipcRenderer.invoke("notes:set-always-on-top", flag),
+
+  /// Shrink the window to its composer band, or restore it. Compact is RENDERER state - it decides what
+  /// to draw, because "just the composer band" is a layout question only it can answer - and this asks
+  /// the shell for a matching window size.
+  setCompact: (flag) => ipcRenderer.invoke("notes:set-compact", flag),
+
+  /// Subscribe to a global-hotkey command routed to this window (the note hotkey, when the notes are
+  /// detached). Returns an unsubscribe function.
+  onNotesCommand: (cb) => {
+    const listener = (_event, payload) => cb(payload);
+    ipcRenderer.on("notes:command", listener);
+    return () => ipcRenderer.removeListener("notes:command", listener);
+  },
+
+  /// The accelerators actually registered, formatted for this platform - the same hint line as the
+  /// inline panel, reading the same source.
+  loadHotkeys: () => ipcRenderer.invoke("hotkeys:load"),
 });

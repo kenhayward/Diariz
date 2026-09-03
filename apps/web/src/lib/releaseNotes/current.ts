@@ -9,6 +9,23 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.270.0",
+    date: "2026-09-03",
+    pr: 746,
+    headline: "Take a note without leaving the call",
+    summary:
+      "The desktop app now holds two more global hotkeys while a recording is running, so a note or a question can be filed with the call still in front of you: **Ctrl+Shift+0** puts your cursor in the note box wherever you are, and **Ctrl+Shift+8** sends the running meeting to the chat. The existing capture hotkey is unchanged.\n\nThey are numbers rather than the obvious letters on purpose. A global shortcut is held for the whole meeting, and Ctrl+Shift+N is Chrome's incognito window and File Explorer's new folder, while Ctrl+Shift+C is copy in Windows Terminal and in VS Code. Taking either of those away for an hour would be a worse surprise than learning an unfamiliar number, so the two sit beside the capture hotkey on the number row. The panel prints the keys actually registered, so if you change one the hint changes with it.\n\nThe note hotkey follows the notes. If the panel is in its separate window, that window is raised and focused; if it is not, the main window opens the panel for you.\n\nThe separate notes window also gains two controls of its own. **On top** can be turned off so the window drops behind your call and back again, and **Compact** shrinks it to just the note box - for a single screen where the call needs all the room, but you still want somewhere to type.",
+    added: [
+      "Two more global hotkeys while recording: Ctrl+Shift+0 focuses the note box wherever you are, Ctrl+Shift+8 sends the running meeting to the chat. On macOS, the Command equivalents.",
+      "A hint line at the bottom of the notes panel showing the hotkeys as they are actually registered, so it stays right if you change one.",
+      "**On top** and **Compact** buttons in the separate notes window - let it fall behind a call, or shrink it to just the note box.",
+    ],
+    changed: [
+      "The separate notes window opens larger by default (420 by 740), and can be made smaller than before when a screen is tight.",
+      "The screenshot hotkey is unchanged, including one you have set yourself.",
+    ],
+  },
+  {
     version: "0.269.0",
     date: "2026-09-03",
     pr: 745,

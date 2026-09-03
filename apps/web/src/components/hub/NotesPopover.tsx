@@ -55,6 +55,10 @@ export type NotesPopoverProps = {
   onShotToChat?: (id: string) => void;
   /// The recording currently streaming, when there is one.
   liveRecordingId?: string;
+  /// Bumped by the host when a global hotkey asks for the composer.
+  focusRequest?: number;
+  /// The accelerators the shell actually registered, for the hint line.
+  hotkeys?: { capture: string; note: string; transcriptChat: string };
 };
 
 const headerButton: React.CSSProperties = {
@@ -101,6 +105,8 @@ export default function NotesPopover({
   onTranscriptToChat,
   onShotToChat,
   liveRecordingId,
+  focusRequest,
+  hotkeys,
 }: NotesPopoverProps) {
   const { t } = useTranslation("workspace");
 
@@ -167,6 +173,8 @@ export default function NotesPopover({
           onTranscriptToChat={onTranscriptToChat}
           onShotToChat={onShotToChat}
           liveRecordingId={liveRecordingId}
+          focusRequest={focusRequest}
+          hotkeys={hotkeys}
           // The two capture handlers arrive together or not at all (the recorder gates both on one
           // `canCaptureScreenshots()` check), so a half-supplied pair hides the capture controls rather
           // than rendering a row with a gap in it.

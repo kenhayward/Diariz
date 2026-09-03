@@ -773,5 +773,12 @@
   "notesCaptureSent": "Aufnahme dem Chat hinzugefügt",
   "notesCaptureChatUploading": "Wird noch hochgeladen",
   "notesCaptureChatNoLive": "Verfügbar, sobald die Aufnahme gespeichert ist",
-  "notesDragToChat": "in den Chat ziehen"
+  "notesDragToChat": "in den Chat ziehen",
+  "notesOnTop": "Im Vordergrund",
+  "notesOnTopHint": "Dieses Fenster über anderen Anwendungen halten",
+  "notesCompact": "Kompakt",
+  "notesCompactHint": "Auf das Notizfeld verkleinern",
+  "notesExpand": "Erweitern",
+  "notesExpandHint": "Den Verlauf wieder anzeigen",
+  "notesHotkeyHint": "{{note}} Notiz überall · {{capture}} Aufnahme · {{chat}} Transkript an den Chat"
 }
