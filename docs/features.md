@@ -134,10 +134,22 @@ line reveals a **plus** that pins the composer to that moment, so a thought you 
 still filed forty seconds back; the pin releases itself once you press Enter, and clicking the pinned time
 releases it without filing anything; you can also jot **prep notes on an upcoming Google Calendar
 meeting** from its preview page (they attach to the recording once it is linked). In the **desktop app** that live
-panel can be **popped out into its own small window**, always on top, so it stays readable over a full-screen Teams
+panel can be **popped out into its own small window**, floating over a full-screen Teams
 or Zoom call on a single monitor - the same panel, the same timestamps, the same screenshot buttons, and it keeps
-working with the main window closed to the tray. Stopping the recording closes it and files the notes as usual; if
-the main window goes away underneath it, it says so and stops accepting notes rather than dropping them. Timestamped lines jump to that
+working with the main window closed to the tray. Two controls of its own sit in its title bar: **On top** can be
+turned off so the window drops behind the call and back again, and **Compact** shrinks it to just the note box,
+for a screen where the call needs all the room but you still want somewhere to type. Compact is temporary and is
+never remembered as the window's size. Stopping the recording closes it and files the notes as usual; if
+the main window goes away underneath it, it says so and stops accepting notes rather than dropping them.
+  **Two global hotkeys while recording.** In the desktop app, **Ctrl+Shift+0** puts the cursor in the note box
+  wherever you are, and **Ctrl+Shift+8** sends the running meeting to the chat - both without leaving the call
+  (the Command equivalents on macOS). They join the existing, configurable screenshot hotkey, which is unchanged.
+  Numbers rather than the obvious letters, deliberately: a global shortcut is held for the whole meeting, and
+  Ctrl+Shift+N is Chrome's incognito window and File Explorer's new folder while Ctrl+Shift+C is copy in Windows
+  Terminal and VS Code. The note hotkey follows the notes - it raises and focuses the separate window when the
+  notes are detached, and opens the panel in the main window when they are not. All three are held **only while a
+  recording is actually running**, so Diariz never sits on a global key while idle, and the panel's hint line
+  prints what is really registered rather than a literal, so it stays right if you change one. Timestamped lines jump to that
 moment in the transcript. Each timestamped note is also **woven inline into the Transcript tab** - it appears as
 its own **green line** (with your name as the speaker) right after the point in the conversation where you wrote
 it; the **Merge same-speaker rows** action treats a note as a boundary, so transcript text either side of a note

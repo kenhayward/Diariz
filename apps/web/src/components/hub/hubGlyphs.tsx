@@ -78,3 +78,17 @@ export const IconGrip = ({ size }: { size?: number } = {}) => (
     <path d="M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01" />
   </Glyph>
 );
+
+/// A pin: keep this window above the others.
+export const IconPin = ({ size }: { size?: number } = {}) => (
+  <Glyph size={size}>
+    <path d="M12 17v5M9 3h6l-1 5 3 3v2H7v-2l3-3-1-5Z" />
+  </Glyph>
+);
+
+/// Two horizontal rules squeezed together: collapse to just the composer.
+export const IconCompact = ({ size }: { size?: number } = {}) => (
+  <Glyph size={size}>
+    <path d="M4 9h16M4 15h16M9 5l3-2 3 2M9 19l3 2 3-2" />
+  </Glyph>
+);

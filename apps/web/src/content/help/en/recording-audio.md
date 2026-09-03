@@ -176,6 +176,31 @@ you can jump straight back to what was said last time instead of hunting through
 works for a repeating event from any calendar source you have connected - Google, a subscribed .ics
 feed, or your synced Outlook calendar.
 
+## Hotkeys while recording (desktop app)
+
+While a recording is running, the desktop app holds three keyboard shortcuts that work wherever you are -
+including with a Teams or Zoom call in front of everything:
+
+- **Ctrl+Shift+0** puts the cursor in the note box. If the notes are in their separate window, that
+  window comes forward; if they are not, the main window opens the notes panel for you.
+- **Ctrl+Shift+9** takes a screenshot of the capture area. This one has always been here and you can
+  change it - see the screenshots section below.
+- **Ctrl+Shift+8** sends the meeting you are recording to the chat, so you can ask about it.
+
+On a Mac these are the Command versions of the same keys.
+
+They are numbers rather than letters on purpose. A shortcut like this is held for the whole meeting, and
+Ctrl+Shift+N is already Chrome's incognito window and File Explorer's new folder, while Ctrl+Shift+C is
+copy in Windows Terminal and in VS Code. Taking one of those away for an hour would be worse than
+learning an unfamiliar number.
+
+**They only work while a recording is actually running.** Diariz does not sit on your keyboard when it
+has nothing to do with it. The bottom of the notes panel shows the keys as they really are, so if you
+change one the reminder changes with it.
+
+If another application already owns one of these combinations, Diariz tells you once at the start of the
+recording rather than failing quietly.
+
 ## Taking notes as you go
 
 The notes popover lets you jot lines while recording. Each line is stamped with the second you wrote
@@ -203,6 +228,13 @@ It is the same notes panel, so lines are stamped exactly as before, and the scre
 with it. You can close the main Diariz window to the tray and carry on taking notes; the recording
 keeps running. Stop the recording and the window closes on its own, with your notes filed against the
 recording as usual.
+
+Two buttons in its title bar decide how it behaves over the call. **On top** is on when the window
+opens, which is the point of it; turn it off and the window drops behind the call like any other, and
+turning it back on brings it forward again. **Compact** shrinks the window to just the note box, for a
+single screen where the call needs all the room but you still want somewhere to type - the notes are all
+still there, and pressing it again brings them back. Compact is temporary: the window never reopens in
+that shape.
 
 If the main Diariz window closes or reloads underneath it, the small window says it has lost contact
 and stops accepting new lines. That is deliberate - a note typed with nowhere to send it would look

@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import LiveNotesStream from "../components/hub/LiveNotesStream";
 import { createNotesClient, type NotesClient, type NotesState } from "../lib/notesChannel";
 import { formatDuration } from "../lib/format";
+import { IconClose, IconCompact, IconPin } from "../components/hub/hubGlyphs";
+import { notesPopoutBridge, type NotesHotkeys } from "../lib/notesPopoutBridge";
 
 /**
  * The detached live-notes window, loaded by the desktop shell at /notes-popout so notes can be taken
@@ -18,6 +20,39 @@ export default function NotesPopout() {
   const [state, setState] = useState<NotesState | null>(null);
   const [lost, setLost] = useState(false);
   const clientRef = useRef<NotesClient | null>(null);
+
+  // The shell, or undefined when somebody has opened /notes-popout in a browser tab by hand. Every
+  // control below is gated on the capability it actually needs, so that tab shows a working notes panel
+  // with no dead window buttons on it.
+  const bridge = notesPopoutBridge();
+  // Seeded true because the window is CREATED always-on-top. Starting at false would show a toggle that
+  // disagreed with the window until it was pressed.
+  const [onTop, setOnTop] = useState(true);
+  const [compact, setCompact] = useState(false);
+  const [hotkeys, setHotkeys] = useState<NotesHotkeys | null>(null);
+  const [focusRequest, setFocusRequest] = useState(0);
+
+  useEffect(() => {
+    if (!bridge?.loadHotkeys) return;
+    let live = true;
+    // A failure leaves the hint line off rather than showing a guess: this window's whole claim is that
+    // it prints the keys that are really registered.
+    void bridge.loadHotkeys().then((h) => {
+      if (live) setHotkeys(h);
+    }).catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!bridge?.onNotesCommand) return;
+    return bridge.onNotesCommand((cmd) => {
+      // Compact is left exactly as it is: the composer is visible either way, and expanding the window
+      // out from under a call the user is in the middle of would be the opposite of what they asked for.
+      if (cmd.type === "focus-composer") setFocusRequest((n) => n + 1);
+    });
+  }, []);
 
   useEffect(() => {
     const client = createNotesClient({
@@ -81,7 +116,88 @@ export default function NotesPopout() {
         >
           {formatDuration(elapsedMs)}
         </span>
-        {/* On top and Compact land here. */}
+        {bridge?.setAlwaysOnTop && (
+          <button
+            type="button"
+            aria-pressed={onTop}
+            aria-label={t("notesOnTop")}
+            title={t("notesOnTopHint")}
+            onClick={() => {
+              const next = !onTop;
+              setOnTop(next);
+              void bridge.setAlwaysOnTop?.(next);
+            }}
+            style={{
+              marginLeft: "auto",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              height: 24,
+              padding: "0 7px",
+              borderRadius: 7,
+              fontSize: 10,
+              fontWeight: 600,
+              cursor: "pointer",
+              background: onTop ? "var(--hub-blue-soft-bg)" : "transparent",
+              border: `1px solid ${onTop ? "var(--hub-blue-soft-border)" : "var(--hub-border)"}`,
+              color: onTop ? "var(--hub-blue-text)" : "var(--hub-muted)",
+            }}
+          >
+            <IconPin size={12} />
+            {t("notesOnTop")}
+          </button>
+        )}
+        {bridge?.setCompact && (
+          <button
+            type="button"
+            aria-pressed={compact}
+            aria-label={compact ? t("notesExpand") : t("notesCompact")}
+            title={compact ? t("notesExpandHint") : t("notesCompactHint")}
+            onClick={() => {
+              const next = !compact;
+              setCompact(next);
+              void bridge.setCompact?.(next);
+            }}
+            style={{
+              marginLeft: bridge?.setAlwaysOnTop ? 0 : "auto",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 24,
+              height: 24,
+              borderRadius: 7,
+              border: "1px solid var(--hub-border)",
+              background: compact ? "var(--hub-surface-hover)" : "transparent",
+              color: "var(--hub-muted)",
+              cursor: "pointer",
+              padding: 0,
+            }}
+          >
+            <IconCompact size={12} />
+          </button>
+        )}
+        <button
+          type="button"
+          aria-label={t("liveNotesClose")}
+          title={t("liveNotesClose")}
+          onClick={() => window.close()}
+          style={{
+            marginLeft: bridge?.setAlwaysOnTop || bridge?.setCompact ? 0 : "auto",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 24,
+            height: 24,
+            borderRadius: 7,
+            border: "none",
+            background: "transparent",
+            color: "var(--hub-muted)",
+            cursor: "pointer",
+            padding: 0,
+          }}
+        >
+          <IconClose size={12} />
+        </button>
       </div>
 
       {state === null && (
@@ -121,6 +237,9 @@ export default function NotesPopout() {
           onTranscriptToChat={live ? () => client?.transcriptToChat() : undefined}
           onShotToChat={live ? (id) => client?.shotToChat(id) : undefined}
           liveRecordingId={state.liveRecordingId}
+          focusRequest={focusRequest}
+          hotkeys={hotkeys ?? undefined}
+          compact={compact}
           // Disabled rather than hidden: a note typed into a dead channel must not look accepted, but
           // the box vanishing would read as the notes themselves having gone.
           disabled={!live}

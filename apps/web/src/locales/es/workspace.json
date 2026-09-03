@@ -773,5 +773,12 @@
   "notesCaptureSent": "Captura añadida al chat",
   "notesCaptureChatUploading": "Aún subiendo",
   "notesCaptureChatNoLive": "Disponible cuando se guarde la grabación",
-  "notesDragToChat": "arrastrar al chat"
+  "notesDragToChat": "arrastrar al chat",
+  "notesOnTop": "Siempre visible",
+  "notesOnTopHint": "Mantener esta ventana sobre las demás aplicaciones",
+  "notesCompact": "Compacto",
+  "notesCompactHint": "Reducir solo a la caja de notas",
+  "notesExpand": "Ampliar",
+  "notesExpandHint": "Mostrar el flujo de nuevo",
+  "notesHotkeyHint": "{{note}} nota en cualquier momento · {{capture}} captura · {{chat}} transcripción al chat"
 }

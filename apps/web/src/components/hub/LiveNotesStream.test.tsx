@@ -645,3 +645,119 @@ describe("LiveNotesStream - dragging a capture", () => {
     expect(screen.getAllByTestId("capture-drag-hint")).toHaveLength(1);
   });
 });
+
+describe("LiveNotesStream - the hotkey hint line", () => {
+  const keys = { capture: "Ctrl+Shift+9", note: "Ctrl+Shift+0", transcriptChat: "Ctrl+Shift+8" };
+
+  it("prints the accelerators the shell reports, not a hardcoded set", () => {
+    // A literal here would be wrong the moment somebody changed a hotkey, and the whole point of the
+    // line is to tell a user which keys are live while a call has the screen.
+    renderStream({ hotkeys: keys });
+
+    const line = screen.getByTestId("notes-hotkey-hint").textContent ?? "";
+    expect(line).toContain("Ctrl+Shift+0");
+    expect(line).toContain("Ctrl+Shift+9");
+    expect(line).toContain("Ctrl+Shift+8");
+  });
+
+  it("shows nothing in a plain browser, which holds no global keys", () => {
+    renderStream();
+
+    expect(screen.queryByTestId("notes-hotkey-hint")).toBeNull();
+  });
+
+  it("shows nothing when the shell could register none of them", () => {
+    renderStream({ hotkeys: { capture: "", note: "", transcriptChat: "" } });
+
+    expect(screen.queryByTestId("notes-hotkey-hint")).toBeNull();
+  });
+});
+
+describe("LiveNotesStream - the note hotkey", () => {
+  it("puts the cursor in the composer when the host asks", () => {
+    const { rerender } = renderStream({ focusRequest: 0 });
+    composer().blur();
+
+    rerender(<LiveNotesStream {...base} focusRequest={1} />);
+
+    expect(document.activeElement).toBe(composer());
+  });
+
+  it("answers a second press as well as the first", () => {
+    // A boolean flag would not: `true -> true` is not a change React runs an effect for, so the second
+    // press of the key would silently do nothing.
+    const { rerender } = renderStream({ focusRequest: 0 });
+    rerender(<LiveNotesStream {...base} focusRequest={1} />);
+    composer().blur();
+
+    rerender(<LiveNotesStream {...base} focusRequest={2} />);
+
+    expect(document.activeElement).toBe(composer());
+  });
+
+  it("does not steal focus merely because the panel appeared", () => {
+    // The detached window is opened mid-call and its `focusRequest` starts at whatever the host has
+    // counted so far, which is not a request. Treating a non-zero initial value as one would grab focus
+    // out of whatever the user was typing the moment the window showed up.
+    render(
+      <div>
+        <input data-testid="elsewhere" autoFocus />
+        <LiveNotesStream {...base} variant="window" focusRequest={7} />
+      </div>,
+    );
+
+    expect(document.activeElement).toBe(screen.getByTestId("elsewhere"));
+    expect(document.activeElement).not.toBe(composer());
+  });
+
+  it("re-focuses on every subsequent press, not only the first", () => {
+    // The guard is "different from the value I last acted on", not "non-zero" or "seen at all": someone
+    // pressing the key three times in a meeting must land in the box all three times.
+    const { rerender } = renderStream({ focusRequest: 5 });
+    const focuses: number[] = [];
+    for (const n of [6, 7, 8]) {
+      composer().blur();
+      rerender(<LiveNotesStream {...base} focusRequest={n} />);
+      if (document.activeElement === composer()) focuses.push(n);
+    }
+
+    expect(focuses).toEqual([6, 7, 8]);
+  });
+});
+
+describe("LiveNotesStream - compact", () => {
+  it("keeps the composer and the status line, and drops everything else", () => {
+    // Compact exists for a call that has taken the screen: what survives is the box you type in and the
+    // line telling you the transcript is still running.
+    renderStream({
+      compact: true,
+      lines: [note({ capturedAtMs: 1_000, text: "my point" })],
+      liveTranscript: transcript({ startMs: 0 }),
+      capture,
+    });
+
+    expect(screen.queryByTestId("notes-stream")).toBeNull();
+    expect(screen.queryByRole("radio", { name: /everything/i })).toBeNull();
+    expect(screen.getByTestId("live-transcript-status")).toBeTruthy();
+    expect(composer()).toBeTruthy();
+  });
+
+  it("still files a note while compact", () => {
+    const onAdd = vi.fn();
+    renderStream({ compact: true, onAdd, elapsedMs: 61_000 });
+
+    fireEvent.change(composer(), { target: { value: "quick one" } });
+    fireEvent.keyDown(composer(), { key: "Enter" });
+
+    expect(onAdd).toHaveBeenCalledWith("quick one", undefined);
+  });
+
+  it("brings the stream back when it is turned off", () => {
+    const { rerender } = renderStream({ compact: true, liveTranscript: transcript({ startMs: 0 }) });
+    expect(screen.queryByTestId("notes-stream")).toBeNull();
+
+    rerender(<LiveNotesStream {...base} compact={false} liveTranscript={transcript({ startMs: 0 })} />);
+
+    expect(screen.getByTestId("notes-stream")).toBeTruthy();
+  });
+});

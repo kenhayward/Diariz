@@ -31,6 +31,11 @@ export interface TrayBridge {
   /// The shell reporting that the pop-out window has gone, however it went. The guaranteed signal: the
   /// pop-out also announces itself over its channel, but a killed renderer never gets to.
   onNotesPopoutClosed?: (cb: () => void) => () => void;
+  /// A global hotkey the shell routed to this window. Returns an unsubscribe function. Absent on a shell
+  /// predating the notes hotkeys, which is what hides the hint line rather than showing a wrong one.
+  onNotesCommand?: (cb: (cmd: { type: "focus-composer" | "transcript-to-chat" }) => void) => () => void;
+  /// The accelerators actually registered, already formatted for the platform, for the panel hint line.
+  loadHotkeys?: () => Promise<{ capture: string; note: string; transcriptChat: string }>;
 }
 
 export interface TrayRecorderHandlers {

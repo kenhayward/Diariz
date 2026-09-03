@@ -2883,3 +2883,89 @@ describe("the recorder is what actually reaches the chat", () => {
     }
   });
 });
+
+describe("global hotkeys reach the right window", () => {
+  // The shell holds these keys while a call has the screen, so what matters here is where each one
+  // lands once it arrives - and that the panel prints the keys really registered rather than a literal.
+  let deliver: ((cmd: { type: "focus-composer" | "transcript-to-chat" }) => void) | null = null;
+  function installShell(extra: Record<string, unknown> = {}) {
+    deliver = null;
+    (window as unknown as { diariz?: unknown }).diariz = {
+      onNotesCommand: (cb: (cmd: { type: string }) => void) => {
+        deliver = cb as never;
+        return () => {
+          deliver = null;
+        };
+      },
+      loadHotkeys: () =>
+        Promise.resolve({ capture: "Ctrl+Shift+9", note: "Ctrl+Shift+0", transcriptChat: "Ctrl+Shift+8" }),
+      ...extra,
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
+    (getStream as Mock).mockResolvedValue(fakeSession);
+    (api.upload as Mock).mockResolvedValue({ id: "rec-new" });
+    (api.beginLive as Mock).mockResolvedValue({ id: "live-hk", sessionId: "shk", status: "Live" });
+    (api.putChunk as Mock).mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    delete (window as unknown as { diariz?: unknown }).diariz;
+    (api.beginLive as Mock).mockRejectedValue(new Error("no live"));
+  });
+
+  it("opens the notes panel and puts the cursor in it when the note hotkey fires", async () => {
+    installShell();
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByTestId("notes-popover");
+    fireEvent.click(screen.getByRole("button", { name: /close notes/i }));
+    expect(screen.queryByTestId("notes-popover")).toBeNull();
+
+    await act(async () => deliver!({ type: "focus-composer" }));
+
+    const panel = await screen.findByTestId("notes-popover");
+    expect(panel).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByLabelText(/note this moment/i));
+  });
+
+  it("sends the running meeting to the chat when the transcript hotkey fires, wherever the panel is", async () => {
+    installShell();
+    const attached: string[] = [];
+    const off = onChatLiveRecordingAttached((id) => attached.push(id));
+    try {
+      render(<Recorder onUploaded={() => {}} />);
+      fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+      await screen.findByTestId("notes-popover");
+
+      await act(async () => deliver!({ type: "transcript-to-chat" }));
+
+      expect(attached).toEqual(["live-hk"]);
+    } finally {
+      off();
+    }
+  });
+
+  it("shows the accelerators the shell reports rather than a hardcoded set", async () => {
+    installShell();
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByTestId("notes-popover");
+
+    const line = await screen.findByTestId("notes-hotkey-hint");
+    expect(line.textContent).toContain("Ctrl+Shift+0");
+    expect(line.textContent).toContain("Ctrl+Shift+8");
+  });
+
+  it("shows no hint line in a plain browser, which holds no global keys", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByTestId("notes-popover");
+
+    expect(screen.queryByTestId("notes-hotkey-hint")).toBeNull();
+  });
+});
