@@ -246,6 +246,17 @@ def _duration_ms(audio) -> int:
     return int(round(len(audio) / config.SAMPLE_RATE * 1000))
 
 
+def measure_duration_ms(audio_path: str) -> int:
+    """How long a file's audio really is once decoded, in milliseconds.
+
+    The live path needs this to know how much audio it has prepended to a chunk's decode window. That
+    used to be taken from the browser's recorded-clock span for the previous chunk, which is a
+    different quantity wearing the same units - and any gap between the two lands directly on every
+    timestamp in the chunk.
+    """
+    return _duration_ms(whisperx.load_audio(audio_path))
+
+
 def _too_long(duration_ms: int, max_seconds: float) -> bool:
     """Whether the audio exceeds the configured cap (0 = unlimited). Pure."""
     return max_seconds > 0 and duration_ms > max_seconds * 1000

@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.270.3",
+    date: "2026-09-03",
+    pr: 752,
+    headline: "Live transcript lines are stamped when they were actually said",
+    summary:
+      "Lines in the live transcript could be stamped well before the moment they were spoken - by around half a minute in a meeting where it was noticed, with a screen capture taken at the same moment stamped correctly. The two sit on one timeline in the notes panel, so they visibly disagreed.\n\nThe live transcript is written a chunk at a time, and each chunk is transcribed with the previous one's audio in front of it so the model does not start mid-sentence. To place the result back on the recording's clock, Diariz has to subtract however much audio it put in front. It was subtracting the length your browser reported for that previous chunk, rather than the length of the audio actually prepended - two different measurements that had no reason to agree, and every millisecond between them landed on every line in the chunk.\n\nIt now measures the audio it prepends. Where the two agreed nothing changes; where they did not, the lines move to where they belong. The finished transcript that arrives after you stop was never affected - it is transcribed in one pass over the whole recording - so this only ever concerned the live text.",
+    fixed: [
+      "Live transcript lines could be stamped noticeably earlier than they were said, putting them out of step with screen captures on the same timeline. The offset is now measured from the audio rather than taken from a timing reported alongside it.",
+    ],
+  },
+  {
     version: "0.270.2",
     date: "2026-09-03",
     pr: 751,
