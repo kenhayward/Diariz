@@ -3079,9 +3079,16 @@ the least likely to hold.
   PrevBlobKey, OffsetMs, OverlapMs, Language)` goes out; the worker byte-joins the previous chunk's tail onto
   this one (only fragment 0 of a `MediaRecorder` stream carries the WebM/EBML header, so a chunk cannot be
   decoded alone), transcribes the joined window, then **trims the overlap off the front and shifts the
-  remainder by `OffsetMs - OverlapMs`** so the times it returns are relative to the whole recording rather
-  than the window. The overlap exists to stop a word being cut in half at a chunk boundary and is a property
-  of the **decode window only** - nothing overlapping is ever stored. Results `POST` to
+  remainder by `OffsetMs - prefixMs`** so the times it returns are relative to the whole recording
+  rather than the window. The overlap exists to stop a word being cut in half at a chunk boundary and is a
+  property of the **decode window only** - nothing overlapping is ever stored.
+  **`prefixMs` is measured, not taken from the job.** The worker joins the bytes it is about to prepend,
+  decodes them and uses that length (`worker._prefix_duration_ms`); the job's `OverlapMs` - the previous
+  chunk's recorded-clock span as the browser measured it - is only a fallback for when the measurement
+  cannot be taken. The two are different quantities, and the gap between them landed on every timestamp
+  in the chunk: a prefix contributing no audio still had its full declared span subtracted, putting the
+  whole chunk about a chunk early (issue #750). Only the live text was ever affected - the final pass
+  transcribes the whole recording in one go and has no window to correct for. Results `POST` to
   **`internal/transcriptions/live-chunk`** (`LiveChunkCallbackController`), authenticated by the same
   `X-Worker-Secret` shared secret as the other worker callbacks, with `LiveChunkFailure` for the failure path.
 - **Live speaker identity is stitched, and the stitch is a separate decision from naming.** pyannote

@@ -576,12 +576,25 @@ def _live_spies(monkeypatch, tmp_path):
                         lambda key: files["prev"] if key.endswith("00002.webm") else files["this"])
 
     def fake_join(paths):
+        calls.setdefault("joins", []).append(list(paths))
         calls["joined"] = list(paths)
         joined = tmp_path / "joined.webm"
         joined.write_text("joined")
         return str(joined)
 
     monkeypatch.setattr(worker.audio_merge, "join_bytes", fake_join)
+    # What the prepended bytes REALLY decode to. Defaults to agreeing with the job's declared span, so
+    # the tests that are not about this measure read as they did.
+    calls["measured_ms"] = 3_000
+
+    def fake_measure(path):
+        calls.setdefault("measured_paths", []).append(path)
+        measured = calls["measured_ms"]
+        if isinstance(measured, Exception):
+            raise measured
+        return measured
+
+    monkeypatch.setattr(worker.pipeline, "measure_duration_ms", fake_measure)
     def fake_transcribe_window(path, **kw):
         calls["transcribe_kw"] = kw
         offset, overlap = kw.get("offset_ms", 0), kw.get("overlap_ms", 0)
@@ -630,6 +643,72 @@ def test_handle_live_chunk_posts_segments_in_recording_time(monkeypatch, tmp_pat
     assert posted["sequence"] == 3
     # 0 ms into a window that began 3 s before the chunk, which itself starts at 90 s.
     assert posted["segments"][0]["StartMs"] == 87_000
+
+
+def test_handle_live_chunk_stamps_from_the_measured_prefix_not_the_declared_span(monkeypatch, tmp_path):
+    """The overlap subtracted has to be the length of the audio ACTUALLY prepended.
+
+    It used to be `prev.EndMs - prev.StartMs` - a recorded-clock span measured in the browser, standing
+    in for the decoded length of the bytes the worker puts in front of the window. Those are different
+    quantities, and every millisecond between them lands on every timestamp in the chunk.
+    """
+    calls = _live_spies(monkeypatch, tmp_path)
+    calls["measured_ms"] = 20_000   # what the prefix really decodes to, against a declared 3 s
+
+    worker.handle_live_chunk(_live_job())
+
+    # 90 s chunk start, minus the 20 s of prepended audio the window actually opens with.
+    assert calls["posted"]["segments"][0]["StartMs"] == 70_000
+
+
+def test_handle_live_chunk_subtracts_nothing_when_the_prepended_audio_did_not_decode(monkeypatch, tmp_path):
+    """The reported fault (#750), reduced to its arithmetic.
+
+    If the prepended fragment contributes no audio, the window opens at this chunk's own first sample -
+    so positions are already chunk-relative and there is nothing to take off. Subtracting the declared
+    span regardless put every line a whole chunk early, which is what a user saw against a screen
+    capture stamped from the same clock.
+    """
+    calls = _live_spies(monkeypatch, tmp_path)
+    calls["measured_ms"] = 0
+
+    worker.handle_live_chunk(_live_job())
+
+    assert calls["posted"]["segments"][0]["StartMs"] == 90_000
+
+
+def test_handle_live_chunk_measures_exactly_the_bytes_it_prepends(monkeypatch, tmp_path):
+    """Measuring anything else would be another proxy. The prefix is joined on its own and decoded, so
+    what is measured is byte-for-byte what goes in front of this chunk."""
+    calls = _live_spies(monkeypatch, tmp_path)
+
+    worker.handle_live_chunk(_live_job())
+
+    prefix_join, window_join = calls["joins"][0], calls["joins"][1]
+    assert prefix_join == window_join[:-1], "the prefix is the window without this chunk"
+    assert window_join[-1].endswith("this.webm")
+
+
+def test_handle_live_chunk_falls_back_to_the_declared_span_when_it_cannot_measure(monkeypatch, tmp_path):
+    """A prefix that will not decode on its own is not evidence that it contributes nothing to the
+    window - so the old value is kept rather than a zero invented. Worst case is the behaviour that
+    shipped before."""
+    calls = _live_spies(monkeypatch, tmp_path)
+    calls["measured_ms"] = RuntimeError("cannot decode")
+
+    worker.handle_live_chunk(_live_job())
+
+    assert calls["posted"]["segments"][0]["StartMs"] == 87_000
+    assert "failed" not in calls, "a failed measurement must not fail the chunk"
+
+
+def test_handle_live_chunk_measures_nothing_when_there_is_no_previous_chunk(monkeypatch, tmp_path):
+    calls = _live_spies(monkeypatch, tmp_path)
+
+    worker.handle_live_chunk(_live_job(Sequence=0, PrevBlobKey=None, OffsetMs=0, OverlapMs=0))
+
+    assert "measured_paths" not in calls
+    assert calls["posted"]["segments"][0]["StartMs"] == 0
 
 
 def test_handle_live_chunk_failure_is_reported_and_does_not_raise(monkeypatch, tmp_path):

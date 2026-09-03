@@ -535,3 +535,24 @@ def test_diarizer_is_built_against_the_pyannote_4_era_whisperx_api(monkeypatch):
     assert seen.get("token") == "hf-token", "whisperx 3.8 takes `token`, not `use_auth_token`"
     assert seen.get("device") == "cuda"
     assert "use_auth_token" not in seen
+
+
+def test_measure_duration_ms_reports_the_real_decoded_length(monkeypatch):
+    """What the live path subtracts from every timestamp in a chunk, so it has to be the actual audio
+    rather than anything reported alongside it."""
+    monkeypatch.setattr(pipeline.whisperx, "load_audio", lambda path: np.zeros(16_000 * 3))
+
+    assert pipeline.measure_duration_ms("prefix.webm") == 3_000
+
+
+def test_measure_duration_ms_decodes_the_file_it_was_given(monkeypatch):
+    seen = []
+
+    def fake_load(path):
+        seen.append(path)
+        return np.zeros(16_000)
+
+    monkeypatch.setattr(pipeline.whisperx, "load_audio", fake_load)
+
+    assert pipeline.measure_duration_ms("prefix.webm") == 1_000
+    assert seen == ["prefix.webm"]

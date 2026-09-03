@@ -191,7 +191,7 @@ def handle_live_chunk(job: dict) -> None:
                     # initialisation segment - a few hundred bytes of header and track definitions,
                     # not its audio - is what makes the window decodable. Sequence 1 needs nothing:
                     # its previous chunk IS chunk 0.
-                    parts = [prev_path, this_path]
+                    prefix = [prev_path]
                     first_key = job.get("FirstBlobKey")
                     if first_key and first_key != prev_key:
                         first_path = storage.download(first_key)
@@ -202,8 +202,12 @@ def handle_live_chunk(job: dict) -> None:
                             with os.fdopen(fd, "wb") as f:
                                 f.write(init)
                             downloaded.append(init_path)
-                            parts.insert(0, init_path)
-                    joined = audio_merge.join_bytes(parts)
+                            prefix.insert(0, init_path)
+                    # Measured before the window is built, so what is decoded for the measurement is
+                    # exactly the bytes about to be prepended - and so the window join stays the last
+                    # thing this branch produces.
+                    overlap_ms = _prefix_duration_ms(prefix, overlap_ms)
+                    joined = audio_merge.join_bytes([*prefix, this_path])
                     audio_path = joined
                 else:
                     # Sequence 0 has nothing before it, so there is no overlap to correct for either.
@@ -232,6 +236,36 @@ def handle_live_chunk(job: dict) -> None:
         for path in downloaded + ([joined] if joined else []):
             if path and os.path.exists(path):
                 os.remove(path)
+
+
+def _prefix_duration_ms(prefix_parts: list[str], declared_ms: int) -> int:
+    """How much audio really sits in front of this chunk in its decode window.
+
+    The window is the prepended bytes followed by this chunk, and `pipeline._offset_segments` maps a
+    position in it back to recording time by subtracting exactly this. It used to be the API's
+    `OverlapMs` - the PREVIOUS chunk's recorded-clock span, measured in the browser - which is a
+    different quantity from the decoded length of the bytes actually prepended. Where the two differed,
+    every line in the chunk was stamped wrong by the difference (issue #750): a fragment that
+    contributes no audio to the window, for instance, still had its full declared span taken off, which
+    put the whole chunk about one chunk early.
+
+    So the prefix is joined on its own and decoded, and what is measured is byte-for-byte what goes in
+    front. A prefix that will not decode standalone is NOT evidence that it contributes nothing to the
+    window, so that case keeps the declared value - the behaviour that shipped before - rather than
+    inventing a zero.
+    """
+    try:
+        prefix_path = audio_merge.join_bytes(prefix_parts)
+    except Exception:  # noqa: BLE001 - measurement is best-effort; the chunk still transcribes
+        return declared_ms
+    try:
+        return pipeline.measure_duration_ms(prefix_path)
+    except Exception:  # noqa: BLE001
+        log.warning("Could not measure the prepended audio; using the declared span of %sms", declared_ms)
+        return declared_ms
+    finally:
+        if os.path.exists(prefix_path):
+            os.remove(prefix_path)
 
 
 def handle_merge(job: dict) -> None:

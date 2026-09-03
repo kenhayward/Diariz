@@ -32,8 +32,14 @@ public record LiveChunkJob(
     string? PrevBlobKey,
     long OffsetMs,
     /// <summary>How much of the decode window belongs to the previous chunk, and must therefore be
-    /// trimmed off the front. This is that chunk's <b>real duration</b>, not a fixed window: a WebM
-    /// fragment cannot be byte-sliced mid-cluster, so the worker prepends the whole of it or none.</summary>
+    /// trimmed off the front. A WebM fragment cannot be byte-sliced mid-cluster, so the worker prepends
+    /// the whole of the previous chunk or none of it.
+    /// <para><b>A fallback, not the authority.</b> This is the previous chunk's recorded-clock span as
+    /// the browser measured it, which is a different quantity from the decoded length of the bytes the
+    /// worker actually puts in front of the window - and the worker subtracts the latter from every
+    /// timestamp in the chunk. It therefore <i>measures</i> the prefix it built and uses that
+    /// (<c>worker._prefix_duration_ms</c>); this value is used only when that measurement cannot be
+    /// taken. Trusting it outright stamped live lines about a chunk early - see issue #750.</para></summary>
     long OverlapMs,
     string? Language = null,
     /// <summary>Chunk 0's blob, whose EBML header the worker prepends so the window can be decoded at
