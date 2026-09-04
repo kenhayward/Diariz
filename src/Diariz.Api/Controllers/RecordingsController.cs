@@ -640,9 +640,9 @@ public class RecordingsController : ControllerBase
             var transcription = await _db.Transcriptions
                 .FirstOrDefaultAsync(t => t.RecordingId == rec.Id && t.IsProvisional);
 
-            // The oldest chunk still waiting to be transcribed. Null means the transcriber is keeping up.
+            // The oldest chunk still waiting on the transcriber. Null means it is keeping up.
             var oldestOutstanding = await _db.RecordingChunks
-                .Where(c => c.RecordingId == rec.Id && c.TranscribedAt == null && c.Sequence != sequence)
+                .Where(c => c.RecordingId == rec.Id && c.SettledAt == null && c.Sequence != sequence)
                 .OrderBy(c => c.ReceivedAt)
                 .Select(c => (DateTimeOffset?)c.ReceivedAt)
                 .FirstOrDefaultAsync();
@@ -650,6 +650,19 @@ public class RecordingsController : ControllerBase
             if (LiveTranscriptLag.ShouldPause(oldestOutstanding, DateTimeOffset.UtcNow,
                     TimeSpan.FromSeconds(_live.MaxLagSeconds)))
             {
+                // Settle the chunk we are declining to queue. It is not waiting on the transcriber -
+                // nothing will ever transcribe it - so counting it as outstanding would make this
+                // refusal the reason for the next one, and the pause a latch that never lifts however
+                // far the transcriber catches up (issue #758). Settled, the measurement above sees only
+                // chunks genuinely in flight, so the transcript resumes the moment they drain.
+                var skipped = await _db.RecordingChunks
+                    .FirstOrDefaultAsync(c => c.RecordingId == rec.Id && c.Sequence == sequence);
+                if (skipped is not null)
+                {
+                    skipped.SettledAt = DateTimeOffset.UtcNow;
+                    await _db.SaveChangesAsync();
+                }
+
                 await _hub.NotifyLiveTranscriptDegradedAsync(rec.UserId, rec.Id, sequence);
                 return;
             }

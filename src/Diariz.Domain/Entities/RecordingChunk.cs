@@ -45,12 +45,21 @@ public class RecordingChunk
     /// disappeared client against.</summary>
     public DateTimeOffset ReceivedAt { get; set; } = DateTimeOffset.UtcNow;
 
-    /// <summary>When this chunk's live transcription came back, or null while it is still outstanding.
+    /// <summary>When the live pass finished with this chunk, one way or another, or null while it is
+    /// still waiting on the transcriber.
+    /// <para>
+    /// Set in all three terminal cases: the chunk was <b>transcribed</b>, the worker <b>failed</b> on it,
+    /// or the gate <b>never queued</b> it because the transcript was already too far behind. What it
+    /// records is "no longer waiting", not "succeeded" - which is what the gate below actually needs.
+    /// </para>
     /// <para>
     /// The oldest null is how far behind the live transcript has fallen: past a threshold the API stops
-    /// queueing live work rather than building an unbounded backlog. Null forever is normal and harmless
-    /// for a chunk whose live pass failed or was skipped - the final full-file pass covers the meeting
-    /// regardless, so this only ever gates the running commentary.
+    /// queueing live work rather than building an unbounded backlog. It was previously
+    /// <c>TranscribedAt</c> and was written only on success, so a chunk that failed or was skipped stayed
+    /// null forever and pinned that measurement permanently - one failed chunk paused the live transcript
+    /// for the rest of the meeting, and every refused chunk was another one (issue #758). A chunk the
+    /// live pass will never come back to is settled, not outstanding; the final full-file pass covers the
+    /// meeting regardless, so this only ever gates the running commentary.
     /// </para></summary>
-    public DateTimeOffset? TranscribedAt { get; set; }
+    public DateTimeOffset? SettledAt { get; set; }
 }

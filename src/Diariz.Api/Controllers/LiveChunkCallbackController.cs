@@ -133,7 +133,7 @@ public class LiveChunkCallbackController(
         // of meeting, however well the transcriber is actually keeping up.
         var chunk = await db.RecordingChunks
             .FirstOrDefaultAsync(c => c.RecordingId == rec.Id && c.Sequence == body.Sequence);
-        if (chunk is not null) chunk.TranscribedAt = DateTimeOffset.UtcNow;
+        if (chunk is not null) chunk.SettledAt = DateTimeOffset.UtcNow;
 
         await db.SaveChangesAsync();
 
@@ -337,8 +337,21 @@ public class LiveChunkCallbackController(
         // audio is already durable, and the final pass transcribes the whole meeting regardless - so
         // this is logged, not escalated to the recording.
         var rec = await db.Recordings.FirstOrDefaultAsync(r => r.Id == body.RecordingId);
-        if (rec is not null)
-            await hub.NotifyLiveTranscriptDegradedAsync(rec.UserId, rec.Id, body.Sequence);
+        if (rec is null) return Ok();
+
+        // Settling it is what keeps that promise. The gate measures how far behind the transcriber is by
+        // the oldest chunk still waiting, and a chunk nobody is going to come back to waits forever - so
+        // leaving this unset made one failure pause the live transcript for the remainder of the meeting
+        // (issue #758).
+        var chunk = await db.RecordingChunks
+            .FirstOrDefaultAsync(c => c.RecordingId == rec.Id && c.Sequence == body.Sequence);
+        if (chunk is not null && chunk.SettledAt is null)
+        {
+            chunk.SettledAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync();
+        }
+
+        await hub.NotifyLiveTranscriptDegradedAsync(rec.UserId, rec.Id, body.Sequence);
         return Ok();
     }
 }

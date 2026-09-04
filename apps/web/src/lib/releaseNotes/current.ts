@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.271.2",
+    date: "2026-09-04",
+    pr: 760,
+    headline: "Live transcript paused now means paused, not stopped",
+    summary:
+      "Once the live transcript said \"Live transcript paused\", it never came back for the rest of that recording - however well everything was running by then. The message and the help both promised it would resume on its own once the transcriber caught up. It could not.\n\nThe pause is meant for a transcriber that has fallen behind: Diariz stops sending it more work until it catches up. It decided how far behind things were by looking at the oldest piece of audio that had not come back yet - but a piece it had just declined to send was never going to come back either, so it became the new oldest, and refused the next one, and so on to the end of the meeting. A single piece of audio that failed to transcribe was enough to start it.\n\nA piece of audio now stops counting the moment the live pass is finished with it, whether it was transcribed, failed, or was never sent. So a failure costs one gap in the running text - which is all it was ever meant to cost - and a genuine backlog pauses and then resumes, as described.",
+    fixed: [
+      "\"Live transcript paused\" never cleared once shown. A single failed piece of audio would stop the live transcript for the remainder of the recording, even though the recording, the finished transcript and everything else were unaffected.",
+    ],
+  },
+  {
     version: "0.271.1",
     date: "2026-09-03",
     pr: 756,
