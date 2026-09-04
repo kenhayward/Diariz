@@ -940,6 +940,120 @@ def test_handle_live_chunk_prepends_the_init_segment_from_the_first_chunk(monkey
     assert blob.endswith(b"prev-audiocur-audio")
 
 
+def _cluster_window(monkeypatch, tmp_path, prev_bytes):
+    """Run one sequence-2 chunk and hand back the bytes the window was built from."""
+    import pathlib as _pathlib
+
+    first = tmp_path / "first.webm"
+    first.write_bytes(b"\x1aE\xdf\xa3INIT" + bytes.fromhex("1F43B675") + b"first-audio")
+    prev = tmp_path / "prev.webm"; prev.write_bytes(prev_bytes)
+    cur = tmp_path / "cur.webm"; cur.write_bytes(b"cur-audio")
+
+    blobs = {"first": str(first), "prev": str(prev), "cur": str(cur)}
+    monkeypatch.setattr(worker.storage, "download", lambda key: blobs[key])
+
+    captured = {}
+
+    def fake_join(paths):
+        blob = b"".join(_pathlib.Path(q).read_bytes() for q in paths)
+        captured.setdefault("joins", []).append(blob)
+        captured["blob"] = blob
+        out = tmp_path / "joined.webm"
+        out.write_bytes(blob)
+        return str(out)
+
+    monkeypatch.setattr(worker.audio_merge, "join_bytes", fake_join)
+    monkeypatch.setattr(worker.pipeline, "measure_duration_ms", lambda path: 6_000)
+    monkeypatch.setattr(worker.pipeline, "transcribe_window",
+                        lambda path, offset_ms, overlap_ms, language: {
+                            "language": "en", "segments": [], "speakers": []})
+    monkeypatch.setattr(worker.callback, "post_live_chunk_result", lambda **kw: None)
+    monkeypatch.setattr(worker.callback, "post_live_chunk_failure",
+                        lambda **kw: captured.update(failed=kw))
+
+    worker.handle_live_chunk({
+        "RecordingId": "r1", "TranscriptionId": "t1", "Sequence": 2, "BlobKey": "cur",
+        "PrevBlobKey": "prev", "FirstBlobKey": "first", "OffsetMs": 60000, "OverlapMs": 30000,
+        "Language": "en"})
+    return captured
+
+
+def test_handle_live_chunk_wraps_the_loose_blocks_in_a_cluster(monkeypatch, tmp_path):
+    """The init segment alone is not enough, which is what issue #759 turned out to be.
+
+    A `requestData()` flush cuts on a SimpleBlock boundary, and Chrome opens a new Cluster only about
+    every 30 seconds - so a 6-12 s window is usually loose blocks with no Cluster anywhere in it.
+    A header followed by naked blocks is not valid Matroska: ffmpeg exits 1 with "End of file" and the
+    chunk is lost. Worse, when a Cluster does happen to fall inside the window, ffmpeg resyncs to it
+    and silently discards everything before it - measured on real fragments, 5.7 s decoded out of
+    12.1 s - so the chunk "succeeds" with most of its audio missing and the rest stamped wrong.
+    """
+    captured = _cluster_window(monkeypatch, tmp_path, b"\xa3\x43\xc3\x81prev-audio")
+
+    blob = captured["blob"]
+    cluster = bytes.fromhex("1F43B675")
+    assert blob.startswith(b"\x1aE\xdf\xa3INIT"), "still opens with the init segment"
+    assert cluster in blob, "the loose blocks need a Cluster to live in"
+    assert blob.index(cluster) < blob.index(b"prev-audio"), "and it has to open before them"
+    assert blob.endswith(b"prev-audiocur-audio"), "no audio added or dropped"
+    assert "failed" not in captured
+
+
+def test_handle_live_chunk_measures_the_cluster_header_it_prepends(monkeypatch, tmp_path):
+    """The prefix measurement decodes byte-for-byte what goes in front of this chunk (#750), and the
+    Cluster header is now part of that - measuring a prefix built differently from the window would
+    put the offset back on a proxy."""
+    captured = _cluster_window(monkeypatch, tmp_path, b"\xa3\x43\xc3\x81prev-audio")
+
+    prefix, window = captured["joins"][0], captured["joins"][1]
+    assert prefix + b"cur-audio" == window
+
+
+def test_handle_live_chunk_adds_no_cluster_when_the_fragment_already_opens_on_one(monkeypatch, tmp_path):
+    """A fragment that begins on a Cluster needs no help, and an empty synthetic one in front of it
+    would be a Cluster with no blocks in it."""
+    captured = _cluster_window(monkeypatch, tmp_path, bytes.fromhex("1F43B675") + b"prev-audio")
+
+    assert captured["blob"] == (
+        b"\x1aE\xdf\xa3INIT" + bytes.fromhex("1F43B675") + b"prev-audio" + b"cur-audio")
+
+
+def test_handle_live_chunk_says_nothing_when_the_meeting_has_already_been_finalised(monkeypatch, tmp_path):
+    """The other half of issue #759, and the quieter half.
+
+    Finalise merges the chunk blobs into the canonical recording and deletes the individual ones, so
+    any live-chunk job still queued at Stop downloads a key that has just gone. Nothing has gone wrong:
+    the meeting ended, the audio is safe in the merged file, and the full pass transcribes all of it.
+    Reporting it as a failed chunk put a stack trace in the log and a "live transcript paused" event on
+    a page whose meeting was already over.
+    """
+    calls = _live_spies(monkeypatch, tmp_path)
+
+    def gone(key):
+        raise worker.storage.MissingBlob(key)
+
+    monkeypatch.setattr(worker.storage, "download", gone)
+
+    worker.handle_live_chunk(_live_job())
+
+    assert "failed" not in calls, "a finalised meeting is not a chunk failure"
+    assert "posted" not in calls
+
+
+def test_handle_live_chunk_still_reports_a_download_that_genuinely_broke(monkeypatch, tmp_path):
+    """Only a missing object is quiet. A storage outage has to stay visible."""
+    calls = _live_spies(monkeypatch, tmp_path)
+
+    def broken(key):
+        raise RuntimeError("connection reset")
+
+    monkeypatch.setattr(worker.storage, "download", broken)
+
+    worker.handle_live_chunk(_live_job())
+
+    assert "connection reset" in calls["failed"]["error"]
+
+
 def test_a_keepalive_does_not_count_as_a_delivery(monkeypatch):
     """Refreshing a claim must not increment the message's delivery counter.
 

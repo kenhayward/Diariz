@@ -4,8 +4,18 @@ import tempfile
 
 import boto3
 from botocore.client import Config as BotoConfig
+from botocore.exceptions import ClientError
 
 from config import config
+
+
+class MissingBlob(Exception):
+    """The object is not in the bucket.
+
+    Distinguished from every other storage fault because for a live chunk it is an ordinary outcome,
+    not an error: finalise merges the chunk blobs into the canonical recording and deletes the
+    individual ones, so a job still queued at Stop asks for a key that has just gone (issue #759).
+    """
 
 _s3 = boto3.client(
     "s3",
@@ -22,7 +32,16 @@ def download(blob_key: str) -> str:
     suffix = os.path.splitext(blob_key)[1] or ".audio"
     fd, path = tempfile.mkstemp(suffix=suffix)
     os.close(fd)
-    _s3.download_file(config.S3_BUCKET, blob_key, path)
+    try:
+        _s3.download_file(config.S3_BUCKET, blob_key, path)
+    except Exception as e:
+        # The temp file was created before the download, so it has to go back whatever happened.
+        if os.path.exists(path):
+            os.remove(path)
+        status = getattr(e, "response", {}).get("ResponseMetadata", {}).get("HTTPStatusCode")
+        if isinstance(e, ClientError) and status == 404:
+            raise MissingBlob(blob_key) from e
+        raise
     return path
 
 

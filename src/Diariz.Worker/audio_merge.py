@@ -60,6 +60,30 @@ def webm_init_segment(path: str) -> bytes:
     return data[:i] if i > 0 else b""
 
 
+# A Cluster a decoder will accept in front of loose blocks: the id, the "unknown size" form, and a
+# Timecode of 0 (the Cluster's mandatory first child).
+#
+# The header alone is not enough to make a mid-stream fragment decodable, which is the part that was
+# missed. A MediaRecorder `requestData()` flush cuts on a SimpleBlock boundary, never a Cluster one,
+# and Chrome opens a new Cluster only about every 30 seconds - it has to, because a SimpleBlock's
+# timecode is an int16 offset from its Cluster and so caps at 32.767 s. A 6-12 s window therefore
+# usually contains no Cluster element anywhere in it, and blocks outside a Cluster are not valid
+# Matroska: ffmpeg exits 1 with "End of file" (issue #759). Wrapping them in one is what makes the
+# window openable.
+#
+# The size is the unknown form deliberately: a real Cluster later in the fragment then ends this one,
+# instead of being swallowed as its content. The blocks keep their original offsets from a Cluster
+# that started earlier in the meeting, so they land late on the window's timeline - harmless, because
+# the offset is derived by decoding the prefix rather than assumed (see worker._prefix_duration_ms).
+WEBM_CLUSTER_HEADER = _CLUSTER_ID + bytes.fromhex("01FFFFFFFFFFFFFF") + bytes.fromhex("E78100")
+
+
+def starts_on_cluster(path: str) -> bool:
+    """Whether this fragment opens a Cluster of its own, and so needs no synthesised one."""
+    with open(path, "rb") as f:
+        return f.read(len(_CLUSTER_ID)) == _CLUSTER_ID
+
+
 def join_bytes(input_paths: list[str]) -> str:
     """Byte-join the inputs, in order, into one temp file. Returns its path.
 

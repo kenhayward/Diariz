@@ -273,6 +273,32 @@ Two consequences follow, and neither was anticipated here:
   1 needs nothing, since its previous chunk *is* chunk 0; that is why the defect presented as "the
   first two chunks work and everything after fails".
 
+**Corrected again once chunks got short - the header is necessary but not sufficient (#759).** A
+`requestData()` flush cuts on a **SimpleBlock** boundary, never a Cluster one, so a later fragment is
+loose blocks with nothing to hold them; and Chrome opens a new Cluster only about every 30 s, because a
+SimpleBlock's timecode is an int16 offset from its Cluster and caps at 32.767 s. So `init + prev + this`
+is a header followed by naked blocks, which is not valid Matroska. Measured on real Electron fragments
+(the same synthesised-signal method as §5.1, eight 6 s fragments):
+
+| decode window | today | with a synthesised Cluster |
+|---|---|---|
+| four windows with no Cluster in them | **ffmpeg exit 1, "End of file"** | 12000 ms, complete |
+| a window whose Cluster falls inside `this` | exit 0, **5700 ms of 12060** | 12060 ms, complete |
+| a window whose Cluster falls inside `prev` | exit 0, 11700 ms of 12060 | 12060 ms, complete |
+
+The middle row is the one worth pausing on: where a Cluster *does* fall inside the window, ffmpeg
+resyncs to it and **silently discards everything before it**, so the chunk "succeeds" with most of its
+audio missing and the rest stamped wrong. That is why the fault read as intermittent rather than total,
+and why it surfaced at 6-12 s chunks and not at 20-45 s - a longer window nearly always contained one of
+those 30 s boundaries to resync to.
+
+The worker therefore prepends `init + Cluster(unknown size, Timecode 0)`, which makes every window open
+cleanly with nothing dropped. Unknown size deliberately: a real Cluster later in the fragment then ends
+the synthesised one rather than being swallowed as its content. The blocks keep their original offsets
+from a Cluster that began earlier in the meeting, so they land late on the window's own timeline -
+harmless, because the overlap is *measured* by decoding the prefix (#750) rather than assumed, and the
+prefix is byte-for-byte what the window opens with.
+
 ### 5.3 D3 - the live transcript is provisional and disposable
 
 The live pass writes a `Transcription` with `IsProvisional = true`. The final pass, after Stop, writes
