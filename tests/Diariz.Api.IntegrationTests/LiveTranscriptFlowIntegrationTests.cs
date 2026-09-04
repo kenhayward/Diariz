@@ -159,12 +159,12 @@ public class LiveTranscriptFlowIntegrationTests(ContainersFixture fx)
                 StartMs = i * 30_000, EndMs = (i + 1) * 30_000, SizeBytes = 1000,
                 ReceivedAt = t0.AddSeconds(i * 30),
                 // Chunks 0 and 1 came back; 2 and 3 are still outstanding.
-                TranscribedAt = i < 2 ? t0.AddSeconds(i * 30 + 5) : null,
+                SettledAt = i < 2 ? t0.AddSeconds(i * 30 + 5) : null,
             });
         await db.SaveChangesAsync();
 
         var oldest = await db.RecordingChunks
-            .Where(c => c.RecordingId == rec.Id && c.TranscribedAt == null)
+            .Where(c => c.RecordingId == rec.Id && c.SettledAt == null)
             .OrderBy(c => c.ReceivedAt)
             .Select(c => (DateTimeOffset?)c.ReceivedAt)
             .FirstOrDefaultAsync();

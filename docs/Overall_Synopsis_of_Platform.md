@@ -3082,6 +3082,17 @@ the least likely to hold.
   remainder by `OffsetMs - prefixMs`** so the times it returns are relative to the whole recording
   rather than the window. The overlap exists to stop a word being cut in half at a chunk boundary and is a
   property of the **decode window only** - nothing overlapping is ever stored.
+  **The pause is per-chunk, not a latch.** The gate stops queueing live work while the oldest chunk
+  still waiting on the transcriber has been waiting longer than `Live:MaxLagSeconds`. `RecordingChunk`
+  records that wait in **`SettledAt`**, which is written in all three terminal cases - transcribed,
+  failed in the worker, or never queued because the gate declined it. It was `TranscribedAt` and
+  written only on success, so a failed or skipped chunk stayed null forever and pinned the
+  measurement; every refused chunk then became another permanently-unsettled row, so one failure
+  paused the live transcript for the remainder of the meeting and no amount of catching up lifted it
+  (issue #758). Settled, the measurement sees only chunks genuinely in flight, so a failure costs one
+  gap and a real backlog pauses and then resumes - which is what the status line and the help have
+  always claimed.
+
   **A live chunk can still wait behind an in-flight full transcription, and there is a switch for it.**
   The priority read bounds live latency by the job ALREADY RUNNING rather than by queue depth, which
   is usually enough - but that job can be a 60-minute transcription, measured at roughly 75 s, and

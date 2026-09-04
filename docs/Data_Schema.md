@@ -135,6 +135,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddSegmentChunkSequence` | `Segment.ChunkSequence` (int, nullable) - which live chunk produced a segment, so an at-least-once redelivery replaces its own rows rather than appending duplicates. Null on every pre-existing row, meaning "from an ordinary full-recording pass". Purely additive - **no `CurrentFormat` bump** |
 | `AddRecordingChunkTranscribedAt` | `RecordingChunk.TranscribedAt` (timestamptz, nullable) - when a chunk's segments were persisted; drives the lag check that pauses live transcription when the worker falls behind. Purely additive - **no `CurrentFormat` bump** |
 | `AddRecordingLiveSessionId` | `Recording.LiveSessionId` (uuid null). The capturing device's client-generated session id while the recording is `Live`; every chunk must present it, so a second device signed in as the same user is refused rather than interleaving its audio. Null for every recording that did not arrive as a live capture. Additive - **no `CurrentFormat` bump** |
+| `RenameChunkTranscribedAtToSettledAt` | `RecordingChunks.TranscribedAt` -> `SettledAt`. The column records "the live pass is finished with this chunk", which is what the lag gate needs, rather than "it was transcribed" - it is now also written when a chunk fails in the worker and when the gate declines to queue one. Under the old name and meaning, either case left it null forever, pinning the lag measurement and making the pause a latch that lasted the rest of the recording (issue #758). A `RenameColumn`, so existing values carry over and an older backup migrates up - **no `CurrentFormat` bump** |
 
 ### Entity-relationship overview
 
@@ -233,7 +234,7 @@ blob and both the rows and their blobs are deleted - **a finished recording has 
 | `StartMs` / `EndMs` | bigint | span covered, in the recording's own pause-aware clock (the same clock `Segments.StartMs` uses) |
 | `SizeBytes` | bigint | counts toward the owner's quota while the recording is live; reconciled against the concatenated blob at finalise |
 | `ReceivedAt` | timestamptz | when the upload landed. The newest chunk's value is what the reaper measures an abandoned capture against |
-| `TranscribedAt` | timestamptz null | when the live-chunk callback persisted this chunk's segments; null = not transcribed yet. The **oldest** null is what the lag check measures, so a worker that has fallen too far behind can be told to stop transcribing live rather than emitting text that is minutes stale |
+| `SettledAt` | timestamptz null | when the live pass finished with this chunk, **one way or another** - transcribed, failed in the worker, or never queued because the transcript was already too far behind; null = still waiting on the transcriber. The **oldest** null is what the lag check measures, so a worker that has fallen behind can be told to stop transcribing live rather than emitting text that is minutes stale. Was `TranscribedAt` and written only on success, which made a failed or skipped chunk pin that measurement forever and turned the pause into a latch (issue #758) |
 
 Unique index: `(RecordingId, Sequence)`. This is **load-bearing rather than tidiness** - it is what makes
 the chunk upload idempotent, so a retry after a network blip collides and replaces instead of duplicating.

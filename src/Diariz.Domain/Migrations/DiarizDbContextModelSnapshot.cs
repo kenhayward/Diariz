@@ -1482,14 +1482,14 @@ namespace Diariz.Domain.Migrations
                     b.Property<int>("Sequence")
                         .HasColumnType("integer");
 
+                    b.Property<DateTimeOffset?>("SettledAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<long>("SizeBytes")
                         .HasColumnType("bigint");
 
                     b.Property<long>("StartMs")
                         .HasColumnType("bigint");
-
-                    b.Property<DateTimeOffset?>("TranscribedAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
