@@ -44,6 +44,28 @@ public class LiveRecordingControllerTests
     }
 
     [Fact]
+    public async Task Begin_TellsTheClientWhereToCutItsChunks()
+    {
+        // Sent with the session rather than fetched, and sent at all so the latency/diarization
+        // trade-off is a deployment setting: shorter chunks put the transcript closer to the room and
+        // give the diarizer less to cluster speakers in. A client that had to be redeployed to change it
+        // could not be retuned against a real meeting.
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        await LiveTestSupport.SeedUser(db, me);
+
+        var result = await LiveTestSupport.Build(db, me).BeginLive(Req());
+
+        var dto = (LiveRecordingDto)((CreatedAtActionResult)result.Result!).Value!;
+        Assert.NotNull(dto.ChunkLimits);
+        // Milliseconds on the wire; the setting is in seconds, because that is how a person thinks
+        // about "how far behind the room am I willing to be".
+        Assert.Equal(6_000, dto.ChunkLimits!.MinMs);
+        Assert.Equal(12_000, dto.ChunkLimits.MaxMs);
+        Assert.Equal(700, dto.ChunkLimits.PauseMs);
+    }
+
+    [Fact]
     public async Task Begin_IntoASharedRoomWithoutCreateRecording_Returns403()
     {
         // Exactly the gate Upload applies. A second entry point that quietly dropped it would be a

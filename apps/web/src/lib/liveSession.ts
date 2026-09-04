@@ -8,11 +8,25 @@
 /// fails, `start` returns null and the recorder carries on exactly as it does today - buffer locally,
 /// upload at stop. A briefly unreachable server must never cost someone their meeting.
 
-import { advance, emptyChunkerState, shouldCut, DEFAULT_CHUNKER_LIMITS, type ChunkerLimits, type ChunkerState } from "./liveChunker";
+import {
+  advance,
+  emptyChunkerState,
+  resolveChunkerLimits,
+  shouldCut,
+  type ChunkerLimits,
+  type ChunkerState,
+} from "./liveChunker";
 import { createChunkQueue, type ChunkQueue, type ChunkStore } from "./liveChunkQueue";
 
 export interface LiveSessionDeps {
-  begin: () => Promise<{ id: string; sessionId: string }>;
+  /// Begins the recording server-side. The response may carry the chunk limits to use - which is how a
+  /// deployment retunes the latency/diarization trade-off without a web deploy - and an older server
+  /// simply does not, in which case `limits` or the built-in defaults apply.
+  begin: () => Promise<{
+    id: string;
+    sessionId: string;
+    chunkLimits?: { minMs: number; maxMs: number; pauseMs: number } | null;
+  }>;
   upload: (recordingId: string, sessionId: string, chunk: {
     sequence: number; blob: Blob; startMs: number; endMs: number;
   }) => Promise<void>;
@@ -39,7 +53,7 @@ export interface LiveSession {
 }
 
 export async function startLiveSession(deps: LiveSessionDeps): Promise<LiveSession | null> {
-  let begun: { id: string; sessionId: string };
+  let begun: Awaited<ReturnType<LiveSessionDeps["begin"]>>;
   try {
     begun = await deps.begin();
   } catch {
@@ -48,7 +62,10 @@ export async function startLiveSession(deps: LiveSessionDeps): Promise<LiveSessi
     return null;
   }
 
-  const limits = deps.limits ?? DEFAULT_CHUNKER_LIMITS;
+  // The server's answer wins where it has one, then the caller's, then the built-in defaults. Sanitised
+  // rather than trusted: the values arrive from a configuration file somebody can typo, and a maximum
+  // at or below the minimum would post a chunk per animation frame.
+  const limits = resolveChunkerLimits(begun.chunkLimits, deps.limits);
   const queue: ChunkQueue = createChunkQueue({
     store: deps.store,
     upload: (chunk) => deps.upload(begun.id, begun.sessionId, chunk),

@@ -340,6 +340,19 @@ def handle_voiceprint(job: dict) -> None:
             os.remove(path)
 
 
+def reclaimable_streams() -> tuple[str, ...]:
+    """Which streams this process picks abandoned work up from when it is otherwise idle.
+
+    A live-only worker reclaims live chunks and nothing else: taking over a stalled full transcription
+    would put it on exactly the job it exists to stay clear of. The general worker deliberately does not
+    reclaim live chunks here - it reads that stream first on every pass anyway, so anything stranded on
+    it is picked up by the ordinary read rather than needing the idle path.
+    """
+    if config.LIVE_ONLY:
+        return (config.LIVE_CHUNK_STREAM_KEY,)
+    return (config.STREAM_KEY, config.MERGE_STREAM_KEY, config.VOICEPRINT_STREAM_KEY)
+
+
 def run_loop(r: redis.Redis, keep_going=lambda: True) -> None:
     """Consume jobs until stopped. A long-running blocking consumer must survive transient Redis hiccups:
     a socket read timeout or a dropped connection (e.g. Redis restart) is caught and retried rather than
@@ -349,14 +362,22 @@ def run_loop(r: redis.Redis, keep_going=lambda: True) -> None:
             # Live chunks first, on their own non-blocking read. A chunk of a meeting still in progress
             # queued behind an hour of audio would arrive long after that meeting had ended, so it does
             # not wait its turn. This bounds live latency by the job already running, not by queue depth.
-            resp = r.xreadgroup(
-                config.CONSUMER_GROUP, config.CONSUMER_NAME,
-                {config.LIVE_CHUNK_STREAM_KEY: ">"}, count=1, block=None)
-            if not resp:
+            if config.LIVE_ONLY:
+                # A dedicated live worker: one blocking read on the live stream and nothing else. It
+                # must never take a full transcription, which is the very job it exists to stay clear
+                # of - and it would hold a second copy of the model weights doing it.
                 resp = r.xreadgroup(
                     config.CONSUMER_GROUP, config.CONSUMER_NAME,
-                    {config.STREAM_KEY: ">", config.MERGE_STREAM_KEY: ">",
-                     config.VOICEPRINT_STREAM_KEY: ">"}, count=1, block=BLOCK_MS)
+                    {config.LIVE_CHUNK_STREAM_KEY: ">"}, count=1, block=BLOCK_MS)
+            else:
+                resp = r.xreadgroup(
+                    config.CONSUMER_GROUP, config.CONSUMER_NAME,
+                    {config.LIVE_CHUNK_STREAM_KEY: ">"}, count=1, block=None)
+                if not resp:
+                    resp = r.xreadgroup(
+                        config.CONSUMER_GROUP, config.CONSUMER_NAME,
+                        {config.STREAM_KEY: ">", config.MERGE_STREAM_KEY: ">",
+                         config.VOICEPRINT_STREAM_KEY: ">"}, count=1, block=BLOCK_MS)
         except (redis.TimeoutError, redis.ConnectionError) as e:
             log.warning("Redis unavailable (%s); retrying in %ds", e, RECONNECT_DELAY)
             time.sleep(RECONNECT_DELAY)
@@ -364,9 +385,7 @@ def run_loop(r: redis.Redis, keep_going=lambda: True) -> None:
         # Nothing new: use the idle moment to pick up anything a dead worker left behind. Doing it here
         # rather than only at startup also recovers from another worker dying while this one runs.
         if not resp:
-            resp = [(key, reclaim_stale(r, key))
-                    for key in (config.STREAM_KEY, config.MERGE_STREAM_KEY,
-                                config.VOICEPRINT_STREAM_KEY)]
+            resp = [(key, reclaim_stale(r, key)) for key in reclaimable_streams()]
             if not any(messages for _, messages in resp):
                 continue
 

@@ -723,6 +723,109 @@ def test_handle_live_chunk_failure_is_reported_and_does_not_raise(monkeypatch, t
     assert "posted" not in calls
 
 
+def test_run_loop_in_live_only_mode_reads_nothing_but_live_chunks(monkeypatch):
+    """A worker dedicated to live chunks.
+
+    The priority read above bounds live latency by the job ALREADY RUNNING rather than by queue depth -
+    but that job can be a 60-minute transcription, measured at ~75 s. A second process consuming only
+    this stream removes that tail: whichever worker is free takes the chunk, and a busy general worker
+    is simply not reading.
+
+    Same consumer group on purpose, so Redis hands each chunk to exactly one of them.
+    """
+    handled = []
+    monkeypatch.setattr(worker, "handle_live_chunk", lambda job: handled.append("live"))
+    monkeypatch.setattr(worker, "handle", lambda job: handled.append("full"))
+    monkeypatch.setattr(worker.config, "LIVE_ONLY", True)
+
+    asked = []
+
+    class _Redis:
+        def xreadgroup(self, group, consumer, streams, count=1, block=None):
+            asked.append(list(streams))
+            # Offers a full transcription to anything that asks for it.
+            if worker.config.STREAM_KEY in streams:
+                return [(worker.config.STREAM_KEY,
+                         [("2-1", {"job": json.dumps({"TranscriptionId": "t", "BlobKey": "b"})})])]
+            return []
+
+        def xack(self, *a, **k):
+            pass
+
+        def xpending_range(self, *a, **k):
+            return []
+
+    worker.run_loop(_Redis(), keep_going=_keep_going(2))
+
+    assert handled == [], "a live-only worker must never pick up a full transcription"
+    for streams in asked:
+        assert streams == [worker.config.LIVE_CHUNK_STREAM_KEY], streams
+
+
+def test_run_loop_in_live_only_mode_still_handles_a_live_chunk(monkeypatch):
+    handled = []
+    monkeypatch.setattr(worker, "handle_live_chunk", lambda job: handled.append("live"))
+    monkeypatch.setattr(worker.config, "LIVE_ONLY", True)
+
+    class _Redis:
+        def __init__(self):
+            self.acked = []
+
+        def xreadgroup(self, group, consumer, streams, count=1, block=None):
+            return [(worker.config.LIVE_CHUNK_STREAM_KEY,
+                     [("1-1", {"job": json.dumps(_live_job())})])]
+
+        def xack(self, stream, group, msg_id):
+            self.acked.append((stream, msg_id))
+
+        def xpending_range(self, *a, **k):
+            return []
+
+    r = _Redis()
+    worker.run_loop(r, keep_going=_keep_going(1))
+
+    assert handled == ["live"]
+    assert r.acked == [(worker.config.LIVE_CHUNK_STREAM_KEY, "1-1")]
+
+
+def test_run_loop_in_live_only_mode_reclaims_only_live_chunks(monkeypatch):
+    """Reclaiming a stalled full transcription would put this worker on exactly the job it exists to
+    stay out of - and hold a second copy of the model weights doing it."""
+    monkeypatch.setattr(worker.config, "LIVE_ONLY", True)
+    reclaimed = []
+    monkeypatch.setattr(worker, "reclaim_stale", lambda r, key: reclaimed.append(key) or [])
+
+    class _Redis:
+        def xreadgroup(self, *a, **k):
+            return []
+
+        def xpending_range(self, *a, **k):
+            return []
+
+    worker.run_loop(_Redis(), keep_going=_keep_going(1))
+
+    assert reclaimed == [worker.config.LIVE_CHUNK_STREAM_KEY]
+
+
+def test_run_loop_by_default_reclaims_the_general_streams(monkeypatch):
+    # The other side of the same switch, so a mistake in it cannot pass unnoticed in one direction.
+    monkeypatch.setattr(worker.config, "LIVE_ONLY", False)
+    reclaimed = []
+    monkeypatch.setattr(worker, "reclaim_stale", lambda r, key: reclaimed.append(key) or [])
+
+    class _Redis:
+        def xreadgroup(self, *a, **k):
+            return []
+
+        def xpending_range(self, *a, **k):
+            return []
+
+    worker.run_loop(_Redis(), keep_going=_keep_going(1))
+
+    assert worker.config.LIVE_CHUNK_STREAM_KEY not in reclaimed
+    assert worker.config.STREAM_KEY in reclaimed
+
+
 def test_run_loop_prefers_live_chunks_over_a_queued_full_transcription(monkeypatch):
     """The priority read of spec section 6.3.
 

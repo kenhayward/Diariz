@@ -539,8 +539,12 @@ public class RecordingsController : ControllerBase
 
         await _hub.NotifyStatusAsync(UserId, rec.Id, rec.Status.ToString());
 
+        // The chunk limits ride along with the session so the browser does not have to ask, and so
+        // the latency/diarization trade-off can be retuned on the server without a web deploy.
         return CreatedAtAction(nameof(Get), new { id = rec.Id },
-            new LiveRecordingDto(rec.Id, req.SessionId, rec.Status));
+            new LiveRecordingDto(rec.Id, req.SessionId, rec.Status,
+                new ChunkLimitsDto(_live.ChunkMinSeconds * 1000, _live.ChunkMaxSeconds * 1000,
+                    _live.ChunkPauseMs)));
     }
 
     [HttpPut("{id:guid}/chunks/{sequence:int}")]
@@ -688,6 +692,57 @@ public class RecordingsController : ControllerBase
             _logger.LogWarning(e, "Could not queue live transcription for chunk {Sequence} of {RecordingId}",
                 sequence, rec.Id);
         }
+    }
+
+    [HttpGet("{id:guid}/live-transcript")]
+    [EndpointSummary("The transcript of a meeting in progress")]
+    [EndpointDescription(
+        "The current transcript and nothing else: each line's text, its position in the recording, and " +
+        "who said it where the speaker has been named. Intended for polling or re-reading while a " +
+        "meeting runs - it is what the live notes panel calls when the hub reports new text.\n\n" +
+        "Returns the **whole** transcript every time rather than a delta, so a missed event repairs " +
+        "itself on the next read. Before the first chunk has been transcribed the segment list is empty, " +
+        "which is a normal opening state rather than a 404. Readable by anyone who can read the " +
+        "recording.")]
+    public async Task<ActionResult<LiveTranscriptDto>> LiveTranscript(Guid id)
+    {
+        if (!(await _rooms.ReadAccessForRecordingAsync(UserId, id)).CanRead) return NotFound();
+
+        // The same "current transcription" rule the detail endpoint applies, and for the same reason: the
+        // full pass takes the next version the moment its job is queued, before it has written a segment,
+        // so ordering by version alone would let that empty row hide everything said in the meeting.
+        var transcription = await _db.Transcriptions
+            .Where(t => t.RecordingId == id)
+            .OrderByDescending(t => t.Segments.Any()).ThenByDescending(t => t.Version)
+            .Select(t => t.Id)
+            .FirstOrDefaultAsync();
+
+        if (transcription == Guid.Empty)
+            return Ok(new LiveTranscriptDto(id, []));
+
+        // Names and suggestion flags live on the recording's speakers, keyed by the label the segments
+        // carry. Two small reads rather than a join, so the segment projection stays a flat select.
+        var speakers = await _db.Speakers
+            .Where(s => s.RecordingId == id)
+            .Select(s => new { s.Label, s.DisplayName, s.SuggestedPersonId })
+            .ToListAsync();
+        var named = speakers.ToDictionary(s => s.Label, s => s.DisplayName, StringComparer.Ordinal);
+        var guessed = speakers.Where(s => s.SuggestedPersonId != null)
+            .Select(s => s.Label).ToHashSet(StringComparer.Ordinal);
+
+        var rows = await _db.Segments
+            .Where(s => s.TranscriptionId == transcription)
+            .OrderBy(s => s.Ordinal)
+            .Select(s => new { s.Id, s.StartMs, s.EndMs, s.Original, s.Revised, s.SpeakerLabel })
+            .ToListAsync();
+
+        var lines = rows.Select(s => new LiveTranscriptLineDto(
+            s.Id, s.StartMs, s.EndMs, s.Revised ?? s.Original,
+            // Null rather than the raw label: an unstitched label is worse than no name at all.
+            named.TryGetValue(s.SpeakerLabel, out var n) && n != s.SpeakerLabel ? n : null,
+            guessed.Contains(s.SpeakerLabel))).ToList();
+
+        return Ok(new LiveTranscriptDto(id, lines));
     }
 
     [HttpPost("{id:guid}/live/finalize")]
