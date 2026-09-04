@@ -105,3 +105,31 @@ def test_webm_init_segment_of_a_headerless_fragment_is_empty(tmp_path):
     src.write_bytes(CLUSTER_ID + b"payload only")
 
     assert audio_merge.webm_init_segment(str(src)) == b""
+
+def test_a_synthesised_cluster_header_opens_a_cluster_of_unknown_size():
+    """What makes a mid-stream fragment decodable at all.
+
+    Measured against real Chrome fragments: a `requestData()` flush lands on a SimpleBlock boundary,
+    never a Cluster one, and Chrome only opens a new Cluster about every 30 seconds (SimpleBlock
+    timecodes are int16, so they cap at 32.767 s). A 6-12 s window therefore usually contains no
+    Cluster element at all - just loose blocks - and blocks outside a Cluster are not valid Matroska.
+
+    The size must be the "unknown" form, so the next real Cluster in the stream ends this one instead
+    of being swallowed as its content.
+    """
+    header = audio_merge.WEBM_CLUSTER_HEADER
+
+    assert header.startswith(CLUSTER_ID)
+    assert header[4:12] == bytes.fromhex("01FFFFFFFFFFFFFF"), "unknown size"
+    assert header[12:] == bytes.fromhex("E78100"), "Timecode 0, the Cluster's mandatory first child"
+
+
+def test_starts_on_cluster_tells_a_whole_cluster_from_a_loose_fragment(tmp_path):
+    """Whether the fragment needs a Cluster wrapping around it, which is the only reason to ask."""
+    whole = tmp_path / "whole.webm"
+    whole.write_bytes(CLUSTER_ID + b"payload")
+    loose = tmp_path / "loose.webm"
+    loose.write_bytes(bytes.fromhex("A343C381") + b"a simple block, mid-cluster")
+
+    assert audio_merge.starts_on_cluster(str(whole)) is True
+    assert audio_merge.starts_on_cluster(str(loose)) is False

@@ -9,6 +9,19 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.271.3",
+    date: "2026-09-04",
+    pr: 761,
+    headline: "The live transcript stops losing pieces of the meeting",
+    summary:
+      "Since the live transcript started working in short pieces, a large share of them were being lost or quietly truncated. Roughly one in five failed outright and left a visible gap; many of the rest arrived with most of their audio missing and what remained stamped at the wrong time.\n\nThe cause was in how the pieces are stitched together before transcription. Audio arriving from the browser is cut at points that are not self-contained, and only the very first piece carries the description a decoder needs. Diariz already put that description back, but the pieces also need a wrapper around them that the browser only emits about every thirty seconds - so a six-second piece usually had none. Without it the audio either would not open at all, or opened part-way through and everything before that point was thrown away silently. Longer pieces used to include one of those wrappers by luck, which is why this appeared when the pieces got shorter.\n\nDiariz now supplies the wrapper itself. Measured against real recordings, every window that previously failed or arrived truncated now decodes complete and on time.\n\nSeparately, pressing Stop no longer produces a burst of failures. Work still in progress at that moment was looking for audio that had just been merged into the finished recording; that is a normal end to a meeting, not a fault, and it is no longer reported as one.",
+    fixed: [
+      "Live transcript pieces failed at about one in five, leaving gaps in the running text. The audio handed to the transcriber was missing a structural element the browser only emits every thirty seconds or so, and would not open without it.",
+      "Live transcript pieces that did not fail were often truncated, losing most of their audio and mis-stamping the rest - which read as text going missing and timings drifting rather than as an error.",
+      "Pressing Stop no longer logs a burst of failed pieces, or briefly reports the live transcript as degraded after the meeting has already ended.",
+    ],
+  },
+  {
     version: "0.271.2",
     date: "2026-09-04",
     pr: 760,

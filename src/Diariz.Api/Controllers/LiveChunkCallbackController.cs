@@ -351,7 +351,11 @@ public class LiveChunkCallbackController(
             await db.SaveChangesAsync();
         }
 
-        await hub.NotifyLiveTranscriptDegradedAsync(rec.UserId, rec.Id, body.Sequence);
+        // Only worth saying while somebody is watching a live transcript. Pressing Stop leaves several
+        // chunk jobs in flight, and the ones that fail behind the finalise would otherwise announce a
+        // gap in a transcript that has already been replaced by the full pass (issue #759).
+        if (rec.Status == RecordingStatus.Live)
+            await hub.NotifyLiveTranscriptDegradedAsync(rec.UserId, rec.Id, body.Sequence);
         return Ok();
     }
 }

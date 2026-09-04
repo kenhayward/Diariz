@@ -196,13 +196,18 @@ def handle_live_chunk(job: dict) -> None:
                     if first_key and first_key != prev_key:
                         first_path = storage.download(first_key)
                         downloaded.append(first_path)
-                        init = audio_merge.webm_init_segment(first_path)
-                        if init:
-                            fd, init_path = tempfile.mkstemp(suffix=".webm")
+                        header = audio_merge.webm_init_segment(first_path)
+                        # The header is not enough on its own: the flush cut mid-cluster, so what
+                        # follows is loose SimpleBlocks with nothing to hold them (issue #759). See
+                        # audio_merge.WEBM_CLUSTER_HEADER for why they usually have no cluster at all.
+                        if header and not audio_merge.starts_on_cluster(prev_path):
+                            header += audio_merge.WEBM_CLUSTER_HEADER
+                        if header:
+                            fd, header_path = tempfile.mkstemp(suffix=".webm")
                             with os.fdopen(fd, "wb") as f:
-                                f.write(init)
-                            downloaded.append(init_path)
-                            prefix.insert(0, init_path)
+                                f.write(header)
+                            downloaded.append(header_path)
+                            prefix.insert(0, header_path)
                     # Measured before the window is built, so what is decoded for the measurement is
                     # exactly the bytes about to be prepended - and so the window join stays the last
                     # thing this branch produces.
@@ -226,6 +231,14 @@ def handle_live_chunk(job: dict) -> None:
                     recording_id=recording_id, transcription_id=transcription_id, sequence=sequence,
                     language=result["language"], segments=result["segments"],
                     speakers=result.get("speakers"), processing_ms=processing_ms)
+    except storage.MissingBlob:
+        # The meeting finished while this job sat in the queue: finalise merged the chunk blobs into
+        # the canonical recording and deleted the individual ones. Nothing is wrong - the audio is
+        # safe in the merged file and the full pass covers all of it - so this is not reported as a
+        # failed chunk, which would put a stack trace in the log and a "live transcript paused" event
+        # on a page whose meeting was already over (issue #759).
+        log.info("Live chunk %s skipped: its audio has already been merged into the recording",
+                 sequence)
     except Exception as e:  # noqa: BLE001 - report and continue; the meeting keeps recording
         log.exception("Live chunk %s failed for transcription %s", sequence, transcription_id)
         telemetry.capture_exception(e)
