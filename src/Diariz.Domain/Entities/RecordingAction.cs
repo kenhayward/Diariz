@@ -31,4 +31,12 @@ public class RecordingAction
     /// the Actions tab and the folder Actions tab only once someone pins it. Reversible, and owner-only to
     /// set (see <c>ActionsController.Pin</c>), exactly like <see cref="Completed"/>.</summary>
     public bool Pinned { get; set; }
+
+    /// <summary>Where this action came from. Live actions are the ones extraction must not duplicate and
+    /// re-extraction must not discard (the latter via <see cref="Pinned"/>, which live actions always start with).</summary>
+    public ActionSource Source { get; set; } = ActionSource.Extracted;
+
+    /// <summary>Offset (ms) into the recorded clock when a live action was typed; null for every other
+    /// source. An immutable capture fact, like <see cref="MeetingNote.CapturedAtMs"/>.</summary>
+    public long? CapturedAtMs { get; set; }
 }

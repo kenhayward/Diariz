@@ -182,6 +182,21 @@ public class RecordingActionsControllerTests
     }
 
     [Fact]
+    public async Task Create_RecordsTheActionAsManual()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribed(db, userId);
+
+        var dto = (await Build(db, userId, new FakeActionsClient())
+            .Create(rec.Id, new CreateRecordingActionRequest("Book the room", "Ada", ""))).Value!;
+
+        var row = await db.RecordingActions.SingleAsync(a => a.Id == dto.Id);
+        Assert.Equal(ActionSource.Manual, row.Source);
+        Assert.Null(row.CapturedAtMs);
+    }
+
+    [Fact]
     public async Task Create_OtherUsersRecording_ReturnsNotFound()
     {
         using var db = TestDb.Create();

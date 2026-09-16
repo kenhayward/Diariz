@@ -150,6 +150,7 @@ public class RecordingActionsController : ControllerBase
             Actor = req.Actor?.Trim() ?? "",
             Deadline = req.Deadline?.Trim() ?? "",
             Ordinal = (maxOrdinal ?? -1) + 1,
+            Source = ActionSource.Manual,
         };
         _db.RecordingActions.Add(action);
 

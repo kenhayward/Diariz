@@ -4101,6 +4101,30 @@ public class RecordingsControllerTests
     }
 
     [Fact]
+    public async Task Merge_CarriesSource_AndDropsCapturedAtFromTheOtherClock()
+    {
+        // CapturedAtMs is an offset into the recording it was typed in. The folded-in recording's clock is not
+        // the survivor's, so its offsets would point at the wrong moment - they are dropped. Source is a fact
+        // about the action and travels with it.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var early = await SeedMergeable(db, userId, DateTimeOffset.UtcNow.AddMinutes(-5), 1000, "Hello");
+        var later = await SeedMergeable(db, userId, DateTimeOffset.UtcNow, 2000, "World");
+        db.RecordingActions.Add(new RecordingAction
+        {
+            Id = Guid.NewGuid(), RecordingId = later.Id, Text = "Send the deck", Ordinal = 0,
+            Source = ActionSource.Live, CapturedAtMs = 42_000, Pinned = true,
+        });
+        await db.SaveChangesAsync();
+
+        await Build(db, userId, new FakeJobQueue()).Merge(new MergeRecordingsRequest([later.Id, early.Id]));
+
+        var moved = await db.RecordingActions.SingleAsync(a => a.RecordingId == early.Id);
+        Assert.Equal(ActionSource.Live, moved.Source);
+        Assert.Null(moved.CapturedAtMs);
+    }
+
+    [Fact]
     public async Task Merge_CarriesCompletionOntoTheSurvivor()
     {
         // Merging two halves of one meeting is a filing operation, so it must not reopen work someone has

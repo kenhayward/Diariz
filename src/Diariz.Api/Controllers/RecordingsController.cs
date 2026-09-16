@@ -2326,6 +2326,9 @@ public class RecordingsController : ControllerBase
                 // Completed and CompletedAt move together on purpose: a tick with no date reads as
                 // finished at no particular time, and the panel renders it with nothing beside it.
                 Pinned = a.Pinned, Completed = a.Completed, CompletedAt = a.CompletedAt,
+                // Source is a fact about the action. CapturedAtMs is not copied: it is an offset into the
+                // folded-in recording's clock, which is not the survivor's.
+                Source = a.Source,
             });
             mergedAnyAction = true;
         }
