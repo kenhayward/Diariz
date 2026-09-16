@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Services;
@@ -13,6 +14,7 @@ namespace Diariz.Api.Controllers;
 /// <see cref="PeopleController.SetVoiceSampleSpans"/>). Authenticated by the shared
 /// <c>X-Worker-Secret</c> header, not JWT.</summary>
 [ApiController]
+[AllowAnonymous] // Called by the worker, not a user: authenticated by the X-Worker-Secret header (WorkerSecret), not a session.
 [Route("internal/people")]
 public class WorkerVoiceprintCallbackController : ControllerBase
 {
@@ -32,7 +34,7 @@ public class WorkerVoiceprintCallbackController : ControllerBase
     }
 
     private bool SecretOk =>
-        Request.Headers.TryGetValue("X-Worker-Secret", out var v) && v == _opts.CallbackSecret;
+        Diariz.Api.Auth.WorkerSecret.Matches(Request.Headers[Diariz.Api.Auth.WorkerSecret.HeaderName].ToString(), _opts.CallbackSecret);
 
     /// <summary>The re-embed is done: store the vector, stop the sample reading as pending, clear the
     /// contributing speaker's stale flag, and rebuild the person's centroid - the average of the samples

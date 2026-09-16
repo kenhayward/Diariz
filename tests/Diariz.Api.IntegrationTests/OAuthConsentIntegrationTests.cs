@@ -102,6 +102,9 @@ public class OAuthConsentIntegrationTests(ContainersFixture fx) : IDisposable
         Assert.IsType<NoContentResult>(result);
         var setCookie = controller.Response.Headers.SetCookie.ToString();
         Assert.Contains(OAuthConsentTicketProtector.CookieName, setCookie);
+        // Scoped to the one path that reads it, and never readable from script.
+        Assert.Contains($"path={OAuthConsentTicketProtector.CookiePath}", setCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("httponly", setCookie, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

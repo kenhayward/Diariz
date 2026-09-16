@@ -12,9 +12,11 @@ namespace Diariz.Api.Auth;
 public sealed class ApiKeyAuthSchemeOptions : AuthenticationSchemeOptions;
 
 /// <summary>Authenticates a request bearing a personal REST-API token (<c>dz_api_…</c>) as the owning user,
-/// with full session parity: the principal carries the user's id, name/email, and role claims, so ownership
-/// checks and admin authorization work exactly as they do for a JWT session. Only invoked for <c>dz_api_</c>
-/// bearers (routed here by the forwarding default scheme in <c>Program.cs</c>).</summary>
+/// carrying the user's id, name and email plus the token's scope. That is session parity for everything the API
+/// authorizes on: ownership checks read the id, and platform permissions are resolved from the database by that
+/// same id (<see cref="PermissionAuthorizationHandler"/>) - no role claims are emitted or needed. The owner's
+/// account must still be enabled and active (checked in <see cref="IApiTokenAuthenticator"/>). Only invoked for
+/// <c>dz_api_</c> bearers (routed here by the forwarding default scheme in <c>Program.cs</c>).</summary>
 public sealed class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAuthSchemeOptions>
 {
     public const string SchemeName = "ApiKey";
@@ -39,6 +41,17 @@ public sealed class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAu
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
+        var result = await AuthenticateTokenAsync();
+        // A presented credential that was refused is worth a trail: the reason and where it came from, never the
+        // token. (The framework's own line for this is Information, below the Microsoft.AspNetCore level we keep.)
+        if (result.Failure is { } failure)
+            Logger.LogWarning("{Scheme} credential rejected for a request from {RemoteIp}: {Reason}",
+                Scheme.Name, Context.Connection.RemoteIpAddress, failure.Message);
+        return result;
+    }
+
+    private async Task<AuthenticateResult> AuthenticateTokenAsync()
+    {
         string? header = Request.Headers.Authorization;
         if (string.IsNullOrWhiteSpace(header) || !header.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase))
             return AuthenticateResult.NoResult();
@@ -51,7 +64,8 @@ public sealed class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAu
         if (auth is null) return AuthenticateResult.Fail("Invalid API token or API access is disabled.");
 
         var user = await _users.FindByIdAsync(auth.UserId.ToString());
-        if (user is null) return AuthenticateResult.Fail("Token owner no longer exists.");
+        if (user is null || !user.IsEnabled || user.Status != UserStatus.Active)
+            return AuthenticateResult.Fail("Token owner no longer exists or is not active.");
 
         var claims = new List<Claim>
         {

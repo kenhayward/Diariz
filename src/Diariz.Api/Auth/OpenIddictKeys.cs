@@ -20,22 +20,58 @@ public static class OpenIddictKeys
         LoadOrCreate(Path.Combine(dir, "oidc-encryption.pfx"), "Diariz OIDC Encryption",
             X509KeyUsageFlags.KeyEncipherment);
 
+    private const UnixFileMode OwnerOnly = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+
     private static X509Certificate2 LoadOrCreate(string path, string subject, X509KeyUsageFlags usage)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
-        if (File.Exists(path))
-            return X509CertificateLoader.LoadPkcs12(File.ReadAllBytes(path), password: null,
-                X509KeyStorageFlags.EphemeralKeySet);
+        if (File.Exists(path)) return Load(path);
 
         using var rsa = RSA.Create(2048);
         var request = new CertificateRequest($"CN={subject}", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         request.CertificateExtensions.Add(new X509KeyUsageExtension(usage, critical: true));
         // A long validity - these are internal keys, rotated by deleting the file, not by expiry.
         using var cert = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(10));
-
         var pfx = cert.Export(X509ContentType.Pfx);
-        File.WriteAllBytes(path, pfx);
+
+        // The file holds a private key that can sign tokens for every user, so it is created owner-only, and it
+        // appears atomically: written in full under a unique temporary name, then moved into place without
+        // overwriting. A crash mid-write leaves no truncated key behind, and when two processes start on an empty
+        // volume together exactly one key wins - the loser discards its own and loads the winner's, so both sign
+        // with the same key.
+        var temp = $"{path}.{Guid.NewGuid():N}.tmp";
+        var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None };
+        if (!OperatingSystem.IsWindows()) options.UnixCreateMode = OwnerOnly;
+        using (var stream = new FileStream(temp, options))
+        {
+            stream.Write(pfx);
+            stream.Flush(flushToDisk: true);
+        }
+
+        try
+        {
+            File.Move(temp, path, overwrite: false);
+        }
+        catch (IOException) when (File.Exists(path))
+        {
+            File.Delete(temp);
+            return Load(path);
+        }
         return X509CertificateLoader.LoadPkcs12(pfx, password: null, X509KeyStorageFlags.EphemeralKeySet);
+    }
+
+    private static X509Certificate2 Load(string path)
+    {
+        // Tighten a key file written before it was created owner-only. Best effort: a read-only volume still loads.
+        if (!OperatingSystem.IsWindows())
+        {
+            try
+            {
+                if (File.GetUnixFileMode(path) != OwnerOnly) File.SetUnixFileMode(path, OwnerOnly);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        }
+        return X509CertificateLoader.LoadPkcs12(File.ReadAllBytes(path), password: null, X509KeyStorageFlags.EphemeralKeySet);
     }
 }

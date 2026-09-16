@@ -6,7 +6,7 @@ namespace Diariz.Api.Services;
 public interface IMcpTokenAuthenticator
 {
     /// <summary>Verifies a presented MCP token string. Returns the owning user's id on a match (and records
-    /// <c>LastUsedAt</c>), or null when the token is blank/unknown.</summary>
+    /// <c>LastUsedAt</c>), or null when the token is blank/unknown or its owner's account is no longer active.</summary>
     Task<Guid?> AuthenticateAsync(string? token, CancellationToken ct);
 }
 
@@ -26,6 +26,7 @@ public sealed class McpTokenAuthenticator : IMcpTokenAuthenticator
         var hash = McpTokenService.Hash(token.Trim());
         var row = await _db.McpAccessTokens.FirstOrDefaultAsync(t => t.TokenHash == hash, ct);
         if (row is null) return null;
+        if (!await new ActiveAccounts(_db).IsActiveAsync(row.UserId, ct)) return null; // disabled or not active
 
         // Record usage. Only write when it has meaningfully changed to avoid a DB write on every single request.
         var now = DateTimeOffset.UtcNow;

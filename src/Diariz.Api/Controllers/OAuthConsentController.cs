@@ -69,7 +69,7 @@ public sealed class OAuthConsentController : ControllerBase
             HttpOnly = true,
             Secure = Request.IsHttps,       // https in production (behind the TLS-terminating proxy)
             SameSite = SameSiteMode.Lax,    // sent on the same-origin top-level nav back to /connect/authorize
-            Path = "/",
+            Path = OAuthConsentTicketProtector.CookiePath, // only /connect/authorize reads it
             MaxAge = TicketLifetime,
             IsEssential = true,
         });

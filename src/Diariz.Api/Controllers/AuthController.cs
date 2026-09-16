@@ -63,6 +63,7 @@ public class AuthController : ControllerBase
 
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
+    [AllowAnonymous]
     [HttpPost("login")]
     [EndpointSummary("Sign in with email and password")]
     [EndpointDescription(
@@ -86,7 +87,17 @@ public class AuthController : ControllerBase
             return StatusCode(StatusCodes.Status403Forbidden,
                 "Please finish setting up your account using the link we sent you.");
 
-        if (!await _users.CheckPasswordAsync(user, req.Password)) return Unauthorized();
+        // Per-account lockout (SignInLockout): checked before the password so a locked account cannot be used to
+        // confirm a guess, and counted only on a real password check.
+        if (await _users.IsLockedOutAsync(user))
+            return StatusCode(StatusCodes.Status403Forbidden,
+                "Too many failed sign-in attempts. Try again in a few minutes.");
+        if (!await _users.CheckPasswordAsync(user, req.Password))
+        {
+            await _users.AccessFailedAsync(user);
+            return Unauthorized();
+        }
+        await _users.ResetAccessFailedCountAsync(user);
 
         if (!user.IsEnabled)
             return StatusCode(StatusCodes.Status403Forbidden,
@@ -102,6 +113,7 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>Public: anyone can request access. Neutral response (no account enumeration).</summary>
+    [AllowAnonymous]
     [HttpPost("request-access")]
     [EndpointSummary("Request an account")]
     [EndpointDescription(
@@ -133,6 +145,7 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>Public: check a setup link before showing the form (rejects expired/garbage links).</summary>
+    [AllowAnonymous]
     [HttpGet("setup/validate")]
     [EndpointSummary("Check an account setup link")]
     [EndpointDescription(
@@ -153,6 +166,7 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>Public: finish account setup — set full name + password, activate, auto sign-in.</summary>
+    [AllowAnonymous]
     [HttpPost("setup")]
     [EndpointSummary("Finish setting up an account")]
     [EndpointDescription(
@@ -228,6 +242,7 @@ public class AuthController : ControllerBase
         string? DesktopChallenge = null);
 
     /// <summary>Public: which external sign-in providers are enabled (so the login page shows the button).</summary>
+    [AllowAnonymous]
     [HttpGet("providers")]
     [EndpointSummary("List the external sign-in providers")]
     [EndpointDescription(
@@ -239,6 +254,7 @@ public class AuthController : ControllerBase
     /// <summary>Public: begin Google sign-in. Stashes PKCE state in a short-lived signed cookie and
     /// redirects to Google's consent screen. <paramref name="desktopChallenge"/> (from the desktop shell)
     /// marks this as a desktop flow so the callback hands back a diariz:// code instead of the SPA cookie.</summary>
+    [AllowAnonymous]
     [HttpGet("google/start")]
     [EndpointSummary("Begin Google sign-in")]
     [EndpointDescription(
@@ -264,6 +280,7 @@ public class AuthController : ControllerBase
 
     /// <summary>Public: Google redirects here with the authorization code. Verifies state, exchanges the
     /// code, resolves the account, and bounces to the SPA with a token (or an error) — never returns JSON.</summary>
+    [AllowAnonymous]
     [HttpGet("google/callback")]
     [EndpointSummary("Google sign-in callback")]
     [EndpointDescription(
@@ -533,6 +550,7 @@ public class AuthController : ControllerBase
     /// <summary>Public: the SPA lands on <c>/auth/google/callback</c> after a successful Google sign-in and
     /// calls this to swap the one-time handoff cookie for its access token (returned in the JSON body, then
     /// the cookie is expired). 401 when there is no handoff cookie.</summary>
+    [AllowAnonymous]
     [HttpPost("google/exchange")]
     [EndpointSummary("Collect the token after Google sign-in")]
     [EndpointDescription(
@@ -553,6 +571,7 @@ public class AuthController : ControllerBase
 
     /// <summary>Public: the desktop app swaps its one-time diariz:// code for an access token, proving it
     /// holds the PKCE verifier whose S256 challenge was bound to the code. Any failure -> generic 401.</summary>
+    [AllowAnonymous]
     [HttpPost("desktop/exchange")]
     [EndpointSummary("Collect the token after desktop sign-in")]
     [EndpointDescription(

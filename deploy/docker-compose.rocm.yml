@@ -30,10 +30,10 @@ services:
     environment:
       POSTGRES_DB: diariz
       POSTGRES_USER: diariz
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-diariz}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required - set POSTGRES_PASSWORD in deploy/.env}
     # Published for external tooling on a NON-default host port - see docker-compose.yml for the full note.
     ports:
-      - "${POSTGRES_BIND:-0.0.0.0}:${POSTGRES_PORT:-5433}:5432"
+      - "${POSTGRES_BIND:-127.0.0.1}:${POSTGRES_PORT:-5433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -47,10 +47,17 @@ services:
     restart: unless-stopped
     # Persisted for the same reason as the CUDA stack: these streams are the job queues, and losing them
     # strands recordings mid-pipeline with no error. See the note in docker-compose.yml.
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?required - set REDIS_PASSWORD (hex/alphanumeric only) in deploy/.env}"]
+    # Password-protected: every client on the compose network - including the observability overlay's GlitchTip,
+    # which shares this instance - must authenticate. Without it anything on the network could read queued job
+    # payloads or inject jobs. Use a hex/alphanumeric value: it is embedded in a redis:// URL and a StackExchange
+    # connection string, where ':', '@', '/' and ',' would need escaping.
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?required - set REDIS_PASSWORD (hex/alphanumeric only) in deploy/.env}
     volumes:
       - redisdata:/data
     healthcheck:
+      # redis-cli reads the password from REDISCLI_AUTH (below), so it never appears in the command line.
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
@@ -63,13 +70,15 @@ services:
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?required - set MINIO_ROOT_USER in deploy/.env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?required - set MINIO_ROOT_PASSWORD in deploy/.env}
     # Only the S3 API is published on the host (handy for debugging/mc). The web console (container :9001,
     # still served for direct `docker exec`/port-forward use) is deliberately NOT published - the app never
     # uses it (the API reaches MinIO in-network at minio:9000), so there's no reason to expose it.
     ports:
-      - "9002:9000"   # S3 API   (host 9002 -> container 9000)
+      # Host-only by default (a published port bypasses the host firewall); set MINIO_BIND=0.0.0.0 to reach it from
+      # another machine.
+      - "${MINIO_BIND:-127.0.0.1}:9002:9000"   # S3 API   (host 9002 -> container 9000)
     volumes:
       - miniodata:/data
     healthcheck:
@@ -86,7 +95,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
-      minio: { condition: service_started }
+      minio: { condition: service_healthy }
     healthcheck:
       # GET /health (reports version + DB/Redis readiness). start_period covers first-run EF migrations + seeding.
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
@@ -96,13 +105,13 @@ services:
       start_period: 60s
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=diariz;Username=diariz;Password=${POSTGRES_PASSWORD:-diariz}"
-      Jwt__Key: ${JWT_KEY}
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=diariz;Username=diariz;Password=${POSTGRES_PASSWORD:?required - set POSTGRES_PASSWORD in deploy/.env}"
+      Jwt__Key: ${JWT_KEY:?required - set JWT_KEY in deploy/.env (random, at least 32 bytes)}
       Storage__Endpoint: "http://minio:9000"
-      Storage__AccessKey: ${MINIO_ROOT_USER:-minioadmin}
-      Storage__SecretKey: ${MINIO_ROOT_PASSWORD:-minioadmin}
-      JobQueue__RedisConnection: "redis:6379"
-      Worker__CallbackSecret: ${CALLBACK_SECRET}
+      Storage__AccessKey: ${MINIO_APP_ACCESS_KEY:-${MINIO_ROOT_USER:?required - set MINIO_ROOT_USER in deploy/.env}}
+      Storage__SecretKey: ${MINIO_APP_SECRET_KEY:-${MINIO_ROOT_PASSWORD:?required - set MINIO_ROOT_PASSWORD in deploy/.env}}
+      JobQueue__RedisConnection: "redis:6379,password=${REDIS_PASSWORD:?required - set REDIS_PASSWORD (hex/alphanumeric only) in deploy/.env}"
+      Worker__CallbackSecret: ${CALLBACK_SECRET:?required - set CALLBACK_SECRET in deploy/.env (shared with the worker)}
       Summarization__ApiBase: ${SUMMARY_API_BASE:-}
       Summarization__ApiKey: ${SUMMARY_API_KEY:-}
       Summarization__Model: ${SUMMARY_MODEL:-gpt-4o-mini}
@@ -117,7 +126,7 @@ services:
       Seed__Email: ${SEED_EMAIL}
       Seed__Password: ${SEED_PASSWORD}
       Seed__FullName: ${SEED_FULL_NAME:-Platform Administrator}
-      App__PublicUrl: ${APP_PUBLIC_URL:-http://localhost:8081}
+      App__PublicUrl: ${APP_PUBLIC_URL:?required - set APP_PUBLIC_URL to the public origin, e.g. https://diariz.example.com}
       Email__SmtpHost: ${SMTP_HOST:-}
       Email__SmtpPort: ${SMTP_PORT:-587}
       Email__User: ${SMTP_USER:-}
@@ -129,7 +138,10 @@ services:
     volumes:
       - apikeys:/keys
     ports:
-      - "8080:8080"
+      # Host-only by default. Browsers, the desktop app and any outer reverse proxy reach the API through the web
+      # container on 8081; publishing 8080 more widely would also expose the internal worker-callback routes,
+      # which nginx never forwards. Set API_BIND=0.0.0.0 only if something off-host genuinely needs it.
+      - "${API_BIND:-127.0.0.1}:8080:8080"
 
   web:
     build:
@@ -149,7 +161,7 @@ services:
       timeout: 5s
       retries: 5
     ports:
-      - "8081:80"   # open the app at http://localhost:8081
+      - "${WEB_BIND:-0.0.0.0}:8081:80"   # open the app at http://localhost:8081
 
   worker:
     build:
@@ -158,7 +170,7 @@ services:
     restart: unless-stopped
     depends_on:
       redis: { condition: service_healthy }
-      minio: { condition: service_started }
+      minio: { condition: service_healthy }
       api: { condition: service_healthy }
     healthcheck:
       # The worker has no HTTP server - healthcheck.py checks the liveness heartbeat file (touched by a
@@ -170,13 +182,13 @@ services:
       retries: 3
       start_period: 120s
     environment:
-      REDIS_URL: "redis://redis:6379/0"
+      REDIS_URL: "redis://:${REDIS_PASSWORD:?required - set REDIS_PASSWORD (hex/alphanumeric only) in deploy/.env}@redis:6379/0"
       S3_ENDPOINT: "http://minio:9000"
-      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
-      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_ACCESS_KEY: ${MINIO_APP_ACCESS_KEY:-${MINIO_ROOT_USER:?required - set MINIO_ROOT_USER in deploy/.env}}
+      S3_SECRET_KEY: ${MINIO_APP_SECRET_KEY:-${MINIO_ROOT_PASSWORD:?required - set MINIO_ROOT_PASSWORD in deploy/.env}}
       S3_BUCKET: "recordings"
       API_BASE_URL: "http://api:8080"
-      CALLBACK_SECRET: ${CALLBACK_SECRET}
+      CALLBACK_SECRET: ${CALLBACK_SECRET:?required - set CALLBACK_SECRET in deploy/.env (shared with the worker)}
       HF_TOKEN: ${HF_TOKEN}
       # PyTorch-ROCm exposes the AMD GPU as device "cuda". ASR is hardcoded to openai-whisper here — it's
       # intrinsic to this image, not a user choice (CTranslate2 has no AMD GPU support), so it must NOT be

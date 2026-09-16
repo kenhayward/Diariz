@@ -32,7 +32,7 @@ import storage
 import telemetry
 import torch_compat
 import voiceprint  # noqa: E402
-from config import config
+from config import config, redact_url
 
 logging.basicConfig(
     level=logging.INFO,
@@ -441,7 +441,7 @@ def main() -> None:
             r.ping()
             break
         except (redis.ConnectionError, redis.TimeoutError):
-            log.info("Waiting for Redis at %s ...", config.REDIS_URL)
+            log.info("Waiting for Redis at %s ...", redact_url(config.REDIS_URL))
             time.sleep(2)
 
     # Every stream run_loop reads, without exception. Redis raises NOGROUP rather than returning empty

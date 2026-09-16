@@ -8,11 +8,15 @@ namespace Diariz.Api.Tests;
 public class ApiTokenAuthenticatorTests
 {
     private static (DiarizDbContext db, Guid userId, string token) Seed(
-        ApiTokenScope scope, DateTimeOffset? expiresAt, bool apiEnabled = true)
+        ApiTokenScope scope, DateTimeOffset? expiresAt, bool apiEnabled = true,
+        bool ownerEnabled = true, UserStatus ownerStatus = UserStatus.Active)
     {
         var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        db.Users.Add(new ApplicationUser { Id = userId, Email = "u@e.com", UserName = "u@e.com" });
+        db.Users.Add(new ApplicationUser
+        {
+            Id = userId, Email = "u@e.com", UserName = "u@e.com", IsEnabled = ownerEnabled, Status = ownerStatus,
+        });
         db.PlatformSettings.Add(new PlatformSettings { Id = PlatformSettings.SingletonId, ApiAccessEnabled = apiEnabled });
         var token = "dz_api_" + Guid.NewGuid().ToString("N");
         db.ApiAccessTokens.Add(new ApiAccessToken
@@ -68,5 +72,32 @@ public class ApiTokenAuthenticatorTests
         var (db, _, _) = Seed(ApiTokenScope.ReadWrite, expiresAt: null, apiEnabled: true);
         var auth = new ApiTokenAuthenticator(db, new FixedPlatformSettings(db));
         Assert.Null(await auth.AuthenticateAsync("dz_api_" + Guid.NewGuid().ToString("N"), default));
+    }
+    [Fact]
+    public async Task A_disabled_owner_is_rejected()
+    {
+        var (db, _, token) = Seed(ApiTokenScope.ReadWrite, expiresAt: null, ownerEnabled: false);
+        var auth = new ApiTokenAuthenticator(db, new FixedPlatformSettings(db));
+        Assert.Null(await auth.AuthenticateAsync(token, default));
+    }
+
+    [Theory]
+    [InlineData(UserStatus.Requested)]
+    [InlineData(UserStatus.Invited)]
+    public async Task An_owner_who_is_not_active_is_rejected(UserStatus status)
+    {
+        var (db, _, token) = Seed(ApiTokenScope.ReadWrite, expiresAt: null, ownerStatus: status);
+        var auth = new ApiTokenAuthenticator(db, new FixedPlatformSettings(db));
+        Assert.Null(await auth.AuthenticateAsync(token, default));
+    }
+
+    [Fact]
+    public async Task A_token_whose_owner_no_longer_exists_is_rejected()
+    {
+        var (db, userId, token) = Seed(ApiTokenScope.ReadWrite, expiresAt: null);
+        db.Users.Remove(db.Users.Single(u => u.Id == userId));
+        await db.SaveChangesAsync();
+        var auth = new ApiTokenAuthenticator(db, new FixedPlatformSettings(db));
+        Assert.Null(await auth.AuthenticateAsync(token, default));
     }
 }

@@ -9,6 +9,31 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.273.0",
+    date: "2026-09-16",
+    pr: 767,
+    headline: "Stronger defaults for sign-in, tokens and deployment",
+    summary:
+      "A round of hardening across sign-in, connected apps and the deployment itself.\n\nSign-in now pauses an account for fifteen minutes after ten wrong passwords in a row, and sign-in and connection requests are limited per address. If you hit a limit, the login page says so and asks you to wait a minute rather than reporting a wrong password.\n\nPersonal API tokens, MCP tokens and connections made through the Claude connector now stop working as soon as an administrator disables the account, and start again if it is re-enabled.\n\nFor administrators running the stack: the server now checks its configuration when it starts and refuses to run on placeholder or too-short secrets, and the compose file requires the secrets it needs rather than falling back to defaults. Redis now requires a password, and the API, Postgres and MinIO ports are reachable only from the host unless you choose otherwise. A new script creates a MinIO account for Diariz that can only reach its own bucket. Read the upgrade notes before deploying: several .env values are now required, and the whole stack needs recreating once.",
+    added: [
+      "Sign-in pauses an account for 15 minutes after 10 wrong passwords in a row",
+      "Per-address limits on sign-in, account setup and connector authorization requests, with a clear message on the login page",
+      "deploy/ProvisionDiarizMinio.cmd and provision-diariz-minio.sh create a MinIO account scoped to the recordings bucket (MINIO_APP_ACCESS_KEY / MINIO_APP_SECRET_KEY)",
+      "API_BIND, MINIO_BIND and WEB_BIND choose which host addresses the published ports listen on",
+    ],
+    changed: [
+      "Personal API tokens, MCP tokens and Claude connector sessions require the account to be enabled and active",
+      "The API refuses to start outside Development when its signing key, worker secret or storage credentials are missing, too short or still placeholders, when no key storage path is set, or when the public URL is not https for the connector",
+      "Required .env values: JWT_KEY, CALLBACK_SECRET, POSTGRES_PASSWORD, REDIS_PASSWORD, MINIO_ROOT_USER, MINIO_ROOT_PASSWORD and APP_PUBLIC_URL (and GLITCHTIP_ALLOWED_HOSTS with the observability overlay)",
+      "Redis requires a password for every client, including GlitchTip",
+      "The API (8080), Postgres (5433) and MinIO (9002) ports listen on 127.0.0.1 by default",
+      "Endpoints require a signed-in user unless they are explicitly public",
+      "LLM endpoints cannot point at link-local or cloud metadata addresses, or at the server itself",
+      "The web server's access log no longer records query strings, and pages send no Referer",
+      "SENTRY_ENVIRONMENT defaults to production",
+    ],
+  },
+  {
     version: "0.272.0",
     date: "2026-09-16",
     pr: 764,

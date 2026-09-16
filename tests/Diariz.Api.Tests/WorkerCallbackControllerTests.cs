@@ -25,7 +25,8 @@ public class WorkerCallbackControllerTests
     }
 
     private static (WorkerCallbackController controller, DiarizDbContext db, FakeHubContext hub, FakeJobQueue queue)
-        BuildEx(string presentedSecret, bool summarizationEnabled, FakeSpeakerIdentification? identifier = null)
+        BuildEx(string presentedSecret, bool summarizationEnabled, FakeSpeakerIdentification? identifier = null,
+            string configuredSecret = Secret)
     {
         var db = TestDb.Create();
         var hub = new FakeHubContext();
@@ -36,7 +37,7 @@ public class WorkerCallbackControllerTests
         var embedding = new EmbeddingSettingsResolver(db, Options.Create(new EmbeddingOptions()), resolver);
         var controller = new WorkerCallbackController(
             db, hub, queue, resolver, embedding, identifier ?? new FakeSpeakerIdentification(new FakeSpeakerIdentifier()),
-            Options.Create(new WorkerOptions { CallbackSecret = Secret }),
+            Options.Create(new WorkerOptions { CallbackSecret = configuredSecret }),
             new CapturingWebhookPublisher(), Options.Create(new AppPublicOptions()),
             NullLogger<WorkerCallbackController>.Instance)
         {
@@ -86,6 +87,17 @@ public class WorkerCallbackControllerTests
     public async Task Result_WithWrongSecret_ReturnsUnauthorized()
     {
         var (controller, db, _) = Build(presentedSecret: "not-the-secret");
+        var (_, transcriptionId) = await SeedQueuedRecording(db, Guid.NewGuid());
+
+        var result = await controller.Result(new TranscriptionResult(transcriptionId, "en", []));
+
+        Assert.IsType<UnauthorizedResult>(result);
+    }
+
+    [Fact]
+    public async Task Result_WithNoConfiguredSecret_RejectsAnEmptyHeader()
+    {
+        var (controller, db, _, _) = BuildEx(presentedSecret: "", summarizationEnabled: false, configuredSecret: "");
         var (_, transcriptionId) = await SeedQueuedRecording(db, Guid.NewGuid());
 
         var result = await controller.Result(new TranscriptionResult(transcriptionId, "en", []));

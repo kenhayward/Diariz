@@ -1386,8 +1386,11 @@ in `Services/AudioStorage.cs`.
   network. (The old `STORAGE_PUBLIC_ENDPOINT` / presign path was removed.)
 - Playback is authorised by a **short-lived token** minted by the API (`GET /api/recordings/{id}/audio-url`),
   so the streaming endpoint can be used by the native `<audio>` element without a bearer header.
-- Credentials are `Storage:AccessKey`/`SecretKey` (worker: `S3_ACCESS_KEY`/`S3_SECRET_KEY`); change them from
-  the `minioadmin` defaults in production.
+- Credentials are `Storage:AccessKey`/`SecretKey` (worker: `S3_ACCESS_KEY`/`S3_SECRET_KEY`). Compose fills them
+  from `MINIO_APP_ACCESS_KEY`/`MINIO_APP_SECRET_KEY` - the scoped `diariz-app` account (policy
+  `diariz-app-recordings`: everything on the `recordings` bucket, plus `s3:ListAllMyBuckets`) created by
+  `deploy/ProvisionDiarizMinio.cmd` - falling back to the MinIO root account when blank. Outside Development the
+  API refuses to start on the `minioadmin` defaults.
 
 ### Lifecycle
 
@@ -1404,5 +1407,7 @@ In Docker Compose, MinIO data persists in the **`miniodata`** named volume (the 
 on **5433** for external tooling), **`apikeys`** (the Data
 Protection keyring that decrypts `LlmModels.ApiKeyEncrypted`, mounted at `/keys`), and
 **`workercache`** (model weights). Back up `pgdata` + `miniodata` together — a transcript row in Postgres is
-meaningless without its audio blob, and vice-versa, and losing `apikeys` makes stored model API keys
-unrecoverable.
+meaningless without its audio blob, and vice-versa. **`apikeys` is not covered by the platform backup** and needs
+its own copy: it also holds the OpenIddict signing/encryption certificates (`oidc-signing.pfx`,
+`oidc-encryption.pfx`, owner-only), so losing it makes stored model API keys, webhook secrets and Google refresh
+tokens unrecoverable and invalidates every issued OAuth token.

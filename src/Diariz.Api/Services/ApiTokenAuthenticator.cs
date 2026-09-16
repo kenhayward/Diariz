@@ -10,7 +10,7 @@ public sealed record ApiTokenAuth(Guid UserId, ApiTokenScope Scope);
 public interface IApiTokenAuthenticator
 {
     /// <summary>Verifies a presented API token. Returns the owner + scope when the feature is enabled, the
-    /// token matches, and it has not expired; else null.</summary>
+    /// token matches, it has not expired, and its owner's account is still active; else null.</summary>
     Task<ApiTokenAuth?> AuthenticateAsync(string? token, CancellationToken ct);
 }
 
@@ -41,6 +41,8 @@ public sealed class ApiTokenAuthenticator : IApiTokenAuthenticator
         if (row is null) return null;
 
         if (row.ExpiresAt is { } exp && exp <= DateTimeOffset.UtcNow) return null;
+        // A token outlives nothing about its owner: a disabled or not-yet-active account authenticates nowhere.
+        if (!await new ActiveAccounts(_db).IsActiveAsync(row.UserId, ct)) return null;
 
         var now = DateTimeOffset.UtcNow;
         if (row.LastUsedAt is null || now - row.LastUsedAt.Value > TimeSpan.FromMinutes(1))

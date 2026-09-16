@@ -1,5 +1,22 @@
 """Environment-driven configuration for the transcription worker."""
 import os
+from urllib.parse import urlsplit, urlunsplit
+
+
+def redact_url(url: str) -> str:
+    """The URL with any password replaced by ***, for logging. REDIS_URL carries the Redis password
+    (redis://:<password>@redis:6379/0), and the startup wait loop logs where it is connecting to."""
+    try:
+        parts = urlsplit(url)
+        if parts.password is not None:
+            user = parts.username or ""
+            host = parts.netloc.rsplit("@", 1)[1]
+            return urlunsplit(parts._replace(netloc=f"{user}:***@{host}"))
+    except ValueError:
+        pass
+    # Anything unparseable that still looks like it holds credentials is not worth the risk of printing.
+    return "<redacted>" if "@" in url else url
+
 
 
 class Config:

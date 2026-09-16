@@ -31,18 +31,34 @@ public sealed class McpBearerAuthenticationHandler : AuthenticationHandler<McpAu
     private readonly IMcpTokenAuthenticator _authenticator;
     private readonly IAuthenticationSchemeProvider _schemes;
     private readonly IPlatformSettingsService _platform;
+    private readonly IActiveAccounts _accounts;
+    private readonly AppPublicOptions _app;
 
     public McpBearerAuthenticationHandler(
         IOptionsMonitor<McpAuthSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder,
-        IMcpTokenAuthenticator authenticator, IAuthenticationSchemeProvider schemes, IPlatformSettingsService platform)
+        IMcpTokenAuthenticator authenticator, IAuthenticationSchemeProvider schemes, IPlatformSettingsService platform,
+        IActiveAccounts accounts, IOptions<AppPublicOptions> app)
         : base(options, logger, encoder)
     {
         _authenticator = authenticator;
         _schemes = schemes;
         _platform = platform;
+        _accounts = accounts;
+        _app = app.Value;
     }
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
+    {
+        var result = await AuthenticateTokenAsync();
+        // A presented credential that was refused is worth a trail: the reason and where it came from, never the
+        // token. (The framework's own line for this is Information, below the Microsoft.AspNetCore level we keep.)
+        if (result.Failure is { } failure)
+            Logger.LogWarning("{Scheme} credential rejected for a request from {RemoteIp}: {Reason}",
+                Scheme.Name, Context.Connection.RemoteIpAddress, failure.Message);
+        return result;
+    }
+
+    private async Task<AuthenticateResult> AuthenticateTokenAsync()
     {
         string? header = Request.Headers.Authorization;
         if (string.IsNullOrWhiteSpace(header) || !header.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase))
@@ -77,9 +93,13 @@ public sealed class McpBearerAuthenticationHandler : AuthenticationHandler<McpAu
 
         var subject = oauth.Principal.FindFirst(OpenIddictConstants.Claims.Subject)?.Value
             ?? oauth.Principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        return Guid.TryParse(subject, out var owner)
+        if (!Guid.TryParse(subject, out var owner))
+            return AuthenticateResult.Fail("The access token has no valid subject.");
+        // A signed, unexpired token says who the user WAS when it was issued. Whether they may still use the
+        // platform is a question for now (the static-token branch asks it inside IMcpTokenAuthenticator).
+        return await _accounts.IsActiveAsync(owner, Context.RequestAborted)
             ? Success(owner)
-            : AuthenticateResult.Fail("The access token has no valid subject.");
+            : AuthenticateResult.Fail("The account is not active.");
     }
 
     private AuthenticateResult Success(Guid userId)
@@ -92,9 +112,13 @@ public sealed class McpBearerAuthenticationHandler : AuthenticationHandler<McpAu
     protected override Task HandleChallengeAsync(AuthenticationProperties properties)
     {
         Response.StatusCode = StatusCodes.Status401Unauthorized;
-        // RFC 9728: point OAuth clients at the protected-resource metadata for this origin so they can discover
-        // the authorization server. The request scheme/host reflect the public origin (forwarded headers).
-        var prm = $"{Request.Scheme}://{Request.Host}/.well-known/oauth-protected-resource";
+        // RFC 9728: point OAuth clients at the protected-resource metadata so they can discover the authorization
+        // server. Built from the configured public origin, never from the request: the Host header is whatever
+        // the caller sent. The request origin is only a fallback for a local run with no public URL configured.
+        var origin = !string.IsNullOrWhiteSpace(_app.PublicUrl)
+            ? _app.PublicUrl.TrimEnd('/')
+            : $"{Request.Scheme}://{Request.Host}";
+        var prm = $"{origin}/.well-known/oauth-protected-resource";
         Response.Headers.WWWAuthenticate = $"Bearer resource_metadata=\"{prm}\"";
         return Task.CompletedTask;
     }
