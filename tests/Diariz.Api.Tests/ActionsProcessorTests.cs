@@ -161,6 +161,51 @@ public class ActionsProcessorTests
     }
 
     [Fact]
+    public async Task ProcessAsync_KeepsLiveActions_AppendsExtraction_SkippingRepeats()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, tr) = await Seed(db, userId);
+        db.RecordingActions.Add(new RecordingAction
+        {
+            Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Send the report", Actor = "Ada", Ordinal = 0,
+            Pinned = true, Source = ActionSource.Live, CapturedAtMs = 500,
+        });
+        await db.SaveChangesAsync();
+        var client = new FakeActionsClient
+        {
+            Result = { new ExtractedAction("Send the report.", "Bob", "Friday"), new ExtractedAction("Book the room", "Grace", "") },
+        };
+
+        await ActionsProcessor.ProcessAsync(db, client, new FakeLlmSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
+            Job(rec, tr), Template, NullLogger.Instance, new CapturingWebhookPublisher(), "");
+
+        var actions = await db.RecordingActions.Where(a => a.RecordingId == rec.Id).OrderBy(a => a.Ordinal).ToListAsync();
+        Assert.Equal(["Send the report", "Book the room"], actions.Select(a => a.Text));
+        Assert.Equal("Ada", actions[0].Actor);                     // the live row is untouched
+        Assert.True(actions[0].Pinned);
+        Assert.False(actions[1].Pinned);                           // extracted rows arrive unpinned, as before
+        Assert.Equal(ActionSource.Extracted, actions[1].Source);
+        Assert.Equal(1, actions[1].Ordinal);
+        Assert.Equal(["Send the report"], client.LastAlreadyRecorded);
+        Assert.NotNull((await db.Recordings.FindAsync(rec.Id))!.ActionsExtractedAt);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithNoLiveActions_PassesNothingAlreadyRecorded()
+    {
+        using var db = TestDb.Create();
+        var (rec, tr) = await Seed(db, Guid.NewGuid());
+        var client = new FakeActionsClient { Result = { new ExtractedAction("Book the room", "", "") } };
+
+        await ActionsProcessor.ProcessAsync(db, client, new FakeLlmSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
+            Job(rec, tr), Template, NullLogger.Instance, new CapturingWebhookPublisher(), "");
+
+        Assert.Empty(client.LastAlreadyRecorded ?? []);
+        Assert.Single(await db.RecordingActions.Where(a => a.RecordingId == rec.Id).ToListAsync());
+    }
+
+    [Fact]
     public async Task ProcessAsync_NoSegments_DoesNothing()
     {
         using var db = TestDb.Create();

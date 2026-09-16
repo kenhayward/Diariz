@@ -192,6 +192,37 @@ public class RecordingAiWebhookEmitTests
     }
 
     [Fact]
+    public async Task Successful_action_extraction_publishes_live_and_extracted_actions()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, tr) = await Seed(db, userId);
+        db.RecordingActions.Add(new RecordingAction
+        {
+            Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Send the report", Actor = "Ada", Ordinal = 0,
+            Pinned = true, Source = ActionSource.Live, CapturedAtMs = 500,
+        });
+        await db.SaveChangesAsync();
+        var client = new FakeActionsClient { Result = { new ExtractedAction("Book the room", "Bob", "Friday") } };
+        var publisher = new CapturingWebhookPublisher();
+
+        await ActionsProcessor.ProcessAsync(
+            db, client, new FakeLlmSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
+            new ActionsJob(rec.Id, tr.Id), ActionsPrompt.DefaultTemplate, NullLogger.Instance, publisher,
+            "https://app.test");
+
+        var published = Assert.Single(publisher.Published);
+        Assert.Equal(WebhookEventTypes.RecordingActionItemsReady, published.EventType);
+        Assert.Equal(userId, published.Owner);
+
+        var data = Payload(published.Data);
+        Assert.Equal(2, data.GetProperty("count").GetInt32());
+        var texts = data.GetProperty("actionItems").EnumerateArray().Select(i => i.GetProperty("text").GetString()).ToList();
+        Assert.Contains("Send the report", texts);
+        Assert.Contains("Book the room", texts);
+    }
+
+    [Fact]
     public async Task Failed_action_extraction_publishes_nothing()
     {
         using var db = TestDb.Create();

@@ -78,12 +78,16 @@ public static class ActionsProcessor
             // The meeting's own date anchors relative deadlines ("by next Friday"), so it must be when the
             // meeting happened - not when the audio was uploaded, which can be a different day entirely for a
             // late-night take or a recovered upload.
-            var extracted = await client.ExtractAsync(cfg, segs, template, rec.StartedAt ?? rec.CreatedAt, ct: ct);
+            // Actions recorded live during the meeting are already on the recording (pinned). Extraction adds to
+            // them rather than replacing them: the model is told what is there, and exact repeats are dropped as a
+            // backstop. Only live rows are listed - this path only runs when ActionsExtractedAt is null, so there
+            // is nothing else a user could have curated yet.
+            var existingTexts = rec.Actions.OrderBy(a => a.Ordinal).Select(a => a.Text).ToList();
+            var extracted = await client.ExtractAsync(
+                cfg, segs, template, rec.StartedAt ?? rec.CreatedAt, existingTexts, ct);
 
-            // Seed the (empty) action list with the extraction; RemoveRange is a no-op defensively.
-            db.RecordingActions.RemoveRange(rec.Actions);
-            var ordinal = 0;
-            var newActions = extracted.Select(e => new RecordingAction
+            var ordinal = rec.Actions.Count == 0 ? 0 : rec.Actions.Max(a => a.Ordinal) + 1;
+            var newActions = ActionMerge.WithoutDuplicates(extracted, existingTexts).Select(e => new RecordingAction
             {
                 Id = Guid.NewGuid(),
                 RecordingId = rec.Id,
@@ -99,7 +103,9 @@ public static class ActionsProcessor
             // Nudge the browser to refetch (status is unchanged — actions don't own the recording status).
             await hub.NotifyStatusAsync(rec.UserId, rec.Id, rec.Status.ToString());
             await PublishActionItemsReadyAsync(
-                db, webhooks, publicUrl, rec, newActions, logger, ct);
+                db, webhooks, publicUrl, rec,
+                rec.Actions.Where(a => !newActions.Contains(a)).OrderBy(a => a.Ordinal).Concat(newActions).ToList(),
+                logger, ct);
         }
         catch (Exception ex)
         {
