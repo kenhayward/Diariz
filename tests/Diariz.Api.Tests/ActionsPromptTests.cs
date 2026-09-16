@@ -107,4 +107,28 @@ public class ActionsPromptTests
         var a = Assert.Single(ActionsPrompt.ParseResponse(Chat(content)));
         Assert.Equal("Review the [draft] contract", a.Text);
     }
+
+    private static readonly SegmentDto[] OneSegment =
+        [new SegmentDto(Guid.NewGuid(), "SPEAKER_00", "Ada", 0, 1000, "Grace will book the room.", null)];
+
+    [Fact]
+    public void BuildMessages_ListsAlreadyRecordedActions_InTheUserMessage_NotTheTemplate()
+    {
+        var msgs = ActionsPrompt.BuildMessages(ActionsPrompt.DefaultTemplate, OneSegment,
+            alreadyRecorded: ["Book the room", "Send the deck"]);
+
+        Assert.DoesNotContain("Book the room", msgs[0].Content); // system = the editable template, untouched
+        Assert.Contains("- Book the room\n- Send the deck", msgs[1].Content);
+        Assert.Contains("do not repeat", msgs[1].Content, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BuildMessages_WithNothingAlreadyRecorded_IsUnchanged()
+    {
+        var without = ActionsPrompt.BuildMessages(ActionsPrompt.DefaultTemplate, OneSegment);
+        var empty = ActionsPrompt.BuildMessages(ActionsPrompt.DefaultTemplate, OneSegment, alreadyRecorded: []);
+
+        Assert.Equal(without[1].Content, empty[1].Content);
+        Assert.DoesNotContain("do not repeat", without[1].Content, StringComparison.OrdinalIgnoreCase);
+    }
 }

@@ -74,7 +74,9 @@ services:
       retries: 10
 
   minio:
-    image: minio/minio:latest
+    # Docker Hub stopped serving minio/minio anonymously (issue #765). MinIO still publishes to quay.io;
+    # this tag has the same digest as the Docker Hub image deployed before the switch, so it is not an upgrade.
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:

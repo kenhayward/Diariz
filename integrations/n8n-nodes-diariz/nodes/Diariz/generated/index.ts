@@ -2109,6 +2109,19 @@ const GENERATED: GeneratedResource[] = [
     "value": "recordingActions",
     "operations": [
       {
+        "value": "addActionsRecordedDuringTheMeeting",
+        "displayName": "Add actions recorded during the meeting",
+        "description": "Appends the actions someone recorded while the meeting was running, in one call. Each is created already pinned, so it appears in the Actions views straight away, and carries the point in the recording where it was typed.",
+        "method": "POST",
+        "path": "/api/recordings/{recordingId}/actions/live",
+        "pathParams": [
+          "recordingId"
+        ],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": true
+      },
+      {
         "value": "addAnActionItem",
         "displayName": "Add an action item",
         "description": "Adds one action item by hand, appended to the end of the list. No LLM is involved, so this works on a platform with no model configured. All three fields are free text - the deadline included, so \"end of week\" is as valid as a date.",

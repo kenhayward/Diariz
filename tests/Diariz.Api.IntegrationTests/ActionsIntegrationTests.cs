@@ -107,4 +107,28 @@ public class ActionsIntegrationTests(ContainersFixture fx)
         await using (var verify = fx.CreateDbContext())
             Assert.False((await verify.RecordingActions.FindAsync(pinnedId))!.Pinned);
     }
+
+    [Fact]
+    public async Task SourceAndCapturedAt_RoundTrip_AndExistingRowsDefaultToExtracted()
+    {
+        Guid live, legacy;
+        await using (var db = fx.CreateDbContext())
+        {
+            var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test", Email = "u@x.test" };
+            var rec = new Recording { Id = Guid.NewGuid(), UserId = user.Id, BlobKey = "k", Title = "Planning" };
+            var a1 = new RecordingAction { Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Send the deck", Ordinal = 0,
+                Source = ActionSource.Live, CapturedAtMs = 61_000, Pinned = true };
+            var a2 = new RecordingAction { Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Book the room", Ordinal = 1 };
+            db.AddRange(user, rec, a1, a2);
+            await db.SaveChangesAsync();
+            (live, legacy) = (a1.Id, a2.Id);
+        }
+
+        await using var read = fx.CreateDbContext();
+        var l = await read.RecordingActions.SingleAsync(a => a.Id == live);
+        Assert.Equal(ActionSource.Live, l.Source);
+        Assert.Equal(61_000, l.CapturedAtMs);
+        Assert.Equal(ActionSource.Extracted, (await read.RecordingActions.SingleAsync(a => a.Id == legacy)).Source);
+        Assert.Null((await read.RecordingActions.SingleAsync(a => a.Id == legacy)).CapturedAtMs);
+    }
 }

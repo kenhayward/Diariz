@@ -1378,6 +1378,9 @@ namespace Diariz.Domain.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<long?>("CapturedAtMs")
+                        .HasColumnType("bigint");
+
                     b.Property<bool>("Completed")
                         .HasColumnType("boolean");
 
@@ -1399,6 +1402,9 @@ namespace Diariz.Domain.Migrations
 
                     b.Property<Guid>("RecordingId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Text")
                         .IsRequired()

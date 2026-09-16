@@ -81,6 +81,29 @@ public class RecordingActionsControllerTests
     }
 
     [Fact]
+    public async Task Extract_KeepsPinnedActions_ReplacesTheRest_AndSkipsRepeatsOfWhatItKept()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribed(db, userId);
+        db.RecordingActions.AddRange(
+            new RecordingAction { Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Book the room", Ordinal = 0, Pinned = true, Source = ActionSource.Live },
+            new RecordingAction { Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Old unpinned", Ordinal = 1 });
+        await db.SaveChangesAsync();
+        var client = new FakeActionsClient
+        {
+            Result = { new ExtractedAction("book the room", "", ""), new ExtractedAction("Send the report", "Bob", "") },
+        };
+
+        var result = (await Build(db, userId, client).Extract(rec.Id)).Value!;
+
+        var all = await db.RecordingActions.Where(a => a.RecordingId == rec.Id).OrderBy(a => a.Ordinal).ToListAsync();
+        Assert.Equal(["Book the room", "Send the report"], all.Select(a => a.Text));
+        Assert.Equal(["Book the room"], client.LastAlreadyRecorded);
+        Assert.Equal(["Book the room", "Send the report"], result.Select(a => a.Text)); // the full list, not just the new rows
+    }
+
+    [Fact]
     public async Task List_CarriesThePinnedFlag()
     {
         using var db = TestDb.Create();
@@ -101,10 +124,10 @@ public class RecordingActionsControllerTests
     }
 
     [Fact]
-    public async Task Extract_LeavesTheReplacementActionsUnpinned()
+    public async Task Extract_LeavesFreshExtractedActionsUnpinned_ButKeepsThePinnedOnePinned()
     {
-        // Accepted by design: extraction replaces the whole list with new rows, and pins go the same way
-        // completion already does. Asserted so that changing it later is a deliberate act, not a drift.
+        // Updated for the "keep pinned actions" rule (was Extract_LeavesTheReplacementActionsUnpinned,
+        // which asserted the old behaviour of wiping every pin on re-extraction).
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var rec = await SeedTranscribed(db, userId);
@@ -113,13 +136,12 @@ public class RecordingActionsControllerTests
             Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Book the room", Ordinal = 0, Pinned = true,
         });
         await db.SaveChangesAsync();
-        var client = new FakeActionsClient { Result = { new ExtractedAction("Book the room", "", "") } };
+        var client = new FakeActionsClient { Result = { new ExtractedAction("Send the report", "Bob", "") } };
 
         var fresh = (await Build(db, userId, client).Extract(rec.Id)).Value!;
 
-        Assert.All(fresh, a => Assert.False(a.Pinned));
-        Assert.All(await db.RecordingActions.Where(a => a.RecordingId == rec.Id).ToListAsync(),
-            a => Assert.False(a.Pinned));
+        Assert.True(fresh.Single(a => a.Text == "Book the room").Pinned);
+        Assert.False(fresh.Single(a => a.Text == "Send the report").Pinned);
     }
 
     [Fact]
@@ -179,6 +201,21 @@ public class RecordingActionsControllerTests
         Assert.Equal(1, dto.Ordinal);
         Assert.False(dto.Completed); // new actions start incomplete
         Assert.NotNull((await db.Recordings.FindAsync(rec.Id))!.ActionsExtractedAt); // manual add surfaces the panel
+    }
+
+    [Fact]
+    public async Task Create_RecordsTheActionAsManual()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribed(db, userId);
+
+        var dto = (await Build(db, userId, new FakeActionsClient())
+            .Create(rec.Id, new CreateRecordingActionRequest("Book the room", "Ada", ""))).Value!;
+
+        var row = await db.RecordingActions.SingleAsync(a => a.Id == dto.Id);
+        Assert.Equal(ActionSource.Manual, row.Source);
+        Assert.Null(row.CapturedAtMs);
     }
 
     [Fact]
@@ -282,5 +319,60 @@ public class RecordingActionsControllerTests
 
         Assert.NotNull(seenOperation);
         Assert.Equal(LlmCallKind.ExtractActions, seenKind);
+    }
+
+    [Fact]
+    public async Task CreateLive_AddsPinnedLiveActions_AfterExisting_WithoutMarkingExtracted()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribed(db, userId);
+        db.RecordingActions.Add(new RecordingAction { Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Existing", Ordinal = 4 });
+        await db.SaveChangesAsync();
+
+        var result = await Build(db, userId, new FakeActionsClient()).CreateLive(rec.Id, new CreateLiveActionsRequest(
+        [
+            new CreateLiveActionLine("  Book the room ", "Ada", "Friday", 61_000),
+            new CreateLiveActionLine("   "),                       // blank: skipped
+            new CreateLiveActionLine("Send the deck"),
+        ]));
+
+        var dtos = result.Value!;
+        Assert.Equal(["Book the room", "Send the deck"], dtos.Select(d => d.Text));
+        Assert.All(dtos, d => Assert.True(d.Pinned));
+        Assert.Equal([5, 6], dtos.Select(d => d.Ordinal));
+
+        var rows = await db.RecordingActions.Where(a => a.Source == ActionSource.Live).OrderBy(a => a.Ordinal).ToListAsync();
+        Assert.Equal(61_000, rows[0].CapturedAtMs);
+        Assert.Equal("Ada", rows[0].Actor);
+        Assert.Equal("", rows[1].Actor);
+        // The whole point: the pipeline must still extract after a live action lands.
+        Assert.Null((await db.Recordings.FindAsync(rec.Id))!.ActionsExtractedAt);
+    }
+
+    [Fact]
+    public async Task CreateLive_OnSomeoneElsesRecording_Is404_AndWritesNothing()
+    {
+        using var db = TestDb.Create();
+        var rec = await SeedTranscribed(db, Guid.NewGuid());
+
+        var result = await Build(db, Guid.NewGuid(), new FakeActionsClient())
+            .CreateLive(rec.Id, new CreateLiveActionsRequest([new CreateLiveActionLine("Book the room")]));
+
+        Assert.IsType<NotFoundResult>(result.Result);
+        Assert.Empty(await db.RecordingActions.ToListAsync());
+    }
+
+    [Fact]
+    public async Task CreateLive_TruncatesLongText()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribed(db, userId);
+
+        var dto = (await Build(db, userId, new FakeActionsClient())
+            .CreateLive(rec.Id, new CreateLiveActionsRequest([new CreateLiveActionLine(new string('x', 3000))]))).Value!.Single();
+
+        Assert.Equal(2048, dto.Text.Length);
     }
 }

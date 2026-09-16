@@ -64,6 +64,23 @@ describe("pendingNotes", () => {
     expect(loaded?.lines[0].text).toBe("second draft");
   });
 
+  it("round-trips an action line and still reads a line with no kind as a note", async () => {
+    await savePendingNotes({
+      userId: "u2",
+      recordingId: null,
+      updatedAt: 1,
+      lines: [
+        { text: "old note", capturedAtMs: 1 },
+        { text: "book the room", capturedAtMs: 2, kind: "action", actor: "Ada" },
+      ],
+    });
+
+    const loaded = await loadPendingNotes("u2");
+
+    expect(loaded?.lines[0].kind).toBe(undefined);
+    expect(loaded?.lines[1]).toEqual({ text: "book the room", capturedAtMs: 2, kind: "action", actor: "Ada" });
+  });
+
   it("clears a stash", async () => {
     await savePendingNotes(stash("u4"));
 

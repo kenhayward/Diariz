@@ -6,10 +6,15 @@
 /// (see keyedStash.ts, which owns the actual IndexedDB plumbing shared with pendingScreenshots).
 
 import { createKeyedStash } from "./keyedStash";
+import type { LineKind } from "./types";
 
 export interface PendingNoteLine {
   text: string;
   capturedAtMs: number | null;
+  /// Absent on every line stashed before actions existed, which is read as a note.
+  kind?: LineKind;
+  actor?: string;
+  deadline?: string;
 }
 
 export interface PendingNotes {

@@ -2,13 +2,14 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import LiveNotesStream, { type LiveNotesStreamProps } from "./LiveNotesStream";
 import type { LiveSegment, LiveTranscript } from "../../lib/liveTranscript";
-import type { MeetingNote, ShotView } from "../../lib/types";
+import type { LiveNoteLine, ShotView } from "../../lib/types";
 
-const note = (over: Partial<MeetingNote> & { capturedAtMs: number | null }): MeetingNote => ({
-  id: `n-${over.capturedAtMs}`,
+const note = (over: Partial<LiveNoteLine> = {}): LiveNoteLine => ({
+  id: over.id ?? `n-${over.capturedAtMs}`,
   text: "a thought",
   ordinal: 0,
   createdAt: "2026-09-03T10:00:00.000Z",
+  capturedAtMs: over.capturedAtMs ?? null,
   ...over,
 });
 
@@ -38,6 +39,8 @@ const base: LiveNotesStreamProps = {
   onAdd: () => {},
   onEdit: () => {},
   onDelete: () => {},
+  onSetKind: vi.fn(),
+  onUpdateAction: vi.fn(),
   onDeleteShot: () => {},
   variant: "popover",
 };
@@ -139,7 +142,7 @@ describe("LiveNotesStream composer", () => {
     fireEvent.keyDown(composer(), { key: "Enter" });
 
     // No stamp: the host reads its own pause-aware clock, which this panel cannot.
-    expect(onAdd).toHaveBeenCalledWith("a thought", undefined);
+    expect(onAdd).toHaveBeenCalledWith("a thought", undefined, "note");
     expect(composer().value).toBe("");
   });
 
@@ -178,7 +181,7 @@ describe("LiveNotesStream composer", () => {
     fireEvent.change(composer(), { target: { value: "about that" } });
     fireEvent.keyDown(composer(), { key: "Enter" });
 
-    expect(onAdd).toHaveBeenCalledWith("about that", 20_000);
+    expect(onAdd).toHaveBeenCalledWith("about that", 20_000, "note");
     // A pin left set would file the NEXT note - about whatever is being said now - back at 0:20, which
     // is the one mistake this control can make without showing anything.
     expect(screen.getByTestId("composer-stamp").textContent).toBe("1:01");
@@ -207,6 +210,122 @@ describe("LiveNotesStream composer", () => {
     fireEvent.change(composer(), { target: { value: "into the void" } });
     fireEvent.keyDown(composer(), { key: "Enter" });
     expect(onAdd).not.toHaveBeenCalled();
+  });
+});
+
+describe("actions", () => {
+  const kindToggle = () => screen.getByTestId("composer-kind") as HTMLButtonElement;
+
+  it("files an action when the toggle is on, then drops back to notes", () => {
+    const onAdd = vi.fn();
+    renderStream({ elapsedMs: 61_000, onAdd });
+    fireEvent.click(kindToggle());
+    expect(kindToggle().getAttribute("aria-pressed")).toBe("true");
+    expect(composer().placeholder).toBe("Add an action...");
+    fireEvent.change(composer(), { target: { value: "book the room" } });
+    fireEvent.keyDown(composer(), { key: "Enter" });
+    expect(onAdd).toHaveBeenCalledWith("book the room", undefined, "action");
+    expect(kindToggle().getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("toggles with Alt+A in the composer without typing into it", () => {
+    renderStream();
+    // fireEvent's return value is the DOM dispatchEvent result: false means something in the handler
+    // chain called preventDefault(). jsdom never mutates the input's value from a keydown on its own, so
+    // asserting composer().value stayed "" would pass whether or not the handler ran at all.
+    expect(fireEvent.keyDown(composer(), { key: "a", code: "KeyA", altKey: true })).toBe(false);
+    expect(kindToggle().getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("toggles with Alt+A by physical key, not the character Option+A types on macOS", () => {
+    // On macOS, Option+A reports e.key === "å" (the character the OS composes), not "a". Matching on
+    // `key` leaves the shortcut dead on a Mac keyboard and lets "å" reach the composer instead.
+    renderStream();
+    fireEvent.keyDown(composer(), { key: "å", code: "KeyA", altKey: true });
+    expect(kindToggle().getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("toggles with Alt+A on a layout where A is not at the QWERTY position (AZERTY)", () => {
+    // On a French AZERTY keyboard the key labelled A sits where QWERTY has Q, so it reports code KeyQ.
+    // The fr catalog advertises Alt+A, so the character has to count too.
+    renderStream();
+    expect(fireEvent.keyDown(composer(), { key: "a", code: "KeyQ", altKey: true })).toBe(false);
+    expect(kindToggle().getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("marks the pressed toggle with the soft green tokens, not white on solid green", () => {
+    // White on --hub-green measures about 2.3:1 in the dark theme at 11px. The soft tint with the green
+    // text token is how the panel's other active pills read, and clears AA in both themes.
+    renderStream();
+    fireEvent.click(kindToggle());
+    const style = kindToggle().getAttribute("style") ?? "";
+    expect(style).toContain("color: var(--hub-green-text)");
+    expect(style).toContain("var(--hub-green-soft-bg)");
+    expect(style).toContain("var(--hub-green-soft-border)");
+    expect(style).not.toContain("rgb(255, 255, 255)");
+  });
+
+  it("does not save an action's text edited down to nothing", () => {
+    // An empty action cannot be attached (the server skips it at best), and the row would sit in the
+    // stream as a blank green bar. Save stays off until there is something to save.
+    const onEdit = vi.fn();
+    renderStream({ lines: [note({ id: "e", text: "send the deck", kind: "action" })], onEdit });
+    fireEvent.click(screen.getByRole("button", { name: "Edit note" }));
+    fireEvent.change(screen.getByLabelText("Edit note"), { target: { value: "   " } });
+    const save = screen.getByRole("button", { name: "Save" }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    fireEvent.click(save);
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Edit note")).toBeTruthy();
+  });
+
+  it("draws Make note with a different glyph from Delete, so the two neighbours cannot be confused", () => {
+    renderStream({ lines: [note({ id: "g", text: "book the room", kind: "action" })] });
+    const glyph = (name: string) => screen.getByRole("button", { name }).querySelector("svg")!.innerHTML;
+    expect(glyph("Delete note")).toContain("path");
+    expect(glyph("Make note")).not.toBe(glyph("Delete note"));
+  });
+
+  it("files a note as a note with no toggle", () => {
+    const onAdd = vi.fn();
+    renderStream({ onAdd });
+    fireEvent.change(composer(), { target: { value: "a thought" } });
+    fireEvent.keyDown(composer(), { key: "Enter" });
+    expect(onAdd).toHaveBeenCalledWith("a thought", undefined, "note");
+  });
+
+  it("renders an action row with its owner, and turns it back into a note", () => {
+    const onSetKind = vi.fn();
+    renderStream({ lines: [note({ id: "x", text: "book the room", kind: "action", actor: "Ada" })], onSetKind });
+    const row = screen.getByTestId("stream-action");
+    expect(row.textContent).toContain("book the room");
+    expect(row.textContent).toContain("Ada");
+    fireEvent.click(screen.getByRole("button", { name: "Make note" }));
+    expect(onSetKind).toHaveBeenCalledWith("x", "note");
+  });
+
+  it("offers Make action on a note row", () => {
+    const onSetKind = vi.fn();
+    renderStream({ lines: [note({ id: "y", text: "chase the invoice" })], onSetKind });
+    fireEvent.click(screen.getByRole("button", { name: "Make action" }));
+    expect(onSetKind).toHaveBeenCalledWith("y", "action");
+  });
+
+  it("edits an action's owner and due date", () => {
+    const onUpdateAction = vi.fn();
+    renderStream({ lines: [note({ id: "z", text: "send the deck", kind: "action", actor: "Ada" })], onUpdateAction });
+    fireEvent.click(screen.getByRole("button", { name: "Owner and due date" }));
+    fireEvent.change(screen.getByLabelText("Owner"), { target: { value: "Grace" } });
+    fireEvent.change(screen.getByLabelText("Due"), { target: { value: "Friday" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onUpdateAction).toHaveBeenCalledWith("z", { actor: "Grace", deadline: "Friday" });
+  });
+
+  it("shows an Actions chip with its count, filtering to actions", () => {
+    renderStream({ lines: [note({ id: "1" }), note({ id: "2", kind: "action" })] });
+    fireEvent.click(screen.getByRole("radio", { name: "Actions 1" }));
+    expect(screen.queryAllByTestId("stream-note").length).toBe(0);
+    expect(screen.getAllByTestId("stream-action").length).toBe(1);
   });
 });
 
@@ -736,7 +855,7 @@ describe("LiveNotesStream - compact", () => {
     fireEvent.change(composer(), { target: { value: "quick one" } });
     fireEvent.keyDown(composer(), { key: "Enter" });
 
-    expect(onAdd).toHaveBeenCalledWith("quick one", undefined);
+    expect(onAdd).toHaveBeenCalledWith("quick one", undefined, "note");
   });
 
   it("brings the stream back when it is turned off", () => {

@@ -217,6 +217,14 @@ of it. The box is then pinned to that line's moment, and what you type is filed 
 the current time. Press Enter and the pin releases on its own; click the pinned time to let it go
 without filing anything.
 
+You can record an action the same way, without waiting for automatic extraction. Switch the composer
+to **Action**, or press **Alt+A** while it has focus, and what you type next is filed as an action
+instead of a note - the composer switches back to Note afterwards so you do not file the next few
+lines as actions by mistake. Any note already on the stream can be turned into an action too, and back
+again. An action you record this way is yours by default, though you can change who it is for, and it
+shows up in the Actions tab as soon as the recording uploads - you do not have to wait for extraction
+to run, and extraction will not remove it as long as it stays pinned.
+
 ### Keeping notes visible during a call (desktop app)
 
 On one screen, a call usually wants the whole display, which leaves nowhere to type. In the desktop

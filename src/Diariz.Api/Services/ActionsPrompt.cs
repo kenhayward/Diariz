@@ -69,13 +69,20 @@ Meeting date: {calendar_date}
 ## Transcript:
 """;
 
+    /// <param name="alreadyRecorded">Actions the attendees recorded themselves during the meeting. Listed in the
+    /// USER message rather than substituted into the template, because the template is admin-editable
+    /// (<c>prompts/extract-actions.md</c>) and a placeholder there would silently vanish from an edited copy.</param>
     public static IReadOnlyList<ChatMessage> BuildMessages(
         string template, IReadOnlyList<SegmentDto> segments, DateTimeOffset? meetingDate = null,
-        int charBudget = PromptTranscript.DefaultCharBudget)
+        int charBudget = PromptTranscript.DefaultCharBudget, IReadOnlyList<string>? alreadyRecorded = null)
     {
         var system = (template ?? DefaultTemplate)
             .Replace("{calendar_date}", meetingDate?.ToString("yyyy-MM-dd") ?? "[unknown]");
         var user = "Transcript:\n" + PromptTranscript.Build(segments, charBudget);
+        if (alreadyRecorded is { Count: > 0 })
+            user += "\n\nThese actions were already recorded during the meeting. Do not repeat them, " +
+                    "even in different words - output only actions that are not on this list:\n" +
+                    string.Join("\n", alreadyRecorded.Select(a => "- " + a));
         return [new ChatMessage("system", system), new ChatMessage("user", user)];
     }
 

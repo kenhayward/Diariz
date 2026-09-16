@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage, getToken } from "../lib/api";
-import { userIdFromToken } from "../lib/jwt";
+import { userIdFromToken, fullNameFromToken } from "../lib/jwt";
 import {
   getStream,
   getCombinedStream,
@@ -81,6 +81,7 @@ import {
   loadPendingNotes,
   clearPendingNotes,
   type PendingNotes,
+  type PendingNoteLine,
 } from "../lib/pendingNotes";
 import {
   canCaptureScreenshots,
@@ -681,6 +682,8 @@ export default function Recorder({
     userId,
     // The recorded clock, which is pause-aware. The hook never reads a clock of its own.
     stampMs: () => timing.elapsedMs(timingRef.current, Date.now()),
+    // The signed-in user owns what they type, until they say otherwise.
+    defaultActor: () => fullNameFromToken(getToken()) ?? "",
   });
 
   // The notes popover's open state lives in the shared hub (id "notes"); this only persists the *preference*
@@ -710,19 +713,36 @@ export default function Recorder({
   /// Attach lines to the created recording. Success clears the durable stash; failure keeps the lines (with
   /// the recording id) and surfaces the retry banner. A notes failure never fails the upload itself.
   async function attachNotes(recordingId: string, fromRetry?: PendingNotes) {
-    const lines = fromRetry
+    // Blank lines are dropped here, before either endpoint sees them: they would attach nothing, and a line
+    // the server rejected would fail the same way on every retry, stranding everything else with it.
+    let remaining: PendingNoteLine[] = (fromRetry
       ? fromRetry.lines
-      : notes.snapshot().map((l) => ({ text: l.text, capturedAtMs: l.capturedAtMs }));
-    if (lines.length === 0) {
+      : notes.snapshot().map((l) => ({
+          text: l.text, capturedAtMs: l.capturedAtMs, kind: l.kind, actor: l.actor, deadline: l.deadline,
+        }))).filter((l) => (l.text ?? "").trim().length > 0);
+    if (remaining.length === 0) {
       if (userId) void clearPendingNotes(userId);
       return;
     }
     try {
-      await api.createNotes(recordingId, lines);
+      // Two calls, and each part leaves `remaining` the moment it lands. A retry after a partial failure must
+      // send only what is still missing, or the part that succeeded would be attached twice.
+      const noteLines = remaining.filter((l) => l.kind !== "action");
+      if (noteLines.length > 0) {
+        await api.createNotes(recordingId, noteLines.map((l) => ({ text: l.text, capturedAtMs: l.capturedAtMs })));
+        remaining = remaining.filter((l) => l.kind === "action");
+      }
+      if (remaining.length > 0) {
+        await api.createLiveActions(
+          recordingId,
+          remaining.map((l) => ({ text: l.text, actor: l.actor ?? "", deadline: l.deadline ?? "", capturedAtMs: l.capturedAtMs })),
+        );
+        remaining = [];
+      }
       await notes.reset();
       setNotesAttach(null);
     } catch {
-      const stash: PendingNotes = { userId: userId ?? "", recordingId, lines, updatedAt: Date.now() };
+      const stash: PendingNotes = { userId: userId ?? "", recordingId, lines: remaining, updatedAt: Date.now() };
       if (userId) await savePendingNotes(stash);
       setNotesAttach(stash);
     }
@@ -1121,6 +1141,8 @@ export default function Recorder({
       onToggleAutoCapture: requestToggleAutoCapture,
       onShotToChat: sendShotToChat,
       onTranscriptToChat: sendTranscriptToChat,
+      onSetKind: notes.setKind,
+      onUpdateAction: notes.updateAction,
     },
   });
 
@@ -1907,6 +1929,8 @@ export default function Recorder({
               onAdd={notes.add}
               onEdit={notes.edit}
               onDelete={notes.remove}
+              onSetKind={notes.setKind}
+              onUpdateAction={notes.updateAction}
               shots={liveShots}
               onDeleteShot={deleteLiveShot}
               // Already ticking at 250ms while recording (`startTicker`), so the header clock and the

@@ -18,7 +18,9 @@ public sealed class ContainersFixture : IAsyncLifetime
     // (the parameterless ctor + WithImage is obsolete in Testcontainers 4.x).
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("pgvector/pgvector:pg16").Build();
     private readonly RedisContainer _redis = new RedisBuilder("redis:7-alpine").Build();
-    private readonly MinioContainer _minio = new MinioBuilder("minio/minio:latest").Build();
+    // quay.io, not Docker Hub: Docker Hub stopped serving minio/minio anonymously, which failed every
+    // integration test at fixture start (issue #765). Pinned to the tag deploy/docker-compose.yml uses.
+    private readonly MinioContainer _minio = new MinioBuilder("quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z").Build();
 
     public string PostgresConnectionString => _postgres.GetConnectionString();
     public string RedisConnectionString => _redis.GetConnectionString();

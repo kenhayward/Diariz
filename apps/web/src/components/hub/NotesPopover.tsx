@@ -4,18 +4,22 @@ import LiveNotesStream from "./LiveNotesStream";
 import { IconClose, IconPopOut } from "./hubGlyphs";
 import { formatDuration } from "../../lib/format";
 import type { LiveTranscript } from "../../lib/liveTranscript";
-import type { MeetingNote } from "../../lib/types";
+import type { LineKind, LiveNoteLine } from "../../lib/types";
 import type { PendingShot } from "../../lib/pendingScreenshots";
 
 export type NotesPopoverProps = {
   open: boolean;
   onClose: () => void;
-  lines: MeetingNote[];
+  lines: LiveNoteLine[];
   /// `atMs` present means the note was pinned to a moment earlier in the meeting; absent means it
-  /// follows the recorded clock, which only the host can read.
-  onAdd: (text: string, atMs?: number) => void;
+  /// follows the recorded clock, which only the host can read. `kind` defaults to "note".
+  onAdd: (text: string, atMs?: number, kind?: LineKind) => void;
   onEdit: (id: string, text: string) => void;
   onDelete: (id: string) => void;
+  /// Switch a line between note and action.
+  onSetKind: (id: string, kind: LineKind) => void;
+  /// Patch an action's owner and/or due date.
+  onUpdateAction: (id: string, patch: { actor?: string; deadline?: string }) => void;
   shots: PendingShot[];
   /// Delete one capture, addressed by id rather than position - captures can arrive at any moment, so
   /// an index read at render time may not be the one the user clicked by the time the click lands.
@@ -90,6 +94,8 @@ export default function NotesPopover({
   onAdd,
   onEdit,
   onDelete,
+  onSetKind,
+  onUpdateAction,
   shots,
   onDeleteShot,
   elapsedMs,
@@ -166,6 +172,8 @@ export default function NotesPopover({
           onAdd={onAdd}
           onEdit={onEdit}
           onDelete={onDelete}
+          onSetKind={onSetKind}
+          onUpdateAction={onUpdateAction}
           onDeleteShot={onDeleteShot}
           liveTranscript={liveTranscript}
           liveLagSeconds={liveLagSeconds}

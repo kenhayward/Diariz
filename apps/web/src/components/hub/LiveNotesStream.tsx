@@ -1,12 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import CaptureControls from "./CaptureControls";
-import { CaptureRow, NoteRow, TranscriptRow, useShotPreviews } from "./notesStreamRows";
+import { ActionRow, CaptureRow, NoteRow, TranscriptRow, useShotPreviews } from "./notesStreamRows";
 import { buildStream, stampColumnPx, streamCounts, type StreamFilter } from "../../lib/notesStream";
 import { formatDuration } from "../../lib/format";
 import { IconChatArrow, IconCheck } from "./hubGlyphs";
 import type { LiveSegment, LiveTranscript } from "../../lib/liveTranscript";
-import type { MeetingNote, ShotView } from "../../lib/types";
+import type { LineKind, LiveNoteLine, ShotView } from "../../lib/types";
 
 export type LiveNotesStreamCapture = {
   captureAreaSet: boolean;
@@ -20,7 +20,7 @@ export type LiveNotesStreamCapture = {
 };
 
 export type LiveNotesStreamProps = {
-  lines: MeetingNote[];
+  lines: LiveNoteLine[];
   shots: ShotView[];
   /// The meeting in progress, or absent when live transcription is not running - an older server, a
   /// deployment without the hardware, or a capture that began before the server could be reached.
@@ -30,9 +30,15 @@ export type LiveNotesStreamProps = {
   liveDegraded?: boolean;
   /// The recorded clock. Drives the composer's badge and, once past an hour, the stamp column's width.
   elapsedMs: number;
-  onAdd: (text: string, atMs?: number) => void;
+  /// `kind` defaults to "note" when omitted - every caller predating actions still compiles and behaves
+  /// the same.
+  onAdd: (text: string, atMs?: number, kind?: LineKind) => void;
   onEdit: (id: string, text: string) => void;
   onDelete: (id: string) => void;
+  /// Switch a line between note and action, from either row's "Make note"/"Make action" button.
+  onSetKind: (id: string, kind: LineKind) => void;
+  /// Patch an action's owner and/or due date, from its details editor.
+  onUpdateAction: (id: string, patch: { actor?: string; deadline?: string }) => void;
   onDeleteShot: (id: string) => void;
   /// Absent where the host cannot capture at all, which hides the capture controls AND the Captures
   /// chip - a plain browser has no captures to filter for. Both handlers are required rather than
@@ -111,6 +117,8 @@ export default function LiveNotesStream({
   onAdd,
   onEdit,
   onDelete,
+  onSetKind,
+  onUpdateAction,
   onDeleteShot,
   capture,
   disabled = false,
@@ -130,6 +138,10 @@ export default function LiveNotesStream({
 
   const [filter, setFilter] = useState<StreamFilter>("all");
   const [draft, setDraft] = useState("");
+  /// Which kind the composer files the next line as. Reset to "note" after every submission (see
+  /// `file()`) - most lines are notes, and a toggle left on by mistake would file the next thoughts as
+  /// tracked actions in everyone's Actions tab.
+  const [kind, setKind] = useState<LineKind>("note");
   /// The moment the composer files at, taken over from a transcript line; null means follow the clock.
   const [pinnedAtMs, setPinnedAtMs] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -202,11 +214,14 @@ export default function LiveNotesStream({
   function file() {
     const text = draft.trim();
     if (!text || disabled) return;
-    onAdd(text, pinnedAtMs ?? undefined);
+    onAdd(text, pinnedAtMs ?? undefined, kind);
     setDraft("");
     // The pin is spent. Leaving it set would file the next note - about whatever is being said now - at
     // the same old moment, which is the one mistake this control can make invisibly.
     setPinnedAtMs(null);
+    // Back to Note after every action. Most lines are notes, and a toggle left on by mistake would file
+    // the next thoughts as tracked actions in everyone's Actions tab.
+    setKind("note");
   }
 
   // Hidden without a live transcript, exactly as the Transcript tab used to be: with no live session
@@ -237,6 +252,7 @@ export default function LiveNotesStream({
   const chips: { id: StreamFilter; label: string }[] = [
     { id: "all", label: t("notesFilterAll") },
     { id: "notes", label: t("notesFilterNotes", { n: counts.notes }) },
+    { id: "actions", label: t("notesFilterActions", { n: counts.actions }) },
     // No capture bridge means no captures will ever exist, so the chip would filter to a permanent
     // empty state.
     ...(capture ? [{ id: "captures" as const, label: t("notesFilterCaptures", { n: counts.captures }) }] : []),
@@ -247,9 +263,11 @@ export default function LiveNotesStream({
   const emptyMessage =
     filter === "captures"
       ? t("screenshotsEmpty")
-      : filter === "notes" || !liveTranscript
-        ? t("notesEmpty")
-        : tr("liveTranscriptEmpty");
+      : filter === "actions"
+        ? t("notesActionsEmpty")
+        : filter === "notes" || !liveTranscript
+          ? t("notesEmpty")
+          : tr("liveTranscriptEmpty");
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: variant === "window" ? 1 : undefined }}>
@@ -333,7 +351,13 @@ export default function LiveNotesStream({
           );
         })}
         <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 500, color: "var(--hub-placeholder)" }}>
-            {filter === "notes" ? t("notesFilterNotesOnly") : filter === "captures" ? t("notesFilterCapturesOnly") : ""}
+            {filter === "notes"
+              ? t("notesFilterNotesOnly")
+              : filter === "actions"
+                ? t("notesFilterActionsOnly")
+                : filter === "captures"
+                  ? t("notesFilterCapturesOnly")
+                  : ""}
           </span>
         </div>
       )}
@@ -381,6 +405,19 @@ export default function LiveNotesStream({
                   stampColumnPx={stampPx}
                   onEdit={onEdit}
                   onDelete={onDelete}
+                  onSetKind={onSetKind}
+                />
+              );
+            if (item.kind === "action")
+              return (
+                <ActionRow
+                  key={item.id}
+                  note={item.note}
+                  stampColumnPx={stampPx}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  onSetKind={onSetKind}
+                  onUpdateAction={onUpdateAction}
                 />
               );
             return (
@@ -484,16 +521,49 @@ export default function LiveNotesStream({
               {formatDuration(pinnedAtMs)}
             </button>
           )}
+          <button
+            type="button"
+            data-testid="composer-kind"
+            aria-pressed={kind === "action"}
+            title={t("notesKindToggleHint")}
+            onClick={() => { setKind((k) => (k === "action" ? "note" : "action")); inputRef.current?.focus(); }}
+            disabled={disabled}
+            style={{
+              flexShrink: 0, borderRadius: 6, fontSize: 11, fontWeight: 600, padding: "2px 6px", cursor: "pointer",
+              // Pressed reads like the panel's other active pills: the soft green tint and border with the green
+              // text token. White on solid --hub-green measured about 2.3:1 in dark at 11px. The tint is laid
+              // over the popover's own background rather than the composer's grey surface, because on that grey
+              // the light theme's green text lands at 4.16:1; over the popover it is 4.52:1 (6.26:1 in dark).
+              ...(kind === "action"
+                ? {
+                    border: "1px solid var(--hub-green-soft-border)",
+                    background:
+                      "linear-gradient(var(--hub-green-soft-bg), var(--hub-green-soft-bg)), var(--hub-popover-bg)",
+                    color: "var(--hub-green-text)",
+                  }
+                : { border: "1px solid var(--hub-field-border)", background: "transparent", color: "var(--hub-text-2)" }),
+            }}
+          >
+            {t("notesKindAction")}
+          </button>
           <input
             ref={inputRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
+              // Either the physical key (`code`) or the character (`key`). `code` alone serves macOS, where
+              // Option+A reports `e.key === "å"` (the composed character). `key` alone serves AZERTY, where
+              // the key labelled A sits at the QWERTY Q position and reports `code === "KeyQ"`.
+              if (e.altKey && (e.code === "KeyA" || e.key.toLowerCase() === "a")) {
+                e.preventDefault();
+                setKind((k) => (k === "action" ? "note" : "action"));
+                return;
+              }
               if (e.key !== "Enter") return;
               e.preventDefault();
               file();
             }}
-            placeholder={t("notesComposerPlaceholder")}
+            placeholder={kind === "action" ? t("notesComposerActionPlaceholder") : t("notesComposerPlaceholder")}
             aria-label={t("notesComposerPlaceholder")}
             disabled={disabled}
             autoFocus={v.autoFocus}

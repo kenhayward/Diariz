@@ -20,6 +20,8 @@ const baseProps: NotesPopoverProps = {
   onAdd: () => {},
   onEdit: () => {},
   onDelete: () => {},
+  onSetKind: () => {},
+  onUpdateAction: () => {},
   shots: [],
   onDeleteShot: () => {},
   elapsedMs: 0,
@@ -248,7 +250,20 @@ describe("NotesPopover one stream", () => {
     fireEvent.change(box, { target: { value: "a thought" } });
     fireEvent.keyDown(box, { key: "Enter" });
 
-    expect(onAdd).toHaveBeenCalledWith("a thought", undefined);
+    expect(onAdd).toHaveBeenCalledWith("a thought", undefined, "note");
+  });
+
+  it("passes a note row's kind change through to the host", () => {
+    const onSetKind = vi.fn();
+    renderPopover({
+      onSetKind,
+      lines: [{ id: "n1", text: "my point", capturedAtMs: 5_000, ordinal: 0, createdAt: "2026-09-03T10:00:00.000Z" }],
+      ...shell,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /make action/i }));
+
+    expect(onSetKind).toHaveBeenCalledWith("n1", "action");
   });
 });
 

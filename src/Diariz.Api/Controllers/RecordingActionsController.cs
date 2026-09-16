@@ -60,16 +60,17 @@ public class RecordingActionsController : ControllerBase
         return actions;
     }
 
-    /// <summary>Run the LLM over the current transcript and replace the recording's action list with the
-    /// result (which may be empty). Synchronous: the caller waits for the extracted list.</summary>
+    /// <summary>Run the LLM over the current transcript and replace the recording's unpinned action list with
+    /// the result (which may be empty). Synchronous: the caller waits for the extracted list.</summary>
     [HttpPost("extract")]
     [EndpointSummary("Extract action items from the transcript")]
     [EndpointDescription(
         "Runs the LLM over the current transcript and returns the action items it found. Unlike most of the " +
         "LLM-backed endpoints this one is **synchronous** - the call blocks until extraction finishes, which " +
         "can take a while on a long meeting, so allow a generous timeout.\n\n" +
-        "It **replaces the whole list**, so anything you added or edited by hand is discarded, including " +
-        "completion state; a run that finds nothing leaves you with an empty list. Returns 404 when the " +
+        "It **replaces every unpinned action**, so unpinned items you added or edited by hand are discarded, " +
+        "including their completion state. **Pinned actions are kept**, and the extraction skips anything that " +
+        "repeats them. Returns the full list afterwards. Returns 404 when the " +
         "recording has no transcript yet, and 400 when no LLM endpoint is configured for you or the platform.")]
     public async Task<ActionResult<IReadOnlyList<RecordingActionDto>>> Extract(Guid recordingId)
     {
@@ -104,12 +105,15 @@ public class RecordingActionsController : ControllerBase
 
         var template = _prompts.Get("extract-actions", ActionsPrompt.DefaultTemplate);
         // The meeting's own date anchors relative deadlines ("by next Friday") - see ActionsProcessor.
-        var extracted = await _client.ExtractAsync(cfg, segs, template, rec.StartedAt ?? rec.CreatedAt);
+        // Pinned actions are ones someone adopted (live during the meeting, or by pinning later). A re-run must
+        // not throw that away, so it replaces only the unpinned rows and is told what it is keeping.
+        var kept = rec.Actions.Where(a => a.Pinned).OrderBy(a => a.Ordinal).ToList();
+        var keptTexts = kept.Select(a => a.Text).ToList();
+        var extracted = await _client.ExtractAsync(cfg, segs, template, rec.StartedAt ?? rec.CreatedAt, keptTexts);
 
-        // Replace the whole list with the fresh extraction.
-        _db.RecordingActions.RemoveRange(rec.Actions);
-        var ordinal = 0;
-        var fresh = extracted.Select(e => new RecordingAction
+        _db.RecordingActions.RemoveRange(rec.Actions.Where(a => !a.Pinned));
+        var ordinal = kept.Count == 0 ? 0 : kept.Max(a => a.Ordinal) + 1;
+        var fresh = ActionMerge.WithoutDuplicates(extracted, keptTexts).Select(e => new RecordingAction
         {
             Id = Guid.NewGuid(),
             RecordingId = recordingId,
@@ -122,7 +126,7 @@ public class RecordingActionsController : ControllerBase
         rec.ActionsExtractedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync();
 
-        return fresh.Select(ToDto).ToList();
+        return kept.Concat(fresh).Select(ToDto).ToList();
     }
 
     [HttpPost]
@@ -132,7 +136,8 @@ public class RecordingActionsController : ControllerBase
         "platform with no model configured. All three fields are free text - the deadline included, so " +
         "\"end of week\" is as valid as a date.\n\n" +
         "Adding by hand also marks the recording as having surfaced actions, so the panel stays visible. Note " +
-        "that a later extraction replaces the whole list, including anything added this way.")]
+        "that a later extraction replaces every unpinned action, including anything added this way unless it " +
+        "is pinned.")]
     public async Task<ActionResult<RecordingActionDto>> Create(Guid recordingId, CreateRecordingActionRequest req)
     {
         if (!await OwnsAsync(recordingId)) return NotFound();
@@ -150,6 +155,7 @@ public class RecordingActionsController : ControllerBase
             Actor = req.Actor?.Trim() ?? "",
             Deadline = req.Deadline?.Trim() ?? "",
             Ordinal = (maxOrdinal ?? -1) + 1,
+            Source = ActionSource.Manual,
         };
         _db.RecordingActions.Add(action);
 
@@ -159,6 +165,49 @@ public class RecordingActionsController : ControllerBase
 
         await _db.SaveChangesAsync();
         return ToDto(action);
+    }
+
+    [HttpPost("live")]
+    [EndpointSummary("Add actions recorded during the meeting")]
+    [EndpointDescription(
+        "Appends the actions someone recorded while the meeting was running, in one call. Each is created " +
+        "**already pinned**, so it appears in the Actions views straight away, and carries the point in the " +
+        "recording where it was typed.\n\n" +
+        "Unlike adding an action by hand, this does **not** stop automatic extraction: when the transcript is " +
+        "ready the extracted actions are added alongside these, skipping any that repeat them. Blank lines are " +
+        "skipped and text over 2048 characters is truncated, so read the response for what was created. Owner only.")]
+    public async Task<ActionResult<IReadOnlyList<RecordingActionDto>>> CreateLive(Guid recordingId, CreateLiveActionsRequest req)
+    {
+        if (!await OwnsAsync(recordingId)) return NotFound();
+
+        var next = (await _db.RecordingActions
+            .Where(a => a.RecordingId == recordingId)
+            .Select(a => (int?)a.Ordinal)
+            .MaxAsync() ?? -1) + 1;
+
+        var fresh = new List<RecordingAction>();
+        foreach (var line in req.Actions)
+        {
+            var text = (line.Text ?? "").Trim();
+            if (text.Length == 0) continue;
+            if (text.Length > 2048) text = text[..2048];
+            fresh.Add(new RecordingAction
+            {
+                Id = Guid.NewGuid(),
+                RecordingId = recordingId,
+                Text = text,
+                Actor = line.Actor?.Trim() ?? "",
+                Deadline = line.Deadline?.Trim() ?? "",
+                Ordinal = next++,
+                Pinned = true,
+                Source = ActionSource.Live,
+                CapturedAtMs = line.CapturedAtMs,
+            });
+        }
+        // ActionsExtractedAt is deliberately left alone - see ActionsProcessor, which merges rather than skips.
+        _db.RecordingActions.AddRange(fresh);
+        await _db.SaveChangesAsync();
+        return fresh.Select(ToDto).ToList();
     }
 
     [HttpPut("{actionId:guid}")]

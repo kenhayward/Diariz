@@ -316,10 +316,11 @@ public sealed class FakeActionsClient(Action? onCall = null) : IActionsClient
     public IReadOnlyList<SegmentDto>? LastSegments { get; private set; }
     public string? LastTemplate { get; private set; }
     public DateTimeOffset? LastMeetingDate { get; private set; }
+    public IReadOnlyList<string>? LastAlreadyRecorded { get; private set; }
 
     public Task<IReadOnlyList<ExtractedAction>> ExtractAsync(
         LlmRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
-        DateTimeOffset? meetingDate, CancellationToken ct = default)
+        DateTimeOffset? meetingDate, IReadOnlyList<string>? alreadyRecorded = null, CancellationToken ct = default)
     {
         onCall?.Invoke();
         Calls++;
@@ -327,6 +328,7 @@ public sealed class FakeActionsClient(Action? onCall = null) : IActionsClient
         LastSegments = segments;
         LastTemplate = template;
         LastMeetingDate = meetingDate;
+        LastAlreadyRecorded = alreadyRecorded;
         if (ThrowOnCall is not null) throw ThrowOnCall;
         return Task.FromResult<IReadOnlyList<ExtractedAction>>(Result);
     }

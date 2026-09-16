@@ -53,6 +53,8 @@ const noopHandlers = {
   onShotToChat: vi.fn(),
   onTranscriptToChat: vi.fn(),
   onClientClosed: vi.fn(),
+  onSetKind: vi.fn(),
+  onUpdateAction: vi.fn(),
 };
 
 beforeEach(() => {
@@ -99,7 +101,7 @@ describe("notesChannel", () => {
     client.add("typed in the pop-out");
     host.publish();
 
-    expect(onAdd).toHaveBeenCalledWith("typed in the pop-out", undefined);
+    expect(onAdd).toHaveBeenCalledWith("typed in the pop-out", undefined, undefined);
     expect(onState).toHaveBeenLastCalledWith(state({ lines }));
     expect(lines[1].capturedAtMs).toBe(42_000);
   });
@@ -117,7 +119,7 @@ describe("notesChannel", () => {
 
     client.add("about that earlier point", 20_000);
 
-    expect(handlers.onAdd).toHaveBeenCalledWith("about that earlier point", 20_000);
+    expect(handlers.onAdd).toHaveBeenCalledWith("about that earlier point", 20_000, undefined);
   });
 
   it("sends no stamp at all when the composer is following the clock", () => {
@@ -133,7 +135,7 @@ describe("notesChannel", () => {
 
     client.add("just now");
 
-    expect(handlers.onAdd).toHaveBeenCalledWith("just now", undefined);
+    expect(handlers.onAdd).toHaveBeenCalledWith("just now", undefined, undefined);
   });
 
   it("publishes a clock the client can tick for itself", () => {
@@ -253,6 +255,26 @@ describe("notesChannel", () => {
     host.end();
 
     expect(onEnded).toHaveBeenCalledTimes(1);
+  });
+
+  it("relays action commands from the pop-out to the host", () => {
+    const channel = makeBus();
+    const onAdd = vi.fn();
+    const onSetKind = vi.fn();
+    const onUpdateAction = vi.fn();
+    createNotesHost(
+      { ...noopHandlers, onAdd, onSetKind, onUpdateAction, getState: () => state() },
+      { channel: channel() },
+    );
+    const client = createNotesClient({ onState: vi.fn(), onEnded: vi.fn(), onDisconnected: vi.fn() }, { channel: channel() });
+
+    client.add("book the room", undefined, "action");
+    client.setKind("n1", "action");
+    client.updateAction("n1", { actor: "Grace", deadline: "Friday" });
+
+    expect(onAdd).toHaveBeenCalledWith("book the room", undefined, "action");
+    expect(onSetKind).toHaveBeenCalledWith("n1", "action");
+    expect(onUpdateAction).toHaveBeenCalledWith("n1", { actor: "Grace", deadline: "Friday" });
   });
 
   it("tells the host when the client window is closing", () => {

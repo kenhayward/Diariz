@@ -226,9 +226,11 @@ export default function NotesPopout() {
           liveTranscript={state.liveTranscript}
           liveLagSeconds={state.liveLagSeconds}
           liveDegraded={state.liveDegraded}
-          onAdd={(text, atMs) => client?.add(text, atMs)}
+          onAdd={(text, atMs, kind) => client?.add(text, atMs, kind)}
           onEdit={(id, text) => client?.edit(id, text)}
           onDelete={(id) => client?.remove(id)}
+          onSetKind={(id, kind) => client?.setKind(id, kind)}
+          onUpdateAction={(id, patch) => client?.updateAction(id, patch)}
           onDeleteShot={(id) => client?.removeShot(id)}
           // Relayed, never done here. `chatAttachments` is an in-TAB pub/sub and the chat panel lives
           // in the main window, so publishing from this one would reach no subscribers and silently do

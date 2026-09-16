@@ -12,7 +12,7 @@ public interface IActionsClient
     /// transcript has none.</summary>
     Task<IReadOnlyList<ExtractedAction>> ExtractAsync(
         LlmRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
-        DateTimeOffset? meetingDate, CancellationToken ct = default);
+        DateTimeOffset? meetingDate, IReadOnlyList<string>? alreadyRecorded = null, CancellationToken ct = default);
 }
 
 /// <summary>Calls an OpenAI-compatible /chat/completions endpoint to extract actions, using a per-request
@@ -25,9 +25,9 @@ public class ActionsClient : IActionsClient
 
     public async Task<IReadOnlyList<ExtractedAction>> ExtractAsync(
         LlmRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
-        DateTimeOffset? meetingDate, CancellationToken ct = default)
+        DateTimeOffset? meetingDate, IReadOnlyList<string>? alreadyRecorded = null, CancellationToken ct = default)
     {
-        var messages = ActionsPrompt.BuildMessages(template, segments, meetingDate, config.ContextCharBudget);
+        var messages = ActionsPrompt.BuildMessages(template, segments, meetingDate, config.ContextCharBudget, alreadyRecorded);
         var body = new Dictionary<string, object?>
         {
             ["model"] = config.Model,

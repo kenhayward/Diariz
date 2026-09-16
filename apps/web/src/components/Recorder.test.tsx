@@ -16,7 +16,7 @@ let hubFactory: (...args: unknown[]) => unknown = () => ({
 
 vi.mock("../lib/api", () => ({
   api: {
-    upload: vi.fn(), createNotes: vi.fn(), createScreenshot: vi.fn(), deleteScreenshot: vi.fn(),
+    upload: vi.fn(), createNotes: vi.fn(), createLiveActions: vi.fn(), createScreenshot: vi.fn(), deleteScreenshot: vi.fn(),
     renameRecording: vi.fn(), putCalendarLink: vi.fn(),
     // Live capture defaults to unavailable, so every pre-existing test exercises the fallback
     // path - which is exactly the behaviour that must not change.
@@ -103,7 +103,7 @@ import {
   getStream, getCombinedStream, listInputDevices, micPermissionState, unlockDeviceLabels,
 } from "../lib/audioSource";
 import { loadPendingRecording, clearPendingRecording } from "../lib/pendingRecording";
-import { savePendingNotes, clearPendingNotes } from "../lib/pendingNotes";
+import { savePendingNotes, clearPendingNotes, loadPendingNotes } from "../lib/pendingNotes";
 import {
   addPendingScreenshot,
   loadPendingScreenshots,
@@ -1069,6 +1069,7 @@ describe("live notes", () => {
     (getStream as Mock).mockResolvedValue(fakeSession);
     (api.upload as Mock).mockResolvedValue({ id: "rec-new" });
     (api.createNotes as Mock).mockResolvedValue([]);
+    (api.createLiveActions as Mock).mockResolvedValue([]);
   });
 
   it("shows the notes panel while recording and commits a stamped, mirrored line", async () => {
@@ -1160,6 +1161,77 @@ describe("live notes", () => {
       ]),
     );
     await waitFor(() => expect(clearPendingNotes).toHaveBeenCalledWith("u1"));
+  });
+
+  it("attaches actions to the live-actions endpoint and notes to the notes endpoint", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByTestId("notes-popover");
+    const box = screen.getByLabelText(/note this moment/i);
+    fireEvent.change(box, { target: { value: "a plain note" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    fireEvent.click(screen.getByTestId("composer-kind"));
+    fireEvent.change(box, { target: { value: "book the room" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() =>
+      expect(api.createLiveActions).toHaveBeenCalledWith("rec-new", [
+        expect.objectContaining({ text: "book the room", actor: "", capturedAtMs: expect.any(Number) }),
+      ]),
+    );
+    expect(api.createNotes).toHaveBeenCalledWith("rec-new", [expect.objectContaining({ text: "a plain note" })]);
+    expect(vi.mocked(api.createNotes).mock.calls[0][1]).toHaveLength(1);
+  });
+
+  it("when the actions attach fails after the notes landed, the retry stash holds only the actions", async () => {
+    (api.createLiveActions as Mock).mockRejectedValueOnce(new Error("offline"));
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByTestId("notes-popover");
+    const box = screen.getByLabelText(/note this moment/i);
+    fireEvent.change(box, { target: { value: "a plain note" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    fireEvent.click(screen.getByTestId("composer-kind"));
+    fireEvent.change(box, { target: { value: "book the room" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() =>
+      expect(savePendingNotes).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recordingId: "rec-new",
+          lines: [expect.objectContaining({ text: "book the room", kind: "action" })],
+        }),
+      ),
+    );
+  });
+
+  it("drops lines left blank before attaching, so one empty line cannot strand the rest", async () => {
+    // A stash from an earlier attach that failed. Blank lines in it (an edit saved empty, or a stash written
+    // before that was blocked) must never reach either endpoint: the server would store nothing for them at
+    // best, and a request it rejects fails identically on every retry.
+    (loadPendingNotes as Mock).mockResolvedValueOnce({
+      userId: "u1",
+      recordingId: "rec-old",
+      updatedAt: 1,
+      lines: [
+        { text: "   ", capturedAtMs: 1_000, kind: "action", actor: "", deadline: "" },
+        { text: "book the room", capturedAtMs: 2_000, kind: "action", actor: "Ada", deadline: "" },
+        { text: "", capturedAtMs: 3_000, kind: "note" },
+        { text: "a plain note", capturedAtMs: 4_000, kind: "note" },
+      ],
+    });
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /attach notes/i }));
+
+    await waitFor(() => expect(screen.queryByText(/could not be attached/i)).toBeNull());
+    expect(vi.mocked(api.createLiveActions).mock.calls).toEqual([
+      ["rec-old", [{ text: "book the room", actor: "Ada", deadline: "", capturedAtMs: 2_000 }]],
+    ]);
+    expect(vi.mocked(api.createNotes).mock.calls).toEqual([
+      ["rec-old", [{ text: "a plain note", capturedAtMs: 4_000 }]],
+    ]);
   });
 
   it("keeps lines durable and offers a retry when the attach fails", async () => {

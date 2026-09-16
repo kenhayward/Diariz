@@ -32,6 +32,8 @@ const handlers = () => ({
   onChangeArea: vi.fn(),
   onShotToChat: vi.fn(),
   onTranscriptToChat: vi.fn(),
+  onSetKind: vi.fn(),
+  onUpdateAction: vi.fn(),
 });
 
 /// Exposes the hook's return value to the test through a button label and two escape hatches.
@@ -99,12 +101,14 @@ describe("useNotesPopout", () => {
       captured.onChangeArea();
       captured.onShotToChat("shot-7");
       captured.onTranscriptToChat();
+      captured.onSetKind("n1", "action");
+      captured.onUpdateAction("n1", { actor: "Grace", deadline: "Friday" });
     });
 
-    expect(on.onAdd).toHaveBeenCalledWith("from the pop-out", undefined);
+    expect(on.onAdd).toHaveBeenCalledWith("from the pop-out", undefined, undefined);
     // A note the pop-out pinned to an earlier moment must reach the host with that moment attached -
     // the host still stamps, it is just told which second to use.
-    expect(on.onAdd).toHaveBeenCalledWith("pinned to a line", 20_000);
+    expect(on.onAdd).toHaveBeenCalledWith("pinned to a line", 20_000, undefined);
     expect(on.onEdit).toHaveBeenCalledWith("n1", "revised");
     expect(on.onDelete).toHaveBeenCalledWith("n1");
     expect(on.onDeleteShot).toHaveBeenCalledWith("s1");
@@ -114,6 +118,8 @@ describe("useNotesPopout", () => {
     // acted on - a publish from over there would reach no subscribers at all.
     expect(on.onShotToChat).toHaveBeenCalledWith("shot-7");
     expect(on.onTranscriptToChat).toHaveBeenCalledTimes(1);
+    expect(on.onSetKind).toHaveBeenCalledWith("n1", "action");
+    expect(on.onUpdateAction).toHaveBeenCalledWith("n1", { actor: "Grace", deadline: "Friday" });
   });
 
   it("reads the current state, not the one captured when hosting began", () => {

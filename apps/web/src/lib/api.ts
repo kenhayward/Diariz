@@ -807,6 +807,15 @@ export const api = {
     return data;
   },
 
+  /// Actions recorded during the meeting. Created pinned, and they do not stop automatic extraction.
+  async createLiveActions(
+    recordingId: string,
+    actions: { text: string; actor?: string; deadline?: string; capturedAtMs?: number | null }[],
+  ): Promise<RecordingAction[]> {
+    const { data } = await http.post<RecordingAction[]>(`/api/recordings/${recordingId}/actions/live`, { actions });
+    return data;
+  },
+
   async updateNote(recordingId: string, noteId: string, text: string): Promise<void> {
     await http.put(`/api/recordings/${recordingId}/notes/${noteId}`, { text });
   },
