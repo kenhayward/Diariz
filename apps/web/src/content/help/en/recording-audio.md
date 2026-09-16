@@ -223,7 +223,7 @@ instead of a note - the composer switches back to Note afterwards so you do not 
 lines as actions by mistake. Any note already on the stream can be turned into an action too, and back
 again. An action you record this way is yours by default, though you can change who it is for, and it
 shows up in the Actions tab as soon as the recording uploads - you do not have to wait for extraction
-to run, and extraction will not remove it.
+to run, and extraction will not remove it as long as it stays pinned.
 
 ### Keeping notes visible during a call (desktop app)
 

@@ -54,7 +54,10 @@ up straight away on the meeting's own **Action items** panel once the recording 
 
 Automatic extraction still runs afterwards. It is told what you already recorded and adds only what it
 finds beyond that, skipping anything that repeats an action you already have. If you re-extract by hand,
-the actions you recorded live stay - see above.
+the actions you recorded live stay for as long as they are pinned - see above. Unpin one and the next
+re-extract treats it like any other extracted action and replaces it.
+
+## Across all your meetings
 
 The left panel's **Actions** tab collects every action you have pinned, from every meeting. From there
 you can:
