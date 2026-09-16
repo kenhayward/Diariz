@@ -177,6 +177,20 @@ describe("useLiveNotes", () => {
     expect(api.snapshot()[0]).toMatchObject({ kind: "action", actor: "Grace", deadline: "Friday" });
   });
 
+  it("leaves a field alone when a later patch omits it, rather than clearing it", () => {
+    // The pop-out channel's updateAction command always carries both keys, undefined where the user
+    // touched only one field. A patch that overwrote a real value with that undefined would look like
+    // the pop-out just cleared it every time only one field was edited.
+    render(<Harness />);
+    act(() => api.add("chase the invoice"));
+    const id = api.snapshot()[0].id;
+
+    act(() => api.updateAction(id, { actor: "Grace" }));
+    act(() => api.updateAction(id, { deadline: "Friday", actor: undefined }));
+
+    expect(api.snapshot()[0]).toMatchObject({ actor: "Grace", deadline: "Friday" });
+  });
+
   it("mirrors kind, owner and due date into the stash", () => {
     render(<Harness />);
     act(() => api.add("book the room", undefined, "action"));

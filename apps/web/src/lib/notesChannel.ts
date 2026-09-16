@@ -14,14 +14,14 @@
 /// hidden host is not throttled, so its replies stay prompt. The visible window therefore does the
 /// polling. See the spike results in docs/superpowers/specs/2026-08-13-notes-popout-window-design.md.
 
-import type { MeetingNote, ShotView } from "./types";
+import type { LineKind, LiveNoteLine, ShotView } from "./types";
 import type { LiveTranscript } from "./liveTranscript";
 
 export const NOTES_CHANNEL = "diariz.live-notes";
 
 /// Everything the pop-out renders. Rebuilt by the host on every publish.
 export interface NotesState {
-  lines: MeetingNote[];
+  lines: LiveNoteLine[];
   shots: ShotView[];
   /// Whether this shell can capture screenshots at all. Sent as a flag rather than read from
   /// `window.diariz` in the client: the pop-out's preload deliberately does not expose the capture
@@ -66,9 +66,11 @@ type HostMessage = { type: "state"; state: NotesState } | { type: "ended" };
 type ClientMessage =
   | { type: "hello" }
   | { type: "ping" }
-  | { type: "add"; text: string; atMs?: number }
+  | { type: "add"; text: string; atMs?: number; kind?: LineKind }
   | { type: "edit"; id: string; text: string }
   | { type: "delete"; id: string }
+  | { type: "setKind"; id: string; kind: LineKind }
+  | { type: "updateAction"; id: string; actor?: string; deadline?: string }
   | { type: "deleteShot"; id: string }
   | { type: "capture" }
   | { type: "toggle-auto-capture" }
@@ -103,9 +105,12 @@ export interface NotesHostHandlers {
   /// `atMs` present means the client pinned the note to a moment; absent means it follows the clock,
   /// and the host stamps it. Deliberately optional rather than defaulted to zero - a zero would file
   /// every ordinary note at the very start of the meeting.
-  onAdd(text: string, atMs?: number): void;
+  onAdd(text: string, atMs?: number, kind?: LineKind): void;
   onEdit(id: string, text: string): void;
   onDelete(id: string): void;
+  /// Turn a note into an action or back. Both windows show the same line, so this is addressed by id.
+  onSetKind(id: string, kind: LineKind): void;
+  onUpdateAction(id: string, patch: { actor?: string; deadline?: string }): void;
   onDeleteShot(id: string): void;
   onCapture(): void;
   onToggleAutoCapture(): void;
@@ -151,13 +156,19 @@ export function createNotesHost(
         publish();
         break;
       case "add":
-        handlers.onAdd(m.text, m.atMs);
+        handlers.onAdd(m.text, m.atMs, m.kind);
         break;
       case "edit":
         handlers.onEdit(m.id, m.text);
         break;
       case "delete":
         handlers.onDelete(m.id);
+        break;
+      case "setKind":
+        handlers.onSetKind(m.id, m.kind);
+        break;
+      case "updateAction":
+        handlers.onUpdateAction(m.id, { actor: m.actor, deadline: m.deadline });
         break;
       case "deleteShot":
         handlers.onDeleteShot(m.id);
@@ -203,9 +214,11 @@ export interface NotesClientHandlers {
 }
 
 export interface NotesClient {
-  add(text: string, atMs?: number): void;
+  add(text: string, atMs?: number, kind?: LineKind): void;
   edit(id: string, text: string): void;
   remove(id: string): void;
+  setKind(id: string, kind: LineKind): void;
+  updateAction(id: string, patch: { actor?: string; deadline?: string }): void;
   removeShot(id: string): void;
   capture(): void;
   toggleAutoCapture(): void;
@@ -254,9 +267,11 @@ export function createNotesClient(
   send({ type: "hello" });
 
   return {
-    add: (text, atMs) => send({ type: "add", text, atMs }),
+    add: (text, atMs, kind) => send({ type: "add", text, atMs, kind }),
     edit: (id, text) => send({ type: "edit", id, text }),
     remove: (id) => send({ type: "delete", id }),
+    setKind: (id, kind) => send({ type: "setKind", id, kind }),
+    updateAction: (id, patch) => send({ type: "updateAction", id, ...patch }),
     removeShot: (id) => send({ type: "deleteShot", id }),
     capture: () => send({ type: "capture" }),
     toggleAutoCapture: () => send({ type: "toggle-auto-capture" }),

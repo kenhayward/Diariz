@@ -1123,6 +1123,8 @@ export default function Recorder({
       onToggleAutoCapture: requestToggleAutoCapture,
       onShotToChat: sendShotToChat,
       onTranscriptToChat: sendTranscriptToChat,
+      onSetKind: notes.setKind,
+      onUpdateAction: notes.updateAction,
     },
   });
 

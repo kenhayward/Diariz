@@ -116,7 +116,8 @@ export function useLiveNotes({
     },
 
     updateAction(id: string, patch: { actor?: string; deadline?: string }) {
-      mirror(linesRef.current.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+      const clean = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+      mirror(linesRef.current.map((l) => (l.id === id ? { ...l, ...clean } : l)));
     },
 
     async reset() {
