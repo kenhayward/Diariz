@@ -25,6 +25,9 @@ export const RECENT: Release[] = [
       "Automatic action extraction adds to actions recorded during the meeting instead of being skipped",
       "Re-extracting actions keeps pinned actions",
     ],
+    fixed: [
+      "The MinIO image now comes from quay.io, pinned to the same build as before: Docker Hub stopped serving minio/minio, which broke integration tests and fresh deployments",
+    ],
   },
   {
     version: "0.271.3",
