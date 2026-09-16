@@ -298,4 +298,59 @@ public class RecordingActionsControllerTests
         Assert.NotNull(seenOperation);
         Assert.Equal(LlmCallKind.ExtractActions, seenKind);
     }
+
+    [Fact]
+    public async Task CreateLive_AddsPinnedLiveActions_AfterExisting_WithoutMarkingExtracted()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribed(db, userId);
+        db.RecordingActions.Add(new RecordingAction { Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Existing", Ordinal = 4 });
+        await db.SaveChangesAsync();
+
+        var result = await Build(db, userId, new FakeActionsClient()).CreateLive(rec.Id, new CreateLiveActionsRequest(
+        [
+            new CreateLiveActionLine("  Book the room ", "Ada", "Friday", 61_000),
+            new CreateLiveActionLine("   "),                       // blank: skipped
+            new CreateLiveActionLine("Send the deck"),
+        ]));
+
+        var dtos = result.Value!;
+        Assert.Equal(["Book the room", "Send the deck"], dtos.Select(d => d.Text));
+        Assert.All(dtos, d => Assert.True(d.Pinned));
+        Assert.Equal([5, 6], dtos.Select(d => d.Ordinal));
+
+        var rows = await db.RecordingActions.Where(a => a.Source == ActionSource.Live).OrderBy(a => a.Ordinal).ToListAsync();
+        Assert.Equal(61_000, rows[0].CapturedAtMs);
+        Assert.Equal("Ada", rows[0].Actor);
+        Assert.Equal("", rows[1].Actor);
+        // The whole point: the pipeline must still extract after a live action lands.
+        Assert.Null((await db.Recordings.FindAsync(rec.Id))!.ActionsExtractedAt);
+    }
+
+    [Fact]
+    public async Task CreateLive_OnSomeoneElsesRecording_Is404_AndWritesNothing()
+    {
+        using var db = TestDb.Create();
+        var rec = await SeedTranscribed(db, Guid.NewGuid());
+
+        var result = await Build(db, Guid.NewGuid(), new FakeActionsClient())
+            .CreateLive(rec.Id, new CreateLiveActionsRequest([new CreateLiveActionLine("Book the room")]));
+
+        Assert.IsType<NotFoundResult>(result.Result);
+        Assert.Empty(await db.RecordingActions.ToListAsync());
+    }
+
+    [Fact]
+    public async Task CreateLive_TruncatesLongText()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribed(db, userId);
+
+        var dto = (await Build(db, userId, new FakeActionsClient())
+            .CreateLive(rec.Id, new CreateLiveActionsRequest([new CreateLiveActionLine(new string('x', 3000))]))).Value!.Single();
+
+        Assert.Equal(2048, dto.Text.Length);
+    }
 }

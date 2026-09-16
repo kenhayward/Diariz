@@ -1055,6 +1055,52 @@
         ],
         "type": "object"
       },
+      "CreateLiveActionLine": {
+        "properties": {
+          "actor": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "capturedAtMs": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
+          "deadline": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
+      "CreateLiveActionsRequest": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/CreateLiveActionLine"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "actions"
+        ],
+        "type": "object"
+      },
       "CreateMcpTokenRequest": {
         "properties": {
           "name": {
@@ -11796,6 +11842,77 @@
           }
         },
         "summary": "Extract action items from the transcript",
+        "tags": [
+          "RecordingActions"
+        ]
+      }
+    },
+    "/api/recordings/{recordingId}/actions/live": {
+      "post": {
+        "description": "Appends the actions someone recorded while the meeting was running, in one call. Each is created **already pinned**, so it appears in the Actions views straight away, and carries the point in the recording where it was typed.\n\nUnlike adding an action by hand, this does **not** stop automatic extraction: when the transcript is ready the extracted actions are added alongside these, skipping any that repeat them. Blank lines are skipped and text over 2048 characters is truncated, so read the response for what was created. Owner only.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recordingId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateLiveActionsRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateLiveActionsRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateLiveActionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RecordingActionDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RecordingActionDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RecordingActionDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Add actions recorded during the meeting",
         "tags": [
           "RecordingActions"
         ]

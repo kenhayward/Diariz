@@ -162,6 +162,49 @@ public class RecordingActionsController : ControllerBase
         return ToDto(action);
     }
 
+    [HttpPost("live")]
+    [EndpointSummary("Add actions recorded during the meeting")]
+    [EndpointDescription(
+        "Appends the actions someone recorded while the meeting was running, in one call. Each is created " +
+        "**already pinned**, so it appears in the Actions views straight away, and carries the point in the " +
+        "recording where it was typed.\n\n" +
+        "Unlike adding an action by hand, this does **not** stop automatic extraction: when the transcript is " +
+        "ready the extracted actions are added alongside these, skipping any that repeat them. Blank lines are " +
+        "skipped and text over 2048 characters is truncated, so read the response for what was created. Owner only.")]
+    public async Task<ActionResult<IReadOnlyList<RecordingActionDto>>> CreateLive(Guid recordingId, CreateLiveActionsRequest req)
+    {
+        if (!await OwnsAsync(recordingId)) return NotFound();
+
+        var next = (await _db.RecordingActions
+            .Where(a => a.RecordingId == recordingId)
+            .Select(a => (int?)a.Ordinal)
+            .MaxAsync() ?? -1) + 1;
+
+        var fresh = new List<RecordingAction>();
+        foreach (var line in req.Actions)
+        {
+            var text = (line.Text ?? "").Trim();
+            if (text.Length == 0) continue;
+            if (text.Length > 2048) text = text[..2048];
+            fresh.Add(new RecordingAction
+            {
+                Id = Guid.NewGuid(),
+                RecordingId = recordingId,
+                Text = text,
+                Actor = line.Actor?.Trim() ?? "",
+                Deadline = line.Deadline?.Trim() ?? "",
+                Ordinal = next++,
+                Pinned = true,
+                Source = ActionSource.Live,
+                CapturedAtMs = line.CapturedAtMs,
+            });
+        }
+        // ActionsExtractedAt is deliberately left alone - see ActionsProcessor, which merges rather than skips.
+        _db.RecordingActions.AddRange(fresh);
+        await _db.SaveChangesAsync();
+        return fresh.Select(ToDto).ToList();
+    }
+
     [HttpPut("{actionId:guid}")]
     [EndpointSummary("Edit an action item")]
     [EndpointDescription(
