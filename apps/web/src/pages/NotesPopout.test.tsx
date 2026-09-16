@@ -9,6 +9,8 @@ const client = {
   toggleAutoCapture: vi.fn(),
   edit: vi.fn(),
   remove: vi.fn(),
+  setKind: vi.fn(),
+  updateAction: vi.fn(),
   removeShot: vi.fn(),
   capture: vi.fn(),
   changeArea: vi.fn(),

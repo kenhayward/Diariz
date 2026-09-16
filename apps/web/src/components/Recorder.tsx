@@ -81,6 +81,7 @@ import {
   loadPendingNotes,
   clearPendingNotes,
   type PendingNotes,
+  type PendingNoteLine,
 } from "../lib/pendingNotes";
 import {
   canCaptureScreenshots,
@@ -712,19 +713,34 @@ export default function Recorder({
   /// Attach lines to the created recording. Success clears the durable stash; failure keeps the lines (with
   /// the recording id) and surfaces the retry banner. A notes failure never fails the upload itself.
   async function attachNotes(recordingId: string, fromRetry?: PendingNotes) {
-    const lines = fromRetry
+    let remaining: PendingNoteLine[] = fromRetry
       ? fromRetry.lines
-      : notes.snapshot().map((l) => ({ text: l.text, capturedAtMs: l.capturedAtMs }));
-    if (lines.length === 0) {
+      : notes.snapshot().map((l) => ({
+          text: l.text, capturedAtMs: l.capturedAtMs, kind: l.kind, actor: l.actor, deadline: l.deadline,
+        }));
+    if (remaining.length === 0) {
       if (userId) void clearPendingNotes(userId);
       return;
     }
     try {
-      await api.createNotes(recordingId, lines);
+      // Two calls, and each part leaves `remaining` the moment it lands. A retry after a partial failure must
+      // send only what is still missing, or the part that succeeded would be attached twice.
+      const noteLines = remaining.filter((l) => l.kind !== "action");
+      if (noteLines.length > 0) {
+        await api.createNotes(recordingId, noteLines.map((l) => ({ text: l.text, capturedAtMs: l.capturedAtMs })));
+        remaining = remaining.filter((l) => l.kind === "action");
+      }
+      if (remaining.length > 0) {
+        await api.createLiveActions(
+          recordingId,
+          remaining.map((l) => ({ text: l.text, actor: l.actor ?? "", deadline: l.deadline ?? "", capturedAtMs: l.capturedAtMs })),
+        );
+        remaining = [];
+      }
       await notes.reset();
       setNotesAttach(null);
     } catch {
-      const stash: PendingNotes = { userId: userId ?? "", recordingId, lines, updatedAt: Date.now() };
+      const stash: PendingNotes = { userId: userId ?? "", recordingId, lines: remaining, updatedAt: Date.now() };
       if (userId) await savePendingNotes(stash);
       setNotesAttach(stash);
     }
