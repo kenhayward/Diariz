@@ -512,7 +512,7 @@ public record UpdateRecordingActionRequest(string? Text, string? Actor, string? 
 /// <summary>Actions typed into the live notes panel during a meeting, attached in one call after the upload.</summary>
 public record CreateLiveActionsRequest(IReadOnlyList<CreateLiveActionLine> Actions);
 /// <param name="CapturedAtMs">Offset into the recorded clock when the action was typed.</param>
-public record CreateLiveActionLine(string Text, string? Actor = null, string? Deadline = null, long? CapturedAtMs = null);
+public record CreateLiveActionLine(string? Text, string? Actor = null, string? Deadline = null, long? CapturedAtMs = null);
 
 /// <summary>One line of the user's own meeting notes. <paramref name="CapturedAtMs"/> is the offset into
 /// the recording clock (null = pre-meeting/post-hoc); immutable after capture.</summary>

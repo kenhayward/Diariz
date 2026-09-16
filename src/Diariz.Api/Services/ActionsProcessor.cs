@@ -80,8 +80,8 @@ public static class ActionsProcessor
             // late-night take or a recovered upload.
             // Actions recorded live during the meeting are already on the recording (pinned). Extraction adds to
             // them rather than replacing them: the model is told what is there, and exact repeats are dropped as a
-            // backstop. Only live rows are listed - this path only runs when ActionsExtractedAt is null, so there
-            // is nothing else a user could have curated yet.
+            // backstop. Every existing row is listed, and with ActionsExtractedAt null those can only be live ones:
+            // adding an action by hand, and a merge that brings any actions across, both set it.
             var existingTexts = rec.Actions.OrderBy(a => a.Ordinal).Select(a => a.Text).ToList();
             var extracted = await client.ExtractAsync(
                 cfg, segs, template, rec.StartedAt ?? rec.CreatedAt, existingTexts, ct);
