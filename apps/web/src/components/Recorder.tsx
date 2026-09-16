@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage, getToken } from "../lib/api";
-import { userIdFromToken } from "../lib/jwt";
+import { userIdFromToken, fullNameFromToken } from "../lib/jwt";
 import {
   getStream,
   getCombinedStream,
@@ -681,6 +681,8 @@ export default function Recorder({
     userId,
     // The recorded clock, which is pause-aware. The hook never reads a clock of its own.
     stampMs: () => timing.elapsedMs(timingRef.current, Date.now()),
+    // The signed-in user owns what they type, until they say otherwise.
+    defaultActor: () => fullNameFromToken(getToken()) ?? "",
   });
 
   // The notes popover's open state lives in the shared hub (id "notes"); this only persists the *preference*

@@ -13,8 +13,14 @@ import { savePendingNotes, clearPendingNotes } from "./pendingNotes";
 let stamp = 0;
 let api: LiveNotes;
 
-function Harness({ userId = "u1" }: { userId?: string | null }) {
-  api = useLiveNotes({ userId, stampMs: () => stamp });
+function Harness({
+  userId = "u1",
+  defaultActor = () => "Ada Lovelace",
+}: {
+  userId?: string | null;
+  defaultActor?: () => string;
+}) {
+  api = useLiveNotes({ userId, stampMs: () => stamp, defaultActor });
   return <div data-testid="lines">{api.lines.map((l) => `${l.text}@${l.capturedAtMs}`).join("|")}</div>;
 }
 
@@ -147,6 +153,41 @@ describe("useLiveNotes", () => {
     expect(rendered()).toBe("");
     expect(api.snapshot()).toEqual([]);
     expect(clearPendingNotes).toHaveBeenCalledWith("u1");
+  });
+
+  it("files an action owned by the default actor", () => {
+    render(<Harness />);
+    stamp = 5_000;
+    act(() => api.add("book the room", undefined, "action"));
+    const [line] = api.snapshot();
+    expect(line.kind).toBe("action");
+    expect(line.actor).toBe("Ada Lovelace");
+    expect(line.capturedAtMs).toBe(5_000);
+  });
+
+  it("promotes a note to an action, filling the owner only if it has none, and back", () => {
+    render(<Harness />);
+    act(() => api.add("chase the invoice"));
+    const id = api.snapshot()[0].id;
+    act(() => api.setKind(id, "action"));
+    expect(api.snapshot()[0]).toMatchObject({ kind: "action", actor: "Ada Lovelace" });
+    act(() => api.updateAction(id, { actor: "Grace", deadline: "Friday" }));
+    act(() => api.setKind(id, "note"));
+    act(() => api.setKind(id, "action"));
+    expect(api.snapshot()[0]).toMatchObject({ kind: "action", actor: "Grace", deadline: "Friday" });
+  });
+
+  it("mirrors kind, owner and due date into the stash", () => {
+    render(<Harness />);
+    act(() => api.add("book the room", undefined, "action"));
+    const saved = vi.mocked(savePendingNotes).mock.calls.at(-1)![0];
+    expect(saved.lines[0]).toEqual({
+      text: "book the room",
+      capturedAtMs: expect.any(Number),
+      kind: "action",
+      actor: "Ada Lovelace",
+      deadline: undefined,
+    });
   });
 
   it("degrades to memory-only with no signed-in user", async () => {
