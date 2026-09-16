@@ -20,6 +20,8 @@ const baseProps: NotesPopoverProps = {
   onAdd: () => {},
   onEdit: () => {},
   onDelete: () => {},
+  onSetKind: () => {},
+  onUpdateAction: () => {},
   shots: [],
   onDeleteShot: () => {},
   elapsedMs: 0,
@@ -248,7 +250,7 @@ describe("NotesPopover one stream", () => {
     fireEvent.change(box, { target: { value: "a thought" } });
     fireEvent.keyDown(box, { key: "Enter" });
 
-    expect(onAdd).toHaveBeenCalledWith("a thought", undefined);
+    expect(onAdd).toHaveBeenCalledWith("a thought", undefined, "note");
   });
 });
 

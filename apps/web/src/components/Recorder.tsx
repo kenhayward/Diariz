@@ -1911,6 +1911,8 @@ export default function Recorder({
               onAdd={notes.add}
               onEdit={notes.edit}
               onDelete={notes.remove}
+              onSetKind={notes.setKind}
+              onUpdateAction={notes.updateAction}
               shots={liveShots}
               onDeleteShot={deleteLiveShot}
               // Already ticking at 250ms while recording (`startTicker`), so the header clock and the

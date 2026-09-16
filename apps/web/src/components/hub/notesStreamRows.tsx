@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { formatDuration } from "../../lib/format";
-import { IconArrowRight, IconClose, IconPencil, IconPlus } from "./hubGlyphs";
+import { IconArrowRight, IconCheck, IconClose, IconPencil, IconPlus } from "./hubGlyphs";
 import type { LiveSegment } from "../../lib/liveTranscript";
-import type { MeetingNote, ShotView } from "../../lib/types";
+import type { LineKind, LiveNoteLine, ShotView } from "../../lib/types";
 
 /// The three row kinds of the live notes stream. Split out from `LiveNotesStream` so the panel file is
 /// about layout and state and these are about one row each.
@@ -142,11 +142,13 @@ export function NoteRow({
   stampColumnPx,
   onEdit,
   onDelete,
+  onSetKind,
 }: {
-  note: MeetingNote;
+  note: LiveNoteLine;
   stampColumnPx: number;
   onEdit: (id: string, text: string) => void;
   onDelete: (id: string) => void;
+  onSetKind?: (id: string, kind: LineKind) => void;
 }) {
   const { t } = useTranslation("workspace");
   const [editing, setEditing] = useState(false);
@@ -212,6 +214,11 @@ export function NoteRow({
           >
             {note.text}
           </span>
+          {onSetKind && (
+            <RowButton label={t("notesMakeAction")} onClick={() => onSetKind(note.id, "action")}>
+              <IconCheck size={12} />
+            </RowButton>
+          )}
           <RowButton
             label={t("notesEdit")}
             onClick={() => {
@@ -220,6 +227,90 @@ export function NoteRow({
             }}
           >
             <IconPencil size={12} />
+          </RowButton>
+          <RowButton label={t("notesDelete")} onClick={() => onDelete(note.id)} className="hub-row-delete">
+            <IconClose size={12} />
+          </RowButton>
+        </>
+      )}
+    </li>
+  );
+}
+
+export function ActionRow({
+  note,
+  stampColumnPx,
+  onEdit,
+  onDelete,
+  onSetKind,
+  onUpdateAction,
+}: {
+  note: LiveNoteLine;
+  stampColumnPx: number;
+  onEdit: (id: string, text: string) => void;
+  onDelete: (id: string) => void;
+  onSetKind: (id: string, kind: LineKind) => void;
+  onUpdateAction: (id: string, patch: { actor?: string; deadline?: string }) => void;
+}) {
+  const { t } = useTranslation("workspace");
+  const [mode, setMode] = useState<"view" | "text" | "details">("view");
+  const [draft, setDraft] = useState("");
+  const [actor, setActor] = useState("");
+  const [deadline, setDeadline] = useState("");
+
+  const field: React.CSSProperties = {
+    minWidth: 0, flex: 1, border: "1px solid var(--hub-field-border)", borderRadius: 6,
+    background: "var(--hub-surface)", color: "var(--hub-text)", fontSize: 13, padding: "2px 6px",
+  };
+
+  return (
+    <li
+      data-testid="stream-action"
+      className="hub-note-row hub-stream-row"
+      style={{
+        display: "flex", alignItems: "flex-start", gap: 8, padding: "5px 4px 5px 0", borderRadius: 7,
+        boxShadow: "inset 2px 0 0 var(--hub-green)",
+      }}
+    >
+      <Stamp ms={note.capturedAtMs ?? 0} widthPx={stampColumnPx} color="var(--hub-green-text)" weight={600} />
+      {mode === "text" ? (
+        <span style={{ display: "flex", minWidth: 0, flex: 1, alignItems: "center", gap: 4 }}>
+          <input value={draft} onChange={(e) => setDraft(e.target.value)} aria-label={t("notesEdit")} autoFocus style={field} />
+          <button type="button" style={pillButton} onClick={() => { onEdit(note.id, draft.trim()); setMode("view"); }}>
+            {t("notesSave")}
+          </button>
+          <button type="button" style={pillButton} onClick={() => setMode("view")}>{t("notesCancel")}</button>
+        </span>
+      ) : mode === "details" ? (
+        <span style={{ display: "flex", minWidth: 0, flex: 1, flexWrap: "wrap", alignItems: "center", gap: 4 }}>
+          <input value={actor} onChange={(e) => setActor(e.target.value)} aria-label={t("notesActionOwner")}
+            placeholder={t("notesActionOwner")} autoFocus style={field} />
+          <input value={deadline} onChange={(e) => setDeadline(e.target.value)} aria-label={t("notesActionDue")}
+            placeholder={t("notesActionDue")} style={field} />
+          <button type="button" style={pillButton}
+            onClick={() => { onUpdateAction(note.id, { actor: actor.trim(), deadline: deadline.trim() }); setMode("view"); }}>
+            {t("notesSave")}
+          </button>
+          <button type="button" style={pillButton} onClick={() => setMode("view")}>{t("notesCancel")}</button>
+        </span>
+      ) : (
+        <>
+          <span style={{ minWidth: 0, flex: 1, fontSize: 13, lineHeight: 1.6, fontWeight: 500, color: "var(--hub-text)", wordBreak: "break-word" }}>
+            {note.text}
+            <span style={{ display: "block", fontSize: 11, color: "var(--hub-muted)" }}>
+              {note.actor || t("notesActionNoOwner")}
+              {note.deadline ? ` - ${note.deadline}` : ""}
+            </span>
+          </span>
+          <RowButton label={t("notesActionDetails")}
+            onClick={() => { setActor(note.actor ?? ""); setDeadline(note.deadline ?? ""); setMode("details"); }}>
+            <IconArrowRight size={12} />
+          </RowButton>
+          <RowButton label={t("notesEdit")} onClick={() => { setDraft(note.text); setMode("text"); }}>
+            <IconPencil size={12} />
+          </RowButton>
+          <RowButton label={t("notesMakeNote")} onClick={() => onSetKind(note.id, "note")}>
+            <IconClose size={10} />
           </RowButton>
           <RowButton label={t("notesDelete")} onClick={() => onDelete(note.id)} className="hub-row-delete">
             <IconClose size={12} />

@@ -76,7 +76,7 @@ describe("NotesPopout", () => {
     fireEvent.keyDown(composer(), { key: "Enter" });
 
     // No stamp: the host reads its own pause-aware clock, which this window cannot.
-    expect(client.add).toHaveBeenCalledWith("Second point", undefined);
+    expect(client.add).toHaveBeenCalledWith("Second point", undefined, "note");
     // The host owns the list. Nothing appears here until it publishes the stamped line back.
     expect(screen.queryByText("Second point")).toBeNull();
   });
@@ -171,7 +171,7 @@ describe("NotesPopout", () => {
     fireEvent.change(composer(), { target: { value: "about that" } });
     fireEvent.keyDown(composer(), { key: "Enter" });
 
-    expect(client.add).toHaveBeenCalledWith("about that", 20_000);
+    expect(client.add).toHaveBeenCalledWith("about that", 20_000, "note");
   });
 
   it("shows the live transcript inline, with no tab to reach it", () => {
