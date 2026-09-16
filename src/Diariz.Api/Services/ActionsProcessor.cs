@@ -78,7 +78,7 @@ public static class ActionsProcessor
             // The meeting's own date anchors relative deadlines ("by next Friday"), so it must be when the
             // meeting happened - not when the audio was uploaded, which can be a different day entirely for a
             // late-night take or a recovered upload.
-            var extracted = await client.ExtractAsync(cfg, segs, template, rec.StartedAt ?? rec.CreatedAt, ct);
+            var extracted = await client.ExtractAsync(cfg, segs, template, rec.StartedAt ?? rec.CreatedAt, ct: ct);
 
             // Seed the (empty) action list with the extraction; RemoveRange is a no-op defensively.
             db.RecordingActions.RemoveRange(rec.Actions);
