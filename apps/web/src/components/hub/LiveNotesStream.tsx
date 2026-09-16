@@ -373,7 +373,7 @@ export default function LiveNotesStream({
                   onPin={pin}
                 />
               );
-            if (item.kind === "note")
+            if (item.kind === "note" || item.kind === "action")
               return (
                 <NoteRow
                   key={item.id}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildStream, streamCounts, stampColumnPx } from "./notesStream";
 import type { LiveSegment } from "./liveTranscript";
-import type { MeetingNote, ShotView } from "./types";
+import type { LiveNoteLine, ShotView } from "./types";
 
 const seg = (over: Partial<LiveSegment> & { startMs: number }): LiveSegment => ({
   id: `s-${over.startMs}`,
@@ -11,11 +11,12 @@ const seg = (over: Partial<LiveSegment> & { startMs: number }): LiveSegment => (
   ...over,
 });
 
-const note = (over: Partial<MeetingNote> & { capturedAtMs: number | null }): MeetingNote => ({
-  id: `n-${over.capturedAtMs}`,
+const note = (over: Partial<LiveNoteLine> = {}): LiveNoteLine => ({
+  id: `n-${over.capturedAtMs ?? 0}`,
   text: "a thought",
   ordinal: 0,
   createdAt: "2026-09-03T10:00:00.000Z",
+  capturedAtMs: 0,
   ...over,
 });
 
@@ -205,7 +206,30 @@ describe("streamCounts", () => {
       shots: [shot(3_000)],
     });
 
-    expect(counts).toEqual({ notes: 2, captures: 1 });
+    expect(counts).toEqual({ notes: 2, actions: 0, captures: 1 });
+  });
+});
+
+describe("actions", () => {
+  it("files an action line as its own kind, on the same timeline as notes", () => {
+    const items = build({
+      lines: [note({ id: "1", capturedAtMs: 20_000 }), note({ id: "2", capturedAtMs: 10_000, kind: "action" })],
+    });
+    expect(items.map((i) => [i.kind, i.id])).toEqual([
+      ["action", "a:2"],
+      ["note", "n:1"],
+    ]);
+  });
+
+  it("shows only actions under the actions filter, and only notes under notes", () => {
+    const lines = [note({ id: "1" }), note({ id: "2", kind: "action" })];
+    expect(build({ lines, filter: "actions" }).map((i) => i.kind)).toEqual(["action"]);
+    expect(build({ lines, filter: "notes" }).map((i) => i.kind)).toEqual(["note"]);
+  });
+
+  it("counts notes and actions separately", () => {
+    const lines = [note({ id: "1" }), note({ id: "2", kind: "action" }), note({ id: "3", kind: "note" })];
+    expect(streamCounts({ lines, shots: [] })).toEqual({ notes: 2, actions: 1, captures: 0 });
   });
 });
 

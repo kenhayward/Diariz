@@ -506,6 +506,17 @@ export interface MeetingNote {
   createdAt: string;
 }
 
+export type LineKind = "note" | "action";
+
+/// A line in the live notes panel. Either a note or an action typed during the meeting. `kind` absent
+/// means note, which is what keeps every `MeetingNote` and every stash written before actions existed valid.
+export interface LiveNoteLine extends MeetingNote {
+  kind?: LineKind;
+  /// Actions only: who owns it (free text, like `RecordingAction.actor`) and when it is due.
+  actor?: string;
+  deadline?: string;
+}
+
 /// The part of a not-yet-uploaded capture that the notes UI needs: enough to show a thumbnail and to
 /// delete it by name. `PendingShot` (lib/pendingScreenshots.ts) satisfies this structurally, and it is
 /// also what crosses the pop-out channel - the full-resolution PNG never leaves the main window.

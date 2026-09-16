@@ -12,9 +12,9 @@
 /// ones. Callers `useMemo` this on `[lines, shots, segments, filter]`.
 
 import type { LiveSegment } from "./liveTranscript";
-import type { MeetingNote, ShotView } from "./types";
+import type { LiveNoteLine, ShotView } from "./types";
 
-export type StreamFilter = "all" | "notes" | "captures";
+export type StreamFilter = "all" | "notes" | "actions" | "captures";
 
 export type StreamItem =
   | {
@@ -26,11 +26,12 @@ export type StreamItem =
       /// against the previous *transcript* segment, not the previous row - see `buildStream`.
       showSpeaker: boolean;
     }
-  | { kind: "note"; id: string; atMs: number; note: MeetingNote }
+  | { kind: "note"; id: string; atMs: number; note: LiveNoteLine }
+  | { kind: "action"; id: string; atMs: number; note: LiveNoteLine }
   | { kind: "capture"; id: string; atMs: number; shot: ShotView };
 
 export interface StreamInput {
-  lines: MeetingNote[];
+  lines: LiveNoteLine[];
   shots: ShotView[];
   segments: LiveSegment[];
   filter: StreamFilter;
@@ -59,23 +60,26 @@ export function buildStream({ lines, shots, segments, filter }: StreamInput): St
         }))
       : [];
 
-  const notes: StreamItem[] =
-    filter === "all" || filter === "notes"
-      ? lines.map((note) => ({
+  const isAction = (l: LiveNoteLine) => l.kind === "action";
+  const wanted = (l: LiveNoteLine) =>
+    filter === "all" || (filter === "notes" && !isAction(l)) || (filter === "actions" && isAction(l));
+
+  const notes: StreamItem[] = lines.filter(wanted).map((note) =>
+    isAction(note)
+      ? { kind: "action", id: `a:${note.id}`, atMs: note.capturedAtMs ?? 0, note }
+      : {
           kind: "note",
           id: `n:${note.id}`,
           // A line adopted from a pre-meeting stash has no recorded moment. It belongs at the top - it
           // was written before anything else in the list - and `null` would sort nowhere sensible.
           atMs: note.capturedAtMs ?? 0,
           note,
-        }))
-      : [];
+        },
+  );
 
-  // Split out ahead of the sort rather than given a sentinel stamp. An adopted line shows 0:00 like any
-  // other zero-stamped row, so it cannot be ordered by its `atMs`; putting it first in the input is what
-  // a stable sort then honours, and nothing in a recording starts before zero to displace it.
-  const adopted = notes.filter((n) => n.kind === "note" && n.note.capturedAtMs === null);
-  const stamped = notes.filter((n) => n.kind === "note" && n.note.capturedAtMs !== null);
+  // Split out ahead of the sort rather than given a sentinel stamp - see the note on `atMs` above.
+  const adopted = notes.filter((n) => (n.kind === "note" || n.kind === "action") && n.note.capturedAtMs === null);
+  const stamped = notes.filter((n) => (n.kind === "note" || n.kind === "action") && n.note.capturedAtMs !== null);
 
   const captures: StreamItem[] =
     filter === "all" || filter === "captures"
@@ -87,11 +91,13 @@ export function buildStream({ lines, shots, segments, filter }: StreamInput): St
 
 /// What the filter chips count. Always the whole meeting, never the filtered view: a "Notes 4" chip
 /// that read "Notes 0" while Captures was selected would be telling the user their notes had gone.
-export function streamCounts({ lines, shots }: { lines: MeetingNote[]; shots: ShotView[] }): {
+export function streamCounts({ lines, shots }: { lines: LiveNoteLine[]; shots: ShotView[] }): {
   notes: number;
+  actions: number;
   captures: number;
 } {
-  return { notes: lines.length, captures: shots.length };
+  const actions = lines.filter((l) => l.kind === "action").length;
+  return { notes: lines.length - actions, actions, captures: shots.length };
 }
 
 /// How wide the stamp column has to be, in px, for the meeting's current length.
