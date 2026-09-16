@@ -57,6 +57,14 @@ export const IconCheck = ({ size }: { size?: number } = {}) => (
   </Glyph>
 );
 
+/// Three ruled lines: turn this action back into a plain note. Not the X it used to share with Delete, which
+/// sits right beside it in the same row - one slip would lose the line, and the live panel has no undo.
+export const IconNote = ({ size }: { size?: number } = {}) => (
+  <Glyph size={size}>
+    <path d="M5 7h14M5 12h14M5 17h9" />
+  </Glyph>
+);
+
 /// A speech bubble with an arrow leaving it: send this into the chat.
 export const IconChatArrow = ({ size }: { size?: number } = {}) => (
   <Glyph size={size}>

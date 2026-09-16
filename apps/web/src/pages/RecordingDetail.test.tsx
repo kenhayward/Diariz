@@ -768,6 +768,28 @@ describe("RecordingDetail", () => {
     expect((await screen.findByLabelText("Action 1") as HTMLInputElement).value).toBe("Send the report");
   });
 
+  it("counts only the newly extracted actions, not the pinned ones it kept", async () => {
+    // Extract returns the kept pinned rows followed by the fresh ones. Counting the whole list reported
+    // "Extracted 3 actions" for a meeting where nothing new was found.
+    const pinned = (id: string, text: string) => ({ id, text, actor: "", deadline: "", ordinal: 0, pinned: true });
+    (api.extractActions as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([
+        pinned("p1", "Book the room"),
+        pinned("p2", "Send the deck"),
+        { id: "f1", text: "Chase the invoice", actor: "", deadline: "", ordinal: 2, pinned: false },
+      ])
+      .mockResolvedValueOnce([pinned("p1", "Book the room"), pinned("p2", "Send the deck")]);
+    renderPage(base);
+    await loaded();
+    openTab("Actions");
+
+    fireEvent.click(screen.getByRole("button", { name: /extract action items/i }));
+    expect(await screen.findByText("Extracted 1 action.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /extract action items/i }));
+    expect(await screen.findByText("No actions were found in this transcript.")).toBeTruthy();
+  });
+
   it("shows extraction progress in the status bar (not an in-page banner)", async () => {
     let resolve!: (v: unknown[]) => void;
     (api.extractActions as ReturnType<typeof vi.fn>).mockReturnValue(new Promise((r) => (resolve = r)));

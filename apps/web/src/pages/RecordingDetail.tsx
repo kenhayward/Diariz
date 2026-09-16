@@ -706,8 +706,11 @@ export default function RecordingDetail() {
     try {
       const actions = await api.extractActions(id);
       await qc.invalidateQueries({ queryKey: ["recording", id] });
-      setActionInfo(actions.length ? t("workspace:extractedActions", { count: actions.length })
-                                   : t("workspace:noActionsFound"));
+      // The response is the pinned rows extraction kept followed by the fresh ones, and only the fresh ones
+      // are unpinned - so they are what this run actually extracted.
+      const extracted = actions.filter((a) => !a.pinned).length;
+      setActionInfo(extracted ? t("workspace:extractedActions", { count: extracted })
+                              : t("workspace:noActionsFound"));
     } catch (e) {
       setActionError(apiErrorMessage(e, t("workspace:errExtract")));
     } finally {

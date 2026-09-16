@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { formatDuration } from "../../lib/format";
-import { IconArrowRight, IconCheck, IconClose, IconPencil, IconPlus } from "./hubGlyphs";
+import { IconArrowRight, IconCheck, IconClose, IconNote, IconPencil, IconPlus } from "./hubGlyphs";
 import type { LiveSegment } from "../../lib/liveTranscript";
 import type { LineKind, LiveNoteLine, ShotView } from "../../lib/types";
 
@@ -276,7 +276,11 @@ export function ActionRow({
       {mode === "text" ? (
         <span style={{ display: "flex", minWidth: 0, flex: 1, alignItems: "center", gap: 4 }}>
           <input value={draft} onChange={(e) => setDraft(e.target.value)} aria-label={t("notesEdit")} autoFocus style={field} />
-          <button type="button" style={pillButton} onClick={() => { onEdit(note.id, draft.trim()); setMode("view"); }}>
+          {/* Off while the draft is blank: an empty action attaches nothing and sits in the stream as a bare
+              green bar. Delete is the way to get rid of one. */}
+          <button type="button" disabled={draft.trim().length === 0}
+            style={{ ...pillButton, ...(draft.trim().length === 0 ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+            onClick={() => { if (draft.trim().length === 0) return; onEdit(note.id, draft.trim()); setMode("view"); }}>
             {t("notesSave")}
           </button>
           <button type="button" style={pillButton} onClick={() => setMode("view")}>{t("notesCancel")}</button>
@@ -310,7 +314,7 @@ export function ActionRow({
             <IconPencil size={12} />
           </RowButton>
           <RowButton label={t("notesMakeNote")} onClick={() => onSetKind(note.id, "note")}>
-            <IconClose size={10} />
+            <IconNote size={12} />
           </RowButton>
           <RowButton label={t("notesDelete")} onClick={() => onDelete(note.id)} className="hub-row-delete">
             <IconClose size={12} />

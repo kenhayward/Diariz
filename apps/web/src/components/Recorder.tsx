@@ -713,11 +713,13 @@ export default function Recorder({
   /// Attach lines to the created recording. Success clears the durable stash; failure keeps the lines (with
   /// the recording id) and surfaces the retry banner. A notes failure never fails the upload itself.
   async function attachNotes(recordingId: string, fromRetry?: PendingNotes) {
-    let remaining: PendingNoteLine[] = fromRetry
+    // Blank lines are dropped here, before either endpoint sees them: they would attach nothing, and a line
+    // the server rejected would fail the same way on every retry, stranding everything else with it.
+    let remaining: PendingNoteLine[] = (fromRetry
       ? fromRetry.lines
       : notes.snapshot().map((l) => ({
           text: l.text, capturedAtMs: l.capturedAtMs, kind: l.kind, actor: l.actor, deadline: l.deadline,
-        }));
+        }))).filter((l) => (l.text ?? "").trim().length > 0);
     if (remaining.length === 0) {
       if (userId) void clearPendingNotes(userId);
       return;

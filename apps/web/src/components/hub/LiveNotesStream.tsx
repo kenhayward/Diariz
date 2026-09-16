@@ -529,10 +529,19 @@ export default function LiveNotesStream({
             onClick={() => { setKind((k) => (k === "action" ? "note" : "action")); inputRef.current?.focus(); }}
             disabled={disabled}
             style={{
-              flexShrink: 0, border: "1px solid var(--hub-field-border)", borderRadius: 6, fontSize: 11,
-              fontWeight: 600, padding: "2px 6px", cursor: "pointer",
-              background: kind === "action" ? "var(--hub-green)" : "transparent",
-              color: kind === "action" ? "#fff" : "var(--hub-text-2)",
+              flexShrink: 0, borderRadius: 6, fontSize: 11, fontWeight: 600, padding: "2px 6px", cursor: "pointer",
+              // Pressed reads like the panel's other active pills: the soft green tint and border with the green
+              // text token. White on solid --hub-green measured about 2.3:1 in dark at 11px. The tint is laid
+              // over the popover's own background rather than the composer's grey surface, because on that grey
+              // the light theme's green text lands at 4.16:1; over the popover it is 4.52:1 (6.26:1 in dark).
+              ...(kind === "action"
+                ? {
+                    border: "1px solid var(--hub-green-soft-border)",
+                    background:
+                      "linear-gradient(var(--hub-green-soft-bg), var(--hub-green-soft-bg)), var(--hub-popover-bg)",
+                    color: "var(--hub-green-text)",
+                  }
+                : { border: "1px solid var(--hub-field-border)", background: "transparent", color: "var(--hub-text-2)" }),
             }}
           >
             {t("notesKindAction")}
@@ -542,10 +551,10 @@ export default function LiveNotesStream({
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
-              // Matched on the physical key (`code`), not the character (`key`): on macOS, Option+A
-              // reports `e.key === "å"` (the composed character), which would leave this shortcut dead
-              // on a Mac keyboard and let "å" reach the composer instead.
-              if (e.altKey && e.code === "KeyA") {
+              // Either the physical key (`code`) or the character (`key`). `code` alone serves macOS, where
+              // Option+A reports `e.key === "å"` (the composed character). `key` alone serves AZERTY, where
+              // the key labelled A sits at the QWERTY Q position and reports `code === "KeyQ"`.
+              if (e.altKey && (e.code === "KeyA" || e.key.toLowerCase() === "a")) {
                 e.preventDefault();
                 setKind((k) => (k === "action" ? "note" : "action"));
                 return;

@@ -103,7 +103,7 @@ import {
   getStream, getCombinedStream, listInputDevices, micPermissionState, unlockDeviceLabels,
 } from "../lib/audioSource";
 import { loadPendingRecording, clearPendingRecording } from "../lib/pendingRecording";
-import { savePendingNotes, clearPendingNotes } from "../lib/pendingNotes";
+import { savePendingNotes, clearPendingNotes, loadPendingNotes } from "../lib/pendingNotes";
 import {
   addPendingScreenshot,
   loadPendingScreenshots,
@@ -1205,6 +1205,33 @@ describe("live notes", () => {
         }),
       ),
     );
+  });
+
+  it("drops lines left blank before attaching, so one empty line cannot strand the rest", async () => {
+    // A stash from an earlier attach that failed. Blank lines in it (an edit saved empty, or a stash written
+    // before that was blocked) must never reach either endpoint: the server would store nothing for them at
+    // best, and a request it rejects fails identically on every retry.
+    (loadPendingNotes as Mock).mockResolvedValueOnce({
+      userId: "u1",
+      recordingId: "rec-old",
+      updatedAt: 1,
+      lines: [
+        { text: "   ", capturedAtMs: 1_000, kind: "action", actor: "", deadline: "" },
+        { text: "book the room", capturedAtMs: 2_000, kind: "action", actor: "Ada", deadline: "" },
+        { text: "", capturedAtMs: 3_000, kind: "note" },
+        { text: "a plain note", capturedAtMs: 4_000, kind: "note" },
+      ],
+    });
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /attach notes/i }));
+
+    await waitFor(() => expect(screen.queryByText(/could not be attached/i)).toBeNull());
+    expect(vi.mocked(api.createLiveActions).mock.calls).toEqual([
+      ["rec-old", [{ text: "book the room", actor: "Ada", deadline: "", capturedAtMs: 2_000 }]],
+    ]);
+    expect(vi.mocked(api.createNotes).mock.calls).toEqual([
+      ["rec-old", [{ text: "a plain note", capturedAtMs: 4_000 }]],
+    ]);
   });
 
   it("keeps lines durable and offers a retry when the attach fails", async () => {

@@ -245,6 +245,47 @@ describe("actions", () => {
     expect(kindToggle().getAttribute("aria-pressed")).toBe("true");
   });
 
+  it("toggles with Alt+A on a layout where A is not at the QWERTY position (AZERTY)", () => {
+    // On a French AZERTY keyboard the key labelled A sits where QWERTY has Q, so it reports code KeyQ.
+    // The fr catalog advertises Alt+A, so the character has to count too.
+    renderStream();
+    expect(fireEvent.keyDown(composer(), { key: "a", code: "KeyQ", altKey: true })).toBe(false);
+    expect(kindToggle().getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("marks the pressed toggle with the soft green tokens, not white on solid green", () => {
+    // White on --hub-green measures about 2.3:1 in the dark theme at 11px. The soft tint with the green
+    // text token is how the panel's other active pills read, and clears AA in both themes.
+    renderStream();
+    fireEvent.click(kindToggle());
+    const style = kindToggle().getAttribute("style") ?? "";
+    expect(style).toContain("color: var(--hub-green-text)");
+    expect(style).toContain("var(--hub-green-soft-bg)");
+    expect(style).toContain("var(--hub-green-soft-border)");
+    expect(style).not.toContain("rgb(255, 255, 255)");
+  });
+
+  it("does not save an action's text edited down to nothing", () => {
+    // An empty action cannot be attached (the server skips it at best), and the row would sit in the
+    // stream as a blank green bar. Save stays off until there is something to save.
+    const onEdit = vi.fn();
+    renderStream({ lines: [note({ id: "e", text: "send the deck", kind: "action" })], onEdit });
+    fireEvent.click(screen.getByRole("button", { name: "Edit note" }));
+    fireEvent.change(screen.getByLabelText("Edit note"), { target: { value: "   " } });
+    const save = screen.getByRole("button", { name: "Save" }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    fireEvent.click(save);
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Edit note")).toBeTruthy();
+  });
+
+  it("draws Make note with a different glyph from Delete, so the two neighbours cannot be confused", () => {
+    renderStream({ lines: [note({ id: "g", text: "book the room", kind: "action" })] });
+    const glyph = (name: string) => screen.getByRole("button", { name }).querySelector("svg")!.innerHTML;
+    expect(glyph("Delete note")).toContain("path");
+    expect(glyph("Make note")).not.toBe(glyph("Delete note"));
+  });
+
   it("files a note as a note with no toggle", () => {
     const onAdd = vi.fn();
     renderStream({ onAdd });
