@@ -81,6 +81,29 @@ public class RecordingActionsControllerTests
     }
 
     [Fact]
+    public async Task Extract_KeepsPinnedActions_ReplacesTheRest_AndSkipsRepeatsOfWhatItKept()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribed(db, userId);
+        db.RecordingActions.AddRange(
+            new RecordingAction { Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Book the room", Ordinal = 0, Pinned = true, Source = ActionSource.Live },
+            new RecordingAction { Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Old unpinned", Ordinal = 1 });
+        await db.SaveChangesAsync();
+        var client = new FakeActionsClient
+        {
+            Result = { new ExtractedAction("book the room", "", ""), new ExtractedAction("Send the report", "Bob", "") },
+        };
+
+        var result = (await Build(db, userId, client).Extract(rec.Id)).Value!;
+
+        var all = await db.RecordingActions.Where(a => a.RecordingId == rec.Id).OrderBy(a => a.Ordinal).ToListAsync();
+        Assert.Equal(["Book the room", "Send the report"], all.Select(a => a.Text));
+        Assert.Equal(["Book the room"], client.LastAlreadyRecorded);
+        Assert.Equal(["Book the room", "Send the report"], result.Select(a => a.Text)); // the full list, not just the new rows
+    }
+
+    [Fact]
     public async Task List_CarriesThePinnedFlag()
     {
         using var db = TestDb.Create();
@@ -101,10 +124,10 @@ public class RecordingActionsControllerTests
     }
 
     [Fact]
-    public async Task Extract_LeavesTheReplacementActionsUnpinned()
+    public async Task Extract_LeavesFreshExtractedActionsUnpinned_ButKeepsThePinnedOnePinned()
     {
-        // Accepted by design: extraction replaces the whole list with new rows, and pins go the same way
-        // completion already does. Asserted so that changing it later is a deliberate act, not a drift.
+        // Updated for the "keep pinned actions" rule (was Extract_LeavesTheReplacementActionsUnpinned,
+        // which asserted the old behaviour of wiping every pin on re-extraction).
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var rec = await SeedTranscribed(db, userId);
@@ -113,13 +136,12 @@ public class RecordingActionsControllerTests
             Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Book the room", Ordinal = 0, Pinned = true,
         });
         await db.SaveChangesAsync();
-        var client = new FakeActionsClient { Result = { new ExtractedAction("Book the room", "", "") } };
+        var client = new FakeActionsClient { Result = { new ExtractedAction("Send the report", "Bob", "") } };
 
         var fresh = (await Build(db, userId, client).Extract(rec.Id)).Value!;
 
-        Assert.All(fresh, a => Assert.False(a.Pinned));
-        Assert.All(await db.RecordingActions.Where(a => a.RecordingId == rec.Id).ToListAsync(),
-            a => Assert.False(a.Pinned));
+        Assert.True(fresh.Single(a => a.Text == "Book the room").Pinned);
+        Assert.False(fresh.Single(a => a.Text == "Send the report").Pinned);
     }
 
     [Fact]

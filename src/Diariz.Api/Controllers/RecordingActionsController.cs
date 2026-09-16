@@ -60,16 +60,17 @@ public class RecordingActionsController : ControllerBase
         return actions;
     }
 
-    /// <summary>Run the LLM over the current transcript and replace the recording's action list with the
-    /// result (which may be empty). Synchronous: the caller waits for the extracted list.</summary>
+    /// <summary>Run the LLM over the current transcript and replace the recording's unpinned action list with
+    /// the result (which may be empty). Synchronous: the caller waits for the extracted list.</summary>
     [HttpPost("extract")]
     [EndpointSummary("Extract action items from the transcript")]
     [EndpointDescription(
         "Runs the LLM over the current transcript and returns the action items it found. Unlike most of the " +
         "LLM-backed endpoints this one is **synchronous** - the call blocks until extraction finishes, which " +
         "can take a while on a long meeting, so allow a generous timeout.\n\n" +
-        "It **replaces the whole list**, so anything you added or edited by hand is discarded, including " +
-        "completion state; a run that finds nothing leaves you with an empty list. Returns 404 when the " +
+        "It **replaces every unpinned action**, so unpinned items you added or edited by hand are discarded, " +
+        "including their completion state. **Pinned actions are kept**, and the extraction skips anything that " +
+        "repeats them. Returns the full list afterwards. Returns 404 when the " +
         "recording has no transcript yet, and 400 when no LLM endpoint is configured for you or the platform.")]
     public async Task<ActionResult<IReadOnlyList<RecordingActionDto>>> Extract(Guid recordingId)
     {
@@ -104,12 +105,15 @@ public class RecordingActionsController : ControllerBase
 
         var template = _prompts.Get("extract-actions", ActionsPrompt.DefaultTemplate);
         // The meeting's own date anchors relative deadlines ("by next Friday") - see ActionsProcessor.
-        var extracted = await _client.ExtractAsync(cfg, segs, template, rec.StartedAt ?? rec.CreatedAt);
+        // Pinned actions are ones someone adopted (live during the meeting, or by pinning later). A re-run must
+        // not throw that away, so it replaces only the unpinned rows and is told what it is keeping.
+        var kept = rec.Actions.Where(a => a.Pinned).OrderBy(a => a.Ordinal).ToList();
+        var keptTexts = kept.Select(a => a.Text).ToList();
+        var extracted = await _client.ExtractAsync(cfg, segs, template, rec.StartedAt ?? rec.CreatedAt, keptTexts);
 
-        // Replace the whole list with the fresh extraction.
-        _db.RecordingActions.RemoveRange(rec.Actions);
-        var ordinal = 0;
-        var fresh = extracted.Select(e => new RecordingAction
+        _db.RecordingActions.RemoveRange(rec.Actions.Where(a => !a.Pinned));
+        var ordinal = kept.Count == 0 ? 0 : kept.Max(a => a.Ordinal) + 1;
+        var fresh = ActionMerge.WithoutDuplicates(extracted, keptTexts).Select(e => new RecordingAction
         {
             Id = Guid.NewGuid(),
             RecordingId = recordingId,
@@ -122,7 +126,7 @@ public class RecordingActionsController : ControllerBase
         rec.ActionsExtractedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync();
 
-        return fresh.Select(ToDto).ToList();
+        return kept.Concat(fresh).Select(ToDto).ToList();
     }
 
     [HttpPost]
@@ -132,7 +136,8 @@ public class RecordingActionsController : ControllerBase
         "platform with no model configured. All three fields are free text - the deadline included, so " +
         "\"end of week\" is as valid as a date.\n\n" +
         "Adding by hand also marks the recording as having surfaced actions, so the panel stays visible. Note " +
-        "that a later extraction replaces the whole list, including anything added this way.")]
+        "that a later extraction replaces every unpinned action, including anything added this way unless it " +
+        "is pinned.")]
     public async Task<ActionResult<RecordingActionDto>> Create(Guid recordingId, CreateRecordingActionRequest req)
     {
         if (!await OwnsAsync(recordingId)) return NotFound();

@@ -13,7 +13,7 @@
   "retranscribing": "Nouvelle transcription…",
   "errRetranscribe": "Impossible de lancer la nouvelle transcription.",
   "errSummarise": "Impossible de lancer le résumé.",
-  "confirmReextract": "Remplacer les actions actuelles par une nouvelle extraction ?",
+  "confirmReextract": "Remplacer les actions non épinglées par une nouvelle extraction ? Les actions épinglées sont conservées.",
   "extractedActions_one": "{{count}} action extraite.",
   "extractedActions_other": "{{count}} actions extraites.",
   "noActionsFound": "Aucune action trouvée dans cette transcription.",

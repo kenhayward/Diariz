@@ -13,7 +13,7 @@
   "retranscribing": "Re-transcribing…",
   "errRetranscribe": "Could not start re-transcription.",
   "errSummarise": "Could not start summarisation.",
-  "confirmReextract": "Replace the current actions with a fresh extraction?",
+  "confirmReextract": "Replace the unpinned actions with a fresh extraction? Pinned actions are kept.",
   "extractedActions_one": "Extracted {{count}} action.",
   "extractedActions_other": "Extracted {{count}} actions.",
   "noActionsFound": "No actions were found in this transcript.",

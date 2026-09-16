@@ -11736,7 +11736,7 @@
         ]
       },
       "post": {
-        "description": "Adds one action item by hand, appended to the end of the list. No LLM is involved, so this works on a platform with no model configured. All three fields are free text - the deadline included, so \"end of week\" is as valid as a date.\n\nAdding by hand also marks the recording as having surfaced actions, so the panel stays visible. Note that a later extraction replaces the whole list, including anything added this way.",
+        "description": "Adds one action item by hand, appended to the end of the list. No LLM is involved, so this works on a platform with no model configured. All three fields are free text - the deadline included, so \"end of week\" is as valid as a date.\n\nAdding by hand also marks the recording as having surfaced actions, so the panel stays visible. Note that a later extraction replaces every unpinned action, including anything added this way unless it is pinned.",
         "parameters": [
           {
             "in": "path",
@@ -11798,7 +11798,7 @@
     },
     "/api/recordings/{recordingId}/actions/extract": {
       "post": {
-        "description": "Runs the LLM over the current transcript and returns the action items it found. Unlike most of the LLM-backed endpoints this one is **synchronous** - the call blocks until extraction finishes, which can take a while on a long meeting, so allow a generous timeout.\n\nIt **replaces the whole list**, so anything you added or edited by hand is discarded, including completion state; a run that finds nothing leaves you with an empty list. Returns 404 when the recording has no transcript yet, and 400 when no LLM endpoint is configured for you or the platform.",
+        "description": "Runs the LLM over the current transcript and returns the action items it found. Unlike most of the LLM-backed endpoints this one is **synchronous** - the call blocks until extraction finishes, which can take a while on a long meeting, so allow a generous timeout.\n\nIt **replaces every unpinned action**, so unpinned items you added or edited by hand are discarded, including their completion state. **Pinned actions are kept**, and the extraction skips anything that repeats them. Returns the full list afterwards. Returns 404 when the recording has no transcript yet, and 400 when no LLM endpoint is configured for you or the platform.",
         "parameters": [
           {
             "in": "path",

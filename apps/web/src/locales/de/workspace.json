@@ -13,7 +13,7 @@
   "retranscribing": "Wird neu transkribiert…",
   "errRetranscribe": "Die neue Transkription konnte nicht gestartet werden.",
   "errSummarise": "Die Zusammenfassung konnte nicht gestartet werden.",
-  "confirmReextract": "Die aktuellen Aktionen durch eine neue Extraktion ersetzen?",
+  "confirmReextract": "Die nicht angehefteten Aktionen durch eine neue Extraktion ersetzen? Angeheftete Aktionen bleiben erhalten.",
   "extractedActions_one": "{{count}} Aktion extrahiert.",
   "extractedActions_other": "{{count}} Aktionen extrahiert.",
   "noActionsFound": "In dieser Transkription wurden keine Aktionen gefunden.",

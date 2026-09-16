@@ -13,7 +13,7 @@
   "retranscribing": "Volviendo a transcribir…",
   "errRetranscribe": "No se pudo iniciar la nueva transcripción.",
   "errSummarise": "No se pudo iniciar el resumen.",
-  "confirmReextract": "¿Reemplazar las acciones actuales por una nueva extracción?",
+  "confirmReextract": "¿Reemplazar las acciones no fijadas por una nueva extracción? Las acciones fijadas se conservan.",
   "extractedActions_one": "Se extrajo {{count}} acción.",
   "extractedActions_other": "Se extrajeron {{count}} acciones.",
   "noActionsFound": "No se encontraron acciones en esta transcripción.",
