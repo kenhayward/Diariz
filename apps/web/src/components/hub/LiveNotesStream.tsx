@@ -542,7 +542,10 @@ export default function LiveNotesStream({
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
-              if (e.altKey && e.key.toLowerCase() === "a") {
+              // Matched on the physical key (`code`), not the character (`key`): on macOS, Option+A
+              // reports `e.key === "å"` (the composed character), which would leave this shortcut dead
+              // on a Mac keyboard and let "å" reach the composer instead.
+              if (e.altKey && e.code === "KeyA") {
                 e.preventDefault();
                 setKind((k) => (k === "action" ? "note" : "action"));
                 return;

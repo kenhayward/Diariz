@@ -230,9 +230,19 @@ describe("actions", () => {
 
   it("toggles with Alt+A in the composer without typing into it", () => {
     renderStream();
-    fireEvent.keyDown(composer(), { key: "a", altKey: true });
+    // fireEvent's return value is the DOM dispatchEvent result: false means something in the handler
+    // chain called preventDefault(). jsdom never mutates the input's value from a keydown on its own, so
+    // asserting composer().value stayed "" would pass whether or not the handler ran at all.
+    expect(fireEvent.keyDown(composer(), { key: "a", code: "KeyA", altKey: true })).toBe(false);
     expect(kindToggle().getAttribute("aria-pressed")).toBe("true");
-    expect(composer().value).toBe("");
+  });
+
+  it("toggles with Alt+A by physical key, not the character Option+A types on macOS", () => {
+    // On macOS, Option+A reports e.key === "å" (the character the OS composes), not "a". Matching on
+    // `key` leaves the shortcut dead on a Mac keyboard and lets "å" reach the composer instead.
+    renderStream();
+    fireEvent.keyDown(composer(), { key: "å", code: "KeyA", altKey: true });
+    expect(kindToggle().getAttribute("aria-pressed")).toBe("true");
   });
 
   it("files a note as a note with no toggle", () => {
