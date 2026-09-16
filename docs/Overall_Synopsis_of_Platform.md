@@ -782,17 +782,29 @@ large folders silently rolled up only their first ~18 meetings. The old per-work
   **Markdig** and, when requested, the recording's file attachments are attached (`IEmailSender` gained an
   attachments parameter). Minutes also ride along in the emailed transcript and the md/txt/rtf downloads. The web
   edits them in a **WYSIWYG editor** (TipTap) that round-trips Markdown.
-- **Extract actions (pipeline + on demand).** Action items are extracted **automatically as part of the
-  pipeline**: a **fourth Redis stream `actions-jobs`** (group `actions-extractors`) with its own `ActionsWorker`
-  (singleton `BackgroundService`) runs `ActionsProcessor` → `ActionsClient`/`ActionsPrompt`, enqueued **alongside
-  the summary** after transcription (same effective per-user config gates both) and, when it finishes, **chains
-  the minutes job** (so the minutes render the same set). The automatic
-  pass **skips any recording whose `Recording.ActionsExtractedAt` is already set** (extraction ran, or the user
-  added an action), so a re-transcribe never clobbers manual edits; like minutes it is **status-neutral** and
-  notifies over SignalR. An explicit re-extract stays synchronous: `POST /api/recordings/{id}/actions/extract`
-  calls the LLM inline and **replaces** the recording's **`RecordingAction`** rows. Actions also travel into
-  transcript downloads, the emailed transcript, and the chat context. Its instruction prompt is the **editable**
-  `prompts/extract-actions.md` (`{calendar_date}` substituted).
+- **Extract actions (pipeline + on demand + live).** Action items are extracted **automatically as part of
+  the pipeline**: a **fourth Redis stream `actions-jobs`** (group `actions-extractors`) with its own
+  `ActionsWorker` (singleton `BackgroundService`) runs `ActionsProcessor` → `ActionsClient`/`ActionsPrompt`,
+  enqueued **alongside the summary** after transcription (same effective per-user config gates both) and,
+  when it finishes, **chains the minutes job** (so the minutes render the same set). The automatic
+  pass **skips any recording whose `Recording.ActionsExtractedAt` is already set** (extraction ran), so a
+  re-transcribe never clobbers it; like minutes it is **status-neutral** and notifies over SignalR. A user
+  can also record an action **while the meeting is still running**: `POST
+  /api/recordings/{id}/actions/live` creates rows already `Pinned = true` with `Source = Live` and a
+  `CapturedAtMs` offset, and deliberately does **not** set `ActionsExtractedAt` - so the pipeline still runs
+  when the recording finishes, rather than being skipped the way a hand-added action (`Source = Manual`)
+  skips it. When it does run, `ActionsProcessor` **merges instead of clearing**: it tells the LLM the texts
+  already recorded (`ActionsPrompt.BuildMessages`'s `alreadyRecorded`) and `ActionMerge.WithoutDuplicates`
+  drops anything the extraction repeats (normalised-text compare, dropping duplicates within the extraction
+  too), appending what is left after the existing rows' max ordinal. The `recording.action_items_ready`
+  webhook then carries the **full** list - live plus extracted - so a subscriber sees every action the
+  meeting produced. An explicit re-extract stays synchronous: `POST /api/recordings/{id}/actions/extract`
+  calls the LLM inline and **replaces only the unpinned rows** - pinned actions (live or otherwise) are kept
+  and passed as the same `alreadyRecorded` context, so a re-extract can no longer discard what someone chose
+  to track. A recording merge copies `Source` onto the folded-in rows; `CapturedAtMs` is not, since it is an
+  offset into a different recording's clock. Actions also travel into transcript downloads, the emailed
+  transcript, and the chat context. Its instruction prompt is the **editable** `prompts/extract-actions.md`
+  (`{calendar_date}` substituted).
 - **Tag cloud (pipeline + backfill) - tags are adopted, not auto-applied.** Every transcription still gets
   **weighted topic candidates** via a Redis stream **`tag-cloud-jobs`** (group `tag-extractors`) with its own
   `TagsWorker` (singleton `BackgroundService`) running `TagsProcessor` → `TagsClient`/`TagsPrompt` (editable

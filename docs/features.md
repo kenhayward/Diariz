@@ -788,9 +788,14 @@ they added, and deleting the original removes it for everyone.
 - **Extract action items** (Action / Actor / Deadline) with that same LLM — **automatically as part of the
 transcription pipeline**, into an editable table in an always-available **Action items** panel (collapsed by
 default, with a refresh button to re-extract). The automatic pass runs once and never overwrites actions
-you've added or edited. The **meeting minutes are generated from that same action set**, so the minutes' Action
-Items table and the Actions panel always match. The actions also travel with the transcript — included in the
-downloads (Text/Markdown/RTF), the emailed transcript, and the chat context.
+you've added or edited. You can also **record an action live** from the notes panel while the meeting is
+still running — switch its composer to Action (or press Alt+A), or turn any note into an action — owned by
+you by default; it is pinned the moment it is typed, so it reaches the Actions tab as soon as the recording
+uploads. Extraction still runs afterwards and adds what it finds alongside what you recorded live, skipping
+anything that repeats it, and a re-extract now keeps pinned actions and replaces only the rest. The
+**meeting minutes are generated from that same action set**, so the minutes' Action Items table and the
+Actions panel always match. The actions also travel with the transcript — included in the downloads
+(Text/Markdown/RTF), the emailed transcript, and the chat context.
 - **Manage the actions you choose to track across all your meetings** in a dedicated **Actions** tab (the
 left panel is now **Meetings**). The tab is **opt-in**: an action reaches it only once someone **pins** it,
 via the pin control on the action's own meeting page or on the row in the tab itself. Everything else stays
@@ -798,8 +803,9 @@ on the meeting it came from, so the recording page remains the one place that sh
 A folder's Actions tab follows the same rule. Within that pinned list you can **filter by person**, mark
 items **done** with a completion date (individually or in bulk, reversible), **hide completed**, and click
 an action to jump to the transcript it came from. Pinning is owner-only, so in a shared room the recording's
-owner decides what the room sees pinned. Re-extracting a meeting's actions replaces the list and clears its
-pins, the same way it already clears completion. The per-transcript table carries the pin alongside the Done
+owner decides what the room sees pinned. Re-extracting a meeting's actions now **keeps every pinned action**
+(including one recorded live) and replaces only the rest, so pins and completion on what you have already
+chosen to track survive a re-extract. The per-transcript table carries the pin alongside the Done
 checkbox and Completed date. The REST API's action list is unfiltered by default (so existing automations
 are unaffected) and takes `pinned=true` for the pinned subset.
 - **Translate** a transcript into your chosen language with that same LLM — the whole recording (segments,

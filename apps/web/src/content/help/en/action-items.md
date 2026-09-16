@@ -37,11 +37,24 @@ This means the Actions tab starts **empty**, and fills up only with what you hav
 You can only pin actions on your own recordings. In a shared room you will see the pins the recording's
 owner has set, and the pin control on someone else's row is disabled.
 
-**Re-extracting a meeting's actions clears its pins**, because it replaces the whole list with a fresh
-one. It clears the Done ticks for the same reason. If you re-extract, expect to pin again what you still
-care about.
+**Re-extracting a meeting's actions keeps every pinned action**, including one you recorded live, and
+replaces only the rest - so re-extracting no longer clears the pins or Done ticks of what you have
+already chosen to track.
 
-## Across all your meetings
+## Recording actions during a meeting
+
+You do not have to wait for extraction to run. While a meeting is recording, switch the notes composer
+to **Action** (or press **Alt+A**), or turn any note into an action with **Make action** on its row -
+**Make note** reverses it. Text is enough; owner and due date are optional and editable in the row, and
+owner defaults to you.
+
+An action recorded this way is **pinned automatically**, so it reaches the Actions tab as soon as the
+recording finishes uploading - you do not need to open the meeting and pin it yourself. It also shows
+up straight away on the meeting's own **Action items** panel once the recording is there.
+
+Automatic extraction still runs afterwards. It is told what you already recorded and adds only what it
+finds beyond that, skipping anything that repeats an action you already have. If you re-extract by hand,
+the actions you recorded live stay - see above.
 
 The left panel's **Actions** tab collects every action you have pinned, from every meeting. From there
 you can:

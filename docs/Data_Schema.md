@@ -136,6 +136,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddRecordingChunkTranscribedAt` | `RecordingChunk.TranscribedAt` (timestamptz, nullable) - when a chunk's segments were persisted; drives the lag check that pauses live transcription when the worker falls behind. Purely additive - **no `CurrentFormat` bump** |
 | `AddRecordingLiveSessionId` | `Recording.LiveSessionId` (uuid null). The capturing device's client-generated session id while the recording is `Live`; every chunk must present it, so a second device signed in as the same user is refused rather than interleaving its audio. Null for every recording that did not arrive as a live capture. Additive - **no `CurrentFormat` bump** |
 | `RenameChunkTranscribedAtToSettledAt` | `RecordingChunks.TranscribedAt` -> `SettledAt`. The column records "the live pass is finished with this chunk", which is what the lag gate needs, rather than "it was transcribed" - it is now also written when a chunk fails in the worker and when the gate declines to queue one. Under the old name and meaning, either case left it null forever, pinning the lag measurement and making the pause a latch that lasted the rest of the recording (issue #758). A `RenameColumn`, so existing values carry over and an older backup migrates up - **no `CurrentFormat` bump** |
+| `AddActionSourceAndCapturedAt` | `RecordingActions.Source` (int enum `ActionSource`: `Extracted = 0`/`Manual = 1`/`Live = 2`, NOT NULL, default `Extracted`) + `RecordingActions.CapturedAtMs` (bigint, nullable). Lets an action recorded live during the meeting be told apart from one the LLM extracted or one typed by hand afterwards, and carry the moment it was typed. Additive with a column default, so an older backup restores and migrates up with every existing action `Extracted` and no `CapturedAtMs` - **no `CurrentFormat` bump** |
 
 ### Entity-relationship overview
 
@@ -359,13 +360,20 @@ Extracted/hand-edited action items.
 | `Completed` | bool | user-set done flag (default false; reversible) |
 | `CompletedAt` | timestamptz null | when marked done; null = not done |
 | `Pinned` | bool | whether the action appears in the cross-meeting Actions views (default false; reversible) |
+| `Source` | int (`ActionSource`) | `Extracted = 0` / `Manual = 1` / `Live = 2`; NOT NULL, default `Extracted` (append-only) |
+| `CapturedAtMs` | bigint null | offset into the recording's own clock when a live action was typed; null for everything else, never user-editable |
 
 Index: `(RecordingId, Ordinal)`. The cross-meeting Actions list (`GET /api/actions`) joins to `Recordings`
 for ownership + display name; bulk complete/un-complete via `POST /api/actions/complete`, bulk pin/unpin via
 `POST /api/actions/pin`. `Pinned` is what promotes an action out of its own recording's page and into the
 Actions tab and the folder Actions tab - both of those pass `?pinned=true`, while the endpoints themselves
-default to returning every action so the published API stays as it was. Extraction replaces the whole row
-set, so a re-extract clears `Pinned` along with `Completed`; a recording merge copies `Pinned` across.
+default to returning every action so the published API stays as it was. `POST
+.../actions/live` creates rows already `Pinned = true` with `Source = Live`, without touching
+`Recording.ActionsExtractedAt`, so the automatic pipeline extraction still runs and merges with them
+instead of skipping. An explicit re-extract (`POST .../actions/extract`) replaces only the **unpinned**
+rows; pinned rows (`Manual`, `Live`, or a pinned `Extracted` one) are kept. A recording merge copies
+`Source` onto the folded-in rows; `CapturedAtMs` is not copied, since it is an offset into a different
+recording's clock.
 
 #### `RecordingTags`
 A tag on a recording, either typed by hand or extracted by the LLM as a suggestion. `Status` is what makes

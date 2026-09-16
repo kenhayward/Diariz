@@ -9,6 +9,24 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.272.0",
+    date: "2026-09-16",
+    pr: 764,
+    headline: "Record actions during the meeting",
+    summary:
+      "The live notes panel can now record actions as the meeting goes. Switch the composer to Action (or press Alt+A), or turn any note into an action. Actions you record are pinned straight away, so they appear in the Actions tab as soon as the recording uploads, owned by you unless you change it. Automatic extraction still runs afterwards and adds what it finds alongside them, skipping repeats. Re-extracting a meeting's actions now keeps pinned actions and replaces only the rest.",
+    added: [
+      "Action toggle in the live notes composer (Alt+A), with an Actions filter chip",
+      "Make action / Make note on lines in the live notes panel, including the pop-out window",
+      "Owner (defaults to you) and due date on actions recorded live",
+      "API: POST /api/recordings/{id}/actions/live",
+    ],
+    changed: [
+      "Automatic action extraction adds to actions recorded during the meeting instead of being skipped",
+      "Re-extracting actions keeps pinned actions",
+    ],
+  },
+  {
     version: "0.271.3",
     date: "2026-09-04",
     pr: 761,
