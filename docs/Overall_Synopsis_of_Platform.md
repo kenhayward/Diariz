@@ -2652,7 +2652,9 @@ into it with no URL or per-user setup at all.
   (loopback keeps any port). The MCP 401 challenge builds its `resource_metadata` URL from `App:PublicUrl`, not
   the request's `Host`. `IgnoreResourcePermissions()` is safe only while exactly one resource is registered;
   `OpenIddictSetupTests` fails if a second appears. Signing/encryption certificates are written atomically
-  (temp file + no-overwrite move, so concurrent first starts converge on one key) and owner-only (`0600`).
+  (temp file + move) and owner-only (`0600`), and first creation is serialised by an exclusive lock on a sibling
+  `.lock` file so concurrent first starts converge on one key - the move alone cannot do that, because on Linux
+  `File.Move(overwrite: false)` checks then renames.
 - **LLM endpoints.** Every `AddLlmClient` client and model discovery connect through `LlmEndpointGuard`: link-local
   (incl. `169.254.169.254`), known cloud-metadata addresses and unusable addresses are always refused, and loopback
   is refused outside Development. Private LAN ranges stay allowed (self-hosted model servers). It is checked in the
