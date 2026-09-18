@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
@@ -14,6 +15,7 @@ namespace Diariz.Api.Controllers;
 /// <summary>Internal callbacks for the audio-merge worker job (see <see cref="RecordingsController.Merge"/>).
 /// Authenticated by the shared <c>X-Worker-Secret</c> header, not JWT.</summary>
 [ApiController]
+[AllowAnonymous] // Called by the worker, not a user: authenticated by the X-Worker-Secret header (WorkerSecret), not a session.
 [Route("internal/recordings")]
 public class WorkerMergeCallbackController : ControllerBase
 {
@@ -37,7 +39,7 @@ public class WorkerMergeCallbackController : ControllerBase
     }
 
     private bool SecretOk =>
-        Request.Headers.TryGetValue("X-Worker-Secret", out var v) && v == _opts.CallbackSecret;
+        Diariz.Api.Auth.WorkerSecret.Matches(Request.Headers[Diariz.Api.Auth.WorkerSecret.HeaderName].ToString(), _opts.CallbackSecret);
 
     /// <summary>The concatenated audio is ready: swap it onto the survivor and remove the merged sources
     /// (rows + blobs) and the survivor's now-superseded original blob.</summary>

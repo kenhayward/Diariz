@@ -63,4 +63,29 @@ public class OAuthConsentTicketTests
         var cookie = NewProtector().Issue(Guid.NewGuid(), "c", true, Now.AddMinutes(5));
         Assert.Null(NewProtector().Verify(cookie, "c", Now));
     }
+    [Fact]
+    public void Verify_RejectsATicketThatClaimsToLiveLongerThanAnyConsentShould()
+    {
+        // Consent is a few-minute bridge between the SPA and /connect/authorize. A ticket minted with a far-future
+        // expiry - by a bug at a call site - must not become a long-lived credential.
+        var p = NewProtector();
+        var cookie = p.Issue(Guid.NewGuid(), "c", allow: true, Now.AddDays(30));
+
+        Assert.Null(p.Verify(cookie, "c", Now));
+    }
+
+    [Fact]
+    public void Verify_AcceptsATicketAtTheMaximumLifetime()
+    {
+        var p = NewProtector();
+        var cookie = p.Issue(Guid.NewGuid(), "c", allow: true, Now.Add(OAuthConsentTicketProtector.MaxLifetime));
+
+        Assert.NotNull(p.Verify(cookie, "c", Now));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("a|b")]
+    public void Issue_RefusesAClientIdThatCannotBeBoundSafely(string clientId) =>
+        Assert.Throws<ArgumentException>(() => NewProtector().Issue(Guid.NewGuid(), clientId, allow: true, Now.AddMinutes(5)));
 }

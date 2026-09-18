@@ -61,7 +61,8 @@ public sealed class OAuthAuthorizeController : ControllerBase
         }
 
         // The ticket is single-use: clear it so a back-navigation can't silently re-authorize.
-        Response.Cookies.Delete(OAuthConsentTicketProtector.CookieName);
+        Response.Cookies.Delete(OAuthConsentTicketProtector.CookieName,
+            new CookieOptions { Path = OAuthConsentTicketProtector.CookiePath });
 
         if (!decision.Allow)
             return Deny(Errors.AccessDenied, "The user denied the authorization request.");

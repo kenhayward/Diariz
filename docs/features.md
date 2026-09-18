@@ -927,6 +927,11 @@ deleted and its last member cannot be removed) and **Administrators** (the other
 backup/restore or platform settings). Around that sits an
 access-request → admin-grant → account-setup lifecycle (one-time email link, with an in-app fallback when
 SMTP is unconfigured). Each user's data is isolated to them. Light/Dark/Auto theming.
+- **Sign-in protection**: ten wrong passwords in a row pause that account's password sign-in for fifteen
+minutes, and each address gets a per-minute budget of sign-in, account-setup and connector authorization
+requests (the login page asks you to wait rather than reporting a wrong password). Disabling an account takes
+effect everywhere at once: its personal API tokens, MCP tokens and Claude connector sessions stop working too,
+including a connector's attempt to refresh.
 - **The Users & access console**: all of the above is administered from one place (account menu → Users &
 access), in the shape every admin tool uses - a list on the left, everything about the selected thing on the
 right. **Users** carries a search over name and email plus status chips that show their own counts, so

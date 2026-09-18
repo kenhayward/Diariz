@@ -34,6 +34,7 @@ public sealed class IdentityTestHost : IDisposable
                 o.Password.RequireDigit = true;
                 o.Password.RequireNonAlphanumeric = true;
                 o.User.RequireUniqueEmail = true;
+                Diariz.Api.Auth.SignInLockout.Apply(o.Lockout);
             })
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<DiarizDbContext>()

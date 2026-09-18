@@ -11,8 +11,9 @@ public static class RedirectUriPolicy
 
     /// <summary>True if <paramref name="redirectUri"/> is an absolute http(s) URI with no fragment whose host is
     /// on <paramref name="allowedHosts"/> (case-insensitive), and, when the scheme is http, the host is a
-    /// loopback address. Everything else - relative URIs, unknown hosts, non-loopback http, other schemes,
-    /// fragments, malformed input - is rejected.</summary>
+    /// loopback address, and a non-loopback host uses its default port. Everything else - relative URIs, unknown
+    /// hosts, non-loopback http, non-default ports on public hosts, other schemes, fragments, malformed input - is
+    /// rejected.</summary>
     public static bool IsAllowed(string? redirectUri, IReadOnlyCollection<string> allowedHosts)
     {
         if (string.IsNullOrWhiteSpace(redirectUri)) return false;
@@ -27,6 +28,9 @@ public static class RedirectUriPolicy
         var isLoopback = LoopbackHosts.Contains(host, StringComparer.OrdinalIgnoreCase);
         // http is only permitted for loopback callbacks (Desktop/Code); everything public must be https.
         if (isHttp && !isLoopback) return false;
+        // A public host only on its scheme's default port: allowing claude.ai must not also allow whatever else
+        // might answer on claude.ai:8675. Loopback callbacks keep any port - Desktop/Code listen on an ephemeral one.
+        if (!isLoopback && !uri.IsDefaultPort) return false;
 
         return allowedHosts.Contains(host, StringComparer.OrdinalIgnoreCase);
     }

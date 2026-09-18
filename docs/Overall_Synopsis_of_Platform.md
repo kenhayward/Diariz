@@ -75,22 +75,25 @@ Infrastructure (via Docker Compose, project name **`diariz`**):
 
 ### Ports (Docker / local dev)
 
-| Service | In-container | Host (Docker) | Dev |
-|---|---|---|---|
-| API | 8080 | 8080 | 8080 |
-| Web (nginx, proxies `/api` + `/hubs` + `/mcp`) | 80 | **8081** | Vite dev server **5173** (proxies to 8080) |
-| Postgres | 5432 | **5433** | 5432 |
-| Redis | 6379 | not published | 6379 |
-| MinIO S3 API | 9000 | **9002** | — |
-| MinIO console | 9001 | not published | — |
+| Service | In-container | Host (Docker) | Host bind default | Dev |
+|---|---|---|---|---|
+| API | 8080 | 8080 | `127.0.0.1` (`API_BIND`) | 8080 |
+| Web (nginx, proxies `/api` + `/hubs` + `/mcp`) | 80 | **8081** | `0.0.0.0` (`WEB_BIND`) | Vite dev server **5173** (proxies to 8080) |
+| Postgres | 5432 | **5433** | `127.0.0.1` (`POSTGRES_BIND`) | 5432 |
+| Redis | 6379 | not published | - | 6379 |
+| MinIO S3 API | 9000 | **9002** | `127.0.0.1` (`MINIO_BIND`) | — |
+| MinIO console | 9001 | not published | - | — |
 
 Two host ports are deliberately remapped so a Compose stack can sit alongside other local instances of the
 same service: the **MinIO S3 API** (9002) and **Postgres** (**5433**, so it does not clash with a Postgres
 already on the host's 5432). Postgres is published purely for external tooling - psql, pgAdmin, a test
 harness on another machine - and is overridable per host via `POSTGRES_PORT` / `POSTGRES_BIND` in `.env`.
-Note that a published port binds `0.0.0.0` by default **and bypasses the host firewall** (Docker writes its
-own DNAT rules), so an exposed database needs a strong `POSTGRES_PASSWORD`; `POSTGRES_BIND=127.0.0.1`
-restricts it to the host. The MinIO web console (container 9001) is **not published** - the app never uses
+A published port **bypasses the host firewall** (Docker writes its own DNAT rules), so every published port
+except the web app's is bound to **`127.0.0.1` by default**; set its `*_BIND` variable to `0.0.0.0` only when
+something on another machine genuinely needs it (and, for Postgres, with a strong `POSTGRES_PASSWORD`). The API
+port in particular stays host-only: browsers, the desktop app and any outer reverse proxy reach the API through
+the web container, and the API port also serves the `internal/*` worker-callback routes that nginx never
+forwards. The MinIO web console (container 9001) is **not published** - the app never uses
 it (the API reaches MinIO in-network at `minio:9000`), so port-forward or `docker exec` if you need it.
 In-container, services address each other by Compose service name (`minio:9000`, `redis:6379`,
 `postgres:5432`, `api:8080`) - publishing a port changes nothing about that private path.
@@ -1616,8 +1619,11 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
 > gets the SPA index.html instead of the metadata and the claude.ai connection never starts. (`/oauth/consent`
 > is deliberately a **SPA** route and must NOT be proxied.) **The `X-Forwarded-Proto` header must carry `https`**
 > all the way to the API - OpenIddict rejects its own endpoints as non-HTTPS otherwise (`ID2083`). The web
-> nginx forwards the outer proxy's incoming `X-Forwarded-Proto` (falling back to its own `$scheme`) rather than
-> clobbering it, so **the outer proxy must set `X-Forwarded-Proto: https`** (most do by default).
+> nginx forwards the outer proxy's incoming `X-Forwarded-Proto` rather than clobbering it, so **the outer proxy
+> must set `X-Forwarded-Proto: https`** (most do by default). Both hops only believe the header from **loopback
+> or a private network** (10/8, 172.16/12, 192.168/16, fc00::/7): nginx via a `geo` block, the API via
+> `ForwardedHeadersTrust`. An outer proxy on a public address would therefore not be believed - put it on the
+> same private network as the web container.
 
 - **Per-user token auth, gated by a platform toggle.** The endpoint is guarded by a dedicated auth scheme
   (`McpBearerAuthenticationHandler`, scheme `"Mcp"`), separate from the browser JWT, and fails closed while
@@ -2615,6 +2621,52 @@ into it with no URL or per-user setup at all.
   **`GET /api/languages`** (anonymous, so the signup page offers a language selector too). This underpins the
   localization & translation feature.
 
+### Request trust and credential checks
+
+- **Startup configuration validation.** Outside Development the API refuses to start (`StartupConfigValidator`,
+  called first thing in `Program.cs`) when `Jwt:Key` is missing, under 32 bytes or a shipped placeholder; when
+  `Worker:CallbackSecret` is missing, under 16 characters or a placeholder; when the storage credentials are the
+  MinIO defaults; when `DataProtection:KeysPath` is unset; when `Seed:Password` is a placeholder; or when MCP OAuth
+  is on with an `http` issuer on a non-loopback host (loopback only warns, so a local compose run still starts).
+  The compose files mirror this with `${VAR:?}` for `JWT_KEY`, `CALLBACK_SECRET`, `POSTGRES_PASSWORD`,
+  `REDIS_PASSWORD`, `MINIO_ROOT_USER/PASSWORD` and `APP_PUBLIC_URL`.
+- **Deny by default.** `AuthorizationDefaults` sets a `FallbackPolicy` requiring an authenticated user, so an
+  endpoint without an attribute is not public. Everything public carries `[AllowAnonymous]` (or
+  `.AllowAnonymous()` for `/health`), and `AuthorizationDefaultsTests` pins the exact anonymous controller set.
+- **Long-lived credentials follow the account.** `IActiveAccounts` (enabled **and** `Status == Active`) is asked
+  by `ApiTokenAuthenticator`, `McpTokenAuthenticator`, the OAuth branch of `McpBearerAuthenticationHandler`, and
+  `InactiveAccountTokenGuard` - an OpenIddict `ProcessSignIn` handler that refuses code exchanges and refreshes at
+  `/connect/token` for an inactive account (the token endpoint is not passed through, so this is the only place
+  a refresh meets current account state). Access tokens last 1 h and refresh tokens 14 d, stated explicitly in
+  `OpenIddictSetup`. Refused token credentials are logged at Warning (reason and client address, never the token).
+- **Sign-in abuse controls.** Password sign-in uses Identity lockout (`SignInLockout`: 10 failures, 15 minutes),
+  and `AuthRateLimits` is a global per-address limiter over the anonymous sign-in routes (20/min), `/connect/token`
+  + `/connect/authorize` (60/min) and `/connect/register` (20/hour), configurable under `RateLimits:*`. It is a
+  path-keyed global limiter rather than endpoint attributes because OpenIddict answers `/connect/token` in its own
+  middleware; it sits after `UseForwardedHeaders` and before `UseAuthentication`. A refusal is `429` with
+  `Retry-After`, which the login page shows as "too many attempts".
+- **Worker callbacks** compare `X-Worker-Secret` through one fixed-time helper (`WorkerSecret.Matches`) that never
+  accepts a blank configured secret.
+- **OAuth details.** The consent cookie is `HttpOnly`, `SameSite=Lax`, scoped to `Path=/connect`, and a ticket
+  claiming more than 10 minutes of life is rejected. DCR redirect URIs on public hosts must use the default port
+  (loopback keeps any port). The MCP 401 challenge builds its `resource_metadata` URL from `App:PublicUrl`, not
+  the request's `Host`. `IgnoreResourcePermissions()` is safe only while exactly one resource is registered;
+  `OpenIddictSetupTests` fails if a second appears. Signing/encryption certificates are written atomically
+  (temp file + move) and owner-only (`0600`), and first creation is serialised by an exclusive lock on a sibling
+  `.lock` file so concurrent first starts converge on one key - the move alone cannot do that, because on Linux
+  `File.Move(overwrite: false)` checks then renames.
+- **LLM endpoints.** Every `AddLlmClient` client and model discovery connect through `LlmEndpointGuard`: link-local
+  (incl. `169.254.169.254`), known cloud-metadata addresses and unusable addresses are always refused, and loopback
+  is refused outside Development. Private LAN ranges stay allowed (self-hosted model servers). It is checked in the
+  socket `ConnectCallback` on resolved addresses (every redirect hop) and, for proxied egress, on the request host.
+- **nginx** logs through a format without the query string or Referer (several routes carry `?access_token=`) and
+  sends `Referrer-Policy: no-referrer`.
+- **Redis** requires a password (`REDIS_PASSWORD`, hex/alphanumeric because it is embedded in URLs and connection
+  strings). The worker redacts it from its startup log line.
+- **MinIO.** The API and workers can use a scoped `diariz-app` key limited to the recordings bucket (plus listing
+  bucket names) instead of root, created by `deploy/ProvisionDiarizMinio.cmd` / `provision-diariz-minio.sh` and
+  set as `MINIO_APP_ACCESS_KEY` / `MINIO_APP_SECRET_KEY` (blank falls back to root).
+
 ## People and speaker identification (voiceprints)
 
 A **`Person`** is someone who appears in meetings: a name plus optional contact details (`Title`,
@@ -3402,9 +3454,10 @@ want it runs the platform exactly as before with zero extra containers.
   (`glitchtip` by default, `GLITCHTIP_COLD_STORAGE_BUCKET`), reached with a scoped MinIO access key - never
   the root credentials, and never a prefix inside the `recordings` bucket (a platform restore wipes and
   re-seeds `recordings`, which would silently destroy the telemetry archive alongside it).
-- **Shares the app's Redis**, on **DB index 1** (`VALKEY_URL=redis://redis:6379/1`) - the app's job queues
-  live on index 0 and are untouched. Redis is optional for GlitchTip (it only speeds up caching and its task
-  queue), so the blast radius of sharing it is small, and it saves standing up a second Redis container.
+- **Shares the app's Redis**, on **DB index 1** (`VALKEY_URL=redis://:${REDIS_PASSWORD}@redis:6379/1`) - the
+  app's job queues live on index 0 and are untouched. Redis is optional for GlitchTip (it only speeds up caching
+  and its task queue), and sharing it saves a second Redis container. The instance is password-protected, so
+  GlitchTip authenticates like every other client.
 - **A single all-in-one container**, via `GLITCHTIP_EMBED_WORKER: "true"`. That variable is required, not a
   tuning knob: the image's entrypoint only self-migrates when the Heroku `DYNO` variable is set, so the plain
   `web` role starts against an **unmigrated** database and runs **no task worker**. Setting it selects the
@@ -3769,6 +3822,12 @@ opened with `Begin()` and disposed when the zip is built - the transfer that fol
 visible download. Concurrent builds are reference-counted, so one admin finishing doesn't clear another's
 progress. Restore needs no server-side counterpart: the browser owns that upload, so the panel switches from
 upload percentage to an "applying" message once the bytes are sent and the server-side work begins.
+
+**Outside the backup: the `apikeys` volume.** The platform backup covers the database and the object store only.
+The `apikeys` volume (`/keys`) holds the Data Protection keyring - which decrypts stored model API keys, webhook
+signing secrets and Google refresh tokens - and the OpenIddict signing/encryption certificates. Copy it separately
+as part of any disaster-recovery plan: a restore onto a server without it brings back rows whose encrypted fields
+can no longer be read, and every issued OAuth token stops validating.
 
 ## Repository layout
 

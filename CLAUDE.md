@@ -593,10 +593,12 @@ Apple**. Design: `docs/macOS_Desktop_App_Guide.md`.
 ### Full stack (Docker)
 ```bash
 cd deploy
-cp .env.example .env      # JWT_KEY, CALLBACK_SECRET, HF_TOKEN, SEED_EMAIL/PASSWORD, MinIO creds
+cp .env.example .env      # JWT_KEY, CALLBACK_SECRET, REDIS_PASSWORD, POSTGRES_PASSWORD, MinIO creds, APP_PUBLIC_URL, HF_TOKEN
 docker compose up --build # web, api, postgres, redis, minio, GPU worker
 ```
-The Compose project is named **`diariz`** (top-level `name:` in `docker-compose.yml`; Docker forces
+Required secrets use `${VAR:?}`, so compose names a missing one instead of starting with it blank, and the API
+itself refuses (outside Development) to start on a placeholder or too-short key (`StartupConfigValidator`).
+Unit/integration hosts run as Development, so they are exempt. The Compose project is named **`diariz`** (top-level `name:` in `docker-compose.yml`; Docker forces
 lowercase, so it is `diariz` not `Diariz`) rather than defaulting to the `deploy` directory name. The
 **`web`** service builds `apps/web` (`apps/web/Dockerfile`) and serves the static SPA via nginx at
 **http://localhost:8081**, proxying `/api`, `/hubs`, and `/mcp` to the `api` container (same-origin, so no CORS
@@ -628,9 +630,11 @@ out the `deploy.resources` GPU block and set `WORKER_DEVICE=cpu WORKER_COMPUTE_T
 - **Ports:** API `8080`; web UI (Docker/nginx) `8081`; web dev server `5173`. Two infra ports are **remapped on
   the host** to avoid clashing with other local instances: **MinIO S3 API** `9002→9000` and **Postgres**
   `5433→5432` (the latter published only for external tooling — psql/pgAdmin/test harnesses — and overridable
-  via `POSTGRES_PORT`/`POSTGRES_BIND` in `deploy/.env`; a published port bypasses the host firewall, so
-  `POSTGRES_BIND=127.0.0.1` keeps it host-only). Redis and the MinIO console (`9001`) are **not published** —
-  the app never uses them from the host. In-container, services use the compose service names
+  via `POSTGRES_PORT`/`POSTGRES_BIND` in `deploy/.env`). A published port bypasses the host firewall, so the API,
+  Postgres and MinIO ports bind **`127.0.0.1` by default** (`API_BIND`/`POSTGRES_BIND`/`MINIO_BIND`); only the web
+  port (`WEB_BIND`) defaults to `0.0.0.0`. Redis and the MinIO console (`9001`) are **not published** —
+  the app never uses them from the host. Redis requires `REDIS_PASSWORD` (API connection string, worker
+  `REDIS_URL`, GlitchTip `VALKEY_URL`), so changing it means recreating the whole stack, not just the API. In-container, services use the compose service names
   (`minio:9000`, `redis:6379`, `postgres:5432`).
 - **MinIO/S3 quirk:** `AmazonS3Config` uses `ForcePathStyle` + region `us-east-1`. A prior bug
   required removing `DisablePayloadSigning` on `PutObject` for MinIO uploads to work — be cautious

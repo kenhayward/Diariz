@@ -1,3 +1,4 @@
+using Diariz.Api.Auth;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
@@ -93,6 +94,51 @@ public class AuthControllerTests
         await CreateUser(host, "a@x.test", GoodPassword, UserStatus.Active);
 
         Assert.IsType<UnauthorizedResult>(await BuildController(host).Login(new LoginRequest("a@x.test", "Wrong1!")));
+    }
+
+    [Fact]
+    public async Task Login_RepeatedWrongPasswords_LockTheAccount_EvenAgainstTheRightPassword()
+    {
+        using var host = new IdentityTestHost();
+        await CreateUser(host, "a@x.test", GoodPassword, UserStatus.Active);
+        var controller = BuildController(host);
+
+        for (var i = 0; i < SignInLockout.MaxFailedAttempts; i++)
+            Assert.IsType<UnauthorizedResult>(await controller.Login(new LoginRequest("a@x.test", "Wrong1!")));
+
+        var result = await controller.Login(new LoginRequest("a@x.test", GoodPassword));
+
+        Assert.Equal(403, StatusOf(result));
+        Assert.Contains("Too many", ((ObjectResult)result).Value!.ToString());
+    }
+
+    [Fact]
+    public async Task Login_ASuccessfulSignIn_ResetsTheFailureCount()
+    {
+        using var host = new IdentityTestHost();
+        await CreateUser(host, "a@x.test", GoodPassword, UserStatus.Active);
+        var controller = BuildController(host);
+
+        for (var round = 0; round < 2; round++)
+        {
+            for (var i = 0; i < SignInLockout.MaxFailedAttempts - 1; i++)
+                await controller.Login(new LoginRequest("a@x.test", "Wrong1!"));
+            Assert.IsType<OkObjectResult>(await controller.Login(new LoginRequest("a@x.test", GoodPassword)));
+        }
+    }
+
+    [Fact]
+    public async Task Login_LockoutLiftsOnceItsTimeHasPassed()
+    {
+        using var host = new IdentityTestHost();
+        var user = await CreateUser(host, "a@x.test", GoodPassword, UserStatus.Active);
+        var controller = BuildController(host);
+        for (var i = 0; i < SignInLockout.MaxFailedAttempts; i++)
+            await controller.Login(new LoginRequest("a@x.test", "Wrong1!"));
+
+        await host.Users.SetLockoutEndDateAsync(user, DateTimeOffset.UtcNow.AddSeconds(-1));
+
+        Assert.IsType<OkObjectResult>(await controller.Login(new LoginRequest("a@x.test", GoodPassword)));
     }
 
     [Fact]

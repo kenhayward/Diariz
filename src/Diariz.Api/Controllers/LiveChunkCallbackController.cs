@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
@@ -22,6 +23,7 @@ namespace Diariz.Api.Controllers;
 /// </para>
 /// </summary>
 [ApiController]
+[AllowAnonymous] // Called by the worker, not a user: authenticated by the X-Worker-Secret header (WorkerSecret), not a session.
 [Route("internal/transcriptions")]
 public class LiveChunkCallbackController(
     DiarizDbContext db,
@@ -43,7 +45,7 @@ public class LiveChunkCallbackController(
     private const int OrdinalStride = 10_000;
 
     private bool SecretOk =>
-        Request.Headers.TryGetValue("X-Worker-Secret", out var v) && v == _opts.CallbackSecret;
+        Diariz.Api.Auth.WorkerSecret.Matches(Request.Headers[Diariz.Api.Auth.WorkerSecret.HeaderName].ToString(), _opts.CallbackSecret);
 
     [HttpPost("live-chunk")]
     public async Task<IActionResult> LiveChunk(LiveChunkResult body)

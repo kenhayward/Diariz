@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
@@ -19,6 +20,7 @@ namespace Diariz.Api.Controllers;
 /// authenticated by a shared secret header (X-Worker-Secret) rather than JWT.
 /// </summary>
 [ApiController]
+[AllowAnonymous] // Called by the worker, not a user: authenticated by the X-Worker-Secret header (WorkerSecret), not a session.
 [Route("internal/transcriptions")]
 public class WorkerCallbackController : ControllerBase
 {
@@ -53,7 +55,7 @@ public class WorkerCallbackController : ControllerBase
     }
 
     private bool SecretOk =>
-        Request.Headers.TryGetValue("X-Worker-Secret", out var v) && v == _opts.CallbackSecret;
+        Diariz.Api.Auth.WorkerSecret.Matches(Request.Headers[Diariz.Api.Auth.WorkerSecret.HeaderName].ToString(), _opts.CallbackSecret);
 
     [HttpPost("result")]
     public async Task<IActionResult> Result(TranscriptionResult body)

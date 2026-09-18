@@ -1,4 +1,6 @@
 using Diariz.Api.Configuration;
+using Diariz.Api.Services;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Diariz.Domain;
 using OpenIddict.Abstractions;
 using OpenIddict.Server;
@@ -21,6 +23,9 @@ public static class OpenIddictSetup
         this IServiceCollection services, McpOAuthOptions options, string? issuer, string? keysDir,
         bool isDevelopment, string resource)
     {
+        // The token guard below depends on it; TryAdd so a host that already registered it keeps its own.
+        services.TryAddScoped<IActiveAccounts, ActiveAccounts>();
+
         services.AddOpenIddict()
             .AddCore(o => o.UseEntityFrameworkCore().UseDbContext<DiarizDbContext>())
             .AddServer(o =>
@@ -48,6 +53,15 @@ public static class OpenIddictSetup
                  .AllowRefreshTokenFlow()
                  .RequireProofKeyForCodeExchange(); // PKCE mandatory; OpenIddict accepts S256 only (never plain)
 
+                // Stated rather than inherited, so the lifetime of a connector's credentials is visible here. Refresh
+                // tokens roll (OpenIddict's default): each use issues a new one and retires the old.
+                o.SetAccessTokenLifetime(TimeSpan.FromHours(1))
+                 .SetRefreshTokenLifetime(TimeSpan.FromDays(14));
+
+                // The token endpoint is not passed through (see below), so this is where a disabled account's code
+                // exchange or refresh is refused.
+                o.AddEventHandler(InactiveAccountTokenGuard.Descriptor);
+
                 // Scopes advertised in metadata; the mcp resource is bound as the token audience at sign-in.
                 o.RegisterScopes(McpOAuthOptions.Scope,
                     OpenIddictConstants.Scopes.OpenId, OpenIddictConstants.Scopes.OfflineAccess, OpenIddictConstants.Scopes.Email);
@@ -60,6 +74,8 @@ public static class OpenIddictSetup
                 // explicit resource permission, so OpenIddict would otherwise reject them (ID2192). There is a
                 // single MCP resource and DCR is already gated by the redirect-host allowlist + PKCE + consent,
                 // so per-client resource granularity adds no security value here.
+                // REVISIT BEFORE REGISTERING A SECOND RESOURCE: with two, any client could obtain a token for either.
+                // Grant resources per client at registration instead. OpenIddictSetupTests fails if a second appears.
                 o.IgnoreResourcePermissions();
 
                 if (!string.IsNullOrWhiteSpace(issuer))

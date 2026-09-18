@@ -80,12 +80,16 @@ export default function Login() {
       // Navigation is handled by the isAuthed effect above (login() flips auth state), so both the
       // password path and the desktop token path leave the login screen the same way.
     } catch (err) {
-      // 401 from the API has no body and genuinely means bad credentials;
-      // anything else (500, network) shows the real reason.
+      // 401 from the API has no body and genuinely means bad credentials; 429 (also bodiless) means this
+      // address has made too many attempts, which is not a wrong password; anything else (500, network)
+      // shows the real reason.
+      const status = axios.isAxiosError(err) ? err.response?.status : undefined;
       setError(
-        axios.isAxiosError(err) && err.response?.status === 401
+        status === 401
           ? t("invalidCredentials")
-          : apiErrorMessage(err, t("invalidCredentials")),
+          : status === 429
+            ? t("tooManyAttempts")
+            : apiErrorMessage(err, t("invalidCredentials")),
       );
     } finally {
       setBusy(false);

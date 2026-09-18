@@ -12,6 +12,7 @@ public class RedirectUriPolicyTests
     [InlineData("https://CLAUDE.AI/cb")]                 // host match is case-insensitive
     [InlineData("http://localhost:51000/callback")]      // loopback may use http (OAuth 2.1)
     [InlineData("http://127.0.0.1:8976/oauth")]          // loopback IPv4 http
+    [InlineData("https://claude.ai:443/cb")]             // naming the default port explicitly is fine
     public void IsAllowed_AcceptsHttpsAllowedHosts_AndLoopbackHttp(string uri) =>
         Assert.True(RedirectUriPolicy.IsAllowed(uri, Allowed));
 
@@ -22,6 +23,8 @@ public class RedirectUriPolicyTests
     [InlineData("/relative/callback")]                   // must be absolute
     [InlineData("not a uri")]
     [InlineData("ftp://claude.ai/cb")]                   // only http(s) schemes
+    [InlineData("https://claude.ai:8675/cb")]            // a public host is only allowed on its default port
+    [InlineData("https://claude.ai:80/cb")]              // (explicitly naming a non-default one counts too)
     [InlineData("")]
     [InlineData(null)]
     public void IsAllowed_RejectsEverythingElse(string? uri) =>

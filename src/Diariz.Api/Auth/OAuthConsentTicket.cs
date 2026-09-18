@@ -28,6 +28,13 @@ public sealed class OAuthConsentTicketProtector : IOAuthConsentTicketProtector
     /// <summary>The cookie name the authorize endpoint reads and the consent endpoint sets.</summary>
     public const string CookieName = "diariz_oauth_consent";
 
+    /// <summary>The cookie is only ever read by <c>/connect/authorize</c>, so it is only ever sent there.</summary>
+    public const string CookiePath = "/connect";
+
+    /// <summary>The longest a ticket may be valid for. A ticket carrying an expiry further out than this from the
+    /// moment it is checked is rejected outright, so a call-site bug cannot mint a long-lived consent.</summary>
+    public static readonly TimeSpan MaxLifetime = TimeSpan.FromMinutes(10);
+
     private readonly IDataProtector _protector;
 
     public OAuthConsentTicketProtector(IDataProtectionProvider provider) =>
@@ -35,8 +42,10 @@ public sealed class OAuthConsentTicketProtector : IOAuthConsentTicketProtector
 
     public string Issue(Guid userId, string clientId, bool allow, DateTimeOffset expiresAt)
     {
-        // userId | clientId | allow(0/1) | expiryUnixSeconds. clientId is our own GUID-hex, so it never
-        // contains the separator.
+        // userId | clientId | allow(0/1) | expiryUnixSeconds. Registered client ids are our own GUID-hex, but that is
+        // checked rather than assumed: the separator must never appear inside a field.
+        if (string.IsNullOrEmpty(clientId) || clientId.Contains('|'))
+            throw new ArgumentException("A consent ticket needs a client id without the '|' separator.", nameof(clientId));
         var payload = $"{userId:N}|{clientId}|{(allow ? 1 : 0)}|{expiresAt.ToUnixTimeSeconds()}";
         return _protector.Protect(payload);
     }
@@ -55,7 +64,9 @@ public sealed class OAuthConsentTicketProtector : IOAuthConsentTicketProtector
         if (!string.Equals(parts[1], clientId, StringComparison.Ordinal)) return null; // bound to this client
         if (parts[2] is not ("0" or "1")) return null;
         if (!long.TryParse(parts[3], out var expiryUnix)) return null;
-        if (DateTimeOffset.FromUnixTimeSeconds(expiryUnix) <= now) return null; // expired
+        var expiry = DateTimeOffset.FromUnixTimeSeconds(expiryUnix);
+        if (expiry <= now) return null;                 // expired
+        if (expiry > now.Add(MaxLifetime)) return null; // claims a longer life than any consent is given
 
         return new ConsentDecision(userId, parts[2] == "1");
     }

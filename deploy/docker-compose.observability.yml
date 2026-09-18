@@ -13,7 +13,8 @@
 #     upgrade cycle blocking the app's.
 #
 # It DOES share the app's Redis, on DB index 1. VALKEY_URL is optional for GlitchTip and only affects
-# caching and task-queue speed, so the blast radius is small and it saves a container.
+# caching and task-queue speed, and it saves a container. That Redis is password-protected (REDIS_PASSWORD),
+# so GlitchTip authenticates like every other client.
 name: diariz
 
 services:
@@ -49,7 +50,7 @@ services:
     environment:
       DATABASE_URL: "postgres://glitchtip:${GLITCHTIP_POSTGRES_PASSWORD:-glitchtip}@glitchtip-postgres:5432/glitchtip"
       # DB index 1 - the app's queues live on index 0 and must not be disturbed.
-      VALKEY_URL: "redis://redis:6379/1"
+      VALKEY_URL: "redis://:${REDIS_PASSWORD:?required - set REDIS_PASSWORD in deploy/.env}@redis:6379/1"
       # The `:?` values below are REQUIRED and fail the compose command with the message shown if
       # they are unset or blank. That is deliberate: with a plain ${VAR} an empty value substitutes
       # silently, the container starts, and the failure surfaces much later as something unrelated -
@@ -61,11 +62,12 @@ services:
       # MUST include the scheme. Django derives its trusted CSRF origins from this, and a mismatch
       # presents as "wrong password" on every login attempt rather than anything mentioning CSRF.
       GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN:?required - the full external URL including https://}
-      # Optional hardening, permissive by default. MUST include the internal service name as well as
-      # the public hostname: the API and worker post to `http://glitchtip:8000`, so their requests
-      # carry `Host: glitchtip`, and Django rejects any host not listed. Setting this to the public
-      # hostname alone silently kills all server-side reporting while the browser keeps working.
-      ALLOWED_HOSTS: ${GLITCHTIP_ALLOWED_HOSTS:-*}
+      # Required. A comma-separated list that MUST include the internal service name as well as the
+      # public hostname, e.g. `glitchtip.example.com,glitchtip`: the API and worker post to
+      # `http://glitchtip:8000`, so their requests carry `Host: glitchtip`, and Django rejects any host
+      # not listed. Setting this to the public hostname alone silently kills all server-side reporting
+      # while the browser keeps working.
+      ALLOWED_HOSTS: ${GLITCHTIP_ALLOWED_HOSTS:?required - public hostname AND the internal name, e.g. glitchtip.example.com,glitchtip}
       DEFAULT_FROM_EMAIL: ${GLITCHTIP_FROM_EMAIL:?required - run deploy/NewGlitchTipSecrets.cmd}
       EMAIL_URL: ${GLITCHTIP_EMAIL_URL:?required - run deploy/NewGlitchTipSecrets.cmd}
       # Internal tool on a public subdomain: no open registration, no new orgs.

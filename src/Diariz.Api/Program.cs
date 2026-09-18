@@ -25,6 +25,14 @@ var appVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Ver
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Refuse to start on configuration that would run but should not (placeholder or missing secrets, default
+// storage credentials, no persisted keyring, a non-https OAuth issuer). Development is exempt. See the class.
+var startupConfig = StartupConfigValidator.Validate(builder.Configuration, builder.Environment.IsDevelopment());
+if (startupConfig.Errors.Count > 0)
+    throw new InvalidOperationException(
+        "Refusing to start - fix these settings (usually in deploy/.env):" + Environment.NewLine + " - "
+        + string.Join(Environment.NewLine + " - ", startupConfig.Errors));
+
 // ---- Options ----
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.Section));
 builder.Services.Configure<GoogleAuthOptions>(builder.Configuration.GetSection(GoogleAuthOptions.Section));
@@ -64,14 +72,9 @@ builder.Services.Configure<WebhookOptions>(builder.Configuration.GetSection(Webh
 builder.Services.Configure<TelemetryOptions>(builder.Configuration.GetSection(TelemetryOptions.Section));
 
 // Honour X-Forwarded-* from the reverse proxy (nginx/TLS terminator) so Request.Scheme/IsHttps reflect the
-// browser's HTTPS — needed for the OAuth state cookie's Secure flag and any request-derived URLs. The proxy
-// is on the container network, so clear the default trusted-proxy allowlist to trust it.
-builder.Services.Configure<ForwardedHeadersOptions>(o =>
-{
-    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    o.KnownIPNetworks.Clear();
-    o.KnownProxies.Clear();
-});
+// browser's HTTPS — needed for the OAuth state cookie's Secure flag and any request-derived URLs. Believed only
+// from loopback/private networks, where the proxy lives - see ForwardedHeadersTrust.
+builder.Services.Configure<ForwardedHeadersOptions>(ForwardedHeadersTrust.Configure);
 
 // ---- Optional error + performance reporting (GlitchTip / Sentry-compatible) ----
 // Entirely absent unless a DSN is configured, matching how Summarization/Dictation are gated.
@@ -123,6 +126,7 @@ builder.Services.AddIdentityCore<ApplicationUser>(o =>
         o.Password.RequireDigit = true;
         o.Password.RequireNonAlphanumeric = true;
         o.User.RequireUniqueEmail = true;
+        SignInLockout.Apply(o.Lockout);
     })
     .AddRoles<IdentityRole<Guid>>()
     .AddEntityFrameworkStores<DiarizDbContext>()
@@ -195,28 +199,7 @@ builder.Services.AddAuthentication(SmartAuthScheme)
     // Personal REST-API token scheme (dz_api_…), routed here by the forwarding default selector above.
     .AddScheme<Diariz.Api.Auth.ApiKeyAuthSchemeOptions, Diariz.Api.Auth.ApiKeyAuthenticationHandler>(
         Diariz.Api.Auth.ApiKeyAuthenticationHandler.SchemeName, _ => { });
-builder.Services.AddAuthorization(o =>
-{
-    // Platform authority, resolved from the caller's group membership. Each policy requires ANY of the flags
-    // it names.
-    o.AddPolicy("ManageRooms", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManageRooms)));
-    o.AddPolicy("ManageUsers", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManageUsers)));
-    o.AddPolicy("ManagePlatform", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManagePlatform)));
-    o.AddPolicy("ManageFormulas", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManageFormulas)));
-    o.AddPolicy("ManagePeople", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManagePeople)));
-    o.AddPolicy("ManageVoiceprints", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManageVoiceprints)));
-    // Reading platform settings: the Manage Users modal shows the default quota, so an Administrator
-    // (ManageUsers, no ManagePlatform) must still be able to GET them. Writes remain ManagePlatform.
-    o.AddPolicy("ReadAdminSettings", p => p.AddRequirements(
-        new PermissionRequirement(PlatformPermission.ManageUsers | PlatformPermission.ManagePlatform)));
-
-    // The /mcp endpoint authenticates only with the MCP token scheme (not the browser's JWT).
-    o.AddPolicy(Diariz.Api.Auth.McpBearerAuthenticationHandler.SchemeName, p =>
-    {
-        p.AddAuthenticationSchemes(Diariz.Api.Auth.McpBearerAuthenticationHandler.SchemeName);
-        p.RequireAuthenticatedUser();
-    });
-});
+builder.Services.AddAuthorization(AuthorizationDefaults.Configure);
 
 // ---- Storage (MinIO / S3) ----
 builder.Services.AddSingleton<IAmazonS3>(_ =>
@@ -242,6 +225,8 @@ builder.Services.AddScoped<ISchemaVersion, EfSchemaVersion>();
 builder.Services.AddSingleton<IBackupProgress, BackupProgress>();
 // Platform authority, resolved from the caller's group membership on every request (never from a JWT claim).
 builder.Services.AddScoped<IUserPermissions, UserPermissions>();
+// Whether an account may still use the platform - asked by every long-lived credential path, not only sign-in.
+builder.Services.AddScoped<IActiveAccounts, ActiveAccounts>();
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 // Rooms. Nothing consumes this yet - phases 2b-2d wire it into the controllers.
 builder.Services.AddScoped<IRoomScope, RoomScope>();
@@ -303,6 +288,16 @@ builder.Services.AddScoped<IdentificationRescan>();
 // the call. Above the app, the proxy must allow at least as long - see apps/web/nginx.conf.
 static void NoHttpTimeout(HttpClient c) => c.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
 
+// Where LLM calls may connect: never link-local/cloud-metadata addresses, and never the API's own loopback outside
+// Development (a local `dotnet run` legitimately talks to a model server on localhost). LAN addresses stay allowed.
+// Applied to every LLM client and to model discovery - see LlmEndpointGuard.
+var llmAllowLoopback = builder.Environment.IsDevelopment();
+SocketsHttpHandler GuardedLlmPrimaryHandler(bool allowAutoRedirect = true) => new()
+{
+    AllowAutoRedirect = allowAutoRedirect,
+    ConnectCallback = LlmEndpointGuard.ConnectCallback(llmAllowLoopback),
+};
+
 // Every LLM client goes through AddLlmClient below rather than AddHttpClient directly, so LlmTelemetryHandler
 // times the call and records its token usage. Registering it once here - instead of instrumenting each client -
 // means a client added later is measured for free, which is the failure mode that matters: the gap this closes
@@ -322,9 +317,13 @@ IHttpClientBuilder AddLlmClient<TClient, TImplementation>(
     Action<HttpClient>? configure = null, bool retry = true)
     where TClient : class where TImplementation : class, TClient
 {
-    var http = configure is null
-        ? builder.Services.AddHttpClient<TClient, TImplementation>()
-        : builder.Services.AddHttpClient<TClient, TImplementation>(configure);
+    var http = (configure is null
+            ? builder.Services.AddHttpClient<TClient, TImplementation>()
+            : builder.Services.AddHttpClient<TClient, TImplementation>(configure))
+        .ConfigurePrimaryHttpMessageHandler(() => GuardedLlmPrimaryHandler());
+
+    // The destination check goes OUTERMOST, so a refused endpoint is neither retried nor recorded as a call.
+    http = http.AddHttpMessageHandler(() => new LlmEndpointGuardHandler(llmAllowLoopback));
 
     // Retry OUTSIDE telemetry (added first = outermost), so each attempt is timed and recorded as its own
     // row. A retry that hid its attempts would make the usage log understate what the platform spent.
@@ -348,7 +347,8 @@ AddLlmClient<ILlmTestProbe, LlmTestProbe>(NoHttpTimeout, retry: false);
 // named a benign one - the same reasoning as the "webhooks" and "url-attachments" clients below. NOT an
 // LLM client: it spends no tokens, so LlmTelemetryHandler would only ever record an empty call.
 builder.Services.AddHttpClient<ILlmModelDiscoveryClient, LlmModelDiscoveryClient>()
-    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+    .ConfigurePrimaryHttpMessageHandler(() => GuardedLlmPrimaryHandler(allowAutoRedirect: false))
+    .AddHttpMessageHandler(() => new LlmEndpointGuardHandler(llmAllowLoopback));
 // The single rule for which models chat may use. Both LLM resolvers and the picker endpoint read it, so
 // that "offered for chat" cannot mean three slightly different things.
 builder.Services.AddScoped<IChatModelCatalog, ChatModelCatalog>();
@@ -598,11 +598,27 @@ builder.Services.AddOpenApi("v1", options =>
     options.AddDocumentTransformer<Diariz.Api.OpenApi.OpenApiCuration.TagDescriptionsTransformer>();
 });
 
+// Per-address budgets on the anonymous sign-in and OAuth routes; everything else is unlimited. See AuthRateLimits.
+var authRateLimits = builder.Configuration.GetSection(AuthRateLimitOptions.Section).Get<AuthRateLimitOptions>()
+                     ?? new AuthRateLimitOptions();
+builder.Services.AddRateLimiter(o =>
+{
+    o.GlobalLimiter = AuthRateLimits.CreateLimiter(authRateLimits);
+    o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    o.OnRejected = (context, _) =>
+    {
+        if (context.Lease.TryGetMetadata(System.Threading.RateLimiting.MetadataName.RetryAfter, out var retryAfter))
+            context.HttpContext.Response.Headers.RetryAfter = ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString();
+        return ValueTask.CompletedTask;
+    };
+});
+
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
     .WithOrigins(builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? ["http://localhost:5173"])
     .AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
 
 var app = builder.Build();
+foreach (var warning in startupConfig.Warnings) app.Logger.LogWarning("Configuration: {Warning}", warning);
 
 // ---- Startup: migrate, seed, ensure bucket ----
 await using (var scope = app.Services.CreateAsyncScope())
@@ -635,6 +651,9 @@ await using (var scope = app.Services.CreateAsyncScope())
 
 // Must run before auth/cookie handling so the pipeline sees the real client scheme.
 app.UseForwardedHeaders();
+// After forwarded headers (the budget is per CLIENT address) and before authentication (OpenIddict answers
+// /connect/token there, without ever reaching an endpoint).
+app.UseRateLimiter();
 
 // The curated OpenAPI document, served in every environment under /api (so the existing nginx proxy covers
 // it) and requiring auth - it backs the in-app API reference at /developers/api.
@@ -649,7 +668,7 @@ app.MapHub<TranscriptionHub>("/hubs/transcription");
 // MCP endpoint (Streamable HTTP), authenticated with the per-user MCP token scheme only.
 if (mcpOptions.Enabled)
     app.MapMcp("/mcp").RequireAuthorization(Diariz.Api.Auth.McpBearerAuthenticationHandler.SchemeName);
-app.MapGet("/health", () => Results.Ok(new { status = "ok", version = appVersion }));
+app.MapGet("/health", () => Results.Ok(new { status = "ok", version = appVersion })).AllowAnonymous();
 
 app.Run();
 

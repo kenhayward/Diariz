@@ -110,3 +110,26 @@ describe("Login surfaces desktop sign-in failures", () => {
     expect(screen.getByText("desktopSignInRejected")).toBeTruthy();
   });
 });
+
+describe("Login explains a refused attempt", () => {
+  beforeEach(() => {
+    (window as unknown as { diariz?: unknown }).diariz = undefined;
+  });
+
+  it("says to wait, rather than blaming the password, when the server is rate limiting", async () => {
+    const tooMany = Object.assign(new Error("Request failed with status code 429"), {
+      isAxiosError: true,
+      response: { status: 429 },
+    });
+    authState = { login: vi.fn().mockRejectedValue(tooMany), isAuthed: false };
+    const { container } = await renderLogin("/login");
+
+    const form = container.querySelector("form")!;
+    await act(async () => {
+      fireEvent.submit(form);
+    });
+
+    expect(screen.getByText("tooManyAttempts")).toBeTruthy();
+    expect(screen.queryByText("invalidCredentials")).toBeNull();
+  });
+});
