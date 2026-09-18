@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using Diariz.Api.Auth;
 
 namespace Diariz.Api.Tests;
@@ -26,7 +28,9 @@ public class OpenIddictKeysTests : IDisposable
     {
         using var _ = OpenIddictKeys.LoadOrCreateSigning(_dir);
 
-        Assert.Equal(["oidc-signing.pfx"], Directory.GetFiles(_dir).Select(f => Path.GetFileName(f)).ToArray());
+        // The lock file stays by design (see OpenIddictKeys.LoadOrCreate); no temporary key file may.
+        Assert.Equal(["oidc-signing.pfx", "oidc-signing.pfx.lock"],
+            Directory.GetFiles(_dir).Select(f => Path.GetFileName(f)).Order(StringComparer.Ordinal).ToArray());
     }
 
     [Fact]
@@ -43,6 +47,42 @@ public class OpenIddictKeysTests : IDisposable
         Assert.Single(thumbprints.Distinct());
         using var onDisk = OpenIddictKeys.LoadOrCreateSigning(_dir);
         Assert.Equal(thumbprints[0], onDisk.Thumbprint);
+    }
+
+    [Fact]
+    public async Task WhileAnotherProcessIsCreatingTheKey_CreationWaits_ThenLoadsTheirKey()
+    {
+        // The concurrency test above rarely catches a race on its own: key generation spreads the threads out. This
+        // pins the mechanism instead. On Linux File.Move(overwrite: false) checks then renames, and rename replaces
+        // an existing file, so two creators can both "win" - creation has to be serialised by the lock file, and
+        // whoever waited on it must take the key the holder published rather than write its own.
+        Directory.CreateDirectory(_dir);
+        var path = Path.Combine(_dir, "oidc-signing.pfx");
+        Task<string> creating;
+        string theirs;
+        using (new FileStream(path + ".lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+        {
+            creating = Task.Run(() =>
+            {
+                using var cert = OpenIddictKeys.LoadOrCreateSigning(_dir);
+                return cert.Thumbprint;
+            });
+            await Task.Delay(TimeSpan.FromMilliseconds(500));
+            Assert.False(creating.IsCompleted, "creation went ahead while another process held the key lock");
+
+            theirs = PublishKey(path);
+        }
+
+        Assert.Equal(theirs, await creating);
+    }
+
+    private static string PublishKey(string path)
+    {
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest("CN=Other process", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        using var cert = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
+        File.WriteAllBytes(path, cert.Export(X509ContentType.Pfx));
+        return cert.Thumbprint;
     }
 
     [Fact]

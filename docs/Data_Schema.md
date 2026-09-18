@@ -1409,5 +1409,6 @@ Protection keyring that decrypts `LlmModels.ApiKeyEncrypted`, mounted at `/keys`
 **`workercache`** (model weights). Back up `pgdata` + `miniodata` together — a transcript row in Postgres is
 meaningless without its audio blob, and vice-versa. **`apikeys` is not covered by the platform backup** and needs
 its own copy: it also holds the OpenIddict signing/encryption certificates (`oidc-signing.pfx`,
-`oidc-encryption.pfx`, owner-only), so losing it makes stored model API keys, webhook secrets and Google refresh
+`oidc-encryption.pfx`, owner-only, each beside an empty `.lock` file that serialises its first creation across
+API processes), so losing it makes stored model API keys, webhook secrets and Google refresh
 tokens unrecoverable and invalidates every issued OAuth token.
