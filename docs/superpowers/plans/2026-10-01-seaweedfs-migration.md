@@ -37,8 +37,9 @@ the runbook. What changed while Tasks 1-5 were executed:
 - **Task 4, overlay switch:** the overlay is enabled by `COMPOSE_FILE` in `.env` (not `-f` flags), because it now
   changes the `s3` service and every compose command must use the same files. `BringUpProd.cmd` refuses to run
   when GlitchTip is configured but `COMPOSE_FILE` is not (replaces Step 4b's findstr-on-the-secret approach).
-- **Task 5, diagram:** the archify renderer is not on the scratch laptop, so the JSON source was updated and
-  re-pinned, but `docs/Runtime_Architecture.html` still needs re-rendering on a machine that has archify.
+- **Task 5, diagram:** re-rendered with archify 3.0.1 `finalize` (all four gates pass), layout unchanged.
+- **Follow-ups folded into this PR:** `FakeAudioStorage` now disposes uploaded streams like the SDK, so the
+  Task 3 bug class fails at the unit layer; and `nginxConf.test.ts` reads CRLF checkouts (issue #781).
 
 ## Global Constraints
 
