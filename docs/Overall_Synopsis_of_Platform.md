@@ -3734,9 +3734,11 @@ audio endpoint; `POST /api/maintenance/restore` takes the raw zip body and gates
 an earlier ancestor** (newer/unknown schemas are refused - there are no down-migrations). It then runs
 `pg_restore --clean`, and if the backup was an **older ancestor**, calls `MigrateToCurrentAsync` to roll the
 restored schema up to the running code (the response reports `migratedFrom`/`migratedTo`/`restartRecommended`).
-`restartRecommended` is true only when a migration ran, but **every** restore needs the API restarted: `--clean`
-recreates the `vector` extension under a new type OID that the running Npgsql type cache does not know, so vector
-reads (login included) fail until a restart (issue #783). Finally it wipes and re-uploads the bucket, and reports `objectsRestored`/`bytesRestored` so the operator can check
+`--clean` recreates the `vector` extension under a new type OID that the running Npgsql type cache does not know,
+so the restore then calls `ISchemaVersion.ReloadTypesAsync()` - a type reload on EF's own connection plus a pool
+clear - and the instance is usable without a restart (issue #783; before 0.273.2 every vector read, login
+included, failed until the API was restarted). `restartRecommended` still reports whether a migration ran.
+Finally it wipes and re-uploads the bucket, and reports `objectsRestored`/`bytesRestored` so the operator can check
 the result against the archive's object count. `Format` is the human-controlled breaking-change fence - bump it in
 the same PR as any migration that is not forward-restore-safe. Restore is **destructive** (replaces all data;
 on a same-version restore the admin is signed out, on a forward-migrated restore they are kept on the page with

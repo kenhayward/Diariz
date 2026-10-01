@@ -475,11 +475,16 @@ column drop/rename, a pgvector dimension change, a semantic data reshape that an
 **bump `MaintenanceController.CurrentFormat` in the same PR** - that fence hard-rejects older backups instead
 of silently corrupting them.
 
-**After any restore, restart the API** (`docker compose restart api worker web`), even when the response says
-`restartRecommended: false` (issue #783). `pg_restore --clean` recreates the `vector` extension, so the type gets a
-new OID that the running process's Npgsql type cache does not know; every query reading a vector column then
-throws `DataTypeName '-.-'`, and login is one of them (500 for everyone). `restartRecommended` only tracks whether
-a migration ran. Also note that a restore brings the old instance's **LLM endpoints** with it: `LlmModels` and
+**A restore must end with `ISchemaVersion.ReloadTypesAsync()`** (`MaintenanceController.Restore` calls it after
+the dump and any migration; issue #783). `pg_restore --clean` recreates the `vector` extension, so the type gets a
+new OID that the running process's Npgsql type cache does not know; without the reload every query reading a
+vector column throws `DataTypeName '-.-'`, and login is one of them (500 for everyone). The reload goes through
+**EF's own connection** (`conn.ReloadTypesAsync()` then `NpgsqlConnection.ClearPool`) because EF owns the data
+source - a separate `NpgsqlDataSource` would refresh its own cache and leave the app's stale. The guard is
+`DatabaseBackupIntegrationTests.Restore_ThenVectorRead_OnADataSourceWarmedBeforeTheRestore_Succeeds`, which must
+warm the data source *before* restoring: one created afterwards loads the new OID and cannot reproduce the bug.
+Builds before 0.273.2 need `docker compose restart api worker web` after every restore instead. Also note that a
+restore brings the old instance's **LLM endpoints** with it: `LlmModels` and
 `PlatformSettings.DefaultLlmModelId` live in the database and override `SUMMARY_API_BASE` and the other `.env`
 LLM settings, which only govern a fresh database.
 
@@ -666,4 +671,8 @@ on Windows provides the GPU path itself); for CPU comment out the `deploy.resour
 - Config binds via the options pattern (`Configuration/AppOptions.cs`): `Jwt`, `Storage`,
   `JobQueue`, `Worker` sections, settable through `__`-delimited env vars in compose.
 - Worker model load is **lazy + cached** in `pipeline.py` (Whisper/align/diarizer load once and are
-  reused across jobs — loading large-v3 + pyannote is expensive).
+  reused across jobs — loading large-v3 + pyannote is expensive). The **per-job** memory is the opposite:
+  `run_loop`'s `finally` calls `gpu_memory.release()` (`gc.collect()` then `torch.cuda.empty_cache()`) after every
+  job, so PyTorch's caching allocator does not keep a job's peak - ~6 GB from alignment, diarization and
+  voiceprints - reserved between jobs and starve an LLM sharing the card (issue #782). Keep weights cached;
+  release activations. CTranslate2 (Whisper) has its own allocator and already returns its peak.
