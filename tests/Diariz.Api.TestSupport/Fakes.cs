@@ -758,7 +758,7 @@ public class FakeJobQueue : IJobQueue
     }
 }
 
-/// <summary>In-memory stand-in for MinIO/S3. Records uploads as byte arrays.</summary>
+/// <summary>In-memory stand-in for the S3 store. Records uploads as byte arrays.</summary>
 public class FakeAudioStorage : IAudioStorage
 {
     public Dictionary<string, byte[]> Objects { get; } = new();

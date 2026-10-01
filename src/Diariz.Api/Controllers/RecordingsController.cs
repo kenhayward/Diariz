@@ -2390,7 +2390,7 @@ public class RecordingsController : ControllerBase
     }
 
     /// <summary>Returns a same-origin URL the browser can stream/download the audio from. The audio is
-    /// served by the API itself (see <see cref="GetAudio"/>), so MinIO never has to be reachable from the
+    /// served by the API itself (see <see cref="GetAudio"/>), so the S3 store never has to be reachable from the
     /// client. The &lt;audio&gt; element / download link can't send an Authorization header, so the caller's
     /// bearer is carried as <c>access_token</c> (the same approach SignalR uses for its WS handshake).</summary>
     [HttpGet("{id:guid}/audio-url")]

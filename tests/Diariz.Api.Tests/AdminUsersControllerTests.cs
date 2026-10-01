@@ -435,7 +435,7 @@ public class AdminUsersControllerTests
     /// user owned (audio, recording attachment, both screenshot keys, own-folder section attachment) is
     /// passed to DeleteAsync, while the survivor's blob (uploaded into someone else's folder) is not - it is
     /// re-pointed instead. This does NOT stand in for the cascade/survival proof, which needs real Postgres +
-    /// MinIO (see UserDeletionBlobCleanupIntegrationTests) - the in-memory provider enforces no FK cascade.</summary>
+    /// S3 (see UserDeletionBlobCleanupIntegrationTests) - the in-memory provider enforces no FK cascade.</summary>
     [Fact]
     public async Task Delete_CollectsOwnedBlobKeys_ButNotTheRepointedSurvivors()
     {

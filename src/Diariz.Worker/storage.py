@@ -1,4 +1,4 @@
-"""Download audio blobs from MinIO/S3 to a local temp file."""
+"""Download audio blobs from the S3 store to a local temp file."""
 import os
 import tempfile
 
