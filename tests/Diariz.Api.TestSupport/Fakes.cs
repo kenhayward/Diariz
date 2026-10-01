@@ -777,6 +777,8 @@ public class FakeAudioStorage : IAudioStorage
         using var ms = new MemoryStream();
         await content.CopyToAsync(ms, ct);
         Objects[key] = ms.ToArray();
+        // Like AWSSDK.S3: the uploaded stream is disposed, so a caller that touches it afterwards fails here too.
+        await content.DisposeAsync();
     }
 
     public Task<Stream> OpenReadAsync(string key, CancellationToken ct = default)

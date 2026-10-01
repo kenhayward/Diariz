@@ -146,4 +146,18 @@ public class AudioStorageIntegrationTests(ContainersFixture fx)
         var res = await http.SendAsync(req);
         Assert.Equal("2345", await res.Content.ReadAsStringAsync());
     }
+
+    [Fact]
+    public async Task Upload_DisposesTheStreamItWasGiven()
+    {
+        // Pins the SDK behaviour FakeAudioStorage mirrors: callers must not touch the stream after UploadAsync.
+        // A restore once read FileStream.Length afterwards and failed on every real store (issue #769).
+        var storage = CreateStorage(out _);
+        await storage.EnsureBucketAsync();
+
+        var input = new MemoryStream(Encoding.UTF8.GetBytes("disposed afterwards"));
+        await storage.UploadAsync($"{Guid.NewGuid()}/a.webm", input, "audio/webm");
+
+        Assert.False(input.CanRead);
+    }
 }
