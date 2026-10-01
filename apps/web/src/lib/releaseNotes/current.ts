@@ -9,6 +9,22 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.273.3",
+    date: "2026-10-01",
+    pr: 793,
+    headline: "Dependency updates",
+    summary:
+      "A routine round of library updates across the web app, desktop app, server and transcription worker. Nothing changes in how Diariz works.\n\nThe server picks up a security fix in OpenIddict, the library behind sign-in for connected apps such as the Claude connector, which tightens how it checks who a client request is meant for. The web app gets the current React, editor and sanitiser releases, and the desktop app moves to the latest Electron 44 patch, which arrives with the next desktop release.\n\nThe transcription worker was checked on a GPU with the newest speaker-separation release, and its storage library was checked against the SeaweedFS store that now holds recordings.",
+    changed: [
+      "Server libraries updated, including the S3 client, OpenIddict, Redis, Sentry, MailKit and SkiaSharp",
+      "Web libraries updated, including React 19.3, the Tiptap editor, DOMPurify, markdown-it, i18next and React Router",
+      "Desktop shell updated to Electron 44.4.5, plus js-yaml, fast-uri, brace-expansion and undici",
+      "Transcription worker requires pyannote.audio 4.0.7 or newer, and updates boto3 and the Sentry SDK",
+      "CodeQL scanning action updated",
+      "Dependabot no longer proposes major @types/node updates, which follow the Node version CI runs, and holds jsdom below 30.1 until the vitest 5 upgrade (#791)",
+    ],
+  },
+  {
     version: "0.273.2",
     date: "2026-10-01",
     pr: 790,
