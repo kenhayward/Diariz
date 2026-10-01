@@ -13,7 +13,7 @@
   "dependencies": {
     "@microsoft/signalr": "^10.0.11",
     "@scalar/api-reference-react": "^0.9.66",
-    "@sentry/react": "^10.72.0",
+    "@sentry/react": "^11.1.0",
     "@tanstack/react-query": "^5.102.8",
     "@tiptap/extension-table": "^3.30.5",
     "@tiptap/extension-table-cell": "^3.30.5",
