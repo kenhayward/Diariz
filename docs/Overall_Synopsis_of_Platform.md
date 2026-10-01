@@ -71,7 +71,10 @@ Infrastructure (via Docker Compose, project name **`diariz`**):
   query-shape bug rather than a tuning problem, and logging every one of them is how 0.228.2 was found -
   a cartesian `Include` had been writing 207 MB to disk on each open of a large recording, silently.
 - **Redis** (`redis:7`) — job queues (Redis **Streams**), nothing is stored long-term here.
-- **MinIO** (S3-compatible) — original audio blobs and uploaded attachment files.
+- **SeaweedFS** (`chrislusf/seaweedfs`, S3-compatible, Apache-2.0; the compose service is `s3`) — original audio
+  blobs and uploaded attachment files. It replaced MinIO in 0.273.1 (issue #769): MinIO's community edition was
+  archived and its images could no longer be pulled. Both the API (AWSSDK.S3) and the worker (boto3) speak plain
+  S3, so the store is swappable by configuration.
 
 ### Ports (Docker / local dev)
 
@@ -81,11 +84,10 @@ Infrastructure (via Docker Compose, project name **`diariz`**):
 | Web (nginx, proxies `/api` + `/hubs` + `/mcp`) | 80 | **8081** | `0.0.0.0` (`WEB_BIND`) | Vite dev server **5173** (proxies to 8080) |
 | Postgres | 5432 | **5433** | `127.0.0.1` (`POSTGRES_BIND`) | 5432 |
 | Redis | 6379 | not published | - | 6379 |
-| MinIO S3 API | 9000 | **9002** | `127.0.0.1` (`MINIO_BIND`) | — |
-| MinIO console | 9001 | not published | - | — |
+| S3 API (SeaweedFS) | 8333 | **9002** | `127.0.0.1` (`S3_BIND`) | — |
 
 Two host ports are deliberately remapped so a Compose stack can sit alongside other local instances of the
-same service: the **MinIO S3 API** (9002) and **Postgres** (**5433**, so it does not clash with a Postgres
+same service: the **S3 API** (9002, kept from the MinIO days) and **Postgres** (**5433**, so it does not clash with a Postgres
 already on the host's 5432). Postgres is published purely for external tooling - psql, pgAdmin, a test
 harness on another machine - and is overridable per host via `POSTGRES_PORT` / `POSTGRES_BIND` in `.env`.
 A published port **bypasses the host firewall** (Docker writes its own DNAT rules), so every published port
@@ -93,9 +95,9 @@ except the web app's is bound to **`127.0.0.1` by default**; set its `*_BIND` va
 something on another machine genuinely needs it (and, for Postgres, with a strong `POSTGRES_PASSWORD`). The API
 port in particular stays host-only: browsers, the desktop app and any outer reverse proxy reach the API through
 the web container, and the API port also serves the `internal/*` worker-callback routes that nginx never
-forwards. The MinIO web console (container 9001) is **not published** - the app never uses
-it (the API reaches MinIO in-network at `minio:9000`), so port-forward or `docker exec` if you need it.
-In-container, services address each other by Compose service name (`minio:9000`, `redis:6379`,
+forwards. SeaweedFS's master, volume and filer ports are **not published** - the app only uses the S3 gateway,
+which the API and workers reach in-network at `s3:8333`.
+In-container, services address each other by Compose service name (`s3:8333`, `redis:6379`,
 `postgres:5432`, `api:8080`) - publishing a port changes nothing about that private path.
 
 ### Redeploying while the platform is in use
@@ -184,7 +186,7 @@ capture itself is the safest of the three, because it is entirely client-side.
 | **worker** | Safe | Safe | **Delays the job** - reclaimed after 10 min idle |
 | **redis** | Safe | Risky | Risky (queue survives a restart now, but reconnects churn) |
 | **postgres** | Safe | **Upload fails** | Fails |
-| **minio** | Safe | **Upload fails** | Fails |
+| **s3** | Safe | **Upload fails** | Fails |
 
 Three things are worth knowing because they are the opposite of what you would guess:
 
@@ -221,7 +223,7 @@ docker compose exec redis redis-cli XPENDING embedding-jobs embedders
 A non-zero count is a job in flight. Since 0.174.0 that is a **delay, not a loss** - it is reclaimed once
 its message has been idle half an hour - so it is a reason to pause, not a reason not to deploy.
 
-Treat `postgres`, `redis` and `minio` as maintenance-window work.
+Treat `postgres`, `redis` and `s3` as maintenance-window work.
 
 #### Orphaned-job recovery
 
@@ -306,7 +308,7 @@ three-second window the case for that work is weak.
        │ EF Core        │ S3 SDK            │ Redis Streams │ HTTP /chat/completions
        ▼                ▼                   ▼              ▼
    ┌────────┐      ┌──────────┐      ┌──────────────┐   ┌──────────────────┐
-   │Postgres│      │  MinIO    │      │    Redis      │   │ OpenAI-compatible │
+   │Postgres│      │ SeaweedFS │      │    Redis      │   │ OpenAI-compatible │
    │+pgvector│     │ (audio)   │      │ transcription-│   │   LLM endpoint    │
    └────────┘      └────┬──────┘      │ jobs / workers│   │ (per-user/server) │
                         │ download    └──────┬───────┘   └──────────────────┘
@@ -353,7 +355,7 @@ three-second window the case for that work is weak.
    nulls it, destroying the original start on the first pause; both are also stashed with the offline pending
    recording so a recovered upload replays the real time instead of the recovery moment. The server drops an
    implausible value (>24 h future, >366 d past, end before start) rather than failing the upload.
-2. **Store + enqueue.** The API streams the blob into **MinIO** (`recordings` bucket, key `{userId}/{recordingId}{ext}`),
+2. **Store + enqueue.** The API streams the blob into the **S3 store** (`recordings` bucket, key `{userId}/{recordingId}{ext}`),
    writes a **`Recording`** row, creates a **`Transcription`** row (version 1) and **enqueues a job** on the
    Redis stream **`transcription-jobs`** (consumer group **`workers`**). Uploads are gated by magic-byte
    format sniffing (`AudioFormats`) + size cap (`Uploads:MaxBytes`) + the owner's storage quota.
@@ -406,7 +408,7 @@ three-second window the case for that work is weak.
        set to `500m` both pre-empts that message with a bare nginx 413 *and* rejects a genuine 500 MB file,
        since the multipart envelope adds a few hundred bytes on top of it.
      - **Timeouts, not size, are the next failure.** A 500 MB upload takes minutes on a domestic connection,
-       and the API then streams it into MinIO before it answers - well past a typical 60s default, which
+       and the API then streams it into the S3 store before it answers - well past a typical 60s default, which
        surfaces as a **504** rather than anything about size. Diagnose by the status code: 413 is a limit,
        504 is a timeout.
      - **`proxy_request_buffering off` matters most.** Left on, the proxy spools the whole upload to its own
@@ -417,7 +419,7 @@ three-second window the case for that work is weak.
      produced by .NET, consumed by Python. `Language` is a **Whisper** code ("en", "pt"), resolved by the API from
      `Recording.TranscriptionLanguage` ?? `UserSettings.TranscriptionLanguage` and mapped from the platform's BCP-47
      tag by `SupportedLanguages.ToWhisperCode` (Whisper does not know "pt-BR"); null = let Whisper detect it.
-3. **Transcribe.** The worker `XREADGROUP`s a job, downloads the blob from MinIO to a temp file, then runs
+3. **Transcribe.** The worker `XREADGROUP`s a job, downloads the blob from the S3 store to a temp file, then runs
    **WhisperX (large-v3)** → **word-alignment** → **pyannote 4 diarization** (honouring optional
    min/max speaker hints) → optional **ECAPA per-speaker voiceprints** (SpeechBrain, 192-d, L2-normalised).
    It measures duration and rejects audio over `MAX_AUDIO_SECONDS`.
@@ -998,7 +1000,7 @@ large folders silently rolled up only their first ~18 meetings. The old per-work
   caller probe which ids exist), and refuses a model whose resolved **`images_supported`** parameter is off
   (400). All three happen **before any blob is read**, so a rejected request costs no storage IO. Surviving
   captures go through **`IVisionImageEncoder`**: a capture already inside **1920x1080** is streamed out of
-  MinIO and base64'd **verbatim** (never decoded), and one outside it is resampled to fit - ratio preserved,
+  the S3 store and base64'd **verbatim** (never decoded), and one outside it is resampled to fit - ratio preserved,
   never enlarged - and re-encoded as **JPEG q92**, because resampling antialiases text and destroys PNG's
   flat-colour compression. Nothing is cached; the same capture re-encodes per turn, which is tens of
   milliseconds against a multi-second model call. **SkiaSharp** (MIT over Google's BSD Skia) is a new API
@@ -2169,7 +2171,7 @@ into it with no URL or per-user setup at all.
     room via the `OwnerUserId` SetNull FK - their shared recordings survive. It also cleans up object storage:
     before the cascade runs, `AdminUsersController.Delete` re-points any `SectionAttachment` the departing user
     uploaded into a folder they don't own (`UploadedByUserId` -> the folder owner - the row and its blob survive,
-    and the bytes move onto the folder owner's storage usage) and then collects and deletes every MinIO blob the
+    and the bytes move onto the folder owner's storage usage) and then collects and deletes every S3 blob the
     user does own outright - their recordings' audio, recording attachments, meeting screenshots (full image +
     thumbnail), and own-folder section attachments - so nothing is left orphaned in object storage. Blob deletes
     are best-effort (logged and skipped on failure) so one bad object-storage call can't abort the whole account
@@ -2626,10 +2628,10 @@ into it with no URL or per-user setup at all.
 - **Startup configuration validation.** Outside Development the API refuses to start (`StartupConfigValidator`,
   called first thing in `Program.cs`) when `Jwt:Key` is missing, under 32 bytes or a shipped placeholder; when
   `Worker:CallbackSecret` is missing, under 16 characters or a placeholder; when the storage credentials are the
-  MinIO defaults; when `DataProtection:KeysPath` is unset; when `Seed:Password` is a placeholder; or when MCP OAuth
+  old `minioadmin` defaults or a placeholder; when `DataProtection:KeysPath` is unset; when `Seed:Password` is a placeholder; or when MCP OAuth
   is on with an `http` issuer on a non-loopback host (loopback only warns, so a local compose run still starts).
   The compose files mirror this with `${VAR:?}` for `JWT_KEY`, `CALLBACK_SECRET`, `POSTGRES_PASSWORD`,
-  `REDIS_PASSWORD`, `MINIO_ROOT_USER/PASSWORD` and `APP_PUBLIC_URL`.
+  `REDIS_PASSWORD`, the `S3_ROOT_*` / `S3_APP_*` keys and `APP_PUBLIC_URL`.
 - **Deny by default.** `AuthorizationDefaults` sets a `FallbackPolicy` requiring an authenticated user, so an
   endpoint without an attribute is not public. Everything public carries `[AllowAnonymous]` (or
   `.AllowAnonymous()` for `/health`), and `AuthorizationDefaultsTests` pins the exact anonymous controller set.
@@ -2663,9 +2665,16 @@ into it with no URL or per-user setup at all.
   sends `Referrer-Policy: no-referrer`.
 - **Redis** requires a password (`REDIS_PASSWORD`, hex/alphanumeric because it is embedded in URLs and connection
   strings). The worker redacts it from its startup log line.
-- **MinIO.** The API and workers can use a scoped `diariz-app` key limited to the recordings bucket (plus listing
-  bucket names) instead of root, created by `deploy/ProvisionDiarizMinio.cmd` / `provision-diariz-minio.sh` and
-  set as `MINIO_APP_ACCESS_KEY` / `MINIO_APP_SECRET_KEY` (blank falls back to root).
+- **S3 store identities.** SeaweedFS reads its identities from an inline compose `configs:` block
+  (`s3_identities`, mounted as `/etc/seaweedfs/s3.json`), interpolated from `.env`. There are two, three with the
+  observability overlay: **root** (administers the store), **diariz** (the API and workers, confined to the
+  `recordings` bucket - `Admin:recordings` is what lets the API create it on first boot; every other bucket is
+  denied and not even listed) and **glitchtip** (confined to its own bucket). The app key is **mandatory** - there
+  is no fallback to root. Keys are hex, made by `deploy/NewS3Keys.cmd` / `new-s3-keys.sh` (`root`, default app,
+  `glitchtip`); the old `MINIO_*` variable names still resolve as fallbacks. Compose does **not** recreate a
+  container when only inline config content changes, so after rotating a key run
+  `docker compose up -d --force-recreate s3`; the `S3_IDENTITY_SET` marker on the service makes adding or removing
+  the overlay recreate it automatically.
 
 ## People and speaker identification (voiceprints)
 
@@ -2884,7 +2893,7 @@ Clips are cut by **ffmpeg, which is a runtime dependency of the API image** (`sr
 because webm/m4a/mp3 cannot be safely byte-sliced. It is driven against a **presigned internal object-store
 URL** (`IAudioStorage.GetPresignedReadUrlAsync`) so ffmpeg range-seeks the blob instead of the API downloading
 a whole recording to cut seconds out of it; that URL never leaves the API process. Presigning defaults to
-HTTPS regardless of `ServiceURL`, so the protocol is derived from the configured endpoint - MinIO is plain
+HTTPS regardless of `ServiceURL`, so the protocol is derived from the configured endpoint - the S3 store is plain
 HTTP in compose, and getting this wrong surfaces as a TLS frame error from inside ffmpeg.
 
 That self exception is `CanManageBiometricsAsync`, kept as a **single predicate** used by both endpoints (and,
@@ -3117,8 +3126,8 @@ the least likely to hold.
 
 ## Audio storage & playback
 
-- Original blobs live in **MinIO**; the **API streams them back itself** (same-origin) rather than handing
-  out presigned URLs, so MinIO never needs to be browser-reachable. Playback uses HTTP **range requests**
+- Original blobs live in the **S3 store** (SeaweedFS); the **API streams them back itself** (same-origin) rather
+  than handing out presigned URLs, so the store never needs to be browser-reachable. Playback uses HTTP **range requests**
   (`AudioStorage.OpenAsync` with a byte range) authorised by a short-lived token, so the `<audio>` element
   can seek. See [`Data_Schema.md`](Data_Schema.md) for the bucket/key layout.
 
@@ -3450,8 +3459,9 @@ want it runs the platform exactly as before with zero extra containers.
   operates on the app database only, so co-locating GlitchTip's tables would entangle two things with
   different retention and recovery semantics. It also decouples GlitchTip's own Postgres version from the
   app's (which is pinned to 16 for pgvector).
-- **Its own MinIO bucket.** GlitchTip's DuckDB/Parquet cold storage for spans lives in a bucket of its own
-  (`glitchtip` by default, `GLITCHTIP_COLD_STORAGE_BUCKET`), reached with a scoped MinIO access key - never
+- **Its own S3 bucket.** GlitchTip's DuckDB/Parquet cold storage for spans lives in a bucket of its own
+  (`glitchtip` by default, `GLITCHTIP_COLD_STORAGE_BUCKET`), created by the overlay's one-shot `s3-buckets` service
+  (`weed shell`, no credentials) and reached with GlitchTip's own scoped S3 identity - never
   the root credentials, and never a prefix inside the `recordings` bucket (a platform restore wipes and
   re-seeds `recordings`, which would silently destroy the telemetry archive alongside it).
 - **Shares the app's Redis**, on **DB index 1** (`VALKEY_URL=redis://:${REDIS_PASSWORD}@redis:6379/1`) - the
@@ -3513,7 +3523,7 @@ want it runs the platform exactly as before with zero extra containers.
   `WebHost.UseSentry` behind an `if (telemetry.Enabled)` guard (`TelemetryOptions`, section `Sentry`), so an
   unset DSN means the SDK is never initialised and there is zero overhead or network traffic.
   - **One transaction per job.** `worker.py` wraps each job in a `transcribe` transaction, with a `span` per
-    stage - `download` (fetching the blob from MinIO), `decode` (the ffmpeg decode to a 16 kHz waveform, the
+    stage - `download` (fetching the blob from the S3 store), `decode` (the ffmpeg decode to a 16 kHz waveform, the
     slowest single stage on a long upload), `asr`, `align`, `diarize`, `shape` (reshaping into the callback's
     segment contract), `embeddings` (the ECAPA voiceprint step, gated by `ENABLE_SPEAKER_EMBEDDINGS`), and
     `callback` (posting the result back to the API). The stages are deliberately gap-free, so the spans add up
@@ -3724,7 +3734,8 @@ audio endpoint; `POST /api/maintenance/restore` takes the raw zip body and gates
 an earlier ancestor** (newer/unknown schemas are refused - there are no down-migrations). It then runs
 `pg_restore --clean`, and if the backup was an **older ancestor**, calls `MigrateToCurrentAsync` to roll the
 restored schema up to the running code (the response reports `migratedFrom`/`migratedTo`/`restartRecommended`);
-finally it wipes and re-uploads the bucket. `Format` is the human-controlled breaking-change fence - bump it in
+finally it wipes and re-uploads the bucket, and reports `objectsRestored`/`bytesRestored` so the operator can check
+the result against the archive's object count. `Format` is the human-controlled breaking-change fence - bump it in
 the same PR as any migration that is not forward-restore-safe. Restore is **destructive** (replaces all data;
 on a same-version restore the admin is signed out, on a forward-migrated restore they are kept on the page with
 a restart hint).
@@ -3823,6 +3834,12 @@ visible download. Concurrent builds are reference-counted, so one admin finishin
 progress. Restore needs no server-side counterpart: the browser owns that upload, so the panel switches from
 upload percentage to an "applying" message once the bytes are sent and the server-side work begins.
 
+**The backup is store-agnostic, and is how a server moves.** Objects are read and written only through
+`IAudioStorage`, so a backup taken from one S3 store restores into another - this is how production moved from
+MinIO to SeaweedFS, with no bucket-level copying (`docs/Server_Migration_Runbook.md`;
+`BackupRestoreS3IntegrationTests` runs the real controller against SeaweedFS in both directions). Redis queues
+are not in it, so drain in-flight jobs before the final backup.
+
 **Outside the backup: the `apikeys` volume.** The platform backup covers the database and the object store only.
 The `apikeys` volume (`/keys`) holds the Data Protection keyring - which decrypts stored model API keys, webhook
 signing secrets and Google refresh tokens - and the OpenIddict signing/encryption certificates. Copy it separately
@@ -3850,7 +3867,7 @@ tests/                      # Diariz.Api.Tests (unit), .IntegrationTests (Testco
 ## Testing & CI
 
 Three .NET test projects (fast **unit** with the EF in-memory provider + hand-rolled fakes; **integration**
-via Testcontainers spinning up real Postgres/Redis/MinIO; shared **TestSupport** fakes), plus **vitest** for
+via Testcontainers spinning up real Postgres/Redis/SeaweedFS; shared **TestSupport** fakes), plus **vitest** for
 the web, **pytest** for the worker (whisperx stubbed), and **`node --test`** for the desktop shell and the n8n
 node. **TDD is required** — write the failing test first. CI (`.github/workflows/ci.yml`) runs the suites on
 `ubuntu-latest`; the n8n-node job additionally regenerates the node from the API's OpenAPI document and fails
@@ -3863,7 +3880,7 @@ the build if the committed output has drifted.
   re-transcribe with model choice, sections (**nested folders up to 8 levels deep**: `Section.ParentId`, drag-to-reorder),
   speaker identification, delete-audio (keep transcript, free quota), **supporting-document attachments**
   (files or URLs on a recording — `Attachments` table + `AttachmentsController` — or **directly on a folder** —
-  `SectionAttachments` + `SectionAttachmentsController`; files in MinIO under `{userId}/attachments/…` /
+  `SectionAttachments` + `SectionAttachmentsController`; files in the S3 store under `{userId}/attachments/…` /
   `{userId}/section-attachments/…` and counted toward the quota; Markdown attachments are editable in place).
 - **M3 — partial:** chat across transcripts (shipped); full embedding-backed RAG over `Segment.Embedding`
   (`vector(768)`, sized for `nomic-embed-text`) is scaffolded but not yet populated.

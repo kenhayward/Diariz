@@ -7,7 +7,7 @@
     "quality_profile": "showcase",
     "repository": {
       "url": "https://github.com/kenhayward/Diariz",
-      "revision": "9dbb7b050edcb07d319036dfb488208cd62e07aa"
+      "revision": "bd5e07c8dcb7aa14dab2e8d543866e7a3577e0dd"
     },
     "views": [
       {
@@ -19,7 +19,7 @@
           "api",
           "redis",
           "gpu",
-          "minio"
+          "s3"
         ],
         "note": "The primary path: record, upload, enqueue, transcribe on GPU, post results back."
       },
@@ -229,11 +229,11 @@
       ]
     },
     {
-      "id": "minio",
+      "id": "s3",
       "type": "cloud",
-      "label": "MinIO (S3)",
+      "label": "SeaweedFS (S3)",
       "sublabel": "audio blobs + attachments",
-      "tag": "internal :9000",
+      "tag": "internal :8333",
       "pos": [
         855,
         530
@@ -245,6 +245,9 @@
       "sources": [
         {
           "path": "src/Diariz.Api/Services/AudioStorage.cs"
+        },
+        {
+          "path": "deploy/docker-compose.yml"
         }
       ]
     }
@@ -275,7 +278,7 @@
         "redis",
         "gpu",
         "postgres",
-        "minio"
+        "s3"
       ]
     },
     {
@@ -330,9 +333,9 @@
       "label": "EF Core"
     },
     {
-      "id": "api-to-minio",
+      "id": "api-to-s3",
       "from": "api",
-      "to": "minio",
+      "to": "s3",
       "label": "store audio"
     },
     {
@@ -357,9 +360,9 @@
       "variant": "dashed"
     },
     {
-      "id": "gpu-to-minio",
+      "id": "gpu-to-s3",
       "from": "gpu",
-      "to": "minio",
+      "to": "s3",
       "label": "download blob"
     },
     {
@@ -400,14 +403,14 @@
         "Segment embeddings vector(768), voiceprints vector(192)",
         "Transcriptions are versioned per recording; renames survive",
         "Summaries, minutes, actions, tags and formulas are LLM-written",
-        "MinIO holds original audio and uploaded attachments"
+        "SeaweedFS (S3) holds original audio and uploaded attachments"
       ]
     },
     {
       "dot": "rose",
       "title": "Trust boundaries and egress",
       "items": [
-        "nginx is the only published surface; Redis and MinIO are not",
+        "nginx is the only published surface; Redis and the S3 store are not",
         "Every user-scoped query filters by the JWT NameIdentifier claim",
         "Worker callbacks authenticate with X-Worker-Secret, not JWT",
         "Optional egress: Google/Outlook calendars, SMTP, GlitchTip"

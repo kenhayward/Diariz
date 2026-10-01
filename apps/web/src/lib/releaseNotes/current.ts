@@ -9,6 +9,27 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.273.1",
+    date: "2026-10-01",
+    pr: 770,
+    headline: "Object storage moves from MinIO to SeaweedFS",
+    summary:
+      "Nothing changes for people using Diariz: recordings, attachments and screenshots behave exactly as before.\n\nFor administrators: MinIO's free edition is no longer maintained and its images can no longer be downloaded, so a fresh install could not start. Audio and uploaded files are now stored in SeaweedFS, an actively maintained S3-compatible store, with the same bucket and file layout. Storage keys are set with S3_* settings (the old MINIO_* names still work) and generated with NewS3Keys.cmd; each key can reach only its own bucket. An existing server moves its data with a platform backup and restore rather than a bucket copy - follow docs/Server_Migration_Runbook.md, and do not simply pull and redeploy a running server, which would start on an empty store. A restore now reports how many files and bytes it put back, so the result can be checked against the backup.",
+    added: [
+      "deploy/NewS3Keys.cmd and new-s3-keys.sh generate storage keys for the server, the app and GlitchTip",
+      "A restore reports objectsRestored and bytesRestored",
+      "docs/Server_Migration_Runbook.md - moving to a new server by backup and restore",
+    ],
+    changed: [
+      "The object store is SeaweedFS instead of MinIO. Settings are S3_ROOT_*, S3_APP_* and S3_BIND; the old MINIO_* names still work",
+      "The app's own storage key is required; it no longer falls back to the administrator key",
+      "The GlitchTip overlay is switched on with COMPOSE_FILE in .env, creates its own bucket, and gets a key that can reach only that bucket",
+      "BringUpProd.cmd refuses to run when GlitchTip is configured but its overlay is not switched on",
+      "The MinIO provisioning scripts (ProvisionDiarizMinio.cmd, ProvisionGlitchTipMinio.cmd and their shell versions) are removed - SeaweedFS reads its keys from the compose file",
+    ],
+    fixed: ["Fresh installs failed because the MinIO image could not be downloaded (#769)"],
+  },
+  {
     version: "0.273.0",
     date: "2026-09-16",
     pr: 767,

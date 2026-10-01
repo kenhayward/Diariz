@@ -340,7 +340,7 @@ in the window.
 Record pressed
   POST /api/recordings/live            -> Recording{Status=Live}, provisional Transcription v1
   (repeat, every ~20-45 s)
-  PUT  /api/recordings/{id}/chunks/{n} -> blob to MinIO, RecordingChunk row, enqueue live-chunk job
+  PUT  /api/recordings/{id}/chunks/{n} -> blob to the S3 store, RecordingChunk row, enqueue live-chunk job
                                           worker -> internal/transcriptions/live-chunk
                                           -> Segments appended to v1, SignalR LiveTranscriptAppended
 Stop pressed
@@ -608,7 +608,7 @@ media stream, a GPU, or a browser.
 | `tests/Diariz.Api.Tests/LiveSpeakerStitcherTests.cs` | xUnit, pure | Cosine matching with hand-built vectors: merge onto an existing label, mint a new one, over-segmentation (3 chunk labels onto 2 session labels), never enrol |
 | `tests/Diariz.Api.Tests/LiveRecordingControllerTests.cs` | xUnit, in-memory | Ownership, room permission, idempotent chunk PUT, 409 on a foreign session id, finalize gap reporting |
 | `tests/Diariz.Api.Tests/ProvisionalTranscriptionGateTests.cs` | xUnit, in-memory | Every consumer in §7.2 declines provisional input |
-| `tests/Diariz.Api.IntegrationTests/LiveChunkFlowTests.cs` | Testcontainers | Real MinIO round-trip, the `(RecordingId, Sequence)` unique constraint, `live-chunk-jobs` wire format, cascade delete |
+| `tests/Diariz.Api.IntegrationTests/LiveChunkFlowTests.cs` | Testcontainers | Real S3 (SeaweedFS) round-trip, the `(RecordingId, Sequence)` unique constraint, `live-chunk-jobs` wire format, cascade delete |
 | `src/Diariz.Worker/tests/test_live_chunk.py` | pytest, models stubbed | Job orchestration, overlap prepend and trim-back, temp cleanup, callback body shape |
 
 The web suite's `act()` guard and pristine-output rule apply as everywhere else. Note that a local

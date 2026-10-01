@@ -1,5 +1,7 @@
 # Handoff: GlitchTip deployment
 
+**Superseded for storage (0.273.1):** the MinIO bucket/key steps below no longer apply - the store is SeaweedFS and GlitchTip's key comes from `NewS3Keys.cmd glitchtip`; see `docs/GlitchTip_Deployment.md`.
+
 **Transient. Delete this file once prod is done** - it is session state, not a reference. The durable material lives in `docs/GlitchTip_Deployment.md`, which is accurate and was written from what actually worked rather than from upstream docs.
 
 Updated 2026-08-01 at repo version **0.175.1**, `main` clean, PRs #401-#411 all merged, nothing open.

@@ -21,6 +21,7 @@ Apache License 2.0 components (their NOTICE terms are acknowledged here):
   - SpeechBrain
   - boto3, requests
   - Testcontainers (.NET)
+  - SeaweedFS (object storage; run unmodified as a separate container)
   - xUnit.net
   - Google.Apis.Auth (Google API .NET client — used to validate Google sign-in ID tokens)
 
@@ -43,7 +44,5 @@ depended on):
 Model / dataset usage terms (see README "Licensing & commercial use" for detail):
   - SpeechBrain ECAPA voiceprint weights are trained on the VoxCeleb dataset, published for
     research / non-commercial use.
-  - MinIO (object storage) is licensed under AGPL-3.0 and is used unmodified as a separate
-    container; it can be swapped for any S3-compatible store.
 
 Full licence texts are available from each component's upstream project.

@@ -13,7 +13,7 @@ Everything here is optional. A Diariz server with no `SENTRY_*` values set repor
 | GlitchTip web + worker | One container, from `deploy/docker-compose.observability.yml` |
 | Its database | Its own Postgres container, its own volume |
 | Its cache/queue | The app's existing Redis, on **DB index 1** (the app's queues are on 0) |
-| Its cold storage | The app's existing MinIO, in its **own bucket** with a **scoped key** |
+| Its cold storage | The app's existing S3 store (SeaweedFS), in its **own bucket** with a **scoped key** |
 
 Roughly 500 MB of RAM on top of the app.
 
@@ -21,7 +21,7 @@ Roughly 500 MB of RAM on top of the app.
 
 ## Before you start
 
-- The app stack is up (`docker compose up -d`), including `minio` and `redis`.
+- The app stack is up (`docker compose up -d`), including `s3` and `redis`.
 - You can add a DNS record and a proxy host for a new subdomain.
 - You know the SMTP details GlitchTip will send invitations and password resets from.
 
@@ -112,8 +112,8 @@ This is the complete set. **The six marked required have no fallback** - leave o
 | `GLITCHTIP_DOMAIN` | **yes** | 1c, by hand | Login fails with a CSRF error that reads as a wrong password |
 | `GLITCHTIP_EMAIL_URL` | **yes** | 1a, the secrets script | No invitations, no password resets |
 | `GLITCHTIP_FROM_EMAIL` | **yes** | 1a, the secrets script | As above |
-| `GLITCHTIP_MINIO_ACCESS_KEY` | **yes** | 1b, the MinIO script | Cold storage fails; spans are lost |
-| `GLITCHTIP_MINIO_SECRET_KEY` | **yes** | 1b, the MinIO script | As above |
+| `GLITCHTIP_S3_ACCESS_KEY` | **yes** | 1b, `NewS3Keys.cmd glitchtip` | Compose refuses to start; the old `GLITCHTIP_MINIO_*` names still work |
+| `GLITCHTIP_S3_SECRET_KEY` | **yes** | 1b, `NewS3Keys.cmd glitchtip` | As above |
 | `GLITCHTIP_POSTGRES_PASSWORD` | no | 1a, the secrets script | Falls back to `glitchtip` - fine locally, set it anywhere else |
 | `GLITCHTIP_PORT` | no | 1c | Defaults to `8000` |
 | `GLITCHTIP_BIND` | no | 1c | Defaults to `127.0.0.1` - see Topology, this is wrong for a remote proxy |
@@ -159,29 +159,38 @@ A plain `smtp://` connects in clear text, and servers only advertise the AUTH ex
 
 > If your username or password needed encoding, the script says so. **Verify it**: after first start, trigger a password reset and confirm the mail arrives. If it does not, the simplest fix is an SMTP app-password made only of letters and digits, which needs no encoding at all.
 
-### 1b. Provision MinIO
+### 1b. GlitchTip's S3 key, and switching the overlay on
 
 ```bash
 cd deploy
-ProvisionGlitchTipMinio.cmd
+NewS3Keys.cmd glitchtip
 ```
 
-Linux/macOS: `./provision-glitchtip-minio.sh`
-
-This creates the `glitchtip` bucket and an access key scoped to it, then **proves the key cannot read the `recordings` bucket** before it exits. If that check fails, it refuses and tells you not to use the key.
+Linux/macOS: `./new-s3-keys.sh glitchtip`
 
 **Copy both lines it prints into `deploy/.env`** - both are required:
 
 ```bash
-GLITCHTIP_MINIO_ACCESS_KEY=glitchtip-svc
-GLITCHTIP_MINIO_SECRET_KEY=<generated>
+GLITCHTIP_S3_ACCESS_KEY=<generated>
+GLITCHTIP_S3_SECRET_KEY=<generated>
 ```
 
-**Why not just use the MinIO root credentials?** They would give an error-tracking service read/write access to every user's recorded audio. GlitchTip needs somewhere to write Parquet files, nothing more.
+There is nothing to provision inside the store. The overlay adds a `glitchtip` identity to SeaweedFS's identity list (`s3_identities`), confined to the `glitchtip` bucket, and its one-shot `s3-buckets` service creates that bucket with `weed shell` before GlitchTip starts (no credentials needed, safe to re-run).
+
+**Then switch the overlay on in `deploy/.env`**, by uncommenting these two lines from `.env.example`:
+
+```bash
+COMPOSE_PATH_SEPARATOR=,
+COMPOSE_FILE=docker-compose.yml,docker-compose.observability.yml
+```
+
+Every `docker compose` command in this document then includes the overlay without `-f` flags. That is not just convenience: the overlay also changes the `s3` service (it adds GlitchTip's identity), so a command run without it would recreate `s3` with the base identities and lock GlitchTip out of its bucket. `BringUpProd.cmd` refuses to run when GlitchTip is configured but `COMPOSE_FILE` is not.
+
+**Why not just use the root S3 credentials?** They would give an error-tracking service read/write access to every user's recorded audio. GlitchTip needs somewhere to write Parquet files, nothing more.
 
 **Why its own bucket and never a prefix inside `recordings`?** Platform restore *wipes* the recordings bucket before repopulating it. Cold storage under a prefix there would be silently destroyed by any restore. A separate bucket is invisible to both backup and restore, because `AudioStorage` scopes every S3 call to the single configured `Storage:Bucket`.
 
-The script runs `mc` **inside the MinIO container**, so the host needs nothing installed, it does not depend on MinIO's port being published, and the root credentials never appear in a host command line or shell history. It is safe to re-run: an existing key is left untouched unless you pass `/rotate`.
+**Rotating the key:** generate a new pair, paste it into `.env`, then `docker compose up -d --force-recreate s3 glitchtip`. Compose does not notice a change to the identity list on its own, so without `--force-recreate` SeaweedFS keeps the old key.
 
 ### 1c. The four you set by hand
 
@@ -288,19 +297,19 @@ Then let compose confirm. The point is to discard stdout and see only stderr, so
 Linux/macOS:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.observability.yml config >/dev/null
+docker compose config >/dev/null
 ```
 
 Windows PowerShell - `/dev/null` does not exist, use `$null`:
 
 ```powershell
-docker compose -f docker-compose.yml -f docker-compose.observability.yml config > $null
+docker compose config > $null
 ```
 
 Windows cmd - `nul`, with one L:
 
 ```
-docker compose -f docker-compose.yml -f docker-compose.observability.yml config > nul
+docker compose config > nul
 ```
 
 Silence means you are good. A missing or blank **required** value stops the command outright, naming the variable and the script that produces it. Note it reports only the **first** problem it hits, which is why the length check above is worth running first - otherwise you fix one, re-run, and meet the next.
@@ -308,13 +317,13 @@ Silence means you are good. A missing or blank **required** value stops the comm
 Then start it:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d glitchtip-postgres glitchtip
+docker compose up -d glitchtip-postgres glitchtip
 ```
 
 **Find the container name now** - the rest of this document needs it, and the two forms are not interchangeable:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.observability.yml ps
+docker compose ps
 ```
 
 `glitchtip` is the **service** name. Compose derives the **container** name from it as `<project>-<service>-<n>`, so on a standard install it is `diariz-glitchtip-1`. Which one you use depends on the command:
@@ -458,7 +467,7 @@ Work down this list. Each one has failed for somebody.
 | 1 | The UI loads over HTTPS on its own hostname | DNS, certificate, proxy routing |
 | 2 | **You can log in** | `GLITCHTIP_DOMAIN` scheme and `X-Forwarded-Proto` - fails as "wrong password" |
 | 3 | A password reset email arrives | SMTP, and your `EMAIL_URL` encoding |
-| 4 | Re-run the MinIO script; it still reports the key cannot read `recordings` | The scoped key is still scoped |
+| 4 | With the GlitchTip key, `s3 ls s3://recordings` is **denied** (via `docker run --rm --network diariz_default amazon/aws-cli --endpoint-url http://s3:8333 ...`) | The scoped key is still scoped |
 | 5 | Transcribe something: a `transcribe` transaction appears with stage spans | Worker reporting and timing |
 | 6 | Break the worker deliberately; a traceback appears **and** the recording still fails cleanly in the app | Reporting did not change behaviour |
 | 7 | A browser error appears, attributed to release `0.174.x` | SPA reporting and `/api/config` |
@@ -489,20 +498,20 @@ Work down this list. Each one has failed for somebody.
 | `chunk-upload returned 404` | `GLITCHTIP_ORG` is the display name rather than the lowercase slug |
 | Source maps upload but stack traces stay minified | Wrong project in `GLITCHTIP_PROJECT`, or a release mismatch |
 | The build cannot reach GlitchTip | `GLITCHTIP_URL` is a loopback address; the build container has its own |
-| `Access Denied` writing cold storage | The MinIO key or bucket name does not match `.env`; re-run the provisioning script |
+| `Access Denied` or `InvalidAccessKeyId` writing cold storage | The key or bucket name does not match `.env`, or `s3` was not recreated after a key change: `docker compose up -d --force-recreate s3` |
 
 ## Removing it
 
 ```bash
 cd deploy
-docker compose -f docker-compose.yml -f docker-compose.observability.yml down glitchtip glitchtip-postgres
+docker compose down glitchtip glitchtip-postgres
 docker volume rm diariz_glitchtipdata
 ```
 
-Clear the `SENTRY_*` values from `.env` and recreate the app services. To clean up MinIO as well:
+Clear the `SENTRY_*` values from `.env`, comment out `COMPOSE_FILE` / `COMPOSE_PATH_SEPARATOR`, and `docker compose up -d` - that recreates `s3` without the GlitchTip identity. To delete the bucket as well (run this **before** commenting out `COMPOSE_FILE`):
 
 ```bash
-docker compose exec minio sh -c 'mc alias set r http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" && mc rb --force r/glitchtip && mc admin user remove r glitchtip-svc && mc admin policy remove r glitchtip-only'
+docker compose exec s3 sh -c "echo 's3.bucket.delete -name glitchtip' | weed shell -master=localhost:9333 -filer=localhost:8888"
 ```
 
 Nothing in the app depends on any of it.

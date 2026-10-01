@@ -20,6 +20,26 @@ v2.23.1+).
 
 **Spec:** issue #769 (scope 1-5) and `docs/Research/minio-archival-and-seaweedfs.md` (risks in section 3).
 
+## Execution notes (where the build departed from this plan)
+
+`docs/Server_Migration_Runbook.md` is the **authoritative** Part B; where it and the Part B below differ, follow
+the runbook. What changed while Tasks 1-5 were executed:
+
+- **Task 1:** no SDK changes were needed (all S3 contract tests passed on SeaweedFS 4.48; suite 502/502 = main).
+- **Task 3 found a real bug in Task 2:** the real S3 client disposes the stream it uploads, so reading
+  `read.Length` after `UploadAsync` threw on every restore. Fixed by taking the length first.
+- **Task 4, scoped app identity:** `Admin:recordings` *can* create its own bucket (verified) - no manual step.
+- **Task 4, GlitchTip bucket:** created automatically by a one-shot `s3-buckets` service in the overlay
+  (`weed shell`, no credentials, safe to re-run) - Task 6 Step 3's manual `aws s3 mb` is not needed.
+- **Task 4, config reload:** Compose does not recreate a container when only inline `configs:` content changes.
+  An `S3_IDENTITY_SET` marker makes adding/removing the overlay recreate `s3`; a key rotation needs
+  `docker compose up -d --force-recreate s3`.
+- **Task 4, overlay switch:** the overlay is enabled by `COMPOSE_FILE` in `.env` (not `-f` flags), because it now
+  changes the `s3` service and every compose command must use the same files. `BringUpProd.cmd` refuses to run
+  when GlitchTip is configured but `COMPOSE_FILE` is not (replaces Step 4b's findstr-on-the-secret approach).
+- **Task 5, diagram:** the archify renderer is not on the scratch laptop, so the JSON source was updated and
+  re-pinned, but `docs/Runtime_Architecture.html` still needs re-rendering on a machine that has archify.
+
 ## Global Constraints
 
 - Every fix starts as an issue: **#769 already exists - reuse it**, PR body carries `Fixes #769` on its own line.
