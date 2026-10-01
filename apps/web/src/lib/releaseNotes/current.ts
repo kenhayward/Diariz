@@ -9,6 +9,18 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.273.2",
+    date: "2026-10-01",
+    pr: 790,
+    headline: "Sign-in works straight after a restore, and the worker shares the GPU",
+    summary:
+      "Two fixes found while moving the production server.\n\nAfter a platform restore, nobody could sign in - every login failed with a server error until the API was restarted, even though the restore said no restart was needed. The restore now refreshes the server's view of the database itself, so the instance is usable as soon as the restore finishes.\n\nThe transcription worker kept the GPU memory from its busiest job for as long as it ran - around 6 GB more than its models need. On a server where a local AI model shares the graphics card, that left the model short of memory and slowed summaries and chat. The worker now hands that memory back after every job and keeps only its models loaded.",
+    fixed: [
+      "Sign-in failed with a server error after a restore until the API was restarted (#783)",
+      "The transcription worker held its peak GPU memory between jobs, starving a local AI model on the same card (#782)",
+    ],
+  },
+  {
     version: "0.273.1",
     date: "2026-10-01",
     pr: 770,

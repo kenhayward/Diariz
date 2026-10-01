@@ -151,6 +151,10 @@ public class MaintenanceController : ControllerBase
             // The dump landed the backup's (older) schema + __EFMigrationsHistory; roll it up to this build.
             if (needMigrate) await _schema.MigrateToCurrentAsync(ct);
 
+            // Always, migration or not: --clean recreated the vector extension under a new type oid, and this
+            // process still has the old one cached - without this, login 500s until a restart (issue #783).
+            await _schema.ReloadTypesAsync(ct);
+
             // Replace the object store: wipe what's there, then upload the archive's objects.
             var existing = new List<string>();
             await foreach (var key in _storage.ListKeysAsync(ct)) existing.Add(key);

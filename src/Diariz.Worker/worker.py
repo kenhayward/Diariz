@@ -26,6 +26,7 @@ rocm_env.clean_gfx_override()
 
 import audio_merge  # noqa: E402
 import callback  # noqa: E402
+import gpu_memory  # noqa: E402
 import heartbeat  # noqa: E402
 import pipeline  # noqa: E402
 import storage
@@ -420,6 +421,9 @@ def run_loop(r: redis.Redis, keep_going=lambda: True) -> None:
                 finally:
                     done.set()
                     r.xack(stream, config.CONSUMER_GROUP, msg_id)
+                    # Hand the job's cached GPU memory back so an LLM sharing the card can use it between
+                    # jobs; the model weights stay loaded (issue #782).
+                    gpu_memory.release()
 
 
 def main() -> None:
