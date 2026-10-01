@@ -7,7 +7,7 @@ namespace Diariz.Api.Tests;
 /// which is where ffmpeg's semantics live - can be asserted without ffmpeg being installed.</summary>
 public class AudioClipperArgsTests
 {
-    private const string Url = "http://minio:9000/diariz/audio/abc.webm?X-Amz-Signature=deadbeef&X-Amz-Expires=300";
+    private const string Url = "http://s3:8333/diariz/audio/abc.webm?X-Amz-Signature=deadbeef&X-Amz-Expires=300";
 
     private static List<string> Args(long fromMs, long toMs) =>
         FfmpegAudioClipper.Args(Url, fromMs, toMs).ToList();

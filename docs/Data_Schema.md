@@ -1,9 +1,9 @@
-# Diariz — Data Schema (Postgres) & Object Storage (MinIO)
+# Diariz — Data Schema (Postgres) & Object Storage (S3 / SeaweedFS)
 
 The persistent state of Diariz lives in two stores:
 
 - **PostgreSQL (+ pgvector)** — all relational data and the voiceprint/segment **vector** columns.
-- **MinIO** (S3-compatible) — the original **audio blobs** only.
+- **SeaweedFS** (S3-compatible; MinIO until 0.273.1) — the original **audio blobs** and uploaded files.
 
 Redis holds only transient queue messages (Redis Streams) and is not a system of record. This document
 details both stores. For how it all fits together see [`Overall_Synopsis_of_Platform.md`](Overall_Synopsis_of_Platform.md).
@@ -18,7 +18,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
   `DbContext` extends ASP.NET Identity's `IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>`, so
   the standard **`AspNet*` Identity tables** exist alongside the app tables.
 - **Migrations** live in `src/Diariz.Domain/Migrations`. The API **auto-applies migrations on startup**
-  (`Program.cs`) and seeds the default user, roles, the `PlatformSettings` singleton, and ensures the MinIO
+  (`Program.cs`) and seeds the default user, roles, the `PlatformSettings` singleton, and ensures the S3
   bucket — you do not run `database update` by hand for normal dev.
   For why that folder is 225,000 lines and the one condition under which squashing it is worth doing,
   see [`EF_Migrations_Size_Review.md`](EF_Migrations_Size_Review.md).
@@ -199,7 +199,7 @@ The owned audio recording.
 | `Title` | varchar(512) | auto descriptor (e.g. "Mic 6/26/2026, 1:25 PM") |
 | `Name` | varchar(512) null | user-editable display name; auto-filled by the summariser when unset (UI shows `Name ?? Title`) |
 | `Source` | int | `RecordingSource`: 0 Microphone, 1 System, 2 Upload, 3 Combined (mic + system mixed) |
-| `BlobKey` | text | MinIO object key (see §2) |
+| `BlobKey` | text | S3 object key (see §2) |
 | `ContentType` | text | MIME of the stored audio (e.g. `audio/webm`) |
 | `SizeBytes` | bigint | blob size; counts toward the owner's quota (reset to 0 when the audio is deleted) |
 | `AudioDeletedAt` | timestamptz null | non-null once the audio blob was deleted to reclaim storage (transcript kept); audio endpoints 404 |
@@ -566,7 +566,7 @@ Supporting documents on a recording — an uploaded file (blob) or a URL.
 | `Ordinal` | int | 0-based order within the recording |
 | `CreatedAt` | timestamptz | |
 
-Index: `(RecordingId, Ordinal)`. Attachment blobs live under MinIO key `{userId}/attachments/{attachmentId}{ext}`.
+Index: `(RecordingId, Ordinal)`. Attachment blobs live under S3 key `{userId}/attachments/{attachmentId}{ext}`.
 Markdown attachments (`text/markdown`) are editable in place via `PUT .../attachments/{id}/content`, which
 overwrites the same blob key and recomputes `SizeBytes` (quota re-checked on the delta).
 
@@ -588,7 +588,7 @@ Supporting documents filed **directly** on a folder (`Section`) rather than a re
 | `Ordinal` | int | 0-based order within the folder |
 | `CreatedAt` | timestamptz | |
 
-Indexes: `(SectionId, Ordinal)`, `UploadedByUserId`. Blobs live under MinIO key
+Indexes: `(SectionId, Ordinal)`, `UploadedByUserId`. Blobs live under S3 key
 `{uploaderUserId}/section-attachments/{attachmentId}{ext}`. Counts toward the **uploader's** storage quota
 (`StorageUsage` sums recording + section-attachment bytes by `UploadedByUserId`, not by the folder's creator).
 CRUD + in-place Markdown edit live in `SectionAttachmentsController` at route
@@ -1325,12 +1325,14 @@ Changing an embedding model means a migration to resize the column **and** re-en
 
 ---
 
-## 2. MinIO (object storage)
+## 2. S3 object storage (SeaweedFS)
 
 ### What's stored
 
 **The original audio blobs and uploaded attachment files.** Nothing else (no transcripts, no derived files)
-lives in MinIO — those are in Postgres. Transcript downloads (TXT/MD/RTF/SRT) and the emailed HTML are
+lives in the object store — those are in Postgres.
+The store is SeaweedFS (compose service `s3`, in-network `s3:8333`); it replaced MinIO in 0.273.1 with the
+bucket and key layout below **unchanged**, moved by platform backup/restore rather than a bucket copy. Transcript downloads (TXT/MD/RTF/SRT) and the emailed HTML are
 rendered on demand by the API from the database.
 
 ### Bucket & key layout
@@ -1356,7 +1358,7 @@ rendered on demand by the API from the database.
 - **Meeting screenshots** use **two** keys per capture: `{userId}/screenshots/{id}.png` (the full image,
   stored on `MeetingScreenshot.BlobKey`) and `{userId}/screenshots/{id}.thumb.jpg` (the thumbnail, on
   `MeetingScreenshot.ThumbBlobKey`). Both are streamed back the same way audio/attachments are (same-origin,
-  never a presigned MinIO URL) and count toward the owner's quota.
+  never a presigned S3 URL) and count toward the owner's quota.
 - **Blob lifecycle on delete/merge:** deleting a recording also deletes its attachment-file and
   screenshot blobs (the DB cascade only removes the rows). Merging **moves** the merged-away recordings'
   attachments onto the survivor (rows reparented, blobs kept), so nothing is orphaned; screenshots are
@@ -1368,29 +1370,30 @@ rendered on demand by the API from the database.
 
 | Actor | Operation | How |
 |---|---|---|
-| **API** (upload) | `PutObject` | streams the multipart body straight into MinIO (SigV4, path-style) |
+| **API** (upload) | `PutObject` | streams the multipart body straight into the S3 store (SigV4, path-style) |
 | **Worker** (transcribe) | `download_file` | boto3 (`s3v4`, path addressing) → local temp file, deleted after the job |
 | **API** (playback / download-audio) | `GetObject` (+ **byte range**) | streams back to the browser **same-origin**; supports `Range` so `<audio>` can seek |
 | **API** (delete recording) | `DeleteObject` | idempotent; also used by quota/cleanup |
 | **API** (quota) | `HeadObject` (`GetObjectMetadata`) | size lookups / backfill (`StorageUsage`, `StorageBackfill`) |
 
-The S3 client uses **`ForcePathStyle = true`** and region `us-east-1` (MinIO requirements). Note: a prior bug
+The S3 client uses **`ForcePathStyle = true`** and region `us-east-1` (path-style addressing is what a self-hosted
+store on a bare hostname needs). Note: a prior bug
 required **not** setting `DisablePayloadSigning` on `PutObject` — normal SigV4 payload signing works over plain
-HTTP against MinIO; AWS SDK v4 rejects `DisablePayloadSigning` over HTTP. Be cautious changing request options
+HTTP against the store (verified against both MinIO and SeaweedFS); AWS SDK v4 rejects `DisablePayloadSigning` over HTTP. Be cautious changing request options
 in `Services/AudioStorage.cs`.
 
 ### Security / exposure
 
-- MinIO is **never exposed to the browser.** The API **proxies all reads** (same-origin streaming) instead of
-  issuing presigned URLs, so MinIO only needs to be reachable from the API and worker on the internal
+- The S3 store is **never exposed to the browser.** The API **proxies all reads** (same-origin streaming) instead of
+  issuing presigned URLs, so the store only needs to be reachable from the API and worker on the internal
   network. (The old `STORAGE_PUBLIC_ENDPOINT` / presign path was removed.)
 - Playback is authorised by a **short-lived token** minted by the API (`GET /api/recordings/{id}/audio-url`),
   so the streaming endpoint can be used by the native `<audio>` element without a bearer header.
 - Credentials are `Storage:AccessKey`/`SecretKey` (worker: `S3_ACCESS_KEY`/`S3_SECRET_KEY`). Compose fills them
-  from `MINIO_APP_ACCESS_KEY`/`MINIO_APP_SECRET_KEY` - the scoped `diariz-app` account (policy
-  `diariz-app-recordings`: everything on the `recordings` bucket, plus `s3:ListAllMyBuckets`) created by
-  `deploy/ProvisionDiarizMinio.cmd` - falling back to the MinIO root account when blank. Outside Development the
-  API refuses to start on the `minioadmin` defaults.
+  from `S3_APP_ACCESS_KEY`/`S3_APP_SECRET_KEY` (old `MINIO_APP_*` names as fallbacks) - the scoped `diariz`
+  identity in the `s3_identities` compose config, with every action on the `recordings` bucket only (it can create
+  that bucket, and is denied on and cannot list any other). It is mandatory: there is no fallback to root. Keys are
+  made by `deploy/NewS3Keys.cmd`. Outside Development the API refuses to start on the old `minioadmin` defaults.
 
 ### Lifecycle
 
@@ -1398,15 +1401,16 @@ in `Services/AudioStorage.cs`.
   `Transcription`/`Segment` rows are created).
 - **Deleting a recording** removes its blob (`DeleteObject`) and cascades all its DB rows.
 - **Quota accounting** is by summing `Recording.SizeBytes` per user (the DB is the source of truth);
-  `StorageBackfill` reconciles sizes from MinIO `HEAD`s where needed.
+  `StorageBackfill` reconciles sizes from S3 `HEAD`s where needed.
 
 ### Durability / volumes
 
-In Docker Compose, MinIO data persists in the **`miniodata`** named volume (the S3 API is remapped to host
-**9002**; the console is not published). Companion volumes: **`pgdata`** (Postgres, reachable from the host
+In Docker Compose, the S3 store's data persists in the **`s3data`** named volume (the S3 API is remapped to host
+**9002**; SeaweedFS's other ports are not published). Older servers kept it in **`miniodata`**; the new name means a
+switched stack can never touch MinIO's data, which moves by backup/restore instead. Companion volumes: **`pgdata`** (Postgres, reachable from the host
 on **5433** for external tooling), **`apikeys`** (the Data
 Protection keyring that decrypts `LlmModels.ApiKeyEncrypted`, mounted at `/keys`), and
-**`workercache`** (model weights). Back up `pgdata` + `miniodata` together — a transcript row in Postgres is
+**`workercache`** (model weights). Back up `pgdata` + `s3data` together (the platform backup does both in one zip) — a transcript row in Postgres is
 meaningless without its audio blob, and vice-versa. **`apikeys` is not covered by the platform backup** and needs
 its own copy: it also holds the OpenIddict signing/encryption certificates (`oidc-signing.pfx`,
 `oidc-encryption.pfx`, owner-only, each beside an empty `.lock` file that serialises its first creation across

@@ -11,14 +11,14 @@ namespace Diariz.Api.IntegrationTests;
 [Collection(IntegrationCollection.Name)]
 public class AudioStorageIntegrationTests(ContainersFixture fx)
 {
-    // Mirrors the S3 client wiring in Program.cs (path-style, us-east-1) against the MinIO container.
+    // Mirrors the S3 client wiring in Program.cs (path-style, us-east-1) against the S3 container.
     private AudioStorage CreateStorage(out StorageOptions opts)
     {
         opts = new StorageOptions
         {
-            Endpoint = fx.MinioEndpoint,
-            AccessKey = fx.MinioAccessKey,
-            SecretKey = fx.MinioSecretKey,
+            Endpoint = fx.S3Endpoint,
+            AccessKey = fx.S3AccessKey,
+            SecretKey = fx.S3SecretKey,
             Bucket = $"recordings-{Guid.NewGuid():N}",
             ForcePathStyle = true
         };
@@ -145,5 +145,19 @@ public class AudioStorageIntegrationTests(ContainersFixture fx)
         req.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(2, 5);
         var res = await http.SendAsync(req);
         Assert.Equal("2345", await res.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Upload_DisposesTheStreamItWasGiven()
+    {
+        // Pins the SDK behaviour FakeAudioStorage mirrors: callers must not touch the stream after UploadAsync.
+        // A restore once read FileStream.Length afterwards and failed on every real store (issue #769).
+        var storage = CreateStorage(out _);
+        await storage.EnsureBucketAsync();
+
+        var input = new MemoryStream(Encoding.UTF8.GetBytes("disposed afterwards"));
+        await storage.UploadAsync($"{Guid.NewGuid()}/a.webm", input, "audio/webm");
+
+        Assert.False(input.CanRead);
     }
 }

@@ -36,7 +36,7 @@ communicating across process/language boundaries:
 | n8n community node (published to npm, not deployed here) | TypeScript, zero runtime deps | `integrations/n8n-nodes-diariz` |
 
 **End-to-end flow:** client records → `POST /api/recordings` (multipart) → API stores the blob in
-MinIO and a `Recording` row in Postgres → API creates a `Transcription` row (versioned) and
+the S3 store (SeaweedFS) and a `Recording` row in Postgres → API creates a `Transcription` row (versioned) and
 **enqueues a job on a Redis Stream** → Python worker `XREADGROUP`s the job, downloads the blob,
 runs WhisperX→align→pyannote, and **POSTs segments back** to `internal/transcriptions/result` →
 API persists `Segment`s + seeds `Speaker` rows → notifies the browser over **SignalR**
@@ -337,10 +337,10 @@ is **Major.Minor.Build** (currently `0.x`).
 - **Keep the architecture & schema docs current.** Two reference docs must not be allowed to drift:
   `docs/Overall_Synopsis_of_Platform.md` (components, data flow, cross-boundary contracts, deployment) and
   `docs/Data_Schema.md` (every Postgres table + column/key/index/cascade, the pgvector columns/dimensions, the
-  enums, and the MinIO bucket/key layout). When a PR makes a **relevant change, update the matching doc in the
+  enums, and the S3 bucket/key layout). When a PR makes a **relevant change, update the matching doc in the
   same PR**:
   - **Schema / storage** (any new or changed entity, column, index, FK/cascade, migration, vector dimension,
-    JSON blob, MinIO bucket/key/lifecycle) → update **`Data_Schema.md`** (and its migration-history table).
+    JSON blob, S3 bucket/key/lifecycle) → update **`Data_Schema.md`** (and its migration-history table).
   - **Architecture / major feature** (a new component or deployable, a new queue/stream or cross-boundary
     contract, a new external dependency or LLM/worker flow, an auth/RBAC change, a shipped milestone, a port
     change) → update **`Overall_Synopsis_of_Platform.md`**.
@@ -406,7 +406,7 @@ The About box (account menu → About) and the `/release-notes` page render from
 
 ```bash
 dotnet build Diariz.slnx
-dotnet run --project src/Diariz.Api          # needs Postgres/Redis/MinIO reachable
+dotnet run --project src/Diariz.Api          # needs Postgres/Redis/S3 (SeaweedFS) reachable
 ```
 
 ### Tests (.NET)
@@ -430,17 +430,17 @@ dotnet test --filter "Name=Result_WithWrongSecret_ReturnsUnauthorized"  # one te
 (`TestDb.Create()` gives each test an isolated database) and hand-rolled fakes for the external
 boundaries. The fakes/helpers live in **`Diariz.Api.TestSupport`** (namespace
 `Diariz.Api.Tests.Infrastructure`, shared with the integration project): `FakeJobQueue` (Redis),
-`FakeAudioStorage` (MinIO/S3), `FakeHubContext` (SignalR — records the messages a controller pushed),
+`FakeAudioStorage` (the S3 store), `FakeHubContext` (SignalR — records the messages a controller pushed),
 and `Http.Context(userId, headers)` (builds a `ControllerContext` with an authenticated user /
 headers). **No mocking library** — add a fake to `TestSupport` rather than reaching for one.
 
 **Integration tests (`Diariz.Api.IntegrationTests`) — needs Docker.** `ContainersFixture` (an
-`ICollectionFixture`) spins up real **Postgres/pgvector, Redis, and MinIO** via Testcontainers once
+`ICollectionFixture`) spins up real **Postgres/pgvector, Redis, and SeaweedFS (S3)** via Testcontainers once
 per run, applies EF migrations, and exposes connection strings + `CreateDbContext()`. All classes
 share the `"integration"` collection so they run sequentially against one set of containers; tests
 isolate via unique ids/keys rather than per-test databases. Use this layer for anything that depends
 on real relational/query behavior, FK enforcement, the pgvector column, the Redis stream wire format,
-or S3/MinIO round-trips.
+or S3 round-trips.
 
 **In-memory provider caveat:** it does not faithfully translate relational queries (e.g. it **ignores
 ordering/`Take` inside a filtered `Include`**, and does not enforce FKs). Behavior like the "current =
@@ -448,7 +448,7 @@ highest-version transcription" rule in `RecordingsController.Get` is therefore `
 the unit project and verified for real in the integration project instead. Don't "fix" a skipped unit
 test by gaming the in-memory provider — move it to the integration harness.
 
-The API **auto-runs EF migrations, seeds the default user, and ensures the MinIO bucket on startup**
+The API **auto-runs EF migrations, seeds the default user, and ensures the S3 bucket on startup**
 (`Program.cs`) — you do not run `database update` manually for normal dev.
 
 That block **waits for Postgres rather than dying on it** (`StartupDatabaseWait`). On a redeploy the
@@ -593,8 +593,8 @@ Apple**. Design: `docs/macOS_Desktop_App_Guide.md`.
 ### Full stack (Docker)
 ```bash
 cd deploy
-cp .env.example .env      # JWT_KEY, CALLBACK_SECRET, REDIS_PASSWORD, POSTGRES_PASSWORD, MinIO creds, APP_PUBLIC_URL, HF_TOKEN
-docker compose up --build # web, api, postgres, redis, minio, GPU worker
+cp .env.example .env      # JWT_KEY, CALLBACK_SECRET, REDIS_PASSWORD, POSTGRES_PASSWORD, S3_ROOT_*/S3_APP_* (NewS3Keys.cmd), APP_PUBLIC_URL, HF_TOKEN
+docker compose up --build # web, api, postgres, redis, s3 (SeaweedFS), GPU worker
 ```
 Required secrets use `${VAR:?}`, so compose names a missing one instead of starting with it blank, and the API
 itself refuses (outside Development) to start on a placeholder or too-short key (`StartupConfigValidator`).
@@ -628,17 +628,24 @@ out the `deploy.resources` GPU block and set `WORKER_DEVICE=cpu WORKER_COMPUTE_T
 - **Tests:** harnesses exist for all three stacks — .NET (`tests/Diariz.Api.Tests` + integration),
   web (`vitest`), and the Python worker (`pytest`, see the Worker section). No CI runs them on push yet.
 - **Ports:** API `8080`; web UI (Docker/nginx) `8081`; web dev server `5173`. Two infra ports are **remapped on
-  the host** to avoid clashing with other local instances: **MinIO S3 API** `9002→9000` and **Postgres**
+  the host** to avoid clashing with other local instances: **S3 API (SeaweedFS)** `9002→8333` and **Postgres**
   `5433→5432` (the latter published only for external tooling — psql/pgAdmin/test harnesses — and overridable
   via `POSTGRES_PORT`/`POSTGRES_BIND` in `deploy/.env`). A published port bypasses the host firewall, so the API,
-  Postgres and MinIO ports bind **`127.0.0.1` by default** (`API_BIND`/`POSTGRES_BIND`/`MINIO_BIND`); only the web
-  port (`WEB_BIND`) defaults to `0.0.0.0`. Redis and the MinIO console (`9001`) are **not published** —
+  Postgres and S3 ports bind **`127.0.0.1` by default** (`API_BIND`/`POSTGRES_BIND`/`S3_BIND`); only the web
+  port (`WEB_BIND`) defaults to `0.0.0.0`. Redis and SeaweedFS's master/volume/filer ports are **not published** —
   the app never uses them from the host. Redis requires `REDIS_PASSWORD` (API connection string, worker
   `REDIS_URL`, GlitchTip `VALKEY_URL`), so changing it means recreating the whole stack, not just the API. In-container, services use the compose service names
-  (`minio:9000`, `redis:6379`, `postgres:5432`).
-- **MinIO/S3 quirk:** `AmazonS3Config` uses `ForcePathStyle` + region `us-east-1`. A prior bug
-  required removing `DisablePayloadSigning` on `PutObject` for MinIO uploads to work — be cautious
-  changing S3 request options in `Services/AudioStorage.cs`.
+  (`s3:8333`, `redis:6379`, `postgres:5432`).
+- **S3 store (SeaweedFS, replaced MinIO in 0.273.1, issue #769):** `AmazonS3Config` uses `ForcePathStyle` + region
+  `us-east-1`. A prior bug required removing `DisablePayloadSigning` on `PutObject` - that is AWS SDK v4 behaviour
+  over HTTP, not a MinIO quirk, and SeaweedFS needed no client changes at all - so be cautious changing S3 request
+  options in `Services/AudioStorage.cs`. Two traps: (1) the real SDK **disposes the stream you upload** and
+  `FakeAudioStorage` does not, so never touch a stream after `UploadAsync` (a restore counter did, and only the
+  SeaweedFS integration test caught it); (2) identities live in the inline compose config `s3_identities`, and
+  Compose does **not** recreate a container when only that content changes - after changing a key run
+  `docker compose up -d --force-recreate s3`. The GlitchTip overlay is switched on by `COMPOSE_FILE` in `.env`
+  (not `-f` flags), because it also changes the `s3` service and every compose command must see the same files.
+  Moving a server is a platform backup/restore (`docs/Server_Migration_Runbook.md`), never a bucket copy.
 - Config binds via the options pattern (`Configuration/AppOptions.cs`): `Jwt`, `Storage`,
   `JobQueue`, `Worker` sections, settable through `__`-delimited env vars in compose.
 - Worker model load is **lazy + cached** in `pipeline.py` (Whisper/align/diarizer load once and are

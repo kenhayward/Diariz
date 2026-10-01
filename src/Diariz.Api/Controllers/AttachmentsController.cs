@@ -265,7 +265,7 @@ public class AttachmentsController : ControllerBase
     }
 
     /// <summary>Overwrite a Markdown attachment's content in place (the in-app TipTap editor's Save). The blob
-    /// key is reused so MinIO replaces the object wholesale; the size is recomputed and quota re-checked on the
+    /// key is reused so the S3 store replaces the object wholesale; the size is recomputed and quota re-checked on the
     /// delta. Only Markdown file attachments are editable this way.</summary>
     [HttpPut("{attachmentId:guid}/content")]
     [EndpointSummary("Replace a Markdown attachment's content")]

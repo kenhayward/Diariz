@@ -8,8 +8,8 @@ namespace Diariz.Api.IntegrationTests.Infrastructure;
 /// rather than starting infrastructure of its own. This is the piece the rest of the integration suite is
 /// missing: every other class in this project constructs a controller directly, which never runs
 /// <c>Program.cs</c>'s JWT <c>OnMessageReceived</c> handler (the <c>access_token</c> query-string allowlist) at
-/// all. A <see cref="DiarizWebAppFactory"/> per test gives each test its own isolated MinIO bucket and app-host
-/// instance while all tests still share (and run sequentially against) the one set of Postgres/Redis/MinIO
+/// all. A <see cref="DiarizWebAppFactory"/> per test gives each test its own isolated S3 bucket and app-host
+/// instance while all tests still share (and run sequentially against) the one set of Postgres/Redis/S3
 /// containers, per the "integration" collection's contract.
 ///
 /// <para><b>Why environment variables, not <c>ConfigureWebHost</c>/<c>ConfigureAppConfiguration</c>:</b>
@@ -41,7 +41,7 @@ public sealed class DiarizWebAppFactory : WebApplicationFactory<Program>
     public const string JwtIssuer = "diariz";
     public const string JwtAudience = "diariz";
 
-    /// <summary>A MinIO bucket unique to this factory instance, so tests never see another test's (or another
+    /// <summary>An S3 bucket unique to this factory instance, so tests never see another test's (or another
     /// factory's) blobs.</summary>
     public string Bucket { get; } = $"it-http-{Guid.NewGuid():N}";
 
@@ -59,9 +59,9 @@ public sealed class DiarizWebAppFactory : WebApplicationFactory<Program>
         Environment.SetEnvironmentVariable("Jwt__Issuer", JwtIssuer);
         Environment.SetEnvironmentVariable("Jwt__Audience", JwtAudience);
         Environment.SetEnvironmentVariable("Jwt__Key", JwtKey);
-        Environment.SetEnvironmentVariable("Storage__Endpoint", fx.MinioEndpoint);
-        Environment.SetEnvironmentVariable("Storage__AccessKey", fx.MinioAccessKey);
-        Environment.SetEnvironmentVariable("Storage__SecretKey", fx.MinioSecretKey);
+        Environment.SetEnvironmentVariable("Storage__Endpoint", fx.S3Endpoint);
+        Environment.SetEnvironmentVariable("Storage__AccessKey", fx.S3AccessKey);
+        Environment.SetEnvironmentVariable("Storage__SecretKey", fx.S3SecretKey);
         Environment.SetEnvironmentVariable("Storage__Bucket", Bucket);
         Environment.SetEnvironmentVariable("Storage__ForcePathStyle", "true");
         Environment.SetEnvironmentVariable("JobQueue__RedisConnection", fx.RedisConnectionString);

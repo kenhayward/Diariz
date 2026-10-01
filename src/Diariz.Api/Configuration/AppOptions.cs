@@ -28,7 +28,7 @@ public class GoogleAuthOptions
 public class StorageOptions
 {
     public const string Section = "Storage";
-    public string Endpoint { get; set; } = "http://minio:9000";
+    public string Endpoint { get; set; } = "http://s3:8333";
     public string AccessKey { get; set; } = "minioadmin";
     public string SecretKey { get; set; } = "minioadmin";
     public string Bucket { get; set; } = "recordings";

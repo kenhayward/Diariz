@@ -46,8 +46,8 @@ class Config:
     CONSUMER_GROUP = os.getenv("CONSUMER_GROUP", "workers")
     CONSUMER_NAME = os.getenv("CONSUMER_NAME", "worker-1")
 
-    # MinIO / S3
-    S3_ENDPOINT = os.getenv("S3_ENDPOINT", "http://minio:9000")
+    # S3 store (SeaweedFS in compose; any S3-compatible endpoint works)
+    S3_ENDPOINT = os.getenv("S3_ENDPOINT", "http://s3:8333")
     S3_ACCESS_KEY = os.getenv("S3_ACCESS_KEY", "minioadmin")
     S3_SECRET_KEY = os.getenv("S3_SECRET_KEY", "minioadmin")
     S3_BUCKET = os.getenv("S3_BUCKET", "recordings")

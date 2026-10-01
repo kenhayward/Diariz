@@ -81,8 +81,8 @@ See **[docs/features.md](docs/features.md)** for the full prose description of e
 | Transcription + diarization + voiceprints | Python: WhisperX (large-v3) + pyannote 4 + SpeechBrain ECAPA (GPU) | [src/Diariz.Worker](src/Diariz.Worker) |
 | Web UI | React + TypeScript + Vite + Tailwind | [apps/web](apps/web) |
 | Desktop app | Electron thin shell — Windows system-tray + **macOS (beta) menu-bar** (first-run server config, mic + system audio, tray recording; auto-update on Windows, manual update check on macOS) | [apps/desktop](apps/desktop) |
-| Orchestration | docker-compose (postgres/pgvector, redis, minio) | [deploy](deploy) |
-| Observability (optional) | Self-hosted [GlitchTip](https://glitchtip.com/): error tracking + transaction timings for the worker, API and SPA, each behind a scrubber that redacts credentials and meeting content. Opt-in compose overlay with its own Postgres and MinIO bucket; entirely inert unless a DSN is set | [overlay](deploy/docker-compose.observability.yml), [deployment runbook](docs/GlitchTip_Deployment.md) |
+| Orchestration | docker-compose (postgres/pgvector, redis, SeaweedFS S3) | [deploy](deploy) |
+| Observability (optional) | Self-hosted [GlitchTip](https://glitchtip.com/): error tracking + transaction timings for the worker, API and SPA, each behind a scrubber that redacts credentials and meeting content. Opt-in compose overlay with its own Postgres and S3 bucket; entirely inert unless a DSN is set | [overlay](deploy/docker-compose.observability.yml), [deployment runbook](docs/GlitchTip_Deployment.md) |
 
 Summaries and chat use any OpenAI-compatible LLM endpoint you configure (OpenAI, or a local server such
 as Ollama / LM Studio / vLLM) — see the Settings modal and `deploy/.env.example`. The API also hosts an
@@ -91,7 +91,7 @@ using the same built-in tools — authenticated with either a personal access to
 **OAuth 2.1 sign-in** (the claude.ai web connector; the API is also a spec-compliant OAuth authorization server,
 built on OpenIddict).
 
-**Flow:** client records → uploads to API → audio stored in MinIO, metadata in Postgres →
+**Flow:** client records → uploads to API → audio stored in SeaweedFS (S3), metadata in Postgres →
 job enqueued on a Redis Stream → Python worker transcribes + diarizes + extracts per-speaker voiceprints →
 posts segments back → API stores them, auto-identifies enrolled speakers, and notifies the client over
 SignalR → note view shows speaker-labelled, timestamped segments.
@@ -108,10 +108,11 @@ worker transcribes with openai-whisper since CTranslate2 has no AMD GPU support;
 [AMD ROCm](src/Diariz.Worker/README.md#amd-rocm-experimental) section.
 
 ```bash
-# 1. Whole stack — web UI, API, Postgres, Redis, MinIO, GPU worker.
+# 1. Whole stack — web UI, API, Postgres, Redis, SeaweedFS (S3), GPU worker.
 #    Runs as a single Compose project named "diariz".
 cd deploy
-cp .env.example .env        # generate every secret it lists (the stack refuses placeholders), plus HF_TOKEN
+cp .env.example .env        # generate every secret it lists (the stack refuses placeholders), plus HF_TOKEN;
+                            # S3 keys come from NewS3Keys.cmd / new-s3-keys.sh (root, then app)
 docker compose up --build   # web UI at http://localhost:8081 (API on 127.0.0.1:8080, host-only)
 
 # 1b. (optional) A second worker that handles ONLY live meetings, so live transcript
@@ -210,9 +211,10 @@ the embedder for one trained on commercially-cleared data (e.g. NVIDIA NeMo Tita
 simply disable the feature with `ENABLE_SPEAKER_EMBEDDINGS=false` on the worker — transcription and
 diarization still work, you just lose cross-recording speaker identification. Voiceprints are **biometric
 data**: only enrol people with their consent, and use the Voice Prints tab to erase them on request.
-- **Object storage (MinIO) is AGPL-3.0.** Used unmodified as a separate container it does **not** impose
-copyleft on Diariz's own code, but if AGPL is a concern, point storage at **any S3-compatible store** (AWS
-S3, Cloudflare R2, …) and drop MinIO entirely.
+- **Object storage is SeaweedFS (Apache-2.0)**, run unmodified as a separate container. Diariz speaks plain S3,
+so storage can point at **any S3-compatible store** (AWS S3, Cloudflare R2, …) instead. It replaced MinIO in
+0.273.1; an existing server moves its data with a platform backup and restore
+([runbook](docs/Server_Migration_Runbook.md)).
 - **Summaries & chat** send transcript text to whatever **OpenAI-compatible LLM endpoint** you configure;
 that provider's terms and privacy policy govern the text you send.
 - **Uploaded audio formats.** Decoding is done by ffmpeg in the worker (Diariz ships no codec). The

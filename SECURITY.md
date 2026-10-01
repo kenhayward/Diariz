@@ -30,7 +30,7 @@ deployment:
 - **Change the seeded admin.** Set `SEED_EMAIL` / `SEED_PASSWORD` before first run; never ship the
   `admin@example.com` / `ChangeMe123!` defaults to production.
 - **Set strong shared secrets.** Provide your own `JWT_KEY` (32+ random chars) and `CALLBACK_SECRET`; keep
-  MinIO/S3, SMTP, and LLM credentials in `.env` (which is git-ignored), never in tracked files.
+  S3 storage, SMTP, and LLM credentials in `.env` (which is git-ignored), never in tracked files.
 - **The worker callback** (`internal/transcriptions/*`) is authenticated by `CALLBACK_SECRET`, not JWT —
   keep the worker on a trusted network and do not expose that route publicly.
 - **Third-party model terms** and the LLM endpoint you configure are your responsibility — see the

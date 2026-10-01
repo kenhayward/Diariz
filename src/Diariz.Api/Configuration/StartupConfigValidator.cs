@@ -7,7 +7,7 @@ public sealed record StartupConfigReport(IReadOnlyList<string> Errors, IReadOnly
 
 /// <summary>Refuses to start a non-Development API on configuration that would run but should not: signing keys
 /// and shared secrets that are missing, too short, or still one of the placeholders shipped in
-/// <c>appsettings.json</c> / <c>deploy/.env.example</c>, storage credentials left at the MinIO defaults, no
+/// <c>appsettings.json</c> / <c>deploy/.env.example</c>, storage credentials left at the old MinIO defaults, no
 /// persisted Data Protection keyring, and an OAuth issuer that is not https.
 ///
 /// <para>This lives in the API rather than only in compose because compose is one way to run it among several:
@@ -68,10 +68,14 @@ public static class StartupConfigValidator
 
     private static void CheckStorage(List<string> errors, string name, string? value)
     {
+        // Compose fills Storage:AccessKey/SecretKey from S3_APP_ACCESS_KEY/S3_APP_SECRET_KEY. `minioadmin` is still
+        // rejected: it is the old MinIO default and the fallback in appsettings.json / AppOptions.
+        var envKey = name.EndsWith("AccessKey", StringComparison.Ordinal) ? "S3_APP_ACCESS_KEY" : "S3_APP_SECRET_KEY";
+        var fix = $"Set {envKey} in .env (generate it with deploy/NewS3Keys.cmd or new-s3-keys.sh).";
         if (string.IsNullOrWhiteSpace(value))
-            errors.Add($"{name} is not set. Set the MinIO credentials in .env.");
+            errors.Add($"{name} is not set. {fix}");
         else if (string.Equals(value, "minioadmin", StringComparison.OrdinalIgnoreCase) || IsPlaceholder(value))
-            errors.Add($"{name} is still a default or placeholder credential. Set the MinIO credentials in .env.");
+            errors.Add($"{name} is still a default or placeholder credential. {fix}");
     }
 
     private static void CheckIssuer(IConfiguration config, List<string> errors, List<string> warnings)

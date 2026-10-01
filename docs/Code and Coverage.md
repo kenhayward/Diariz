@@ -31,7 +31,7 @@ codebase - migrations alone are 1.6x all hand-written production code combined.
 
 The API and Domain share one test estate and one coverage run, so their test columns are not split.
 Of the 1,965 .NET cases, **1,742 are unit** (in-memory provider, no Docker) and **223 integration**
-(real Postgres/pgvector, Redis and MinIO via Testcontainers). One unit test is deliberately skipped -
+(real Postgres/pgvector, Redis and SeaweedFS via Testcontainers). One unit test is deliberately skipped -
 it asserts relational ordering the in-memory provider cannot reproduce, and lives for real in the
 integration suite.
 

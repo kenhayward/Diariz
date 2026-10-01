@@ -758,7 +758,7 @@ public class FakeJobQueue : IJobQueue
     }
 }
 
-/// <summary>In-memory stand-in for MinIO/S3. Records uploads as byte arrays.</summary>
+/// <summary>In-memory stand-in for the S3 store. Records uploads as byte arrays.</summary>
 public class FakeAudioStorage : IAudioStorage
 {
     public Dictionary<string, byte[]> Objects { get; } = new();
@@ -777,6 +777,8 @@ public class FakeAudioStorage : IAudioStorage
         using var ms = new MemoryStream();
         await content.CopyToAsync(ms, ct);
         Objects[key] = ms.ToArray();
+        // Like AWSSDK.S3: the uploaded stream is disposed, so a caller that touches it afterwards fails here too.
+        await content.DisposeAsync();
     }
 
     public Task<Stream> OpenReadAsync(string key, CancellationToken ct = default)

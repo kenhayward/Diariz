@@ -19,10 +19,9 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <!-- Real Postgres/pgvector, Redis, and MinIO spun up in Docker per test run. -->
+    <!-- Real Postgres/pgvector, Redis, and SeaweedFS (S3) spun up in Docker per test run. -->
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.*" />
     <PackageReference Include="Testcontainers.Redis" Version="4.*" />
-    <PackageReference Include="Testcontainers.Minio" Version="4.*" />
     <!-- WebApplicationFactory: boots the real Program.cs pipeline (auth middleware, routing, [Authorize])
          against the containers above, for HTTP-level allowlist coverage that direct-controller integration
          tests bypass. -->

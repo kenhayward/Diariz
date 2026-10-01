@@ -26,14 +26,15 @@ public interface IAudioStorage
     ///
     /// <para><b>Internal only.</b> It addresses the object store on its in-network endpoint and must never be
     /// returned to a client — clients get audio through the API's own streaming endpoints, which is the whole
-    /// reason MinIO does not have to be reachable from a browser.</para></summary>
+    /// reason the store does not have to be reachable from a browser.</para></summary>
     Task<string> GetPresignedReadUrlAsync(string key, TimeSpan lifetime, CancellationToken ct = default);
     /// <summary>Enumerate every object key in the bucket (paginated). Used by the platform backup.</summary>
     IAsyncEnumerable<string> ListKeysAsync(CancellationToken ct = default);
 }
 
-/// <summary>S3-compatible storage backed by MinIO. Stores original audio blobs. The API streams audio
-/// back to clients itself (same-origin) rather than handing out presigned URLs, so MinIO never needs to
+/// <summary>S3-compatible storage (SeaweedFS in the compose stack; any S3 endpoint works). Stores original audio
+/// blobs. The API streams audio back to clients itself (same-origin) rather than handing out presigned URLs, so
+/// the store never needs to
 /// be reachable from the browser.</summary>
 public class AudioStorage : IAudioStorage
 {
@@ -65,7 +66,8 @@ public class AudioStorage : IAudioStorage
             ContentType = contentType
             // NB: do NOT set DisablePayloadSigning here — AWS SDK v4 rejects it over
             // plain HTTP ("must be sent over HTTPS"). Normal SigV4 payload signing works
-            // fine against MinIO over HTTP.
+            // fine over HTTP (verified against MinIO and SeaweedFS). The SDK also DISPOSES `content`
+            // once the upload completes, so callers must not touch the stream afterwards.
         }, ct);
     }
 
@@ -119,7 +121,7 @@ public class AudioStorage : IAudioStorage
             Key = key,
             Verb = HttpVerb.GET,
             Expires = DateTime.UtcNow.Add(lifetime),
-            // Presigning defaults to HTTPS regardless of ServiceURL, and MinIO is served over plain HTTP in
+            // Presigning defaults to HTTPS regardless of ServiceURL, and the S3 store is served over plain HTTP in
             // the compose stack. Without this the URL is unusable and the failure is a TLS frame error from
             // inside ffmpeg, which says nothing about the cause.
             Protocol = _opts.Endpoint.StartsWith("https", StringComparison.OrdinalIgnoreCase)

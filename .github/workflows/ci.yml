@@ -36,7 +36,7 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      # Spins up real Postgres/pgvector, Redis, and MinIO via Testcontainers — Docker is
+      # Spins up real Postgres/pgvector, Redis, and SeaweedFS (S3) via Testcontainers — Docker is
       # preinstalled on ubuntu-latest, so no Docker-host workaround is needed.
       - name: Integration tests
         run: dotnet test tests/Diariz.Api.IntegrationTests/Diariz.Api.IntegrationTests.csproj -c Release

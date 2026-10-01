@@ -18,7 +18,7 @@ public class Recording
     /// <summary>Where the audio was captured (microphone vs system/loopback).</summary>
     public RecordingSource Source { get; set; } = RecordingSource.Microphone;
 
-    /// <summary>Object-storage key (MinIO/S3) for the original audio blob.</summary>
+    /// <summary>Object-storage key (S3) for the original audio blob.</summary>
     public string BlobKey { get; set; } = string.Empty;
 
     /// <summary>MIME / container of the stored audio, e.g. audio/webm, audio/wav.</summary>

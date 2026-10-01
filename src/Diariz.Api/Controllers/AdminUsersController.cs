@@ -224,7 +224,7 @@ public class AdminUsersController : ControllerBase
         // Section.UserId == id - a row can never match both.
         await RepointForeignSectionAttachmentsAsync(user.Id);
 
-        // Collect every MinIO blob this user owns before their rows vanish under cascade - the row is gone
+        // Collect every S3 blob this user owns before their rows vanish under cascade - the row is gone
         // afterwards, so this MUST happen first. Deletes are best-effort (catch-log-continue): an admin
         // deleting one user's many blobs shouldn't have the whole request fail on a single transient
         // object-storage error, and a leaked blob here is merely the pre-existing status quo, unlike an

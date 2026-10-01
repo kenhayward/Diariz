@@ -5,7 +5,7 @@ namespace Diariz.Domain;
 
 /// <summary>
 /// Design-time factory so `dotnet ef migrations` can build the model without booting the
-/// web host (which would try to connect to Postgres/Redis/MinIO). The connection string
+/// web host (which would try to connect to Postgres/Redis/S3). The connection string
 /// here is only used to pick the Npgsql provider; no connection is opened to add a migration.
 /// </summary>
 public class DiarizDbContextFactory : IDesignTimeDbContextFactory<DiarizDbContext>

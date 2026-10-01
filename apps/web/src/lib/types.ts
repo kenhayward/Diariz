@@ -778,6 +778,8 @@ export interface RestoreResult {
   migratedFrom: string;
   migratedTo: string;
   restartRecommended: boolean;
+  objectsRestored: number;
+  bytesRestored: number;
 }
 
 /// How far the server has got assembling a backup archive. The download sends no bytes until the whole zip is

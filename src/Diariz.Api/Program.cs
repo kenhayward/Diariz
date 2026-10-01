@@ -201,7 +201,7 @@ builder.Services.AddAuthentication(SmartAuthScheme)
         Diariz.Api.Auth.ApiKeyAuthenticationHandler.SchemeName, _ => { });
 builder.Services.AddAuthorization(AuthorizationDefaults.Configure);
 
-// ---- Storage (MinIO / S3) ----
+// ---- Storage (S3: SeaweedFS in compose) ----
 builder.Services.AddSingleton<IAmazonS3>(_ =>
 {
     var cfg = new AmazonS3Config

@@ -79,6 +79,21 @@ public class StartupConfigValidatorTests
         Assert.Contains(Check(values).Errors, e => e.Contains(key));
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("minioadmin")]
+    public void StorageCredentialErrors_NameTheEnvKeysToSet(string value)
+    {
+        // The store is SeaweedFS now (issue #769): point the operator at the S3_APP_* keys and their generator,
+        // not at MinIO credentials that no longer exist.
+        var values = Valid();
+        values["Storage:AccessKey"] = value;
+        var error = Assert.Single(Check(values).Errors, e => e.Contains("Storage:AccessKey"));
+        Assert.Contains("S3_APP_ACCESS_KEY", error);
+        Assert.Contains("NewS3Keys", error);
+        Assert.DoesNotContain("MinIO", error);
+    }
+
     [Fact]
     public void StorageCredentials_UnsetFallBackToTheMinioDefault_AndAreRejected()
     {
