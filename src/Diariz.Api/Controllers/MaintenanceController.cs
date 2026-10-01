@@ -172,9 +172,11 @@ public class MaintenanceController : ControllerBase
                     await using (var src = entry.Open())
                         await src.CopyToAsync(ofs, ct);
                     await using var read = new FileStream(objTemp, FileMode.Open, FileAccess.Read, FileShare.None);
+                    // Length first: the real S3 client disposes the stream it uploads (the fake does not).
+                    var length = read.Length;
                     await _storage.UploadAsync(key, read, ContentTypeForKey(key), ct);
                     objectsRestored++;
-                    bytesRestored += read.Length;
+                    bytesRestored += length;
                 }
                 finally { if (System.IO.File.Exists(objTemp)) System.IO.File.Delete(objTemp); }
             }
