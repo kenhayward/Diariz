@@ -30,7 +30,7 @@ jobs:
         with:
           dotnet-version: '10.0.x'
       # Unit + integration together give the real figure: much of the API is covered by the
-      # integration suite (real Postgres/pgvector/MinIO), which the in-memory unit provider can't
+      # integration suite (real Postgres/pgvector/SeaweedFS), which the in-memory unit provider can't
       # exercise. The runsettings excludes generated EF migrations and the test assemblies.
       - name: Unit coverage
         run: dotnet test tests/Diariz.Api.Tests/Diariz.Api.Tests.csproj -c Release --collect:"XPlat Code Coverage" --settings coverage.runsettings --results-directory ./cov-unit || true

@@ -5,7 +5,9 @@ rem ==========================================================================
 rem BringUpWebApi.cmd - rebuild and redeploy just the API and web containers.
 rem
 rem These are the two that change on an ordinary release; postgres, redis,
-rem minio and the GPU worker are left alone.
+rem the s3 store and the GPU worker are left alone. The set of compose files
+rem (core, or core + GlitchTip overlay) comes from COMPOSE_FILE in .env, the
+rem same as BringUpProd.cmd, so this never recreates s3 without the overlay.
 rem
 rem BOTH IMAGES ARE BUILT BEFORE ANYTHING IS RESTARTED. This does not shorten
 rem the outage - `up --build` already builds before it stops the old

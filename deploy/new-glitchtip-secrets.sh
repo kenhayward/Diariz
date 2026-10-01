@@ -14,8 +14,8 @@
 #   GLITCHTIP_EMAIL_URL           correctly percent-encoded (prompted)
 #   GLITCHTIP_FROM_EMAIL
 #
-# It does NOT generate the MinIO key - that one has to be created inside
-# MinIO itself, so it lives in provision-glitchtip-minio.sh.
+# It does NOT generate GlitchTip's S3 storage key - run
+# ./new-s3-keys.sh glitchtip for that.
 #
 # Nothing is written to disk.
 #

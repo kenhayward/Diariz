@@ -15,8 +15,8 @@ rem   GLITCHTIP_POSTGRES_PASSWORD   its own database, not the app's
 rem   GLITCHTIP_EMAIL_URL           correctly percent-encoded (prompted)
 rem   GLITCHTIP_FROM_EMAIL
 rem
-rem It does NOT generate the MinIO key - that one has to be created inside
-rem MinIO itself, so it lives in ProvisionGlitchTipMinio.cmd.
+rem It does NOT generate GlitchTip's S3 storage key - run
+rem NewS3Keys.cmd glitchtip for that.
 rem
 rem Nothing is written to disk. Copy the output into deploy\.env and close
 rem the window.

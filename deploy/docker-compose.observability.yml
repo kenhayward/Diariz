@@ -1,8 +1,8 @@
 # Optional observability overlay: self-hosted GlitchTip (error tracking + transaction timings).
 #
 # Opt-in, and deliberately a separate file so the core stack is unchanged for anyone who does not
-# want it:
-#   docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+# want it. Turn it on with COMPOSE_FILE in deploy/.env (see .env.example), not with -f flags: this overlay
+# also changes the `s3` service (GlitchTip's storage identity), so every compose command has to see it.
 #
 # GlitchTip gets its OWN Postgres (not a second database inside the app's pgvector container):
 #   - the platform backup/restore operates on the app database; co-locating an observability tool's
@@ -33,6 +33,29 @@ services:
       timeout: 3s
       retries: 10
 
+  s3:
+    environment:
+      # See docker-compose.yml: changing this recreates the s3 container so it loads the identities below.
+      S3_IDENTITY_SET: "root,diariz,glitchtip"
+
+  s3-buckets:
+    # One-shot: create GlitchTip's bucket in the SeaweedFS store (issue #769). django-storages no longer
+    # creates buckets, and the MinIO provision script that used to is gone. `weed shell` talks to SeaweedFS's
+    # master/filer in-network, so this needs no credentials and no extra image. Safe to re-run: an existing
+    # bucket counts as success. GlitchTip waits for this to finish before it starts.
+    image: chrislusf/seaweedfs:4.48
+    depends_on:
+      s3: { condition: service_healthy }
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        out=$$(echo "s3.bucket.create -name $${BUCKET}" | weed shell -master=s3:9333 -filer=s3:8888 2>&1);
+        echo "$$out";
+        echo "$$out" | grep -qE "created bucket|already exists"
+    environment:
+      BUCKET: ${GLITCHTIP_COLD_STORAGE_BUCKET:-glitchtip}
+    restart: "no"
+
   glitchtip:
     # NO `v` PREFIX. GlitchTip dropped it partway through the 6.0 line: `v6`, `v6.0` and `v6.0.3`
     # exist, `6.0.3` exists as both, and from 6.0.4 onwards only the bare form is published. So
@@ -47,6 +70,7 @@ services:
     depends_on:
       glitchtip-postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
+      s3-buckets: { condition: service_completed_successfully }
     environment:
       DATABASE_URL: "postgres://glitchtip:${GLITCHTIP_POSTGRES_PASSWORD:-glitchtip}@glitchtip-postgres:5432/glitchtip"
       # DB index 1 - the app's queues live on index 0 and must not be disturbed.
@@ -101,7 +125,7 @@ services:
       # process writing Parquet, so this costs ~128 MB of RAM and no extra container.
       GLITCHTIP_ENABLE_DUCKDB: "true"
       GLITCHTIP_COLD_STORAGE_BUCKET: ${GLITCHTIP_COLD_STORAGE_BUCKET:-glitchtip}
-      AWS_S3_ENDPOINT_URL: "http://minio:9000"
+      AWS_S3_ENDPOINT_URL: "http://s3:8333"
       # REQUIRED once AWS_S3_ENDPOINT_URL is set, and easy to miss because nothing complains at boot.
       # Setting the endpoint switches Django's default file storage to S3Boto3Storage, but the bucket
       # is a SEPARATE setting - leave it unset and `diffsettings` shows
@@ -111,16 +135,16 @@ services:
       #
       # NOTE this is a different mechanism from GLITCHTIP_COLD_STORAGE_BUCKET above: that one is
       # DuckDB's Parquet archive, this one is django-storages for uploaded files (source maps, debug
-      # symbols). Same bucket by design - both are GlitchTip's own data, the scoped MinIO key already
-      # grants s3:* on it, and sharing the variable stops the two drifting apart.
+      # symbols). Same bucket by design - both are GlitchTip's own data, the scoped GlitchTip identity already
+      # has every action on it, and sharing the variable stops the two drifting apart.
       AWS_STORAGE_BUCKET_NAME: ${GLITCHTIP_COLD_STORAGE_BUCKET:-glitchtip}
       # Namespace uploaded files under a prefix so they are visibly distinct from the Parquet archive
       # sharing the bucket. Cold-storage cleanup is enabled by default; whether it is prefix-scoped
       # has NOT been verified, so keeping the two apart is cheap insurance. If artifacts ever vanish
       # after a cleanup run, that is the cause, and the fix is a bucket of their own.
       AWS_LOCATION: "uploads"
-      AWS_ACCESS_KEY_ID: ${GLITCHTIP_MINIO_ACCESS_KEY:?required - run deploy/ProvisionGlitchTipMinio.cmd}
-      AWS_SECRET_ACCESS_KEY: ${GLITCHTIP_MINIO_SECRET_KEY:?required - run deploy/ProvisionGlitchTipMinio.cmd}
+      AWS_ACCESS_KEY_ID: ${GLITCHTIP_S3_ACCESS_KEY:-${GLITCHTIP_MINIO_ACCESS_KEY:?required - run deploy/NewS3Keys.cmd glitchtip and set GLITCHTIP_S3_ACCESS_KEY in deploy/.env}}
+      AWS_SECRET_ACCESS_KEY: ${GLITCHTIP_S3_SECRET_KEY:-${GLITCHTIP_MINIO_SECRET_KEY:?required - run deploy/NewS3Keys.cmd glitchtip and set GLITCHTIP_S3_SECRET_KEY in deploy/.env}}
     ports:
       # Published for the OUTER reverse proxy only. Bind to localhost so it is not LAN-reachable:
       # Docker publishes to 0.0.0.0 by default AND writes its own DNAT rules, bypassing the host
@@ -129,3 +153,21 @@ services:
 
 volumes:
   glitchtipdata:
+
+configs:
+  # SeaweedFS identities. Inline so Compose interpolates the keys from deploy/.env; the file exists only
+  # inside the s3 container (needs Compose v2.23.1+). Root administers the store; the app identity is
+  # confined to `recordings` (Admin:recordings is what lets the API create its own bucket on first boot).
+  # The old MINIO_* names still resolve as fallbacks, so an existing .env keeps working.
+  # REPLACES docker-compose.yml's s3_identities (Compose merges top-level configs by name) to add the
+  # GlitchTip identity, confined to its own bucket. Keep the root and diariz entries in step with that file.
+  s3_identities:
+    content: |
+      {"identities":[
+        {"name":"root","credentials":[{"accessKey":"${S3_ROOT_ACCESS_KEY:-${MINIO_ROOT_USER:?required - run deploy/NewS3Keys.cmd root and set S3_ROOT_ACCESS_KEY in deploy/.env}}","secretKey":"${S3_ROOT_SECRET_KEY:-${MINIO_ROOT_PASSWORD:?required - run deploy/NewS3Keys.cmd root and set S3_ROOT_SECRET_KEY in deploy/.env}}"}],
+         "actions":["Admin","Read","Write","List","Tagging"]},
+        {"name":"diariz","credentials":[{"accessKey":"${S3_APP_ACCESS_KEY:-${MINIO_APP_ACCESS_KEY:?required - run deploy/NewS3Keys.cmd and set S3_APP_ACCESS_KEY in deploy/.env}}","secretKey":"${S3_APP_SECRET_KEY:-${MINIO_APP_SECRET_KEY:?required - run deploy/NewS3Keys.cmd and set S3_APP_SECRET_KEY in deploy/.env}}"}],
+         "actions":["Admin:recordings","Read:recordings","Write:recordings","List:recordings","Tagging:recordings"]},
+        {"name":"glitchtip","credentials":[{"accessKey":"${GLITCHTIP_S3_ACCESS_KEY:-${GLITCHTIP_MINIO_ACCESS_KEY:?required - run deploy/NewS3Keys.cmd glitchtip and set GLITCHTIP_S3_ACCESS_KEY in deploy/.env}}","secretKey":"${GLITCHTIP_S3_SECRET_KEY:-${GLITCHTIP_MINIO_SECRET_KEY:?required - run deploy/NewS3Keys.cmd glitchtip and set GLITCHTIP_S3_SECRET_KEY in deploy/.env}}"}],
+         "actions":["Admin:${GLITCHTIP_COLD_STORAGE_BUCKET:-glitchtip}","Read:${GLITCHTIP_COLD_STORAGE_BUCKET:-glitchtip}","Write:${GLITCHTIP_COLD_STORAGE_BUCKET:-glitchtip}","List:${GLITCHTIP_COLD_STORAGE_BUCKET:-glitchtip}","Tagging:${GLITCHTIP_COLD_STORAGE_BUCKET:-glitchtip}"]}
+      ]}

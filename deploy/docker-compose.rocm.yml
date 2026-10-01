@@ -63,29 +63,41 @@ services:
       timeout: 3s
       retries: 10
 
-  minio:
-    # Docker Hub stopped serving minio/minio anonymously (issue #765). MinIO still publishes to quay.io;
-    # this tag has the same digest as the Docker Hub image deployed before the switch, so it is not an upgrade.
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+  s3:
+    # SeaweedFS S3 gateway (issue #769). Replaced MinIO, whose community edition is archived and whose images
+    # can no longer be pulled. Pinned: bump deliberately, after the integration suite passes on the new tag
+    # (tests/Diariz.Api.IntegrationTests/Infrastructure/ContainersFixture.cs pins the same tag).
+    image: chrislusf/seaweedfs:4.48
     restart: unless-stopped
-    command: server /data --console-address ":9001"
+    # One process runs master + volume + filer + S3. -volume.max=0 sizes volumes from free disk (the default
+    # cap of 8 runs out: each bucket is its own collection). Only the S3 port is used by the app; the API and
+    # worker reach it in-network at s3:8333.
+    command: >
+      server -dir=/data -ip.bind=0.0.0.0
+      -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json
+      -volume.max=0 -master.volumeSizeLimitMB=1024
+    configs:
+      - source: s3_identities
+        target: /etc/seaweedfs/s3.json
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?required - set MINIO_ROOT_USER in deploy/.env}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?required - set MINIO_ROOT_PASSWORD in deploy/.env}
-    # Only the S3 API is published on the host (handy for debugging/mc). The web console (container :9001,
-    # still served for direct `docker exec`/port-forward use) is deliberately NOT published - the app never
-    # uses it (the API reaches MinIO in-network at minio:9000), so there's no reason to expose it.
+      # Compose does NOT recreate this container when only the s3_identities content changes, so SeaweedFS
+      # would keep serving the old identities. Naming the identity set here makes adding or dropping the
+      # observability overlay (which adds `glitchtip`) a config change that recreates it. A key ROTATION is
+      # not visible here: after changing any S3_* / GLITCHTIP_S3_* key, run
+      #   docker compose up -d --force-recreate s3
+      S3_IDENTITY_SET: "root,diariz"
     ports:
-      # Host-only by default (a published port bypasses the host firewall); set MINIO_BIND=0.0.0.0 to reach it from
-      # another machine.
-      - "${MINIO_BIND:-127.0.0.1}:9002:9000"   # S3 API   (host 9002 -> container 9000)
+      # Host-only by default (a published port bypasses the host firewall); set S3_BIND=0.0.0.0 to reach it
+      # from another machine. Host 9002 is kept from the MinIO days so existing tooling still works.
+      - "${S3_BIND:-${MINIO_BIND:-127.0.0.1}}:9002:8333"   # S3 API (host 9002 -> container 8333)
     volumes:
-      - miniodata:/data
+      # A new volume name, not miniodata: a server switched to this file can never touch MinIO's data.
+      - s3data:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8333/healthz"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 20
 
   api:
     build:
@@ -95,7 +107,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
-      minio: { condition: service_healthy }
+      s3: { condition: service_healthy }
     healthcheck:
       # GET /health (reports version + DB/Redis readiness). start_period covers first-run EF migrations + seeding.
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
@@ -107,9 +119,9 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=diariz;Username=diariz;Password=${POSTGRES_PASSWORD:?required - set POSTGRES_PASSWORD in deploy/.env}"
       Jwt__Key: ${JWT_KEY:?required - set JWT_KEY in deploy/.env (random, at least 32 bytes)}
-      Storage__Endpoint: "http://minio:9000"
-      Storage__AccessKey: ${MINIO_APP_ACCESS_KEY:-${MINIO_ROOT_USER:?required - set MINIO_ROOT_USER in deploy/.env}}
-      Storage__SecretKey: ${MINIO_APP_SECRET_KEY:-${MINIO_ROOT_PASSWORD:?required - set MINIO_ROOT_PASSWORD in deploy/.env}}
+      Storage__Endpoint: "http://s3:8333"
+      Storage__AccessKey: ${S3_APP_ACCESS_KEY:-${MINIO_APP_ACCESS_KEY:?required - run deploy/NewS3Keys.cmd (or new-s3-keys.sh) and set S3_APP_ACCESS_KEY in deploy/.env}}
+      Storage__SecretKey: ${S3_APP_SECRET_KEY:-${MINIO_APP_SECRET_KEY:?required - run deploy/NewS3Keys.cmd (or new-s3-keys.sh) and set S3_APP_SECRET_KEY in deploy/.env}}
       JobQueue__RedisConnection: "redis:6379,password=${REDIS_PASSWORD:?required - set REDIS_PASSWORD (hex/alphanumeric only) in deploy/.env}"
       Worker__CallbackSecret: ${CALLBACK_SECRET:?required - set CALLBACK_SECRET in deploy/.env (shared with the worker)}
       Summarization__ApiBase: ${SUMMARY_API_BASE:-}
@@ -170,7 +182,7 @@ services:
     restart: unless-stopped
     depends_on:
       redis: { condition: service_healthy }
-      minio: { condition: service_healthy }
+      s3: { condition: service_healthy }
       api: { condition: service_healthy }
     healthcheck:
       # The worker has no HTTP server - healthcheck.py checks the liveness heartbeat file (touched by a
@@ -183,9 +195,9 @@ services:
       start_period: 120s
     environment:
       REDIS_URL: "redis://:${REDIS_PASSWORD:?required - set REDIS_PASSWORD (hex/alphanumeric only) in deploy/.env}@redis:6379/0"
-      S3_ENDPOINT: "http://minio:9000"
-      S3_ACCESS_KEY: ${MINIO_APP_ACCESS_KEY:-${MINIO_ROOT_USER:?required - set MINIO_ROOT_USER in deploy/.env}}
-      S3_SECRET_KEY: ${MINIO_APP_SECRET_KEY:-${MINIO_ROOT_PASSWORD:?required - set MINIO_ROOT_PASSWORD in deploy/.env}}
+      S3_ENDPOINT: "http://s3:8333"
+      S3_ACCESS_KEY: ${S3_APP_ACCESS_KEY:-${MINIO_APP_ACCESS_KEY:?required - run deploy/NewS3Keys.cmd (or new-s3-keys.sh) and set S3_APP_ACCESS_KEY in deploy/.env}}
+      S3_SECRET_KEY: ${S3_APP_SECRET_KEY:-${MINIO_APP_SECRET_KEY:?required - run deploy/NewS3Keys.cmd (or new-s3-keys.sh) and set S3_APP_SECRET_KEY in deploy/.env}}
       S3_BUCKET: "recordings"
       API_BASE_URL: "http://api:8080"
       CALLBACK_SECRET: ${CALLBACK_SECRET:?required - set CALLBACK_SECRET in deploy/.env (shared with the worker)}
@@ -239,7 +251,22 @@ services:
 
 volumes:
   pgdata:
-  miniodata:
+  s3data:
   workercache:
   apikeys:
   redisdata:
+
+configs:
+  # SeaweedFS identities. Inline so Compose interpolates the keys from deploy/.env; the file exists only
+  # inside the s3 container (needs Compose v2.23.1+). Root administers the store; the app identity is
+  # confined to `recordings` (Admin:recordings is what lets the API create its own bucket on first boot).
+  # The old MINIO_* names still resolve as fallbacks, so an existing .env keeps working.
+  # The observability overlay REPLACES this whole config to add a GlitchTip identity - keep the two in step.
+  s3_identities:
+    content: |
+      {"identities":[
+        {"name":"root","credentials":[{"accessKey":"${S3_ROOT_ACCESS_KEY:-${MINIO_ROOT_USER:?required - run deploy/NewS3Keys.cmd root and set S3_ROOT_ACCESS_KEY in deploy/.env}}","secretKey":"${S3_ROOT_SECRET_KEY:-${MINIO_ROOT_PASSWORD:?required - run deploy/NewS3Keys.cmd root and set S3_ROOT_SECRET_KEY in deploy/.env}}"}],
+         "actions":["Admin","Read","Write","List","Tagging"]},
+        {"name":"diariz","credentials":[{"accessKey":"${S3_APP_ACCESS_KEY:-${MINIO_APP_ACCESS_KEY:?required - run deploy/NewS3Keys.cmd and set S3_APP_ACCESS_KEY in deploy/.env}}","secretKey":"${S3_APP_SECRET_KEY:-${MINIO_APP_SECRET_KEY:?required - run deploy/NewS3Keys.cmd and set S3_APP_SECRET_KEY in deploy/.env}}"}],
+         "actions":["Admin:recordings","Read:recordings","Write:recordings","List:recordings","Tagging:recordings"]}
+      ]}
