@@ -10,7 +10,7 @@ whisperx==3.8.6
 # `use_auth_token` to hf_hub_download, which huggingface_hub 1.0 removed - so transformers and the hub
 # had to be held below their majors. pyannote 4 does not pass it, so those ceilings are no longer load
 # bearing; they are kept here only because whisperx 3.8.6 itself asks for `huggingface-hub<1.0.0`.
-pyannote.audio>=4.0.0
+pyannote.audio>=4.0.7
 
 # Still the pre-1.0 hub line, now because whisperx requires it rather than because pyannote does.
 #
@@ -34,9 +34,9 @@ speechbrain==1.1.1
 # the base image's Python is bumped — a Dependabot bump to 3.11.x will break the Docker build.
 matplotlib==3.10.9
 redis==8.1.0
-boto3==1.43.83
+boto3==1.43.104
 requests==2.34.2
 
 # Optional error + performance reporting (GlitchTip / Sentry-compatible). Imported lazily and only
 # when SENTRY_DSN is set, so it costs nothing on deployments that do not use it.
-sentry-sdk==2.68.1
+sentry-sdk==2.71.0
