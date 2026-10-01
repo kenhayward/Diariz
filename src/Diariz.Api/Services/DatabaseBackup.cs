@@ -18,6 +18,11 @@ public interface ISchemaVersion
     /// <summary>Apply any pending migrations, bringing the database up to this build's latest schema. Used
     /// after restoring an older, forward-compatible backup to roll its schema up to the running code.</summary>
     Task MigrateToCurrentAsync(CancellationToken ct = default);
+
+    /// <summary>Make the running process re-read the database's type catalogue. Required after every restore:
+    /// <c>pg_restore --clean</c> recreates the <c>vector</c> extension under a new type oid, and a data source that
+    /// cached the old one fails every vector read - login included - until it is told (issue #783).</summary>
+    Task ReloadTypesAsync(CancellationToken ct = default);
 }
 
 public class EfSchemaVersion(DiarizDbContext db) : ISchemaVersion
@@ -28,6 +33,23 @@ public class EfSchemaVersion(DiarizDbContext db) : ISchemaVersion
     public IReadOnlyList<string> KnownMigrations => db.Database.GetMigrations().ToList();
 
     public Task MigrateToCurrentAsync(CancellationToken ct = default) => db.Database.MigrateAsync(ct);
+
+    public async Task ReloadTypesAsync(CancellationToken ct = default)
+    {
+        if (!db.Database.IsNpgsql()) return; // the in-memory provider has no type catalogue
+
+        // EF builds and owns the data source behind this connection, so go through the connection rather than
+        // a data source of our own - a separate one would refresh its own cache and leave the app's untouched.
+        var conn = (NpgsqlConnection)db.Database.GetDbConnection();
+        var opened = conn.State != System.Data.ConnectionState.Open;
+        if (opened) await conn.OpenAsync(ct);
+        try { await conn.ReloadTypesAsync(ct); }
+        finally { if (opened) await conn.CloseAsync(); }
+
+        // Idle pooled connections were opened against the old catalogue; drop them so the next request opens
+        // a fresh one. Connections busy right now are discarded when they come back.
+        NpgsqlConnection.ClearPool(conn);
+    }
 }
 
 /// <summary>Faithful Postgres dump/restore for the platform backup. Abstracted so the controller's

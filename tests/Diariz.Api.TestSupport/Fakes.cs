@@ -865,9 +865,18 @@ public sealed class FakeSchemaVersion(string current = "20260615111923_InitialCr
     /// <summary>Set true when <see cref="MigrateToCurrentAsync"/> is called - lets tests assert a forward-migrate ran.</summary>
     public bool Migrated { get; private set; }
 
+    /// <summary>The mutating calls in order ("migrate", "reload-types"), so tests can assert sequencing.</summary>
+    public List<string> Calls { get; } = new();
+
     public Task<string> CurrentAsync(CancellationToken ct = default) => Task.FromResult(Current);
     public IReadOnlyList<string> KnownMigrations => Known;
-    public Task MigrateToCurrentAsync(CancellationToken ct = default) { Migrated = true; return Task.CompletedTask; }
+    public Task MigrateToCurrentAsync(CancellationToken ct = default)
+    {
+        Migrated = true;
+        Calls.Add("migrate");
+        return Task.CompletedTask;
+    }
+    public Task ReloadTypesAsync(CancellationToken ct = default) { Calls.Add("reload-types"); return Task.CompletedTask; }
 }
 
 /// <summary>Stub URL fetcher: returns canned text per URL (or null for "blocked/unreachable").</summary>
