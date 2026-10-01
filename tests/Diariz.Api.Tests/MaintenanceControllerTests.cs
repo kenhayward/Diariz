@@ -156,6 +156,25 @@ public class MaintenanceControllerTests
     }
 
     [Fact]
+    public async Task Restore_ReportsHowManyObjectsAndBytesItRestored()
+    {
+        // The operator compares these against the archive listing at cutover. A wrong count must be visible
+        // in the response, not discovered later as a missing recording.
+        var archive = BuildArchive(Migration, "DUMP", new()
+        {
+            ["u1/a.webm"] = "12345",      // 5 bytes
+            ["u1/sub/b.pdf"] = "1234567", // 7 bytes
+        });
+
+        var result = await BuildForRestore(new FakeAudioStorage(), new FakeDatabaseBackup(), archive).Restore();
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var body = JsonSerializer.SerializeToElement(ok.Value, JsonOpts);
+        Assert.Equal(2, body.GetProperty("objectsRestored").GetInt32());
+        Assert.Equal(12, body.GetProperty("bytesRestored").GetInt64());
+    }
+
+    [Fact]
     public async Task Restore_RejectsBackupFromADifferentSchemaVersion()
     {
         var storage = new FakeAudioStorage();

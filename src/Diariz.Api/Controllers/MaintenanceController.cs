@@ -156,6 +156,9 @@ public class MaintenanceController : ControllerBase
             await foreach (var key in _storage.ListKeysAsync(ct)) existing.Add(key);
             foreach (var key in existing) await _storage.DeleteAsync(key, ct);
 
+            // Reported back so the operator can check the restore against the archive listing (server moves).
+            int objectsRestored = 0;
+            long bytesRestored = 0;
             foreach (var entry in zip.Entries)
             {
                 if (!entry.FullName.StartsWith(ObjectPrefix, StringComparison.Ordinal)) continue;
@@ -170,6 +173,8 @@ public class MaintenanceController : ControllerBase
                         await src.CopyToAsync(ofs, ct);
                     await using var read = new FileStream(objTemp, FileMode.Open, FileAccess.Read, FileShare.None);
                     await _storage.UploadAsync(key, read, ContentTypeForKey(key), ct);
+                    objectsRestored++;
+                    bytesRestored += read.Length;
                 }
                 finally { if (System.IO.File.Exists(objTemp)) System.IO.File.Delete(objTemp); }
             }
@@ -179,6 +184,8 @@ public class MaintenanceController : ControllerBase
                 migratedFrom = manifest.MigrationId,
                 migratedTo = current,
                 restartRecommended = needMigrate,
+                objectsRestored,
+                bytesRestored,
             });
         }
         finally { if (System.IO.File.Exists(archive)) System.IO.File.Delete(archive); }
