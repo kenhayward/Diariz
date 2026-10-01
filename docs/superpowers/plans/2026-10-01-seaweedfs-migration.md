@@ -29,10 +29,20 @@ v2.23.1+).
 - TDD: no production code without a failing test first. Integration tests need Docker.
 - No em/en dashes in user-facing strings (release notes, i18n). Plain `-`.
 - No production data anywhere in the repo, issues or PR: report counts and sizes only.
-- **Where this runs:** the plan is meant to be executed on a machine with **no existing Diariz stack**, so a
-  local `docker compose up` in `deploy/` is a safe end-to-end smoke there. Before running `up` or `down`,
-  check: if `docker volume ls` shows any `diariz_*` volume, or `docker compose ls` shows a `diariz` project,
-  stop. That machine has a live stack (the original dev box *is* prod), so use the dev server instead.
+- **Where each part runs (three machines, all Windows 11 + Docker Desktop / WSL2):**
+  - **Scratch laptop** - Tasks 1-5: code, unit + integration suites (Testcontainers), web and worker tests,
+    `docker compose config`. It holds the dev toolchain; the prod box should not.
+  - **New server `192.168.1.49`** (RTX 3090, 128 GB RAM; runs only this stack, GlitchTip and the local LLM) -
+    Task 6 smoke from the **PR branch**, then the rehearsal restore (B2), then cutover (B3) from `main`. It
+    has no Diariz stack until B1, so `up` there is safe; nothing points traffic at it until B3.5.
+  - **Old prod** - untouched MinIO stack. The only actions there are taking backups, copying the keyring
+    archive and the post-cutover straggler query. **Never run `BringUpProd.cmd` / `BringUpWebApi.cmd` on it
+    after this merges: both `git pull` first, and would point its API at an `s3` service it does not have.**
+  Before any `up`/`down`, check `docker volume ls` / `docker compose ls` show no `diariz` project you did not
+  create.
+- **Commands for the servers are PowerShell.** In PowerShell 5.1 `curl` is an alias for `Invoke-WebRequest`:
+  always type `curl.exe`. Windows ships `curl.exe` and `tar.exe` (bsdtar, which also lists zips), so `jq`,
+  `unzip`, `rsync` and the AWS CLI are not needed on the servers (S3 checks use the `amazon/aws-cli` image).
 - Never `git add -A`; stage explicit paths.
 - Pin the SeaweedFS image to an exact tag (`4.48`), never `latest`, in compose **and** the test fixture.
 - Keep host port `9002` for the S3 API, bound to `127.0.0.1` by default.
@@ -46,9 +56,12 @@ v2.23.1+).
    observability overlay, a scoped GlitchTip identity limited to `glitchtip`). The MinIO `mc admin`
    provisioning scripts go away; a key generator script replaces them.
 3. **Env vars renamed `MINIO_*` -> `S3_*`, old names kept as fallbacks**, so an existing `.env` still resolves.
-4. **GlitchTip starts fresh on the new server.** Its `glitchtip` bucket and its own Postgres are not in the
-   Diariz backup. They hold error telemetry only. Moving them would mean the manual bucket copy you said you
-   don't want.
+4. **GlitchTip starts fresh on the new server, and the overlay stays optional.** The new server runs GlitchTip;
+   any error history elsewhere is not carried (its bucket and Postgres are not in the Diariz backup, and it is
+   telemetry only). `BringUpProd.cmd` must add the overlay **only when `.env` sets `GLITCHTIP_SECRET_KEY`**:
+   today it adds it unconditionally, so a stack without GlitchTip cannot be brought up with it at all. The
+   overlay is the least-proven part of this change (no integration test covers GlitchTip -> SeaweedFS with a
+   scoped identity), so Task 6 smoke-tests it on the new server.
 5. **The `apikeys` volume (Data Protection keyring + OpenIddict signing keys) is copied to the new server.** It
    is a few KB, deliberately excluded from the backup zip. Without it, every user's stored LLM API key becomes
    undecryptable and every MCP/OAuth connector must re-authorise. It is optional, but recommended.
@@ -68,6 +81,10 @@ v2.23.1+).
 | `src/Diariz.Api/Controllers/MaintenanceController.cs` | restore returns `objectsRestored` / `bytesRestored` |
 | `apps/web/src/lib/types.ts` (`RestoreResult`, line ~776) | add the two fields |
 | `src/Diariz.Api/Services/AudioStorage.cs`, `Program.cs`, `src/Diariz.Worker/storage.py` | comments only ("MinIO" -> "the S3 store") |
+| `src/Diariz.Api/Configuration/AppOptions.cs`, `src/Diariz.Api/appsettings.json`, `src/Diariz.Worker/config.py` | default endpoint `http://minio:9000` -> `http://s3:8333` (keep `minioadmin` as the rejected placeholder default) |
+| `src/Diariz.Api/Configuration/StartupConfigValidator.cs` (+ `StartupConfigValidatorTests`) | error text "Set the MinIO credentials" -> "Set the S3 credentials (S3_APP_*)"; keep rejecting `minioadmin` |
+| `tests/Diariz.Api.IntegrationTests/{VisionImage,UserDeletionBlobCleanup}IntegrationTests.cs` | rename `fx.Minio*` uses (missed by the original list; the Task 1 grep finds them) |
+| `NOTICE`, `SECURITY.md`, `docs/Code and Coverage.md`, `.gitattributes` | MinIO AGPL attribution -> SeaweedFS Apache-2.0; credential and Testcontainers wording; drop the `glitchtip-minio/provision.sh` rule |
 | `deploy/docker-compose.yml`, `deploy/docker-compose.rocm.yml`, `deploy/docker-compose.observability.yml` | `minio` -> `s3` (SeaweedFS) |
 | `deploy/.env.example` | `S3_*` vars |
 | `deploy/new-s3-keys.sh`, `deploy/NewS3Keys.cmd` | **new** - print hex key pairs |
@@ -509,6 +526,13 @@ directories. In `.env.example`, replace the MinIO block with `S3_BIND`, `S3_ROOT
 note pointing to `new-s3-keys.sh`), and `GLITCHTIP_S3_*`. Add one line saying that the old `MINIO_*` names
 still work as fallbacks.
 
+- [ ] **Step 4b: Make the overlay optional in `BringUpProd.cmd`**
+
+Add the `-f docker-compose.observability.yml` pair only when `.env` defines `GLITCHTIP_SECRET_KEY`
+(`findstr /b /c:"GLITCHTIP_SECRET_KEY=" .env` + `if errorlevel 1`), and echo which mode it chose. Without this,
+a stack with no GlitchTip variables fails at `docker compose` with the overlay's `:?` messages. Also replace
+"minio" in its and `BringUpWebApi.cmd`'s header comments.
+
 - [ ] **Step 5: Verify the compose files resolve**
 
 ```bash
@@ -584,124 +608,191 @@ Run: `dotnet build Diariz.slnx`, `dotnet test > %TEMP%/all.txt` (unit + integrat
 
 ---
 
-### Task 6: Dev-server smoke, then PR
+### Task 6: New-server smoke (PR branch) and rehearsal, then PR
 
-- [ ] **Step 1: Bring a stack up.** **Preferred:** use the executing machine, provided it has no existing Diariz
-  stack (see Global Constraints). `cp deploy/.env.example deploy/.env`, fill in the required secrets and the
-  `S3_*` keys from `new-s3-keys.sh`, then `cd deploy && docker compose up -d --build`. **Alternative:** the
-  dev server (`dev.diariz.stocks-hayward.com`), after adding `S3_ROOT_*`/`S3_APP_*` to its `.env`. It starts
-  with an **empty** SeaweedFS because its MinIO volume is left alone. Bring its data across with the Part B
-  backup/restore, which also rehearses the restore. On a fresh local stack, rehearse the same way: take a
-  backup after the Step 2 checks, then restore it with the B2.3 `curl` commands.
-- [ ] **Step 2: End-to-end checks** (issue #769 scope 3): `docker compose ps` shows `s3` healthy. Upload a short
-  recording, then confirm that it transcribes (the worker reads the S3 store through boto3), plays, and can
-  be seeked (ranged GETs). Make a clip or screenshot (presigned GET through ffmpeg). Delete a recording and
-  check that its object is gone. Run a live session if live transcription is enabled (merge jobs make the
-  worker upload multipart). Take an admin backup, then restore it.
-- [ ] **Step 3: Scoped key proof:**
-  `AWS_ACCESS_KEY_ID=<app> AWS_SECRET_ACCESS_KEY=<app> aws --endpoint-url http://127.0.0.1:9002 s3 ls s3://recordings`
-  succeeds; the same against `s3://glitchtip` (or any other bucket) is **denied**.
-- [ ] **Step 4:** `gh pr create`. The body must include: `Fixes #769` on its own line, the integration pass
-  count before and after, the deployment surface (**server redeploy only, no desktop release**, plus a warning
-  that redeploying an existing server **starts with an empty object store**. Use the runbook, and do not
-  simply `git pull && up`), and the release checklist items touched. Bind the PR with `ccd_pr` and watch CI.
+Runs on **`192.168.1.49`** (Windows 11, Docker Desktop / WSL2), in PowerShell from `deploy\`, with the PR branch
+checked out. The server carries no traffic yet, so this is safe. It also covers B1 and B2 of Part B, so after
+the merge only the cutover is left.
 
-> **Important for the existing prod:** after this merges, do **not** redeploy the old server from `main`. It
-> would come up on an empty SeaweedFS while its DB still points at blobs in MinIO, so every recording would
-> lose its audio. The old server stays on its current build until it is retired.
+- [ ] **Step 0: One-time server preparation**
+  - Docker Desktop, WSL2 backend. Turn on **Start Docker Desktop when you sign in**. Docker Desktop runs only
+    inside a signed-in session, so after every reboot (Windows Update included) the stack stays down until
+    someone signs in. Set up automatic sign-in, a power plan that never sleeps, and Windows Update active hours.
+  - **Disk image location** (Settings -> Resources -> Advanced): put it on a drive with at least 50 GB free.
+    Every volume and the API's `/tmp` (where backup and restore stage the zip) live in that VHDX. The VHDX
+    grows on its own but does not shrink.
+  - A current NVIDIA Windows driver (Docker Desktop's WSL2 backend provides the GPU path, so no container
+    toolkit install is needed). Check it with
+    `docker run --rm --gpus all nvidia/cuda:12.8.0-base-ubuntu22.04 nvidia-smi`, which should list the 3090.
+  - Git for Windows, then clone the repo and check out the PR branch.
+  - Networking: the outer proxy runs on another host, so `WEB_BIND=0.0.0.0` (the default) and
+    `GLITCHTIP_BIND=0.0.0.0`. Docker Desktop publishes ports through a Windows process, so Windows Firewall
+    controls LAN access. Add inbound rules for TCP 8081 and `GLITCHTIP_PORT` (8000) that allow **only the
+    outer proxy's address**. Leave API, Postgres and S3 on `127.0.0.1`.
+  - The local LLM runs on the host. Containers reach it at `http://host.docker.internal:<port>/v1`, not at
+    `localhost`.
+
+- [ ] **Step 1: `.env`** (from `.env.example`; copy values server to server, never through chat or the repo)
+  - **Carry over from old prod:** `JWT_KEY`, `CALLBACK_SECRET`, `POSTGRES_PASSWORD`, `REDIS_PASSWORD`,
+    `APP_PUBLIC_URL` (same public origin, so desktop apps, OAuth redirect URIs, webhooks and the claude.ai MCP
+    connector keep working), `HF_TOKEN`, `Seed__*`, Google/Microsoft OAuth, SMTP.
+  - **LLM and embeddings:** `SUMMARY_API_BASE` and similar point at the new host's LLM. **`EMBED_MODEL` and
+    `EMBED_DIMENSION` must equal old prod's values, and the endpoint must serve the same model.** The backup
+    carries every segment's vector. A different embedding model does not error: search and chat silently
+    return poor matches. If the model has to change, plan a re-embed.
+  - **Generate new:** `.\NewS3Keys.cmd root`, `.\NewS3Keys.cmd`, and `.\NewS3Keys.cmd glitchtip` give
+    `S3_ROOT_*`, `S3_APP_*` and `GLITCHTIP_S3_*`. `.\NewGlitchTipSecrets.cmd` gives the GlitchTip secrets.
+    Set `GLITCHTIP_DOMAIN` to the real external URL and `GLITCHTIP_ALLOWED_HOSTS` to that host plus
+    `glitchtip`. Leave `SENTRY_DSN`, `SENTRY_BROWSER_DSN` and `GLITCHTIP_URL/ORG/PROJECT/TOKEN` empty until
+    Step 4.
+
+- [ ] **Step 2: Keyring before the first start** (Decision 5). If the API ever starts with an empty `apikeys`
+  volume, it mints a new keyring and you have to redo this step.
+
+  On old prod, from its `deploy\`:
+  ```powershell
+  docker run --rm -v diariz_apikeys:/keys -v "${PWD}:/out" alpine tar czf /out/apikeys.tgz -C /keys .
+  ```
+  Copy `apikeys.tgz` to the new server over an SMB share. Treat it as a secret. Then, on the new server:
+  ```powershell
+  docker compose -f docker-compose.yml -f docker-compose.observability.yml up --no-start --build
+  docker run --rm -v diariz_apikeys:/keys -v "${PWD}:/in" alpine tar xzf /in/apikeys.tgz -C /keys
+  docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+  ```
+  `up --no-start` lets Compose create the volume with its own labels, which avoids the "volume was not
+  created by Compose" warning. Wait until `docker compose ps` shows every service healthy, including `s3`.
+  On first boot the API creates the empty `recordings` bucket with the scoped app identity. **If
+  `EnsureBucketAsync` fails** (if `Admin:recordings` is not enough), create the bucket with the root key
+  using the Step 3 command and record that in the runbook.
+
+- [ ] **Step 3: GlitchTip bucket** (django-storages no longer creates buckets itself):
+  ```powershell
+  docker run --rm --network diariz_default -e AWS_ACCESS_KEY_ID=<root> -e AWS_SECRET_ACCESS_KEY=<root> `
+    -e AWS_DEFAULT_REGION=us-east-1 amazon/aws-cli --endpoint-url http://s3:8333 s3 mb s3://glitchtip
+  ```
+  Confirm the network name with `docker network ls` first.
+
+- [ ] **Step 4: Wire GlitchTip up.** Create the organisation and the two projects (server and browser) in
+  GlitchTip, then set `SENTRY_DSN`, `SENTRY_BROWSER_DSN`, `GLITCHTIP_URL`, `GLITCHTIP_ORG`, `GLITCHTIP_PROJECT`
+  and `GLITCHTIP_TOKEN`, and run `.\BringUpProd.cmd`. The web build **fails** when the source map upload
+  fails while all four are set, so a green build proves GlitchTip writes to SeaweedFS with its scoped key.
+  Then cause an API error and confirm it shows in GlitchTip.
+
+- [ ] **Step 5: End-to-end checks** (issue #769 scope 3). Upload a short recording, then check that it
+  transcribes (the worker reads S3 through boto3), plays, and can be seeked (ranged GETs). Make a clip or
+  screenshot (presigned GET through ffmpeg). Delete a recording and confirm its object is gone. Run a live
+  session (merge jobs make the worker upload multipart). **Watch `nvidia-smi` during a transcription with the
+  LLM loaded:** the worker and the live worker each hold their own models next to the LLM on 24 GB. If memory
+  runs short, fix it now, not after cutover.
+
+- [ ] **Step 6: Scoped key proof** (all through the `amazon/aws-cli` image, as in Step 3):
+  `s3 ls s3://recordings` succeeds with the app key and is **denied** for `s3://glitchtip`. The GlitchTip key
+  is **denied** on `s3://recordings`.
+
+- [ ] **Step 7: Rehearsal restore with real prod data** (B2 below). This also replaces the smoke data.
+
+- [ ] **Step 8:** `gh pr create` from the laptop. The body must include: `Fixes #769` on its own line; the
+  integration pass count before (from the last green `main` CI run, since the MinIO image no longer pulls)
+  and after; the deployment surface (**server redeploy only, no desktop release**, with a warning that
+  redeploying an existing server **starts on an empty object store**, so use the runbook rather than
+  `git pull` and `up`); the rehearsal timings; and the release checklist items touched. Bind the PR with
+  `ccd_pr` and watch CI.
+
+> **Important for old prod:** after this merges, do **not** redeploy it from `main`, and do not run either
+> `BringUp*.cmd` script on it, because both `git pull`. It would come up on an empty SeaweedFS while its
+> database still points at blobs in MinIO, and every recording would lose its audio. Old prod stays on its
+> current build until it is retired.
 
 ---
 
-# Part B - the server move (operational, after Part A is merged)
+# Part B - the server move (Windows, PowerShell)
 
-The old server keeps running MinIO, untouched, the whole time. The new server is built from `main` (SeaweedFS)
-and filled from a backup. The same backup can be restored any number of times (restore wipes and replaces), so
-you rehearse first and then do the real cutover.
+Old prod keeps running MinIO, untouched, the whole time. The new server is built and smoke-tested in Task 6
+(B1) and filled from a backup. Restore wipes and replaces everything, so the same backup can be restored
+any number of times: rehearse first, then cut over.
 
 ### B0. Sizing and prerequisites
 
-- **Disk on the new server: at least 2.5x the backup zip** (about 8.5 GB today, from about 6.6 GB of recordings
-  plus the dump). Restore writes the whole zip to the API container's `/tmp`, then fills SeaweedFS. Each object
-  also spills to a temp file before upload.
-- **Disk on the old server: about 1x the zip free** in Docker's data root. Backup builds the zip in the API
-  container's `/tmp` before streaming it.
-- New server: Docker + Compose v2.23.1+ (inline `configs:`), NVIDIA Container Toolkit, the repo at the merged
-  `main`, outbound access to Hugging Face. The worker re-downloads about 4 GB of models into `workercache` on
-  first job.
-- The new server runs the **same or a newer** app version than the old one. Restore refuses a backup from a
-  newer schema. An older one is rolled forward automatically.
+- **New server:** at least 2.5x the backup zip free **inside the Docker Desktop disk image** (the zip is about
+  8.5 GB today, from about 6.6 GB of recordings plus the dump). Restore writes the whole zip to the API
+  container's `/tmp`, fills SeaweedFS, and spills each object to a temp file before upload. Add the same
+  again on the Windows drive that holds the copied zip.
+- **Old prod:** about 1x the zip free in its Docker disk image (backup builds the zip in `/tmp` before
+  streaming it).
+- The new server must run the **same or a newer** app version than old prod. Restore refuses a backup from a
+  newer schema and rolls an older one forward.
+- The worker downloads about 4 GB of models into `workercache` on its first job (Task 6 Step 5 already did this).
 
 ### B1. Build the new server
 
-1. `.env`: start from `deploy/.env.example`. **Carry over from the old `.env`** (copy the values server-to-server
-   over SSH, never through chat or the repo): `JWT_KEY`, `CALLBACK_SECRET`, `POSTGRES_PASSWORD`, `REDIS_PASSWORD`,
-   `APP_PUBLIC_URL` (same public origin, so desktop apps, Google OAuth redirect URIs, webhooks and the claude.ai MCP
-   connector all keep working), `HF_TOKEN`, `Seed__*`, Google/Microsoft OAuth, SMTP, LLM endpoints. **Generate
-   new**: `S3_ROOT_*`, `S3_APP_*` (`deploy/new-s3-keys.sh`, `... root`).
-2. Copy the keyring volume (recommended, Decision 5). On the old server:
-   ```bash
-   docker run --rm -v diariz_apikeys:/keys -v "$PWD":/out alpine tar czf /out/apikeys.tgz -C /keys .
-   ```
-   Then copy `apikeys.tgz` across with `scp`, and on the new server **before the first `up`**:
-   ```bash
-   docker volume create diariz_apikeys && docker run --rm -v diariz_apikeys:/keys -v "$PWD":/in alpine tar xzf /in/apikeys.tgz -C /keys
-   ```
-   Treat `apikeys.tgz` as a secret, and delete both copies afterwards.
-3. `cd deploy && docker compose up -d --build`. Wait for `docker compose ps` to show everything healthy. The API
-   creates the empty `recordings` bucket and seeds the admin from `Seed__*`.
+Done in Task 6 Steps 0-4, from the PR branch. After the merge:
+```powershell
+git checkout main; git pull
+.\BringUpProd.cmd
+```
+Volumes, including the keyring, are kept. Confirm `docker compose ps` is healthy and `GET /health` reports
+the merged version.
 
 ### B2. Rehearsal restore
 
-1. Old server, quiet moment: Admin -> Maintenance -> **Download backup** (or `curl` it on the old box; see B3.2).
-   Note its object count without unpacking it:
-   ```bash
-   unzip -l diariz-backup-*.zip | grep -c " objects/"
+1. Old prod, at a quiet moment: Admin -> Maintenance -> **Download backup**. Count the objects in it without
+   unpacking:
+   ```powershell
+   $zip = "D:\diariz-restore\diariz-backup-XXXX.zip"
+   (tar -tf $zip | Select-String '^objects/.*[^/]$').Count
    ```
-2. Copy it to the new server: `rsync -P` resumes if the link drops.
-3. Restore **on the new server, directly against the API on 127.0.0.1:8080**. This bypasses nginx and any outer
-   proxy and its body or timeout limits, and the browser:
-   ```bash
-   TOKEN=$(curl -s -X POST http://127.0.0.1:8080/api/auth/login -H 'Content-Type: application/json' \
-     -d '{"email":"<seed admin email>","password":"<seed admin password>"}' | jq -r .accessToken)
-   curl -sS -X POST -T diariz-backup-XXXX.zip -H "Authorization: Bearer $TOKEN" \
-     -H 'Content-Type: application/zip' http://127.0.0.1:8080/api/maintenance/restore
+2. Copy the zip to the new server. `robocopy` can resume a broken copy:
+   `robocopy \\<old-prod>\<share> D:\diariz-restore diariz-backup-XXXX.zip /Z /J`
+3. Restore **on the new server, directly against the API on 127.0.0.1:8080**. That bypasses nginx, the
+   outer proxy and the browser, along with their body-size and timeout limits:
+   ```powershell
+   $cred  = Get-Credential   # a platform admin: the seed admin the first time; a prod admin once prod data is loaded
+   $body  = @{ email = $cred.UserName; password = $cred.GetNetworkCredential().Password } | ConvertTo-Json
+   $token = (Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8080/api/auth/login -ContentType 'application/json' -Body $body).accessToken
+   curl.exe -sS -X POST -T $zip -H "Authorization: Bearer $token" -H "Content-Type: application/zip" http://127.0.0.1:8080/api/maintenance/restore
    ```
-   Use `-T`, **not** `--data-binary @file`, because `--data-binary` loads the whole file into memory. Expect
-   `{"restored":true,...,"objectsRestored":N,"bytesRestored":B}`, where **N equals the `unzip -l` count**. If
-   `restartRecommended` is true: `docker compose restart api worker`.
-4. Verify by count: the number of recordings, users and people in the admin pages matches the old server.
-   Pick a few recordings across a range of ages, and confirm that each one plays, seeks, and shows its
-   transcript, summary and speakers. Re-transcribe one recording (worker <-> SeaweedFS). Upload a new one.
-   Search and chat return results (embeddings are in the dump). If the keyring was copied, confirm that a
-   user's own LLM key still works.
-5. Write down how long the backup, the transfer and the restore took. That is the length of the cutover window.
+   Use `curl.exe -T`, which streams the file (not `--data-binary @file`, and not `Invoke-WebRequest`, which
+   buffers the file in memory). Expect `{"restored":true,...,"objectsRestored":N,"bytesRestored":B}`, with
+   **N equal to the step 1 count**. If `restartRecommended` is true, run
+   `docker compose restart api worker live-worker`.
+4. Verify by count: recordings, users and people in the admin pages match old prod. Pick a few recordings
+   across a range of ages and check that each plays, seeks, and shows its transcript, summary and speakers.
+   Re-transcribe one (worker to SeaweedFS). Upload a new one. Run a search and a chat question about an
+   **old** recording; this is the embedding-model check. A user's own LLM key still works, which confirms
+   the keyring copy. Errors appear in GlitchTip.
+5. Record how long the backup, the copy and the restore took. That sum is the cutover window.
 
 ### B3. Cutover
 
-1. Tell users about the window (B2.5 timing). Ask them to stop recording and to close desktop apps. Desktop
-   apps reconnect afterwards, because the address is the same.
-2. Old server: take the **final backup**, and note its timestamp `T`.
-3. New server: run the B2.3 restore again. It wipes the rehearsal data. Check that `objectsRestored` matches the
-   count from `unzip -l`.
-4. Repeat the B2.4 spot checks.
-5. Switch traffic: point DNS or the outer reverse proxy at the new server. The outer proxy must forward `/mcp`
-   with buffering off, and allow long timeouts on `/api/maintenance/`.
-6. Catch stragglers. On the **old** server, count anything written after `T`:
-   ```bash
-   docker compose exec postgres psql -U diariz -d diariz -c "select count(*) from \"Recordings\" where \"CreatedAt\" > '<T>';"
+1. Tell users the window (B2.5 timing). Ask them to stop recording and to close desktop apps. Desktop apps
+   reconnect afterwards, because the address does not change.
+2. **Drain in-flight work on old prod.** Redis queues are not in the backup, so a job still running when the
+   backup is taken arrives stuck. In old prod's `deploy\`:
+   ```powershell
+   'select "Status", count(*) from "Recordings" group by 1 order by 1;' | docker compose exec -T postgres psql -U diariz -d diariz
    ```
-   (Check the actual table and column names in `docs/Data_Schema.md` first.) If the count is not zero,
-   download those recordings' audio from the old UI and upload them to the new one.
+   Wait until nothing is in statuses 0, 1, 2, 6, 7 or 8 (Uploaded, Queued, Transcribing, Summarizing,
+   Merging, Capturing). SQL goes in through stdin because PowerShell 5.1 mangles embedded double quotes in
+   native-command arguments.
+3. Old prod: take the **final backup** and note its timestamp `T` (UTC). Copy it across as in B2.2.
+4. New server: run the B2.3 restore again, signing in as a prod platform admin, since the rehearsal loaded
+   prod's users. It wipes the rehearsal data. Check that `objectsRestored` matches the B2.1 count for this zip.
+5. Repeat the B2.4 spot checks.
+6. Switch traffic: point the outer reverse proxy (or DNS) for the Diariz origin at `192.168.1.49:8081`, and
+   the GlitchTip host at `192.168.1.49:8000`. The proxy must forward `/mcp` with buffering off and allow long
+   timeouts on `/api/maintenance/`.
+7. Catch stragglers. On **old** prod, count anything written after `T`:
+   ```powershell
+   'select count(*) from "Recordings" where "CreatedAt" > ''<T>'';' | docker compose exec -T postgres psql -U diariz -d diariz
+   ```
+   If it is not zero, download those recordings' audio from the old UI and upload them to the new one.
 
 ### B4. Afterwards
 
-- Leave the old stack running (as you planned) until the new one has been in use for a while. Then
-  `docker compose down` **without `-v`**, and keep the `miniodata` and `pgdata` volumes until you are sure.
-- GlitchTip (Decision 4): bring the overlay up fresh on the new server. If its bucket isn't created
-  automatically, create it with `aws --endpoint-url http://127.0.0.1:9002 s3 mb s3://glitchtip` using the
-  root key. Error history starts again.
-- Delete every copy of the backup zip and `apikeys.tgz` that you no longer need. They contain everyone's
-  recordings.
+- Leave old prod running until the new server has been in use for a while. Then run `docker compose down`
+  **without `-v`**, and keep the `miniodata` and `pgdata` volumes until you are sure.
+- Delete every copy of the backup zips and `apikeys.tgz` that you no longer need. They contain everyone's
+  recordings and the keys that decrypt users' stored API keys.
 
 ---
 
@@ -713,5 +804,5 @@ you rehearse first and then do the real cutover.
 - The user asked to restore a backup into the new container: Tasks 2 and 3 plus Part B.
 - Known unverified facts, each checked before anything depends on it: the `/healthz` path (Task 1 Step 1);
   SeaweedFS and AWS SDK v4 checksum compatibility (Task 1 Step 6, with a named fix); whether a scoped
-  `Admin:recordings` identity can create its own bucket on first boot (Task 6 Step 1: if the API fails at
+  `Admin:recordings` identity can create its own bucket on first boot (Task 6 Step 2: if the API fails at
   `EnsureBucketAsync`, create the bucket once with the root key and record that in the runbook).
