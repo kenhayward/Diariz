@@ -3733,8 +3733,10 @@ audio endpoint; `POST /api/maintenance/restore` takes the raw zip body and gates
 `Format` must equal the running instance's `CurrentFormat`, and its migration id must be the current one **or
 an earlier ancestor** (newer/unknown schemas are refused - there are no down-migrations). It then runs
 `pg_restore --clean`, and if the backup was an **older ancestor**, calls `MigrateToCurrentAsync` to roll the
-restored schema up to the running code (the response reports `migratedFrom`/`migratedTo`/`restartRecommended`);
-finally it wipes and re-uploads the bucket, and reports `objectsRestored`/`bytesRestored` so the operator can check
+restored schema up to the running code (the response reports `migratedFrom`/`migratedTo`/`restartRecommended`).
+`restartRecommended` is true only when a migration ran, but **every** restore needs the API restarted: `--clean`
+recreates the `vector` extension under a new type OID that the running Npgsql type cache does not know, so vector
+reads (login included) fail until a restart (issue #783). Finally it wipes and re-uploads the bucket, and reports `objectsRestored`/`bytesRestored` so the operator can check
 the result against the archive's object count. `Format` is the human-controlled breaking-change fence - bump it in
 the same PR as any migration that is not forward-restore-safe. Restore is **destructive** (replaces all data;
 on a same-version restore the admin is signed out, on a forward-migrated restore they are kept on the page with
@@ -3882,8 +3884,9 @@ the build if the committed output has drifted.
   (files or URLs on a recording — `Attachments` table + `AttachmentsController` — or **directly on a folder** —
   `SectionAttachments` + `SectionAttachmentsController`; files in the S3 store under `{userId}/attachments/…` /
   `{userId}/section-attachments/…` and counted toward the quota; Markdown attachments are editable in place).
-- **M3 — partial:** chat across transcripts (shipped); full embedding-backed RAG over `Segment.Embedding`
-  (`vector(768)`, sized for `nomic-embed-text`) is scaffolded but not yet populated.
+- **M3 — shipped:** chat across transcripts, with embedding-backed **semantic (RAG) search** over
+  `TranscriptChunk.Embedding` (`vector(768)`, sized for `nomic-embed-text`) fused with keyword search, and speaker
+  identification from enrolled voiceprints. (`Segment.Embedding` is a legacy, unused slot.)
 - **M4 — in progress:** packaging/TLS hardening; **macOS desktop app** shipped as an unsigned **beta**
   (mic + ScreenCaptureKit system audio, menu-bar shell, manual update check) - signing/notarization +
   auto-update + Sign in with Apple are the next macOS milestones (see the macOS guide).

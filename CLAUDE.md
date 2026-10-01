@@ -122,8 +122,10 @@ API persists `Segment`s + seeds `Speaker` rows → notifies the browser over **S
 - **Speaker renames are preserved across re-transcribes.** Worker emits diarization labels
   (`SPEAKER_00`...); the callback seeds a `Speaker` row per new label with `DisplayName = label`,
   and the UI's rename updates `DisplayName` only.
-- **pgvector** column is `vector(768)` on `Segment.Embedding` (sized for `nomic-embed-text`).
-  Embeddings/RAG are **live**, not dormant: `EmbeddingWorker` fills the column off the `embedding-jobs`
+- **pgvector** search column is `vector(768)` on **`TranscriptChunk.Embedding`** (sized for `nomic-embed-text`),
+  one row per windowed retrieval chunk. `Segment.Embedding` also exists but is a **legacy, always-null** slot,
+  kept only to avoid a drop migration - do not count it to check whether search is indexed.
+  Embeddings/RAG are **live**, not dormant: `EmbeddingWorker` fills `TranscriptChunks` off the `embedding-jobs`
   stream and chat/search read it (semantic results fused with keyword). Changing the embed model means
   a migration to resize the column **and** a re-embed of existing rows - the dimension is server-pinned
   (`Embedding__Dimension`) and must match the column, so a mismatch fails at query time, not at startup.
@@ -473,6 +475,14 @@ column drop/rename, a pgvector dimension change, a semantic data reshape that an
 **bump `MaintenanceController.CurrentFormat` in the same PR** - that fence hard-rejects older backups instead
 of silently corrupting them.
 
+**After any restore, restart the API** (`docker compose restart api worker web`), even when the response says
+`restartRecommended: false` (issue #783). `pg_restore --clean` recreates the `vector` extension, so the type gets a
+new OID that the running process's Npgsql type cache does not know; every query reading a vector column then
+throws `DataTypeName '-.-'`, and login is one of them (500 for everyone). `restartRecommended` only tracks whether
+a migration ran. Also note that a restore brings the old instance's **LLM endpoints** with it: `LlmModels` and
+`PlatformSettings.DefaultLlmModelId` live in the database and override `SUMMARY_API_BASE` and the other `.env`
+LLM settings, which only govern a fresh database.
+
 ### Worker (Python)
 ```bash
 cd src/Diariz.Worker
@@ -604,8 +614,12 @@ lowercase, so it is `diariz` not `Diariz`) rather than defaulting to the `deploy
 **http://localhost:8081**, proxying `/api`, `/hubs`, and `/mcp` to the `api` container (same-origin, so no CORS
 needed — `apps/web/nginx.conf`). `/mcp` (the MCP server, Streamable HTTP) is proxied with `proxy_buffering off`
 so the SSE stream isn't stalled; any **outer** reverse proxy in front of the web container must forward `/mcp`
-(buffering off) too, or Claude can't connect. The GPU worker needs the NVIDIA Container Toolkit; for CPU comment
-out the `deploy.resources` GPU block and set `WORKER_DEVICE=cpu WORKER_COMPUTE_TYPE=int8`.
+(buffering off) too, or Claude can't connect. nginx resolves `api` **once, at startup** (a static
+`proxy_pass http://api:8080`, no `resolver`), so whenever the `api` container is **recreated** - an `up -d` after an
+env change, not a plain restart - it comes back on a new IP and every `/api` call 502s until `web` is restarted
+too (`BringUpWebApi.cmd` orders this). The GPU worker needs the NVIDIA Container Toolkit on Linux (Docker Desktop
+on Windows provides the GPU path itself); for CPU comment out the `deploy.resources` GPU block and set
+`WORKER_DEVICE=cpu WORKER_COMPUTE_TYPE=int8`.
 
 ## Conventions & gotchas
 
@@ -646,6 +660,9 @@ out the `deploy.resources` GPU block and set `WORKER_DEVICE=cpu WORKER_COMPUTE_T
   `docker compose up -d --force-recreate s3`. The GlitchTip overlay is switched on by `COMPOSE_FILE` in `.env`
   (not `-f` flags), because it also changes the `s3` service and every compose command must see the same files.
   Moving a server is a platform backup/restore (`docs/Server_Migration_Runbook.md`), never a bucket copy.
+- **Error-reporting DSNs are per component:** the API reads `SENTRY_API_DSN` (`Sentry__Dsn`), the workers read
+  `SENTRY_DSN`, the SPA gets `SENTRY_BROWSER_DSN` via `/api/config`. A `.env` copied between servers carries all
+  three, so blank them all or the new instance reports into the old GlitchTip.
 - Config binds via the options pattern (`Configuration/AppOptions.cs`): `Jwt`, `Storage`,
   `JobQueue`, `Worker` sections, settable through `__`-delimited env vars in compose.
 - Worker model load is **lazy + cached** in `pipeline.py` (Whisper/align/diarizer load once and are

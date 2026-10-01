@@ -36,16 +36,60 @@ else needs installing on either server.
 - **Docker Desktop**, WSL2 backend, with **Start Docker Desktop when you sign in** turned on. Docker Desktop
   only runs inside a signed-in session, so after every reboot (Windows Update included) the stack is down until
   someone signs in. Set up automatic sign-in, a power plan that never sleeps, and Windows Update active hours.
+  Every long-running service is `restart: unless-stopped`, so once Docker Desktop is up the stack follows on its
+  own. Check the toggle in the UI rather than trusting the registry: a `Docker Desktop` entry in the `Run` key
+  can coexist with `AutoStart=False` in `%APPDATA%\Docker\settings-store.json`. See
+  [Unattended restart](#unattended-restart) for the whole chain (power loss -> boot -> sign-in -> Docker -> LLM).
 - **Disk image location** (Settings -> Resources -> Advanced) on a drive with at least 50 GB free. Every volume
   lives in that VHDX, which grows on its own but never shrinks.
 - A current **NVIDIA Windows driver**. Docker Desktop provides the GPU path, so no container toolkit is needed.
   Check with `docker run --rm --gpus all nvidia/cuda:12.8.0-base-ubuntu22.04 nvidia-smi`.
 - **Git for Windows**, and the repo cloned.
 - **Firewall:** the outer reverse proxy runs on another host, so set `WEB_BIND=0.0.0.0` (the default) and, with
-  GlitchTip, `GLITCHTIP_BIND=0.0.0.0`. Docker Desktop publishes ports through a Windows process, so Windows
-  Firewall controls LAN access. Add inbound rules for TCP **8081** and **8000** (GlitchTip) that allow **only the
-  outer proxy's address**. Leave the API, Postgres and S3 ports on `127.0.0.1`.
+  GlitchTip, `GLITCHTIP_BIND=0.0.0.0`. Docker Desktop publishes ports through `com.docker.backend.exe`, and it
+  installs its own inbound rule, **Docker Desktop Backend**, that allows **every TCP port from every address**.
+  So 8081 and 8000 are open to the whole LAN from the first `up`, and an *allow* rule for the proxy restricts
+  nothing - Windows admits traffic if any allow rule matches. Use a **block** rule, which outranks allow rules,
+  covering every address except the proxy. In an elevated PowerShell:
+  ```powershell
+  $proxy = '<proxy-ip>'
+  $b = [Net.IPAddress]::Parse($proxy).GetAddressBytes(); [Array]::Reverse($b); $n = [BitConverter]::ToUInt32($b, 0)
+  function ToIp([uint32]$v) { $x = [BitConverter]::GetBytes($v); [Array]::Reverse($x); ([Net.IPAddress]::new($x)).ToString() }
+  $ranges = @("0.0.0.0-$(ToIp ($n - 1))", "$(ToIp ($n + 1))-255.255.255.255", "::-ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff")
+  New-NetFirewallRule -DisplayName 'Diariz: block 8081 and 8000 except the proxy' -Direction Inbound -Protocol TCP -LocalPort 8081,8000 -RemoteAddress $ranges -Action Block -Profile Any
+  ```
+  Leave Docker's own rule alone (Docker Desktop recreates it). Loopback is not filtered, so the host itself still
+  reaches both ports. Check from another LAN machine with `Test-NetConnection <server> -Port 8081` (expect
+  `False`) and from the proxy (expect `True`). The API, Postgres and S3 ports stay on `127.0.0.1`, which no
+  firewall rule is needed for.
 - **Local LLM** on the host: containers reach it at `http://host.docker.internal:<port>/v1`, not `localhost`.
+  It must listen on `0.0.0.0` (LM Studio: Developer -> Server settings -> serve on local network).
+- **GPU budget.** The worker holds about **10.8 GB** after its first job and keeps it for the life of the
+  container (issue #782); the optional `live-worker` is a second ~9 GB copy. With an LLM on the same 24 GB card,
+  leave the live worker off and say so in `.env` with an explicit, commented `COMPOSE_PROFILES=`.
+
+### Unattended restart
+
+The stack only comes back by itself if every link in this chain holds. Test it once by pulling the power.
+
+1. **Power returns -> the machine boots.** UEFI setting, usually *Advanced -> APM Configuration -> Restore AC
+   Power Loss = Power On* (ASUS; other boards call it *AC Back* or *After Power Loss*). A UPS that signals a clean
+   shutdown is better still.
+2. **Boot -> a user is signed in.** Docker Desktop cannot run without one. Use Sysinternals **Autologon**
+   (`autologon.exe`), which stores the password as an LSA secret rather than in plain text in the registry. For a
+   Microsoft account, first turn off *Settings -> Accounts -> Sign-in options -> For improved security, only allow
+   Windows Hello sign-in*, then sign in to Autologon with the account's password, not its PIN. To keep the
+   console locked after the automatic sign-in, add a logon task that runs `rundll32.exe user32.dll,LockWorkStation`;
+   Docker keeps running in a locked session.
+3. **Windows Update restarts** are covered by the same Autologon. Also turn on *Sign-in options -> Use my sign-in
+   info to automatically finish setting up after an update*.
+4. **Sign-in -> Docker Desktop -> containers.** *Start Docker Desktop when you sign in*, plus the services'
+   `restart: unless-stopped`.
+5. **Sign-in -> the LLM.** LM Studio in the `Run` key with `--run-as-service`, its server set to start on launch,
+   and either the model auto-loaded or JIT loading on. Otherwise every summary and chat fails until someone loads
+   it.
+
+Never sleep on AC (`powercfg /change standby-timeout-ac 0`, and the same for `hibernate-timeout-ac`).
 
 ---
 
@@ -60,8 +104,13 @@ Start from `.env.example`. Copy values server to server (SMB share or similar), 
   MCP connector keep working), `HF_TOKEN`, `Seed__*`, Google/Microsoft OAuth, SMTP.
 - **LLM and embeddings:** point `SUMMARY_API_BASE` and friends at the new host's LLM. **`EMBED_MODEL` and
   `EMBED_DIMENSION` must equal the old server's values, and the endpoint must serve the same model.** The backup
-  carries every segment's vector; a different embedding model does not error, it silently makes search and chat
-  return poor matches. If the model must change, plan a re-embed.
+  carries every chunk's vector (`TranscriptChunks.Embedding`); a different embedding model does not error, it
+  silently makes search and chat return poor matches. If the model must change, plan a re-embed.
+  **These `.env` values only govern a fresh database.** Once a backup is restored, the endpoints come from the
+  restored database - the admin's **LLM models** (`LlmModels`, each with its own `ApiBase` and optionally a stored
+  key) and the platform default model - and they override `.env`. They still point at whatever the old server
+  used. Repoint them in the admin UI **after the final restore** (2.4 and 3.4), never before: a restore
+  overwrites them.
 - **Generate new** (never reuse the old server's keys):
   ```powershell
   .\NewS3Keys.cmd root        # S3_ROOT_ACCESS_KEY / S3_ROOT_SECRET_KEY
@@ -74,7 +123,15 @@ Start from `.env.example`. Copy values server to server (SMB share or similar), 
   COMPOSE_PATH_SEPARATOR=,
   COMPOSE_FILE=docker-compose.yml,docker-compose.observability.yml
   ```
-  Leave `SENTRY_DSN`, `SENTRY_BROWSER_DSN` and `GLITCHTIP_URL/ORG/PROJECT/TOKEN` empty until 1.4.
+  (An older `.env` may not have these lines at all, even commented - add them.) Leave **all three DSNs** -
+  `SENTRY_DSN` (the workers), **`SENTRY_API_DSN`** (the API) and `SENTRY_BROWSER_DSN` (the SPA) - and
+  `GLITCHTIP_URL/ORG/PROJECT/TOKEN` empty until 1.4. `SENTRY_API_DSN` is the easy one to miss: a `.env` copied
+  from the old server still carries the old DSN, and the new API would report its errors to the **old** GlitchTip.
+- **Starting from a copy of the old `.env`** instead of `.env.example`: delete `MINIO_ROOT_*`, `MINIO_APP_*` and
+  `GLITCHTIP_MINIO_*`, add the new `S3_*`/`GLITCHTIP_S3_*` keys above, and rename `MINIO_BIND` to `S3_BIND` - or
+  add `S3_BIND=127.0.0.1` if the old file never set it. Check the result with `docker compose config --quiet`
+  (silent on success, so no values are printed). If you edit `.env` from a .NET script, note that it is often a
+  **Hidden** file, and `File.WriteAllText` refuses to recreate a hidden file - open it with `FileMode.Truncate`.
 
 ### 1.2 Copy the keyring before the first start
 
@@ -100,9 +157,17 @@ empty `recordings` bucket itself with the scoped app key - no manual bucket step
 
 - Upload a short recording: it transcribes (worker reads S3 through boto3), plays, and seeks (ranged GETs).
 - Make a clip or screenshot (presigned GET through ffmpeg). Delete a recording and confirm its object is gone.
-- Run a live session (merge jobs make the worker upload multipart).
+- Run a live session (merge jobs make the worker upload multipart). If you script it instead of using the
+  browser, the chunks must be **byte slices of one WebM stream** - only chunk 0 carries the header, and the
+  worker byte-joins the chunks before ffmpeg sees them. Cut at Cluster boundaries (EBML id `1F 43 B6 75`).
+  Independently encoded files each have their own header; the join then decodes only partway, and live chunks
+  fail with `'waveform' must be provided as a (channel, time) torch Tensor`. That is the test's fault, not the
+  server's.
 - **Watch `nvidia-smi` during a transcription with the LLM loaded.** The worker and the live worker each hold
-  their own models next to the LLM; if 24 GB is not enough, fix it now, not after cutover.
+  their own models next to the LLM; if 24 GB is not enough, fix it now, not after cutover. The peak is the
+  worker's **voiceprint stage**, not the LLM, and after the job the worker keeps that memory reserved (#782), so
+  measure the *idle* figure after a job too. `docker compose restart worker` drops it back to the LLM-only
+  baseline. On Windows an overfull card does not fail; it spills into shared system memory and slows down.
 - **Scoped keys** - each must be **denied** outside its own bucket:
   ```powershell
   function s3as($ak, $sk) { docker run --rm --network diariz_default -e AWS_ACCESS_KEY_ID=$ak -e AWS_SECRET_ACCESS_KEY=$sk -e AWS_DEFAULT_REGION=us-east-1 amazon/aws-cli --endpoint-url http://s3:8333 @args }
@@ -113,10 +178,37 @@ empty `recordings` bucket itself with the scoped app key - no manual bucket step
 
 ### 1.4 GlitchTip
 
-Create the organisation and the server and browser projects in GlitchTip, set `SENTRY_DSN`,
-`SENTRY_BROWSER_DSN`, `GLITCHTIP_URL`, `GLITCHTIP_ORG`, `GLITCHTIP_PROJECT` and `GLITCHTIP_TOKEN`, then
-`.\BringUpProd.cmd`. The web build **fails** if the source map upload fails while all four are set, so a green
-build proves GlitchTip writes to SeaweedFS with its scoped key. Cause an API error and confirm it appears.
+Follow `docs/GlitchTip_Deployment.md` passes 2 and 3. In short: create the organisation, a **team** (projects
+need one), and **three** projects - `diariz-worker`, `diariz-api` and `diariz-web` - plus an auth token with only
+`project:releases`. Then set:
+
+| Variable | Value |
+|---|---|
+| `SENTRY_DSN` | the worker project's DSN, host rewritten to `http://<key>@glitchtip:8000/<id>` |
+| `SENTRY_API_DSN` | the API project's DSN, host rewritten the same way |
+| `SENTRY_BROWSER_DSN` | the web project's DSN on the **public** GlitchTip host |
+| `GLITCHTIP_ORG` / `GLITCHTIP_PROJECT` | the **slugs** (from the address bar), not the display names |
+| `GLITCHTIP_TOKEN` | the token |
+| `GLITCHTIP_URL` | an address the **build container** can reach (see below) |
+
+The web build **fails** if the source map upload fails while all four are set, so a green build proves
+GlitchTip writes to SeaweedFS with its scoped key. Only the upload POST checks the org and project slugs: GET
+endpoints answer 200 even for a wrong slug, and a `project:releases` token gets 403 on project reads, which is
+correct. To deploy, run `docker compose build` then `docker compose up -d`. `.\BringUpProd.cmd` does the same
+plus a `git pull` first, which on an unmerged branch silently changes the code under test.
+
+**Before the outer proxy points here** (a rehearsal), GlitchTip is reachable only on `http://<server>:8000`, and
+its login fails as "wrong password" because Django's CSRF check is derived from `GLITCHTIP_DOMAIN`. Temporarily
+set `GLITCHTIP_DOMAIN=http://<server>:8000`, append `,<server>,localhost` to `GLITCHTIP_ALLOWED_HOSTS`, and set
+`GLITCHTIP_URL=http://<server>:8000` - the doc confirms the build container reaches a private address. Note that
+the GlitchTip API answers **400** to a `Host` it does not allow, so `127.0.0.1:8000` fails where `<server>:8000`
+works. Keep a copy of the prod values and restore them at cutover (3.4).
+
+Confirm reporting: break a worker job (upload a few KB of random bytes as `source=Microphone`, which skips the
+format sniff) - the issue lands in `diariz-worker` and the recording fails cleanly in the app; the API's
+transactions appear in `diariz-api`. Without a proxy you can count events in GlitchTip's own database:
+`docker compose exec -T glitchtip-postgres psql -U glitchtip -d glitchtip`, tables `issue_events_issue` and
+`projects_*hourlystatistic`.
 
 > **Changing any S3 key later:** `docker compose up -d --force-recreate s3`. Compose does not notice a change to
 > the identity list on its own, so without it SeaweedFS keeps serving the old keys.
@@ -145,17 +237,44 @@ build proves GlitchTip writes to SeaweedFS with its scoped key. Cause an API err
    ```
    Use `curl.exe -T`, which streams the file - not `--data-binary @file` and not `Invoke-WebRequest`, which both
    buffer it in memory. Expect `{"restored":true,...,"objectsRestored":N,"bytesRestored":B}` with **N equal to
-   the step 1 count**. If `restartRecommended` is true: `docker compose restart api worker` (add
-   `--profile live-worker ... live-worker` if you run the live worker).
-4. **Verify by count:** recordings, users and people in the admin pages match the old server. Pick a few
-   recordings across a range of ages: each plays, seeks, and shows its transcript, summary and speakers.
-   Re-transcribe one. Upload a new one. Ask search and chat about an **old** recording (the embedding-model
-   check). A user's own LLM key still works (the keyring check). Errors reach GlitchTip.
+   the step 1 count**.
+
+   **Then restart, whatever the response says** (issue #783):
+   ```powershell
+   docker compose restart api worker web
+   ```
+   (add `live-worker` if you run it). `pg_restore --clean` recreates the `vector` extension, so the type comes
+   back with a new OID while the running API's Npgsql type cache still holds the old one. Every query that reads a
+   vector column then fails with `Reading as 'System.Object' is not supported for fields having DataTypeName
+   '-.-'` - including **login**, which returns 500 for everyone. `restartRecommended` is only true when the backup
+   needed a migration, so a same-schema restore reports `false` and leaves the instance in that state. `web` is in
+   the list for the reason in [Troubleshooting](#troubleshooting).
+4. **Verify by count:** recordings, users and people in the admin pages match the old server, and the bucket
+   holds exactly the step 1 count (`s3 ls s3://recordings --recursive --summarize` with the app key, as in 1.3).
+   Pick a few recordings across a range of ages: each plays, seeks, and shows its transcript, summary and
+   speakers. Re-transcribe one. Upload a new one. Ask search and chat about an **old** recording (the
+   embedding-model check). A user's own LLM key still works (the keyring check). Errors reach GlitchTip.
+
+   **Mind where the LLM calls go.** After the restore they follow the restored LLM-model settings (1.1), which
+   still point at the old server's LLM hosts - so re-transcribing, uploading, summarising, tagging, chat and even
+   the *query* embedding for search all send prod content there. If the old server must not be contacted, repoint
+   the models in the admin UI before these checks.
+
+   **A sharper embedding-model check** than eyeballing search results: take a few `TranscriptChunks` rows from an
+   old recording, embed `EMBED_DOCUMENT_PREFIX + Text` with the new endpoint, and compare with the stored
+   `Embedding`. The same model gives a cosine similarity of about **0.9999**; a different model is near **0**.
+
+   **These checks change prod data** (a new transcript version, a new recording, regenerated summaries). If the
+   rehearsal data will become the live data (see 3), restore the same zip once more afterwards to undo them.
 5. **Write down** how long the backup, the copy and the restore took. Their sum is the cutover window.
 
 ---
 
 ## 3. Cutover
+
+> **If the old server has been down since the rehearsal backup was taken**, nothing has been written since, so
+> skip steps 2, 3 and 7. Re-run the 2.3 restore with **the same zip** (it undoes the rehearsal's own changes),
+> then carry on from step 4's restart. This is how the 0.273.1 move was done.
 
 1. Announce the window (2.5). Ask users to stop recording and close desktop apps; desktop apps reconnect
    afterwards because the address does not change.
@@ -169,11 +288,24 @@ build proves GlitchTip writes to SeaweedFS with its scoped key. Cause an API err
    arguments.
 3. **Old server:** take the **final backup** and note its time `T` (UTC). Copy it across as in 2.2.
 4. **New server:** run the 2.3 restore again, signing in as a **prod** platform admin (the rehearsal loaded
-   prod's users). It wipes the rehearsal data. `objectsRestored` must match this zip's 2.1 count.
-5. Repeat the 2.4 checks.
+   prod's users). It wipes the rehearsal data. `objectsRestored` must match this zip's 2.1 count. If 1.4 used
+   the temporary LAN values, put the prod `GLITCHTIP_DOMAIN` and `GLITCHTIP_ALLOWED_HOSTS` back, set
+   `GLITCHTIP_URL` to the public GlitchTip URL, and point `SENTRY_BROWSER_DSN` at the public host (same key and
+   project id). Then apply `.env` and restart:
+   ```powershell
+   docker compose up -d
+   docker compose restart api worker web
+   ```
+   From here the GlitchTip UI only accepts logins through the proxy. A web **build** before step 6 would push
+   source maps to the old GlitchTip and fail; set `GLITCHTIP_SOURCEMAPS_OPTIONAL=1` if you must build sooner.
+5. **Repoint the LLM models** in the admin UI if the LLM is moving (1.1), then repeat the 2.4 checks. From inside
+   a container, `docker run --rm --network diariz_default curlimages/curl -sS <ApiBase>/models` proves the new
+   endpoint is reachable.
 6. **Switch traffic:** point the outer reverse proxy (or DNS) for the Diariz origin at the new server's **8081**,
-   and the GlitchTip host at its **8000**. The proxy must forward `/mcp` with buffering off and allow long
-   timeouts on `/api/maintenance/`.
+   and the GlitchTip host at its **8000**. The proxy must forward `/mcp` with buffering off, upgrade WebSockets on
+   `/hubs`, and allow long timeouts on `/api/maintenance/`. Then sign in on the public URL, check a desktop app
+   reconnects and the claude.ai MCP connector still works (its signing keys came over in the keyring), and log in
+   to GlitchTip through its public host.
 7. **Stragglers.** On the **old** server, count anything written after `T`:
    ```powershell
    'select count(*) from "Recordings" where "CreatedAt" > ''<T>'';' | docker compose exec -T postgres psql -U diariz -d diariz
@@ -189,4 +321,18 @@ build proves GlitchTip writes to SeaweedFS with its scoped key. Cause an API err
 - GlitchTip error history does not move (its own Postgres and bucket are not in the Diariz backup); the new
   server starts fresh.
 - Delete every copy of the backup zips and `apikeys.tgz` you no longer need. They contain everyone's
-  recordings and the keys that decrypt users' stored secrets.
+  recordings and the keys that decrypt users' stored secrets. Neither is gitignored, so keep them out of
+  `deploy\` or out of any `git add`.
+- Repoint or remove any LLM model still on the old server's address before you switch its LLM off.
+
+---
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| **502 on every `/api` call** (public URL *and* `localhost:8081`), while `http://127.0.0.1:8080/health` is fine | `up -d` recreated the `api` container, which came back on a new IP; nginx in `web` resolved `api` once at startup and still sends to the old one (`connect() failed ... upstream: "http://<old-ip>:8080/..."` in `docker compose logs web`) | `docker compose restart web` - and restart `web` whenever `api` is recreated. `BringUpWebApi.cmd` already orders this |
+| **Login returns 500** after a restore; the API log shows `DataTypeName '-.-'` from `PeopleDirectory.EnsureForUserAsync` | Stale `vector` OID in Npgsql's type cache (2.3, #783) | `docker compose restart api worker web` |
+| GlitchTip login says **wrong password** | `GLITCHTIP_DOMAIN` does not match the URL you are using (CSRF) | See 1.4 - temporary LAN values before the proxy, public values after |
+| GlitchTip API calls return **400** | The request's `Host` is not in `GLITCHTIP_ALLOWED_HOSTS` | Call it on an allowed host |
+| Tag extraction fails with **Failed to process regex** (400 from LM Studio) | LM Studio rejecting the structured-output grammar for that request; not migration-related | Retried on every API start; try another model for tags |
