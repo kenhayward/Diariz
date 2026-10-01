@@ -13,17 +13,17 @@ using StackExchange.Redis;
 namespace Diariz.Api.IntegrationTests;
 
 /// <summary>
-/// The parts of live capture that the in-memory provider and the fakes cannot see: real blobs in
-/// MinIO, the real Redis wire format the Python worker parses, and real cascade behaviour.
+/// The parts of live capture that the in-memory provider and the fakes cannot see: real blobs in the
+/// S3 store, the real Redis wire format the Python worker parses, and real cascade behaviour.
 /// </summary>
 [Collection(IntegrationCollection.Name)]
 public class LiveChunkFlowIntegrationTests(ContainersFixture fx)
 {
     private async Task<IAudioStorage> StorageAsync()
     {
-        var s3 = new AmazonS3Client(fx.MinioAccessKey, fx.MinioSecretKey, new AmazonS3Config
+        var s3 = new AmazonS3Client(fx.S3AccessKey, fx.S3SecretKey, new AmazonS3Config
         {
-            ServiceURL = fx.MinioEndpoint,
+            ServiceURL = fx.S3Endpoint,
             ForcePathStyle = true,
             AuthenticationRegion = "us-east-1",
         });

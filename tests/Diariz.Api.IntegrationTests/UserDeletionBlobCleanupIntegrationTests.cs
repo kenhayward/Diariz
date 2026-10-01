@@ -17,9 +17,9 @@ using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.IntegrationTests;
 
-/// <summary>Deleting a user must not leak their MinIO blobs, and must not let a SectionAttachment they
+/// <summary>Deleting a user must not leak their S3 blobs, and must not let a SectionAttachment they
 /// uploaded into someone else's folder survive with a dangling UploadedByUserId. Verified against real
-/// Postgres (cascade behaviour) and real MinIO (blob presence/absence) - the in-memory provider enforces
+/// Postgres (cascade behaviour) and real S3 (blob presence/absence) - the in-memory provider enforces
 /// neither, so it cannot prove either half of this.</summary>
 [Collection(IntegrationCollection.Name)]
 public class UserDeletionBlobCleanupIntegrationTests(ContainersFixture fx)
@@ -28,9 +28,9 @@ public class UserDeletionBlobCleanupIntegrationTests(ContainersFixture fx)
     {
         var opts = new StorageOptions
         {
-            Endpoint = fx.MinioEndpoint,
-            AccessKey = fx.MinioAccessKey,
-            SecretKey = fx.MinioSecretKey,
+            Endpoint = fx.S3Endpoint,
+            AccessKey = fx.S3AccessKey,
+            SecretKey = fx.S3SecretKey,
             Bucket = $"recordings-{Guid.NewGuid():N}",
             ForcePathStyle = true
         };

@@ -28,15 +28,6 @@
           "Microsoft.TestPlatform.TestHost": "18.9.0"
         }
       },
-      "Testcontainers.Minio": {
-        "type": "Direct",
-        "requested": "[4.*, )",
-        "resolved": "4.14.0",
-        "contentHash": "kAl5pq02eb8p0JyoH8EjwtQZGrmLe+z5b67Hj+7FCHQesZqVuH8mtjL1ppScccgaailPvulrzUaY7qpV7ZwhMw==",
-        "dependencies": {
-          "Testcontainers": "4.14.0"
-        }
-      },
       "Testcontainers.PostgreSql": {
         "type": "Direct",
         "requested": "[4.*, )",

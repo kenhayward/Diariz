@@ -9,10 +9,10 @@ using SkiaSharp;
 
 namespace Diariz.Api.IntegrationTests;
 
-/// <summary>The vision attachment path against real MinIO and real Postgres.
+/// <summary>The vision attachment path against the real S3 store and real Postgres.
 ///
 /// <para>The unit tests use an in-memory storage fake, so they prove the encoder's logic but not that it
-/// survives a genuine S3 round trip - and byte identity through MinIO is exactly the sort of thing a fake
+/// survives a genuine S3 round trip - and byte identity through the S3 store is exactly the sort of thing a fake
 /// cannot vouch for.</para></summary>
 [Collection(IntegrationCollection.Name)]
 public class VisionImageIntegrationTests(ContainersFixture fx)
@@ -21,9 +21,9 @@ public class VisionImageIntegrationTests(ContainersFixture fx)
     {
         var opts = new StorageOptions
         {
-            Endpoint = fx.MinioEndpoint,
-            AccessKey = fx.MinioAccessKey,
-            SecretKey = fx.MinioSecretKey,
+            Endpoint = fx.S3Endpoint,
+            AccessKey = fx.S3AccessKey,
+            SecretKey = fx.S3SecretKey,
             Bucket = $"vision-{Guid.NewGuid():N}",
             ForcePathStyle = true,
         };

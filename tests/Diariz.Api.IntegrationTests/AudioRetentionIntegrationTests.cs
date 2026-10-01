@@ -11,7 +11,7 @@ using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.IntegrationTests;
 
-/// <summary>End-to-end audio-retention sweep against real Postgres + MinIO: the eligible recording's blob is
+/// <summary>End-to-end audio-retention sweep against real Postgres + S3 (SeaweedFS): the eligible recording's blob is
 /// deleted (row kept, flagged), while a protected recording is left untouched.</summary>
 [Collection(IntegrationCollection.Name)]
 public class AudioRetentionIntegrationTests(ContainersFixture fx)
@@ -20,9 +20,9 @@ public class AudioRetentionIntegrationTests(ContainersFixture fx)
     {
         var opts = new StorageOptions
         {
-            Endpoint = fx.MinioEndpoint,
-            AccessKey = fx.MinioAccessKey,
-            SecretKey = fx.MinioSecretKey,
+            Endpoint = fx.S3Endpoint,
+            AccessKey = fx.S3AccessKey,
+            SecretKey = fx.S3SecretKey,
             Bucket = $"recordings-{Guid.NewGuid():N}",
             ForcePathStyle = true
         };

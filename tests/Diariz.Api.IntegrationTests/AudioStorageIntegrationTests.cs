@@ -11,14 +11,14 @@ namespace Diariz.Api.IntegrationTests;
 [Collection(IntegrationCollection.Name)]
 public class AudioStorageIntegrationTests(ContainersFixture fx)
 {
-    // Mirrors the S3 client wiring in Program.cs (path-style, us-east-1) against the MinIO container.
+    // Mirrors the S3 client wiring in Program.cs (path-style, us-east-1) against the S3 container.
     private AudioStorage CreateStorage(out StorageOptions opts)
     {
         opts = new StorageOptions
         {
-            Endpoint = fx.MinioEndpoint,
-            AccessKey = fx.MinioAccessKey,
-            SecretKey = fx.MinioSecretKey,
+            Endpoint = fx.S3Endpoint,
+            AccessKey = fx.S3AccessKey,
+            SecretKey = fx.S3SecretKey,
             Bucket = $"recordings-{Guid.NewGuid():N}",
             ForcePathStyle = true
         };
