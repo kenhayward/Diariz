@@ -27,7 +27,10 @@ export const RECENT: Release[] = [
       "BringUpProd.cmd refuses to run when GlitchTip is configured but its overlay is not switched on",
       "The MinIO provisioning scripts (ProvisionDiarizMinio.cmd, ProvisionGlitchTipMinio.cmd and their shell versions) are removed - SeaweedFS reads its keys from the compose file",
     ],
-    fixed: ["Fresh installs failed because the MinIO image could not be downloaded (#769)"],
+    fixed: [
+      "Fresh installs failed because the MinIO image could not be downloaded (#769)",
+      "A web test about the nginx configuration failed on Windows checkouts while passing in CI (#781)",
+    ],
   },
   {
     version: "0.273.0",

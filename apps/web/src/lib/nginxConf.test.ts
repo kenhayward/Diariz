@@ -10,14 +10,26 @@ import { describe, expect, it } from "vitest";
 const conf = () => readFileSync(join(__dirname, "..", "..", "nginx.conf"), "utf8");
 
 /** Directives only - comments are prose and routinely mention the very things being ruled out. */
-const directives = () =>
-  conf()
-    .split("\n")
+const directivesOf = (text: string) =>
+  text
+    .split(/\r?\n/) // CRLF on a Windows clone: `.` does not match "\r", so "#.*$" would strip nothing
     .map((line) => line.replace(/#.*$/, ""))
     .join("\n");
+const directives = () => directivesOf(conf());
 
 /** Every `location ... { ... }` block's body. None of these blocks nest braces. */
 const locations = () => [...directives().matchAll(/location\s+[^{]+\{([^}]*)\}/g)].map((m) => m[1]);
+
+describe("the nginx.conf reader", () => {
+  it("strips comments whatever the checkout's line endings", () => {
+    // A Windows clone (core.autocrlf=true) checks nginx.conf out with CRLF. If the reader only handled LF, no
+    // comment was stripped there and the assertions below failed locally while passing in CI (issue #781).
+    const lf = 'listen 80; # the port\nadd_header X "y" always; # why\n';
+    const crlf = lf.replace(/\n/g, "\r\n");
+    expect(directivesOf(crlf)).not.toContain("#");
+    expect(directivesOf(crlf)).toBe(directivesOf(lf));
+  });
+});
 
 describe("nginx forwarded-scheme trust", () => {
   it("never passes a caller's X-Forwarded-Proto through unconditionally", () => {
