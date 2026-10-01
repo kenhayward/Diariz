@@ -282,6 +282,41 @@ public class MaintenanceControllerTests
     }
 
     [Fact]
+    public async Task Restore_SameVersion_ReloadsTheTypeCatalogue()
+    {
+        // Issue #783: a same-schema restore needs no migration, but pg_restore --clean still recreates the vector
+        // type under a new oid - without a reload, every vector read (login included) fails until a restart.
+        var schema = Schema("m3", History);
+        var result = await BuildForRestore(new FakeAudioStorage(), new FakeDatabaseBackup(),
+            BuildArchive("m3", "D", new()), schema).Restore();
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Equal(["reload-types"], schema.Calls);
+    }
+
+    [Fact]
+    public async Task Restore_OlderAncestor_ReloadsTypesAfterMigratingForward()
+    {
+        // A migration can create types of its own, so the reload must see the final schema.
+        var schema = Schema("m3", History);
+        await BuildForRestore(new FakeAudioStorage(), new FakeDatabaseBackup(),
+            BuildArchive("m1", "D", new()), schema).Restore();
+
+        Assert.Equal(["migrate", "reload-types"], schema.Calls);
+    }
+
+    [Fact]
+    public async Task Restore_Rejected_DoesNotTouchTheTypeCatalogue()
+    {
+        var schema = Schema("m1", "m1"); // the archive below is at an unknown migration
+        var result = await BuildForRestore(new FakeAudioStorage(), new FakeDatabaseBackup(),
+            BuildArchive("m9", "D", new()), schema).Restore();
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Empty(schema.Calls);
+    }
+
+    [Fact]
     public async Task Restore_RejectsArchiveMissingTheDump()
     {
         var archive = new MemoryStream();

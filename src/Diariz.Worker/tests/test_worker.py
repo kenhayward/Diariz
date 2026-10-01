@@ -214,6 +214,40 @@ def test_run_loop_dispatches_transcription_job_and_acks(monkeypatch):
     assert r.acked == [(worker.config.STREAM_KEY, "5-0")]
 
 
+def test_run_loop_releases_gpu_memory_after_every_job(monkeypatch):
+    # Issue #782: without this the worker keeps each job's peak reserved for its whole life, starving an
+    # LLM that shares the card. Every stream goes through run_loop, so this covers all four job kinds.
+    events = []
+    monkeypatch.setattr(worker, "handle", lambda job: events.append(("job", job["TranscriptionId"])))
+    monkeypatch.setattr(worker, "handle_voiceprint", lambda job: events.append(("job", job["VoiceSampleId"])))
+    monkeypatch.setattr(worker.gpu_memory, "release", lambda: events.append("release"))
+    r = _FakeRedis([
+        [(worker.config.STREAM_KEY, [("1-0", {"job": json.dumps({"TranscriptionId": "t1", "BlobKey": "b"})})])],
+        [(worker.config.VOICEPRINT_STREAM_KEY, [("2-0", {"job": json.dumps({"VoiceSampleId": "v1"})})])],
+    ])
+
+    worker.run_loop(r, keep_going=_keep_going(2))
+
+    assert events == [("job", "t1"), "release", ("job", "v1"), "release"]
+
+
+def test_run_loop_releases_gpu_memory_even_when_a_handler_raises(monkeypatch):
+    released = []
+
+    def explode(job):
+        raise RuntimeError("CUDA out of memory")
+
+    monkeypatch.setattr(worker, "handle", explode)
+    monkeypatch.setattr(worker.gpu_memory, "release", lambda: released.append(True))
+    r = _FakeRedis([[(worker.config.STREAM_KEY, [("3-0", {"job": json.dumps({"TranscriptionId": "t"})})])]])
+
+    with pytest.raises(RuntimeError):
+        worker.run_loop(r, keep_going=_keep_going(1))
+
+    assert released == [True]  # the failed job's allocations are exactly what most needs handing back
+    assert r.acked == [(worker.config.STREAM_KEY, "3-0")]
+
+
 def test_run_loop_routes_merge_jobs_to_handle_merge(monkeypatch):
     merged = []
     monkeypatch.setattr(worker, "handle_merge", lambda job: merged.append(job))

@@ -64,9 +64,11 @@ else needs installing on either server.
   firewall rule is needed for.
 - **Local LLM** on the host: containers reach it at `http://host.docker.internal:<port>/v1`, not `localhost`.
   It must listen on `0.0.0.0` (LM Studio: Developer -> Server settings -> serve on local network).
-- **GPU budget.** The worker holds about **10.8 GB** after its first job and keeps it for the life of the
-  container (issue #782); the optional `live-worker` is a second ~9 GB copy. With an LLM on the same 24 GB card,
-  leave the live worker off and say so in `.env` with an explicit, commented `COMPOSE_PROFILES=`.
+- **GPU budget.** Since 0.273.2 the worker hands each job's cached GPU memory back when the job ends and keeps
+  only its loaded models between jobs (issue #782). Before that it held its job peak - about **10.8 GB** on a
+  3090 - for the life of the container. Its peak *during* a job is unchanged, and the optional `live-worker` is a
+  second ~9 GB copy of the models. With an LLM on the same 24 GB card, leave the live worker off and say so in
+  `.env` with an explicit, commented `COMPOSE_PROFILES=`.
 
 ### Unattended restart
 
@@ -165,9 +167,10 @@ empty `recordings` bucket itself with the scoped app key - no manual bucket step
   server's.
 - **Watch `nvidia-smi` during a transcription with the LLM loaded.** The worker and the live worker each hold
   their own models next to the LLM; if 24 GB is not enough, fix it now, not after cutover. The peak is the
-  worker's **voiceprint stage**, not the LLM, and after the job the worker keeps that memory reserved (#782), so
-  measure the *idle* figure after a job too. `docker compose restart worker` drops it back to the LLM-only
-  baseline. On Windows an overfull card does not fail; it spills into shared system memory and slows down.
+  worker's **voiceprint stage**, not the LLM. Measure the *idle* figure after a job too: from 0.273.2 it should
+  fall back to the LLM plus the worker's model weights (#782); on an older build it stays at the job's peak until
+  `docker compose restart worker`. On Windows an overfull card does not fail; it spills into shared system memory
+  and slows down.
 - **Scoped keys** - each must be **denied** outside its own bucket:
   ```powershell
   function s3as($ak, $sk) { docker run --rm --network diariz_default -e AWS_ACCESS_KEY_ID=$ak -e AWS_SECRET_ACCESS_KEY=$sk -e AWS_DEFAULT_REGION=us-east-1 amazon/aws-cli --endpoint-url http://s3:8333 @args }
@@ -239,16 +242,16 @@ transactions appear in `diariz-api`. Without a proxy you can count events in Gli
    buffer it in memory. Expect `{"restored":true,...,"objectsRestored":N,"bytesRestored":B}` with **N equal to
    the step 1 count**.
 
-   **Then restart, whatever the response says** (issue #783):
+   `pg_restore --clean` recreates the `vector` extension, so the type comes back with a new OID. **From 0.273.2
+   the restore refreshes the API's type cache itself** (issue #783) and the instance is usable straight away;
+   restart only if the response says `restartRecommended: true` (the backup needed a migration):
    ```powershell
    docker compose restart api worker web
    ```
-   (add `live-worker` if you run it). `pg_restore --clean` recreates the `vector` extension, so the type comes
-   back with a new OID while the running API's Npgsql type cache still holds the old one. Every query that reads a
-   vector column then fails with `Reading as 'System.Object' is not supported for fields having DataTypeName
-   '-.-'` - including **login**, which returns 500 for everyone. `restartRecommended` is only true when the backup
-   needed a migration, so a same-schema restore reports `false` and leaves the instance in that state. `web` is in
-   the list for the reason in [Troubleshooting](#troubleshooting).
+   (add `live-worker` if you run it; `web` is in the list for the reason in [Troubleshooting](#troubleshooting)).
+   **On a build before 0.273.2, always run that restart**, whatever the response says: otherwise every query
+   that reads a vector column fails with `Reading as 'System.Object' is not supported for fields having
+   DataTypeName '-.-'` - including **login**, which returns 500 for everyone.
 4. **Verify by count:** recordings, users and people in the admin pages match the old server, and the bucket
    holds exactly the step 1 count (`s3 ls s3://recordings --recursive --summarize` with the app key, as in 1.3).
    Pick a few recordings across a range of ages: each plays, seeks, and shows its transcript, summary and
@@ -294,8 +297,10 @@ transactions appear in `diariz-api`. Without a proxy you can count events in Gli
    project id). Then apply `.env` and restart:
    ```powershell
    docker compose up -d
-   docker compose restart api worker web
+   docker compose restart web
    ```
+   (`up -d` recreates `api` when its environment changed, and nginx must then re-resolve it. On a build before
+   0.273.2 restart `api worker web` instead, as in 2.3.)
    From here the GlitchTip UI only accepts logins through the proxy. A web **build** before step 6 would push
    source maps to the old GlitchTip and fail; set `GLITCHTIP_SOURCEMAPS_OPTIONAL=1` if you must build sooner.
 5. **Repoint the LLM models** in the admin UI if the LLM is moving (1.1), then repeat the 2.4 checks. From inside
@@ -332,7 +337,7 @@ transactions appear in `diariz-api`. Without a proxy you can count events in Gli
 | Symptom | Cause | Fix |
 |---|---|---|
 | **502 on every `/api` call** (public URL *and* `localhost:8081`), while `http://127.0.0.1:8080/health` is fine | `up -d` recreated the `api` container, which came back on a new IP; nginx in `web` resolved `api` once at startup and still sends to the old one (`connect() failed ... upstream: "http://<old-ip>:8080/..."` in `docker compose logs web`) | `docker compose restart web` - and restart `web` whenever `api` is recreated. `BringUpWebApi.cmd` already orders this |
-| **Login returns 500** after a restore; the API log shows `DataTypeName '-.-'` from `PeopleDirectory.EnsureForUserAsync` | Stale `vector` OID in Npgsql's type cache (2.3, #783) | `docker compose restart api worker web` |
+| **Login returns 500** after a restore; the API log shows `DataTypeName '-.-'` from `PeopleDirectory.EnsureForUserAsync` | Stale `vector` OID in Npgsql's type cache (2.3, #783) - builds before 0.273.2, which do not refresh it themselves | `docker compose restart api worker web` |
 | GlitchTip login says **wrong password** | `GLITCHTIP_DOMAIN` does not match the URL you are using (CSRF) | See 1.4 - temporary LAN values before the proxy, public values after |
 | GlitchTip API calls return **400** | The request's `Host` is not in `GLITCHTIP_ALLOWED_HOSTS` | Call it on an allowed host |
 | Tag extraction fails with **Failed to process regex** (400 from LM Studio) | LM Studio rejecting the structured-output grammar for that request; not migration-related | Retried on every API start; try another model for tags |
