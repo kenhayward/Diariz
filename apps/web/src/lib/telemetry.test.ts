@@ -296,7 +296,22 @@ describe("initTelemetry", () => {
 
     const opts = init.mock.calls[0][0];
     expect(opts.dsn).toBe("https://k@errors.example/2");
-    expect(opts.sendDefaultPii).toBe(false);
+    // SDK 11 replaced sendDefaultPii with dataCollection, and IGNORES the old flag entirely - while every
+    // category it omits defaults to collect (userInfo: true makes the server infer and store the user's IP).
+    // So each category is switched off by name, and the dead flag must not linger looking like a guard.
+    expect(opts).not.toHaveProperty("sendDefaultPii");
+    expect(opts.dataCollection).toEqual({
+      userInfo: false,
+      cookies: false,
+      httpHeaders: false,
+      httpBodies: [],
+      urlQueryParams: false,
+      graphQL: { document: false, variables: false },
+      genAI: { inputs: false, outputs: false },
+      databaseQueryData: false,
+      queues: false,
+      stackFrameVariables: false,
+    });
     // Both hooks must be wired - phase 1 shipped a leak because one of a pair was missed.
     expect(opts.beforeSend).toBe(beforeSend);
     expect(opts.beforeBreadcrumb).toBe(beforeBreadcrumb);

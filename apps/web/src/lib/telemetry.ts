@@ -195,7 +195,7 @@ export function beforeSendTransaction(event: TransactionEventLike): TransactionE
  */
 type TelemetryOptions = Pick<
   BrowserOptions,
-  "dsn" | "environment" | "release" | "sendDefaultPii" | "integrations" | "tracesSampleRate" | "beforeSend" | "beforeBreadcrumb"
+  "dsn" | "environment" | "release" | "dataCollection" | "integrations" | "tracesSampleRate" | "beforeSend" | "beforeBreadcrumb"
 > & {
   beforeSendTransaction: typeof beforeSendTransaction;
 };
@@ -271,8 +271,23 @@ export async function initTelemetry(sdk: SentryLike = realSdk): Promise<boolean>
       dsn,
       environment: cfg.sentryEnvironment || "development",
       release: __APP_VERSION__,
-      // Never attach request bodies, headers or user identifiers automatically.
-      sendDefaultPii: false,
+      // Never attach request bodies, headers, cookies, query strings or user identifiers automatically.
+      // SDK 11 replaced `sendDefaultPii: false` with this, ignores the old flag entirely, and defaults
+      // every category it is NOT told about to collect - `userInfo` alone would have the server infer
+      // and store each user's IP. So every category is named, including ones the browser SDK has no
+      // integration for today, so a future default integration cannot quietly start collecting.
+      dataCollection: {
+        userInfo: false,
+        cookies: false,
+        httpHeaders: false,
+        httpBodies: [],
+        urlQueryParams: false,
+        graphQL: { document: false, variables: false },
+        genAI: { inputs: false, outputs: false },
+        databaseQueryData: false,
+        queues: false,
+        stackFrameVariables: false,
+      },
       // GlitchTip does not support sessions, so browserSessionIntegration is removed. It is a DEFAULT
       // integration, and getIntegrationsToSetup (@sentry/core integration.js) MERGES a supplied ARRAY
       // with the defaults - only the function form gets to drop one. (`autoSessionTracking: false`,
