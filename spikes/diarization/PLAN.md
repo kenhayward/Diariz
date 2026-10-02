@@ -210,6 +210,48 @@ Reading so far:
 - **community-1 against 3.1:** slightly better on AMI and slightly worse on our silver set. Not decisive
   either way; the gold set will settle it.
 
+## Day 2 results
+
+**New metric: word-level speaker error** (`harness/words.py`). It is the share of words shown under the
+wrong speaker, with word timings from the production worker's own WhisperX run on the same audio:
+
+- **seg:** what the transcript shows. A Whisper segment takes the speaker it overlaps most, per
+  `whisperx.assign_word_speakers`, and every word in it inherits that speaker.
+- **word:** each word is assigned on its own.
+
+| candidate | AMI word err seg / word | AMI DER | ours word err seg / word | RTF |
+|---|---|---|---|---|
+| pyannote 3.1 (production) | 8.6 / 6.4 | 17.3 | 2.5* / 6.9 | 0.03 |
+| pyannote community-1 | 8.4 / **6.3** | **16.9** | 3.5* / 7.8 | 0.03 |
+| Nemotron, NeMo default post-proc | 8.4 / 7.6 | 25.9 | 4.1* / 8.1 | 0.003 |
+| Nemotron, **post-proc tuned on AMI dev** | **8.2** / 8.5 | 19.3 | 4.1* / 8.6 | 0.002 |
+
+\* Our silver reference *is* production 3.1's segment labelling (with named labels merged), so the seg
+column on our set mostly measures agreement with 3.1. Only the gold set can settle our audio.
+
+Findings:
+
+1. **On the user-visible metric the diarizer barely matters on AMI.** All four sit at 8.2-8.6% word
+   error as displayed. Nemotron's large confusion lead (1.0-1.4% against 3.9-4.3%) does not survive the
+   step from time to words, and pyannote is better word by word.
+2. **The display rule costs more than the choice of diarizer.** Segment-level display adds about 2
+   points over word-level assignment for pyannote on AMI (8.6 against 6.4). Whisper segments regularly
+   span a change of speaker, and the whole segment goes to one person. Splitting segments where the
+   word-level speaker changes is a cheaper and larger win than any model swap measured so far.
+   **Recommend as its own change**, independent of the diarizer decision.
+3. **Tuning Nemotron's post-processing on AMI dev** (a 324-setting grid, `nemotron/tune_postproc.py`):
+   - On dev, DER falls from 21.6% to 16.5%.
+   - On test, the tuned settings bring DER from 25.9% to 19.3%. That is still behind pyannote's 17%,
+     because Nemotron's speech boundaries stay worse than pyannote's even when tuned.
+   - Tuned settings: onset 0.6, offset 0.7, pad_onset 0.1, pad_offset 0.2, min_duration_off 0.3.
+4. **Nemotron's 1 s streaming mode peaks at 4.0-4.3 GB**, measured cleanly on the two longest AMI
+   meetings (49 and 44 min). The 6.9 GB seen on Day 1 came from files that ran alongside another GPU
+   job.
+5. **The gold set is built** (`harness/build_gold.py`): 10 excerpts of 5 minutes from the hardest
+   recordings, where production produced 10-24 diarized labels against 0-2 named people.
+   - Pre-filled label files alternate between pyannote 3.1 and Nemotron output.
+   - They are waiting on human labelling (about 2 hours).
+
 ## Open questions to answer along the way
 
 - Nemotron's real VRAM use and speed on the 4070, and whether it runs on ROCm at all.

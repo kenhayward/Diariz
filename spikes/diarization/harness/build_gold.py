@@ -84,7 +84,7 @@ def labels():
     manifest = json.loads((out / "manifest.json").read_text())
     for uri, meta in manifest.items():
         hyp = Path("/data/out/gold") / meta["prefill"] / f"{uri}.rttm"
-        turns = merge_turns(read_rttm(hyp.read_text()).get(uri, []), max_gap=0.3)
+        turns = merge_turns(read_rttm(hyp.read_text()).get(uri, []), max_gap=1.0)
         (out / "labels" / f"{uri}.txt").write_text(
             "".join(f"{t.start:.3f}\t{t.end:.3f}\t{t.speaker}\n" for t in turns))
         print(f"{uri}: {len(turns)} pre-filled turns from {meta['prefill']}")

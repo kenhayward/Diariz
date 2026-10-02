@@ -32,7 +32,6 @@ GRID = {
     "min_duration_on": [0.0],
     "min_duration_off": [0.0, 0.15, 0.3],
 }
-FRAME_10MS = 8  # Nemotron emits one frame per 80 ms
 
 
 def rttm(path, uri):
@@ -52,18 +51,22 @@ def main():
     for f in files:
         uri = f.stem
         _, _, s, e = (root / "uem" / f"{uri}.uem").read_text().split()[:4]
-        data.append((uri, torch.from_numpy(np.load(f)).unsqueeze(0), rttm(root / "ref" / f"{uri}.rttm", uri),
-                     Timeline([Segment(float(s), float(e))]), float(e)))
+        probs = np.load(f)
+        # Frame length in 10 ms units, from the file itself: diarize() emits 10 ms frames for this model
+        # (output_subsampling_factor 1), not the 80 ms its streaming settings are expressed in.
+        unit = max(1, round(float(e) / (probs.shape[0] * 0.01)))
+        data.append((uri, torch.from_numpy(probs).unsqueeze(0), rttm(root / "ref" / f"{uri}.rttm", uri),
+                     Timeline([Segment(float(s), float(e))]), float(e), unit))
     print(f"{len(data)} files, {np.prod([len(v) for v in GRID.values()])} settings", flush=True)
 
     results = []
     for values in itertools.product(*GRID.values()):
         params = dict(zip(GRID.keys(), values))
         der = DiarizationErrorRate(collar=0.0)
-        for uri, preds, ref, uem, dur in data:
+        for uri, preds, ref, uem, dur, unit in data:
             stamps = predlist_to_timestamps(
                 batch_preds_list=[preds], audio_rttm_map_dict={uri: {"offset": 0.0, "duration": dur}},
-                cfg_vad_params=OmegaConf.create(dict(params)), unit_10ms_frame_count=FRAME_10MS)[0]
+                cfg_vad_params=OmegaConf.create(dict(params)), unit_10ms_frame_count=unit)[0]
             hyp = Annotation(uri=uri)
             for spk, segs in enumerate(stamps):
                 for k, (a, b) in enumerate(segs):
