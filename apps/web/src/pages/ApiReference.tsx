@@ -41,7 +41,9 @@ export default function ApiReference({ embedded = false }: { embedded?: boolean 
             </button>
           </div>
         ) : (
-          <ApiReferenceReact configuration={{ content: spec }} />
+          // agent: Scalar's AI chat drawer, which talks to Scalar's hosted service. Unused here, and its
+          // AI SDK dependency carries an advisory pinned upstream (#798); disabling it never loads the chunk.
+          <ApiReferenceReact configuration={{ content: spec, agent: { disabled: true } }} />
         )}
       </div>
     </div>
