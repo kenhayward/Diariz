@@ -60,7 +60,7 @@ def write_rttm(path: Path, uri: str, turns):
         f"SPEAKER {uri} 1 {s:.3f} {e - s:.3f} <NA> <NA> {spk} <NA> <NA>\n" for s, e, spk in turns if e > s))
 
 
-def run_all(name: str, load, data: str = "/data", only: list[str] | None = None):
+def run_all(name: str, load, data: str = "/data", only: list[str] | None = None, on_file=None):
     """`load()` builds the model and returns the diarize callable; it is timed separately from the files."""
     idle = gpu_used_mb()
     t0 = time.perf_counter()
@@ -83,6 +83,8 @@ def run_all(name: str, load, data: str = "/data", only: list[str] | None = None)
         if (Path(data) / "out" / eval_set / name / f"{uri}.rttm").exists() or list(
                 (Path(data) / "out" / eval_set).glob(f"{name}-*/{uri}.rttm")):
             continue  # resume: already done
+        if on_file:
+            on_file(uri)
         wav, sr = sf.read(f, dtype="float32")
         if wav.ndim > 1:
             wav = wav.mean(axis=1)

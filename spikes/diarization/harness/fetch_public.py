@@ -1,6 +1,7 @@
 """Fetch the public AMI test set into /data/ami, in the same layout as our own set (audio/ref/uem/manifest).
 
-  python fetch_public.py
+  python fetch_public.py              # test split -> /data/ami
+  python fetch_public.py dev          # dev split  -> /data/ami-dev (for tuning, never for the verdict)
 
 Audio: the 16 AMI test meetings, Mix-Headset (all headsets summed - the closest AMI condition to a
 recorded call), about 9 hours and 1 GB, from the AMI corpus mirror (CC-BY-4.0).
@@ -24,14 +25,15 @@ def get(url: str) -> bytes:
         return r.read()
 
 
-def main(out: Path = Path("/data/ami")):
+def main(split: str = "test"):
+    out = Path("/data/ami" if split == "test" else f"/data/ami-{split}")
     for sub in ("audio", "ref", "uem", "_raw"):
         (out / sub).mkdir(parents=True, exist_ok=True)
-    meetings = get(f"{SETUP}/lists/test.meetings.txt").decode().split()
+    meetings = get(f"{SETUP}/lists/{split}.meetings.txt").decode().split()
     manifest = {}
     for m in meetings:
-        (out / "ref" / f"{m}.rttm").write_bytes(get(f"{SETUP}/only_words/rttms/test/{m}.rttm"))
-        (out / "uem" / f"{m}.uem").write_bytes(get(f"{SETUP}/uems/test/{m}.uem"))
+        (out / "ref" / f"{m}.rttm").write_bytes(get(f"{SETUP}/only_words/rttms/{split}/{m}.rttm"))
+        (out / "uem" / f"{m}.uem").write_bytes(get(f"{SETUP}/uems/{split}/{m}.uem"))
         wav = out / "audio" / f"{m}.wav"
         if not wav.exists():
             raw = out / "_raw" / f"{m}.wav"
@@ -56,4 +58,5 @@ def main(out: Path = Path("/data/ami")):
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    main(sys.argv[1] if len(sys.argv) > 1 else "test")

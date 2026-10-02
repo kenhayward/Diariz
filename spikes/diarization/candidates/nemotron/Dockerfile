@@ -12,6 +12,8 @@ RUN echo "torch==2.8.0" > /tmp/c.txt && echo "torchaudio==2.8.0" >> /tmp/c.txt \
  && pip install Cython packaging \
  && pip install -c /tmp/c.txt "nemo-toolkit[asr] @ git+https://github.com/NVIDIA-NeMo/NeMo.git@1688cc3d6a9ade854f544987810c53f605dc86fc" soundfile nvidia-ml-py
 
+RUN pip install -c /tmp/c.txt "pyannote.metrics==4.0.*"
+
 # NVIDIA's tuned post-processing settings (Apache-2.0, same pinned commit).
 ARG PP=https://raw.githubusercontent.com/NVIDIA-NeMo/NeMo/1688cc3d6a9ade854f544987810c53f605dc86fc/examples/speaker_tasks/diarization/conf/post_processing
 RUN mkdir -p /app/postproc && cd /app/postproc  && python -c "import urllib.request as u; [u.urlretrieve('$PP/'+f, f) for f in ('diar_streaming_sortformer_4spk-v2_dihard3-dev.yaml', 'diar_streaming_sortformer_4spk-v2_callhome-part1.yaml')]"
