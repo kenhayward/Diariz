@@ -14,6 +14,8 @@ RUN curl -sSL $REL/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation
  && curl -sSLO $REL/speaker-recongition-models/3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx \
  && curl -sSLO $REL/speaker-recongition-models/wespeaker_en_voxceleb_resnet34_LM.onnx \
  && curl -sSLO $REL/speaker-recongition-models/nemo_en_titanet_large.onnx
+# Extra embedding models for the identification track (embed.py), in their own layer.
+RUN for f in 3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx 3dspeaker_speech_eres2net_sv_en_voxceleb_16k.onnx       3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx; do curl -sSLO $REL/speaker-recongition-models/$f; done
 
 WORKDIR /app
 COPY common/ common/
