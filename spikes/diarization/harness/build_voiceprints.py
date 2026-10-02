@@ -18,6 +18,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 import psycopg
+import soundfile as sf
 
 from build_evalset import concat_spans, stable_order
 from rttm import Turn, merge_turns
@@ -85,7 +86,13 @@ def main():
                 chosen.append((t.start, t.start + take))
                 used += take
             (out / "clips" / person_ids[p]).mkdir(exist_ok=True)
-            concat_spans(raw, out / "clips" / person_ids[p] / f"{rec_ids[r]}.wav", chosen)
+            clip = out / "clips" / person_ids[p] / f"{rec_ids[r]}.wav"
+            concat_spans(raw, clip, chosen)
+            # Segment times can run past the end of the stored audio, so the span total above can promise
+            # more than the clip holds. Judge the clip by what was actually extracted.
+            if sf.info(clip).duration < args.min_seconds:
+                clip.unlink()
+                continue
             manifest.append({"person": person_ids[p], "rec": rec_ids[r], "seconds": round(used, 1)})
         raw.unlink()
         print(f"{rec_ids[r]}: {len(people)} clips", flush=True)

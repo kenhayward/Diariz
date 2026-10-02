@@ -103,7 +103,10 @@ def evaluate(emb, threshold, confirm, margin):
 
 def main():
     root = Path("/data/vp/emb")
-    models = {f.stem: json.loads(f.read_text()) for f in sorted(root.glob("*.json"))}
+    clips = {f"{c.parent.name}/{c.stem}" for c in (root.parent / "clips").glob("*/*.wav")}
+    # Only clips that still exist: build_voiceprints drops ones too short to identify on.
+    models = {f.stem: {k: v for k, v in json.loads(f.read_text()).items() if k in clips}
+              for f in sorted(root.glob("*.json"))}
     if "ecapa" not in models:
         raise SystemExit("ecapa.json missing - run embed_worker.py first; it anchors the calibrated bands")
     ecapa = evaluate(models["ecapa"], THRESHOLD, CONFIRM, MARGIN)

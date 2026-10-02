@@ -252,6 +252,68 @@ Findings:
    - Pre-filled label files alternate between pyannote 3.1 and Nemotron output.
    - They are waiting on human labelling (about 2 hours).
 
+## Day 3 results - identification (voiceprint embeddings)
+
+**Set** (`harness/build_voiceprints.py`): one clip per (person, recording), pooled up to 120 s, for every
+**manually named** speaker with audio. That gives 85 clips, 63 people and 35 recordings.
+
+- Auto-identified speakers are excluded. They were labelled by ECAPA itself, and on the backup they
+  outnumber manual namings by 596 to 111.
+- 38 probe clips come from the 14 people who appear in 2+ recordings.
+- 47 open-set clips come from people who appear in only one recording.
+
+**Method** (`harness/score_vp.py`): this replays production's identification.
+
+- A person's voiceprint is the L2-normalised mean of their samples, compared by cosine distance.
+- Each probe is held out by recording, so it never matches its own clip.
+- The decision follows `IdentificationRules.Decide` with the live PlatformSettings: accept at 0.30 or
+  below with a 0.05 margin, suggest at 0.40 or below.
+- Other models get a second, *calibrated* set of bands: thresholds scaled so their false-accept rate
+  matches ECAPA's.
+
+| model | dim | top-1 % | EER % | accept right / WRONG (prod bands) | open-set false accepts |
+|---|---|---|---|---|---|
+| **ECAPA (production)** | 192 | 68.4 | **7.9** | 12 / 1 | 1/47 |
+| TitaNet-Large | 192 | 71.1 | 8.8 | 13 / 1 (calibrated 15 / 1) | 0/47 (calibrated 1/47) |
+| 3D-Speaker ERes2Net (en, VoxCeleb) | 192 | **81.6** | 13.1 | 20 / 2 (calibrated 13 / 0) | 1/47 |
+| 3D-Speaker CAM++ (zh+en) | 192 | 68.4 | 13.1 | 15 / 1 | 2/47 |
+| 3D-Speaker ERes2NetV2 (zh only) | 192 | 52.6 | 18.4 | 17 / 3 | 3/47 |
+| 3D-Speaker CAM++ (en, VoxCeleb) | 512 | 42.1 | 20.5 | 12 / 0 | 1/47 |
+| Resemblyzer | 256 | 47.4 | 18.4 | 7 / 3 | 6/47 |
+| Vosk spk-0.4 | 128 | 44.7 | 21.0 | 7 / 4 | 5/47 |
+| WeSpeaker ResNet34-LM | 256 | 23.7 | 29.0 | 1 / 2 | 4/47 |
+
+Findings (38 probes: one probe is 2.6 points of top-1, so differences of a few points are noise):
+
+1. **Nothing clearly beats ECAPA, so keep it.**
+   - **EER:** ECAPA has the best equal error rate, the measure of how cleanly a model separates same-voice
+     from different-voice pairs. TitaNet is level with it.
+   - **ERes2Net:** it ranks the right person first most often (82%), but its separation is worse (EER
+     13.1%). At bands with ECAPA's false-accept rate, it accepts about the same number of right matches
+     (13 against 12).
+   - **Cost of switching:** none of this justifies re-embedding every voiceprint and recalibrating the
+     bands.
+2. **Resemblyzer and Vosk are confirmed weak**, at roughly 45% top-1 and 18-21% EER. At production bands
+   they also falsely accept 5-6 of the 47 people who are not enrolled. The research expected this.
+   - WeSpeaker ResNet34-LM came out worst, which is suspiciously far below its published EER. It may be a
+     preprocessing mismatch in the sherpa export. Not pursued, since nothing rides on it.
+3. **The production bands are conservative for matches across recordings.**
+   - ECAPA's median genuine distance is 0.42, above the 0.30 accept threshold.
+   - So only 12 of 38 true repeat speakers are auto-accepted, 6 more are suggested, and half are ignored.
+   - False accepts stay rare: 1 wrong accept on the closed set, and 1 of 47 on the open set.
+   - This is a tuning question for the bands, not a model problem. Worth revisiting with a bigger
+     manually confirmed set (more confirmations in Review Voice Matches would grow it).
+4. **ERes2NetV2 is only published trained on Chinese**, and it does not transfer (53% top-1). CAM++'s
+   English VoxCeleb export is poor here, but the bilingual "advanced" export matches ECAPA's top-1.
+
+## Silver set caveat (found on Day 3)
+
+78.6% of the silver set's speech is attributed through **automatic** ECAPA identification, not manual
+naming. Its "labels named as the same person" merges therefore mostly trust ECAPA's matches.
+
+That makes silver a measure of agreement with production on two counts: pyannote 3.1's segment labels and
+ECAPA's merges. The **gold set is the only trustworthy reference for our own audio.**
+
 ## Open questions to answer along the way
 
 - Nemotron's real VRAM use and speed on the 4070, and whether it runs on ROCm at all.
