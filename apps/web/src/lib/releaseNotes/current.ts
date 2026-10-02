@@ -9,6 +9,20 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.273.4",
+    date: "2026-10-02",
+    pr: 799,
+    headline: "Security fixes for libraries held back upstream",
+    summary:
+      "Clears the remaining open security alerts. In each case another library had locked in an older, vulnerable version of something it uses, so the routine updates could not reach it. Diariz now forces the fixed versions directly.\n\nThe API reference page no longer offers Scalar's built-in AI chat assistant. Diariz never used it, it talks to Scalar's own hosted service, and it was where one of these libraries ran in your browser. The reference itself works exactly as before.\n\nThe other affected libraries are only used to build and test Diariz and its n8n node, and never reached users.",
+    changed: [
+      "The API reference page no longer shows Scalar's AI chat assistant",
+    ],
+    fixed: [
+      "Vulnerable versions of undici, @ai-sdk/provider-utils, axios and brace-expansion were locked in by other libraries (#798)",
+    ],
+  },
+  {
     version: "0.273.3",
     date: "2026-10-01",
     pr: 793,
