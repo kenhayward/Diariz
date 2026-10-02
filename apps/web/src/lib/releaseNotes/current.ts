@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.273.6",
+    date: "2026-10-02",
+    pr: 802,
+    headline: "A clean web test run again",
+    summary:
+      "Behind-the-scenes only. One web test printed two error messages on every run even though it passed, because its stand-in for the server returned nothing where the real server returns the new recording. It now returns a recording like the real one, so a passing run is silent again and a genuine error stands out.",
+    fixed: [
+      "A recorder test printed 'Attaching notes failed unexpectedly' errors on every passing run (#801)",
+    ],
+  },
+  {
     version: "0.273.5",
     date: "2026-10-02",
     pr: 800,
