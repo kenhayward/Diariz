@@ -232,6 +232,10 @@ beforeEach(() => {
     on: () => {},
   });
   (getStream as Mock).mockResolvedValue(fakeSession);
+  // The real upload always returns the created recording. Left as a bare vi.fn() it resolved to
+  // undefined, so stopping on the fallback path read `created.id` off nothing and the attach-on-stop
+  // guards printed TypeErrors into every run (#801).
+  (api.upload as Mock).mockResolvedValue({ id: "rec-1" });
   (api.putChunk as Mock).mockResolvedValue(undefined);
   (api.finalizeLive as Mock).mockResolvedValue(undefined);
   (api.discardLive as Mock).mockResolvedValue(undefined);
