@@ -169,6 +169,47 @@ Reading so far:
 - **The gold set must therefore come from the hard end.** Recordings with many unnamed labels are where
   the over-splitting lives, and they cannot have a silver reference at all.
 
+## Day 1 results (RTX 4070 Laptop 8 GB)
+
+Confusion % / DER %; ours = silver set, collar 0.25 s; AMI = test set, Mix-Headset, collar 0 s.
+
+| candidate | ours conf | ours DER | AMI conf | AMI DER | RTF | peak VRAM |
+|---|---|---|---|---|---|---|
+| pyannote 3.1 (regular) - **production** | 5.3 | 23.6 | 4.3 | 17.3 | 0.027-0.031 | 2.6 GB |
+| pyannote community-1 (regular) | 6.2 | 24.5 | 3.9 | **16.9** | 0.029-0.032 | 2.6 GB |
+| Nemotron offline, NeMo default post-proc | 5.7 | 28.4 | **1.0** | 25.9 | **0.003** | 3.2 GB |
+| Nemotron offline, CALLHOME post-proc | 6.1 | 24.8 | 1.4 | 20.3 | 0.005 | 3.1 GB |
+| Nemotron 1 s streaming ("low") | 5.7 | 28.5 | 1.0 | 26.1 | 0.068 | 3.3-6.9 GB (re-measure) |
+| sherpa-onnx + TitaNet, threshold 1.2 (CPU) | 8.3 | 25.5 | 11.5 | 24.5 | 0.10 CPU | 0 |
+
+**Harness check:** pyannote's published AMI-IHM DER is 18.8 for 3.1 and 17.0 for community-1. We
+measure 17.3 and 16.9. Our figure is a per-file mean, theirs is time-weighted, so the small gap is
+expected.
+
+Reading so far:
+
+- **Nemotron attributes speech far better than anything else on AMI.** Its confusion is 1.0-1.4%,
+  against 2.5-4.3% for pyannote. On our own silver set it ties pyannote, though the silver reference
+  favours 3.1 there.
+- **Nemotron misses more speech.** That is all of its DER deficit:
+  - Its missed speech on AMI is 23.6% with NeMo's untuned default post-processing, and 12.8% with
+    NVIDIA's CALLHOME settings, against 9.3% for pyannote.
+  - Post-processing is a threshold choice, so the gap can be tuned. Tuning should use AMI dev, not the
+    test set.
+- **DER mixes in an error users rarely see.** Missed speech at turn edges mostly does not reach the
+  user, because WhisperX assigns each word to the speaker it overlaps most. Confusion does reach them.
+  Day 2 adds a **word-level speaker error** metric (each Whisper word's speaker against the
+  reference's), which is the metric this decision should rest on.
+- **Nemotron is about 10x faster than pyannote**, at 0.003-0.005 RTF. Its 1 s streaming mode keeps
+  offline accuracy at 0.068 RTF, which is directly relevant to live transcription.
+- **Nemotron's dependency cost.** It needs NeMo from `main`, because 3.0.0 predates the rope attention
+  the model uses. Its streaming-mode VRAM peak needs re-measuring, since 6.9 GB on AMI is an outlier.
+- **sherpa-onnx is out for diarization quality.** Its confusion is 8-12%. The CAM++ and ResNet34
+  embeddings collapse speakers at any threshold. TitaNet works, but only in a narrow threshold band
+  (1.2 gives 6 speakers where 2 are present, 1.3 merges everyone into 2), which is too brittle to ship.
+- **community-1 against 3.1:** slightly better on AMI and slightly worse on our silver set. Not decisive
+  either way; the gold set will settle it.
+
 ## Open questions to answer along the way
 
 - Nemotron's real VRAM use and speed on the 4070, and whether it runs on ROCm at all.
