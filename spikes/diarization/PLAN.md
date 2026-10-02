@@ -146,6 +146,29 @@ change.
 Change the embedding model only if it beats ECAPA clearly on our identification set. A tie is not worth
 re-embedding every voiceprint and recalibrating the identification bands.
 
+## Day 0 results (silver set, RTX 4070 Laptop 8 GB, collar 0.25 s)
+
+| candidate | DER % | confusion % | spk count err | hyp/ref spk | RTF | peak VRAM |
+|---|---|---|---|---|---|---|
+| D0 3.1 exclusive | 22.0 | 5.8 | 0.6 | 1.00 | 0.027 | 2.4 GB |
+| D0 3.1 regular | 23.6 | 5.3 | 0.6 | 1.03 | 0.027 | 2.4 GB |
+| D1 community-1 exclusive | 22.9 | 6.7 | 1.1 | 1.08 | 0.029 | 2.4 GB |
+| D1 community-1 regular | 24.5 | 6.2 | 1.0 | 1.11 | 0.029 | 2.4 GB |
+
+Missed speech is 12.6% for every candidate. That is the silver reference's Whisper-segment granularity,
+as expected, not a diarizer difference.
+
+Reading so far:
+
+- **community-1 is not a free win on our audio.** It is slightly worse than 3.1 on confusion and speaker
+  count. This runs against its published benchmarks, but the silver set favours 3.1 (see the bias note).
+- **Selection bias.** On these 18 recordings, 3.1 does *not* over-split (1.00 hyp/ref), although
+  production shows 6.9 labels against 2.9 named people overall. The eligibility rule (90% of speech
+  named) selects the recordings that diarized cleanly enough for someone to name everyone, which is
+  exactly the easy end.
+- **The gold set must therefore come from the hard end.** Recordings with many unnamed labels are where
+  the over-splitting lives, and they cannot have a silver reference at all.
+
 ## Open questions to answer along the way
 
 - Nemotron's real VRAM use and speed on the 4070, and whether it runs on ROCm at all.
