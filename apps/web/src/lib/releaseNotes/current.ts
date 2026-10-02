@@ -9,6 +9,18 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.273.5",
+    date: "2026-10-02",
+    pr: 800,
+    headline: "Error reporting keeps your details private on its new version",
+    summary:
+      "The web app's error reporting moves to the current major version of its library. Nothing changes in what it sends: errors still go only to the error tracker an administrator configures, without your IP address, cookies, request contents or other personal details.\n\nThe new version reversed its defaults and would collect all of those unless told not to, and quietly ignores the setting Diariz used to turn them off. Diariz now switches off each kind of personal data by name, so the upgrade keeps reports exactly as private as before.\n\nBehind the scenes, the web test tooling also moves to its next major version.",
+    changed: [
+      "Error reporting library updated to @sentry/react 11, with every kind of personal data collection switched off explicitly",
+      "Web test tooling updated to vitest 5, and jsdom is no longer held back (#791)",
+    ],
+  },
+  {
     version: "0.273.4",
     date: "2026-10-02",
     pr: 799,

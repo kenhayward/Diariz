@@ -20,11 +20,6 @@ updates:
       # (e.g. 26) types APIs that runtime does not have, so it only moves alongside the CI Node version.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
-      # jsdom 30.1 renamed its Blob internals (`_buffer` -> `_bytes`), and vitest 4's createObjectURL
-      # shim still reads `_buffer`, so every test making an object URL from a Blob throws. Vitest 5
-      # reads both. Held at 30.0.x until the vitest 5 upgrade - issue #791 - then drop this.
-      - dependency-name: "jsdom"
-        versions: [">=30.1.0"]
 
   # Electron desktop shell.
   - package-ecosystem: "npm"
