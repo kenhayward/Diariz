@@ -1,11 +1,12 @@
 """Score every candidate's RTTM output against the reference and write a summary.
 
-  python score.py                     # all candidates under /data/out
-  python score.py --collar 0.25
+  python score.py                     # all candidates on our silver set (/data/eval)
+  python score.py --set ami           # the public AMI test set
+  python score.py --collar 0
 
-Reads   /data/eval/{ref,uem}/<uri>.rttm|uem, /data/eval/manifest.json
-        /data/out/<candidate>/<uri>.rttm, /data/out/<candidate>/runs.jsonl (timing + VRAM per uri)
-Writes  /data/out/report.md and /data/out/scores.csv - counts and rates only, safe to paste.
+Reads   /data/<set>/{ref,uem}/<uri>.rttm|uem, /data/<set>/manifest.json
+        /data/out/<set>/<candidate>/<uri>.rttm and runs.jsonl (timing + VRAM per uri)
+Writes  /data/out/<set>/report.md and scores.csv - counts and rates only, safe to paste.
 
 On the silver reference, read **confusion** first. Its turns come from Whisper segments, which span the
 short pauses inside a sentence, so missed speech and false alarm partly measure segment granularity
@@ -36,12 +37,11 @@ def annotation(turns, uri):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--eval", default="/data/eval")
-    ap.add_argument("--out", default="/data/out")
+    ap.add_argument("--set", default="eval")
     ap.add_argument("--collar", type=float, default=0.25)
     args = ap.parse_args()
 
-    ev, out = Path(args.eval), Path(args.out)
+    ev, out = Path("/data") / args.set, Path("/data/out") / args.set
     manifest = json.loads((ev / "manifest.json").read_text())
     rows = []
     for cand in sorted(p for p in out.iterdir() if p.is_dir()):
@@ -83,7 +83,7 @@ def main():
     def pct(x):
         return f"{100 * x:.1f}"
 
-    lines = [f"# Diarization spike - scores (collar {args.collar}s)", "",
+    lines = [f"# Diarization spike - {args.set} set, collar {args.collar}s", "",
              "| candidate | files | DER % | confusion % | missed % | FA % | JER % | spk count err (mean abs) "
              "| over-split (hyp/ref spk) | RTF | peak VRAM MB |",
              "|---|---|---|---|---|---|---|---|---|---|---|"]

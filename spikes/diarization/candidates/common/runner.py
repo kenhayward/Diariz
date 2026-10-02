@@ -1,8 +1,11 @@
 """The contract every candidate image implements: read /data/eval/audio/*.wav, write RTTM + run stats.
 
+`SET` (env, default `eval`) picks the evaluation set: audio comes from /data/<SET>/audio and output goes to
+/data/out/<SET>/<name>. `eval` is our own silver set; `ami` is the public AMI test set (fetch_public.py).
+
 A candidate supplies `diarize(waveform: np.ndarray[float32], sample_rate: int) -> {variant: [(start, end,
 speaker), ...]}` - more than one variant when one model run yields several outputs (pyannote's regular and
-exclusive diarizations). Each variant lands in /data/out/<name>[-<variant>]/<uri>.rttm, with a runs.jsonl
+exclusive diarizations). Each variant lands in /data/out/<SET>/<name>[-<variant>]/<uri>.rttm, with a runs.jsonl
 line per file: audio seconds, wall seconds, and peak GPU memory.
 
 Peak VRAM is the device's used memory sampled every 50 ms, minus what was in use before the model loaded,
@@ -65,7 +68,8 @@ def run_all(name: str, load, data: str = "/data", only: list[str] | None = None)
         diarize = load()
     print(f"[{name}] model loaded in {time.perf_counter() - t0:.1f}s", flush=True)
 
-    audio_dir = Path(data) / "eval" / "audio"
+    eval_set = os.getenv("SET", "eval")
+    audio_dir = Path(data) / eval_set / "audio"
     files = sorted(audio_dir.glob("*.wav"))
     if only:
         files = [f for f in files if f.stem in only]
@@ -76,6 +80,9 @@ def run_all(name: str, load, data: str = "/data", only: list[str] | None = None)
 
     for f in files:
         uri = f.stem
+        if (Path(data) / "out" / eval_set / name / f"{uri}.rttm").exists() or list(
+                (Path(data) / "out" / eval_set).glob(f"{name}-*/{uri}.rttm")):
+            continue  # resume: already done
         wav, sr = sf.read(f, dtype="float32")
         if wav.ndim > 1:
             wav = wav.mean(axis=1)
@@ -84,7 +91,7 @@ def run_all(name: str, load, data: str = "/data", only: list[str] | None = None)
             outputs = diarize(np.ascontiguousarray(wav), sr)
             wall = time.perf_counter() - t
         for variant, turns in outputs.items():
-            out = Path(data) / "out" / (f"{name}-{variant}" if variant else name)
+            out = Path(data) / "out" / eval_set / (f"{name}-{variant}" if variant else name)
             out.mkdir(parents=True, exist_ok=True)
             write_rttm(out / f"{uri}.rttm", uri, turns)
             with open(out / "runs.jsonl", "a") as fh:
