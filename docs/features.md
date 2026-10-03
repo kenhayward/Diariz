@@ -64,7 +64,15 @@ you are usually looking at the meeting app rather than Diariz. A recording that 
 Stop you press yourself stays silent.
 - **Transcribe + diarize** server-side with WhisperX (large-v3, word-level timestamps) and pyannote 3.1,
 producing speaker-labelled, timestamped segments you can rename, edit, and play back (per segment, per speaker,
-or the whole recording). A **Speakers** panel lists each speaker with their segment count and **total talk time**,
+or the whole recording). **A segment is split wherever the speaker changes between words**, so someone who
+speaks partway through another person's sentence - a quick "yes", an answer that starts early - appears under
+their own name rather than the majority speaker's. The cut lands between two words, using the same conventions
+as the manual split below, and a single stray word inside one person's turn is not split off; short replies at
+a change of turn are kept, since they are mostly real. On the public AMI meeting benchmark this cut the words
+shown under the wrong speaker from 8.6% to 6.4%, for about 13% more rows, and the audio pooled into each
+speaker's voiceprint is cleaner as a result. It never introduces a speaker that diarization did not already
+give a segment of their own. Applies to new transcriptions (re-transcribe for older ones); the in-meeting
+live transcript keeps whole segments for now, while the final transcript after Stop is split. A **Speakers** panel lists each speaker with their segment count and **total talk time**,
 plays or steps through just their segments, and reassigns them. Edits are kept **separately from the model's
 original words** — a ✎ marks revised rows and a **Show original / Show revised** toggle flips the whole
 transcript, so you can always get back to what the model said. Re-transcribe with a chosen model at any time

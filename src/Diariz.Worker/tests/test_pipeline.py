@@ -556,3 +556,140 @@ def test_measure_duration_ms_decodes_the_file_it_was_given(monkeypatch):
 
     assert pipeline.measure_duration_ms("prefix.webm") == 1_000
     assert seen == ["prefix.webm"]
+
+
+# ---- word-level speaker split (issue #803) ----
+#
+# assign_word_speakers sets a speaker on every timed word as well as on the segment; the transcript used
+# to show only the segment's. These pin where segment_split runs in each path, not the split rules
+# themselves (tests/test_segment_split.py).
+
+def _word(text, start, end, speaker):
+    return {"word": text, "start": start, "end": end, "speaker": speaker}
+
+
+# A's sentence, then B answers inside the same Whisper segment.
+_TWO_VOICES = {"text": "Shall we start? Yes please.", "start": 0.0, "end": 4.0, "speaker": "SPEAKER_00",
+               "words": [_word("Shall", 0.0, 0.3, "SPEAKER_00"), _word("we", 0.4, 0.6, "SPEAKER_00"),
+                         _word("start?", 0.7, 1.2, "SPEAKER_00"), _word("Yes", 2.0, 2.4, "SPEAKER_01"),
+                         _word("please.", 2.5, 3.8, "SPEAKER_01")]}
+# B also wins a segment of its own, so the label-set guard lets the split use it.
+_B_ALONE = {"text": "Thanks.", "start": 5.0, "end": 6.0, "speaker": "SPEAKER_01",
+            "words": [_word("Thanks.", 5.0, 5.9, "SPEAKER_01")]}
+
+
+def _stub_models(monkeypatch, segments, embedded):
+    monkeypatch.setattr(pipeline.whisperx, "load_audio", lambda path: np.zeros(16000 * 8))
+    monkeypatch.setattr(pipeline.config, "MAX_AUDIO_SECONDS", 0)
+    monkeypatch.setattr(pipeline, "_asr", lambda audio, language=None: {"language": "en", "segments": []})
+    monkeypatch.setattr(pipeline, "_get_align", lambda language: ("model", "meta"))
+    monkeypatch.setattr(pipeline.whisperx, "align", lambda *a, **k: {"segments": []})
+    monkeypatch.setattr(pipeline, "_diarize", lambda *a, **k: "diarization")
+    monkeypatch.setattr(pipeline.whisperx, "assign_word_speakers",
+                        lambda d, r: {"segments": [dict(s) for s in segments]})
+    monkeypatch.setattr(pipeline, "_extract_speakers",
+                        lambda audio, segs: embedded.extend(segs) or [])
+
+
+def test_transcribe_splits_segments_where_the_word_speaker_changes(monkeypatch):
+    monkeypatch.setattr(pipeline.config, "SPLIT_SEGMENTS_BY_WORD_SPEAKER", True)
+    embedded = []
+    _stub_models(monkeypatch, [_TWO_VOICES, _B_ALONE], embedded)
+
+    out = pipeline.transcribe("/tmp/audio.wav")
+
+    assert [(s["Speaker"], s["StartMs"], s["EndMs"], s["Text"]) for s in out["segments"]] == [
+        ("SPEAKER_00", 0, 1200, "Shall we start?"),
+        ("SPEAKER_01", 2000, 4000, "Yes please."),
+        ("SPEAKER_01", 5000, 6000, "Thanks."),
+    ]
+    assert [w["W"] for w in out["segments"][1]["Words"]] == ["Yes", "please."]
+
+
+def test_transcribe_pools_voiceprints_from_the_split_segments(monkeypatch):
+    """The point of splitting in the worker rather than the API: B's words no longer sit inside a span
+    pooled into A's voiceprint."""
+    monkeypatch.setattr(pipeline.config, "SPLIT_SEGMENTS_BY_WORD_SPEAKER", True)
+    embedded = []
+    _stub_models(monkeypatch, [_TWO_VOICES, _B_ALONE], embedded)
+
+    out = pipeline.transcribe("/tmp/audio.wav")
+
+    assert embedded == out["segments"]
+
+
+def test_transcribe_keeps_whole_segments_when_the_split_is_switched_off(monkeypatch):
+    monkeypatch.setattr(pipeline.config, "SPLIT_SEGMENTS_BY_WORD_SPEAKER", False)
+    embedded = []
+    _stub_models(monkeypatch, [_TWO_VOICES, _B_ALONE], embedded)
+
+    out = pipeline.transcribe("/tmp/audio.wav")
+
+    assert [(s["Speaker"], s["Text"]) for s in out["segments"]] == [
+        ("SPEAKER_00", "Shall we start? Yes please."), ("SPEAKER_01", "Thanks.")]
+
+
+def test_transcribe_window_does_not_split_while_the_live_switch_is_off(monkeypatch):
+    monkeypatch.setattr(pipeline.config, "SPLIT_SEGMENTS_BY_WORD_SPEAKER", True)
+    monkeypatch.setattr(pipeline.config, "SPLIT_LIVE_SEGMENTS_BY_WORD_SPEAKER", False)
+    embedded = []
+    _stub_models(monkeypatch, [_TWO_VOICES, _B_ALONE], embedded)
+
+    out = pipeline.transcribe_window("/tmp/chunk.webm", offset_ms=0, overlap_ms=0)
+
+    assert [s["Text"] for s in out["segments"]] == ["Shall we start? Yes please.", "Thanks."]
+
+
+def test_transcribe_window_splits_when_the_live_switch_is_on(monkeypatch):
+    monkeypatch.setattr(pipeline.config, "SPLIT_LIVE_SEGMENTS_BY_WORD_SPEAKER", True)
+    embedded = []
+    _stub_models(monkeypatch, [_TWO_VOICES, _B_ALONE], embedded)
+
+    out = pipeline.transcribe_window("/tmp/chunk.webm", offset_ms=60_000, overlap_ms=0)
+
+    assert [(s["Speaker"], s["StartMs"], s["Text"]) for s in out["segments"]] == [
+        ("SPEAKER_00", 60_000, "Shall we start?"),
+        ("SPEAKER_01", 62_000, "Yes please."),
+        ("SPEAKER_01", 65_000, "Thanks."),
+    ]
+
+
+def test_transcribe_window_trims_whole_segments_before_splitting_them(monkeypatch):
+    """The overlap trim keeps a segment that straddles the boundary, because the previous chunk ended
+    before it did and nobody else reports its words. Trimming after the split would drop the piece that
+    lies inside the overlap - words the previous chunk never reported - so the keep-or-drop decision is
+    made on the whole segment, exactly as before, and only the survivors are split."""
+    monkeypatch.setattr(pipeline.config, "SPLIT_LIVE_SEGMENTS_BY_WORD_SPEAKER", True)
+    embedded = []
+    in_overlap = {"text": "Earlier.", "start": 0.0, "end": 0.0 + 0.9, "speaker": "SPEAKER_01",
+                  "words": [_word("Earlier.", 0.0, 0.8, "SPEAKER_01")]}
+    straddling = {**_TWO_VOICES, "start": 1.0, "end": 5.0,
+                  "words": [_word("Shall", 1.0, 1.3, "SPEAKER_00"), _word("we", 1.4, 1.6, "SPEAKER_00"),
+                            _word("start?", 1.7, 2.2, "SPEAKER_00"), _word("Yes", 3.0, 3.4, "SPEAKER_01"),
+                            _word("please.", 3.5, 4.8, "SPEAKER_01")]}
+    _stub_models(monkeypatch, [in_overlap, straddling], embedded)
+
+    # 2.5 s of the previous chunk prepended: "Shall we start?" lies wholly inside it.
+    out = pipeline.transcribe_window("/tmp/chunk.webm", offset_ms=30_000, overlap_ms=2_500)
+
+    assert [(s["Speaker"], s["Text"]) for s in out["segments"]] == [
+        ("SPEAKER_00", "Shall we start?"), ("SPEAKER_01", "Yes please.")]
+    # Voiceprints still come from the whole decoded window, as before, now split.
+    assert [s["Text"] for s in embedded] == ["Earlier.", "Shall we start?", "Yes please."]
+
+
+def test_a_failing_split_falls_back_to_whole_segments_rather_than_failing_the_job(monkeypatch):
+    """The split is a display refinement. A shape of whisperx output nobody anticipated must cost the
+    refinement, never the transcript."""
+    monkeypatch.setattr(pipeline.config, "SPLIT_SEGMENTS_BY_WORD_SPEAKER", True)
+    embedded = []
+    _stub_models(monkeypatch, [_TWO_VOICES, _B_ALONE], embedded)
+
+    def boom(*a, **k):
+        raise KeyError("start")
+
+    monkeypatch.setattr(pipeline.segment_split, "split_by_word_speaker", boom)
+
+    out = pipeline.transcribe("/tmp/audio.wav")
+
+    assert [s["Text"] for s in out["segments"]] == ["Shall we start? Yes please.", "Thanks."]

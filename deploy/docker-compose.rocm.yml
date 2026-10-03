@@ -212,6 +212,8 @@ services:
       WHISPER_MODEL: ${WHISPER_MODEL:-large-v3}
       MAX_AUDIO_SECONDS: ${MAX_AUDIO_SECONDS:-14400}
       ENABLE_SPEAKER_EMBEDDINGS: ${ENABLE_SPEAKER_EMBEDDINGS:-1}
+      SPLIT_SEGMENTS_BY_WORD_SPEAKER: ${SPLIT_SEGMENTS_BY_WORD_SPEAKER:-1}
+      SPLIT_LIVE_SEGMENTS_BY_WORD_SPEAKER: ${SPLIT_LIVE_SEGMENTS_BY_WORD_SPEAKER:-0}
       # Borrow a nearby arch's kernels (e.g. 11.0.0 = gfx1100), for correctness: the build has no kernels
       # for your GPU ("invalid device function" / no kernel image). It is often also described as a 2-6x
       # SPEED win on gfx1151 - that did not reproduce on ROCm 7.2.4 / torch 2.8.0 here (within noise warm,

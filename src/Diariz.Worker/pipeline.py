@@ -8,6 +8,7 @@ import logging
 import numpy as np
 import whisperx
 
+import segment_split
 import telemetry
 from config import config
 
@@ -205,6 +206,22 @@ def _shape_words(raw_words) -> list[dict]:
     return words
 
 
+def _ms(seconds: float) -> int:
+    """whisperx seconds -> the contract's whole milliseconds."""
+    return int(round(seconds * 1000))
+
+
+def _split(raw_segments: list[dict], labels: set[str] | None = None) -> list[dict]:
+    """Cut raw whisperx segments where the word-level speaker changes (segment_split, issue #803).
+    Best-effort, like the voiceprints: a failure costs the refinement, never the transcript."""
+    try:
+        return segment_split.split_by_word_speaker(
+            raw_segments, labels, min_words=config.SPLIT_MIN_WORDS, min_ms=config.SPLIT_MIN_MS)
+    except Exception:  # noqa: BLE001 - the split is optional
+        log.exception("Word-speaker split failed; keeping whole segments")
+        return raw_segments
+
+
 def _shape_segments(raw_segments: list[dict]) -> list[dict]:
     """Convert whisperx segments to the API's contract: PascalCase keys, seconds -> ms,
     empty-text segments dropped, missing speaker defaulted to UNKNOWN, and aligned word
@@ -216,8 +233,8 @@ def _shape_segments(raw_segments: list[dict]) -> list[dict]:
             continue
         shaped = {
             "Speaker": seg.get("speaker", "UNKNOWN"),
-            "StartMs": int(round(seg["start"] * 1000)),
-            "EndMs": int(round(seg["end"] * 1000)),
+            "StartMs": _ms(seg["start"]),
+            "EndMs": _ms(seg["end"]),
             "Text": text,
         }
         # Absent, never null, when there is nothing usable: the segment contract stays exactly what it
@@ -293,13 +310,22 @@ def transcribe_window(audio_path: str, offset_ms: float = 0, overlap_ms: float =
         result = whisperx.assign_word_speakers(diarize_segments, result)
 
     with telemetry.span("ai.shape", "shape"):
-        segments = _shape_segments(result["segments"])
+        raw = result["segments"]
+        if config.SPLIT_LIVE_SEGMENTS_BY_WORD_SPEAKER:
+            # Trim whole segments first and split only the survivors, so the keep-or-drop decision at the
+            # chunk edge is exactly what it was. The labels a split may use come from the whole window -
+            # the same pass the voiceprints below are pooled over.
+            labels = segment_split.segment_labels(raw)
+            window = _shape_segments(_split(raw, labels))
+            kept = _shape_segments(_split(_trim_raw_to_window(raw, overlap_ms), labels))
+        else:
+            window = _shape_segments(raw)
+            kept = _trim_to_window(window, overlap_ms)
 
     with telemetry.span("ai.embeddings", "embeddings"):
-        speakers = _extract_speakers(audio, segments)
+        speakers = _extract_speakers(audio, window)
 
-    segments = _trim_to_window(segments, overlap_ms)
-    segments = _offset_segments(segments, offset_ms, overlap_ms)
+    segments = _offset_segments(kept, offset_ms, overlap_ms)
     return {"language": language, "segments": segments, "speakers": speakers}
 
 
@@ -316,7 +342,19 @@ def _trim_to_window(segments: list[dict], overlap_ms: float) -> list[dict]:
     """
     if overlap_ms <= 0:
         return segments
-    return [s for s in segments if s["EndMs"] > overlap_ms]
+    return [s for s in segments if _in_window(s["EndMs"], overlap_ms)]
+
+
+def _trim_raw_to_window(raw_segments: list[dict], overlap_ms: float) -> list[dict]:
+    """`_trim_to_window` on raw whisperx segments, before they are split - same decision, same rounding."""
+    if overlap_ms <= 0:
+        return raw_segments
+    return [s for s in raw_segments if _in_window(_ms(s["end"]), overlap_ms)]
+
+
+def _in_window(end_ms: int, overlap_ms: float) -> bool:
+    """Whether a segment ending at `end_ms` reaches past the prepended overlap into this chunk."""
+    return end_ms > overlap_ms
 
 
 def _offset_segments(segments: list[dict], offset_ms: float, overlap_ms: float) -> list[dict]:
@@ -354,10 +392,9 @@ def transcribe(audio_path: str, min_speakers=None, max_speakers=None, language=N
     language = asr["language"]
 
     # 2. Word-level alignment. Optional: a language whisperx has no align model for keeps the ASR's own
-    # segment timings rather than failing the job. Nothing downstream needs the words - _shape_segments
-    # stores segment-level start/end/text/speaker and discards word data even when alignment ran, and
-    # assign_word_speakers guards its word loop with `if 'words' in seg`, so speakers are still assigned
-    # per segment. The cost is segment boundaries that are a little less precise.
+    # segment timings rather than failing the job. assign_word_speakers guards its word loop with
+    # `if 'words' in seg`, so speakers are still assigned per segment. The cost is less precise segment
+    # boundaries, no stored word timings (so no manual split), and no split at word-speaker changes.
     with telemetry.span("ai.align", "align"):
         aligned = _get_align(language)
         if aligned is None:
@@ -373,9 +410,13 @@ def transcribe(audio_path: str, min_speakers=None, max_speakers=None, language=N
         diarize_segments = _diarize(audio, min_speakers, max_speakers)
         result = whisperx.assign_word_speakers(diarize_segments, result)
 
-    # 3b. Reshape into the callback's segment contract (walks every word of the transcript).
+    # 3b. Split where the word-level speaker changes, then reshape into the callback's segment
+    # contract (both walk every word of the transcript).
     with telemetry.span("ai.shape", "shape"):
-        segments = _shape_segments(result["segments"])
+        raw = result["segments"]
+        if config.SPLIT_SEGMENTS_BY_WORD_SPEAKER:
+            raw = _split(raw)
+        segments = _shape_segments(raw)
 
     # 4. Per-speaker voiceprint embeddings (for identification against enrolled people)
     with telemetry.span("ai.embeddings", "embeddings"):
