@@ -62,7 +62,7 @@ services:
     # `v6.2` looks plausible, is what the release announcement reads like, and does not exist -
     # the pull fails with "manifest unknown" long after you have set everything else up.
     #
-    # Pinned to the minor line rather than a patch, matching postgres:16-alpine and redis:7-alpine
+    # Pinned to the minor line rather than a patch, matching postgres:16-alpine and redis:8-alpine
     # above: `docker compose pull` then picks up 6.2.x security fixes without pulling in new
     # features unannounced.
     image: glitchtip/glitchtip:6.2

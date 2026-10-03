@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.275.2",
+    date: "2026-10-03",
+    pr: 815,
+    headline: "The job queue moves to the current Redis",
+    summary:
+      "Behind the scenes, the queue that carries work between the app and the transcription server runs on Redis. It has been on the 7.x line since the first release, which is now in maintenance, and moves to 8.x with this release.\n\nNothing changes about how the app behaves. Queued and in-progress work survives the upgrade, so a meeting waiting to be transcribed when the server restarts is picked up afterwards as usual.",
+    changed: [
+      "The job queue runs on Redis 8 instead of the 7.x maintenance line (#811)",
+    ],
+  },
+  {
     version: "0.275.1",
     date: "2026-10-03",
     pr: 814,

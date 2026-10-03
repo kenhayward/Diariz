@@ -85,7 +85,10 @@ Infrastructure (via Docker Compose, project name **`diariz`**):
   **`shm_size: 1gb`**: a parallel query puts its shared tuplestores in `/dev/shm`, which Docker caps at
   64 MB whatever the host has, and the failure is a mid-query `could not resize shared memory segment`
   rather than anything at startup.
-- **Redis** (`redis:7`) — job queues (Redis **Streams**), nothing is stored long-term here.
+- **Redis** (`redis:8`) — job queues (Redis **Streams**), nothing is stored long-term here. Moved off
+  the 7.x maintenance line in 0.275.2 (issue #811); streams and consumer groups are unchanged between the
+  two, and AOF/RDB are forward-compatible, so an existing `redisdata` volume carries over with its queued
+  jobs. The integration suite pins the same tag, which is what proves the stream wire format still works.
 - **SeaweedFS** (`chrislusf/seaweedfs`, S3-compatible, Apache-2.0; the compose service is `s3`) — original audio
   blobs and uploaded attachment files. It replaced MinIO in 0.273.1 (issue #769): MinIO's community edition was
   archived and its images could no longer be pulled. Both the API (AWSSDK.S3) and the worker (boto3) speak plain

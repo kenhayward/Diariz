@@ -79,7 +79,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     restart: unless-stopped
     # Redis holds the job queues (transcription, summarisation, minutes, actions, tags, formulas,
     # embeddings, audio merge) as streams, plus their consumer-group state. Without persistence a restart
