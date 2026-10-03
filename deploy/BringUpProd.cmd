@@ -18,6 +18,26 @@ rem
 rem It also runs `git pull` first, so it deploys whatever is on the checked-out
 rem branch - confirm you are on `main` and at the commit you mean to ship.
 rem
+rem And it runs `docker compose pull` for the third-party images (postgres,
+rem redis, s3, and GlitchTip under the overlay). Without that step they stay at
+rem whatever version the host first cached FOREVER: `docker compose build` only
+rem rebuilds the three services that have a build: section, and `up -d` fetches
+rem an image: service only when it is missing locally. Issue #816 found
+rem production on a June Postgres image - one patch release and four pgvector
+rem releases behind - on a server that had been up for two days. It is invisible
+rem by construction: containers are recreated on every deploy so they always
+rem look fresh, and `docker ps` shows the tag, not what the tag resolved to.
+rem
+rem The pull is also what makes the pinning strategy mean anything. The tags are
+rem pinned to the MINOR line (redis:8-alpine, postgres:16-alpine, glitchtip:6.2)
+rem precisely so a pull collects patch and security fixes without taking new
+rem features unannounced - and nothing used to run the pull.
+rem
+rem A pull FAILURE does not stop the bring-up. The other job of this script is
+rem recovering after a machine restart or a power cut, and a stack that refuses
+rem to come up because a registry is unreachable is worse than one running last
+rem month's Postgres.
+rem
 rem The observability overlay (docker-compose.observability.yml, self-hosted
 rem GlitchTip; see docs/GlitchTip_Deployment.md) is switched on by COMPOSE_FILE
 rem in deploy\.env, not by this script - so this script, BringUpWebApi.cmd and
@@ -51,6 +71,25 @@ rem findstr leaves errorlevel 1 on no match; clear it so the exit code below is 
 ver >nul
 
 git pull
+
+rem --ignore-buildable skips api/web/worker, which are built from source below, and
+rem leaves only the third-party images. It needs no service list: COMPOSE_FILE in
+rem .env already puts the overlay in play, so GlitchTip's images are covered when it
+rem is switched on and absent when it is not.
+echo Refreshing third-party images...
+docker compose pull --ignore-buildable
+if errorlevel 1 (
+  echo.
+  echo WARNING: could not refresh one or more third-party images - carrying on with
+  echo          the versions already on this host. Re-run when the registry is
+  echo          reachable, or the stack stays on them indefinitely.
+  echo.
+)
+rem Clear the errorlevel the warning above may have left set, so the exit code
+rem below is docker's from `up -d` and a failed pull is not reported as a failed
+rem bring-up.
+ver >nul
+
 docker compose build
 docker compose up -d
 set "RC=%errorlevel%"
