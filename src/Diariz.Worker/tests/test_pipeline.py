@@ -693,3 +693,28 @@ def test_a_failing_split_falls_back_to_whole_segments_rather_than_failing_the_jo
     out = pipeline.transcribe("/tmp/audio.wav")
 
     assert [s["Text"] for s in out["segments"]] == ["Shall we start? Yes please.", "Thanks."]
+
+
+def test_offset_shifts_word_timings_into_recording_time_too():
+    """Issue #805: segment times were shifted into recording time but their words stayed in chunk-window
+    time, and the API stores both as sent - so splitting a live row cut it at a chunk-relative time."""
+    shaped = pipeline._shape_segments([
+        {"speaker": "SPEAKER_00", "start": 3.1, "end": 6.0, "text": "genuinely new",
+         "words": [{"word": "genuinely", "start": 3.1, "end": 3.9}, {"word": "new", "start": 4.0, "end": 6.0}]},
+    ])
+
+    shifted = pipeline._offset_segments(shaped, offset_ms=30_000, overlap_ms=3_000)
+
+    # Same shift as the segment: 30000 offset, minus the 3000 of prepended overlap.
+    assert shifted[0]["Words"] == [
+        {"W": "genuinely", "S": 30_100, "E": 30_900},
+        {"W": "new", "S": 31_000, "E": 33_000},
+    ]
+    assert (shifted[0]["StartMs"], shifted[0]["EndMs"]) == (30_100, 33_000)
+
+
+def test_offset_leaves_a_segment_without_words_without_words():
+    """The contract keeps the key absent, never null or empty, when there are no word timings."""
+    shifted = pipeline._offset_segments(
+        [{"Speaker": "SPEAKER_00", "StartMs": 0, "EndMs": 1000, "Text": "a"}], offset_ms=5_000, overlap_ms=0)
+    assert "Words" not in shifted[0]

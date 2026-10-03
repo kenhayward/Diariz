@@ -9,6 +9,20 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.274.1",
+    date: "2026-10-03",
+    pr: 806,
+    headline: "Summaries read more of a long meeting, and live rows split at the right time",
+    summary:
+      "Two follow-ups to splitting rows where the speaker changes.\n\nSummaries, minutes, action items and tags are written from the transcript up to a fixed length, and every row used to repeat its speaker's name. Now that one person's turn can span several rows, consecutive rows by the same person are passed to the AI as one passage, so more of a long meeting fits before the cut-off. The transcript itself is unchanged.\n\nSplitting a row of the live transcript shown during a meeting put the two halves at the wrong time - seconds into that stretch of audio rather than where the row really was in the recording. The word timings on live rows are now in recording time, so a split lands where you clicked.",
+    changed: [
+      "Consecutive rows by the same person reach the AI as one passage, so summaries, minutes, actions and tags see more of a long meeting",
+    ],
+    fixed: [
+      "Splitting a row of a live transcript gave the halves the wrong timestamps (#805)",
+    ],
+  },
+  {
     version: "0.274.0",
     date: "2026-10-03",
     pr: 804,
