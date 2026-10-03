@@ -27,6 +27,18 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
+    # Memory dials only - see docker-compose.yml for why each one is set and why the defaults are modest.
+    # (This file does not load pg_stat_statements or the logging dials that the main compose file does;
+    # that divergence predates this and is not addressed here.)
+    command: >
+      postgres
+      -c shared_buffers=${PG_SHARED_BUFFERS:-1GB}
+      -c work_mem=${PG_WORK_MEM:-16MB}
+      -c maintenance_work_mem=${PG_MAINTENANCE_WORK_MEM:-256MB}
+      -c autovacuum_work_mem=${PG_AUTOVACUUM_WORK_MEM:-64MB}
+      -c effective_cache_size=${PG_EFFECTIVE_CACHE_SIZE:-4GB}
+    # Parallel query shared memory lives in /dev/shm, which Docker caps at 64 MB - see docker-compose.yml.
+    shm_size: 1gb
     environment:
       POSTGRES_DB: diariz
       POSTGRES_USER: diariz

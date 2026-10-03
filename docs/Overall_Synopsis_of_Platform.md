@@ -70,6 +70,21 @@ Infrastructure (via Docker Compose, project name **`diariz`**):
   A temp-file spill means a sort or hash outgrew `work_mem` and went to disk; that is nearly always a
   query-shape bug rather than a tuning problem, and logging every one of them is how 0.228.2 was found -
   a cartesian `Include` had been writing 207 MB to disk on each open of a large recording, silently.
+  The same `command:` also sets the **five memory dials** - `shared_buffers`, `work_mem`,
+  `maintenance_work_mem`, `autovacuum_work_mem` and `effective_cache_size` - each from an env var
+  (`PG_SHARED_BUFFERS` and friends, see `deploy/.env.example`) with a modest default. The image defaults
+  assume nothing about the host and so assume the worst: 128 MB of shared buffers and 4 MB of `work_mem`,
+  which a `vector(768)` (3,076 bytes a row) outgrows after about 1,300 rows - so the spill log above fills
+  with spills that are a tuning artefact rather than the query-shape bug it was added to catch.
+  `maintenance_work_mem` is what decides whether an HNSW build keeps its graph in memory or falls back to
+  the much slower on-disk path. Defaults are deliberately small because this compose file is public and
+  Postgres **refuses to start** when `shared_buffers` exceeds what the host can allocate; real values are a
+  per-deployment choice in `deploy/.env`, where `.env.example` carries a worked set for a 128 GB host.
+  `autovacuum_work_mem` is pinned rather than left at `-1` (which means "use `maintenance_work_mem`"), or
+  raising the latter would silently multiply by `autovacuum_max_workers`. The service also sets
+  **`shm_size: 1gb`**: a parallel query puts its shared tuplestores in `/dev/shm`, which Docker caps at
+  64 MB whatever the host has, and the failure is a mid-query `could not resize shared memory segment`
+  rather than anything at startup.
 - **Redis** (`redis:7`) — job queues (Redis **Streams**), nothing is stored long-term here.
 - **SeaweedFS** (`chrislusf/seaweedfs`, S3-compatible, Apache-2.0; the compose service is `s3`) — original audio
   blobs and uploaded attachment files. It replaced MinIO in 0.273.1 (issue #769): MinIO's community edition was

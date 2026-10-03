@@ -20,6 +20,21 @@ services:
     # The three logging dials exist because a cartesian-product query silently spilled 207 MB to disk on
     # every open of a large recording, and nothing in the default configuration said so (see 0.228.2).
     # log_temp_files=0 logs EVERY spill, which is the signal that was missing.
+    #
+    # The five memory dials are set because the image defaults assume nothing about the host and so assume
+    # the worst: shared_buffers 128 MB, work_mem 4 MB, maintenance_work_mem 64 MB, effective_cache_size
+    # 4 GB. A vector(768) is 3,076 bytes, so a sort or hash over TranscriptChunk passes 4 MB after about
+    # 1,300 rows and spills - the dial above then dutifully logs a spill that is a tuning artefact rather
+    # than the query-shape bug it was added to catch. maintenance_work_mem is what decides whether an HNSW
+    # build keeps the graph in memory or falls back to the much slower on-disk path.
+    #
+    # The DEFAULTS here are deliberately modest, not tuned: this file is public and anyone can `up` it, and
+    # a shared_buffers larger than the host can allocate stops Postgres from starting at all. Set the real
+    # values per deployment in deploy/.env - .env.example carries a worked set for a 128 GB host.
+    #
+    # autovacuum_work_mem is pinned rather than left at -1 (meaning "use maintenance_work_mem"), because
+    # otherwise raising maintenance_work_mem silently multiplies by autovacuum_max_workers: three workers
+    # would each claim 2 GB on the host set sized in .env.example.
     command: >
       postgres
       -c shared_preload_libraries=pg_stat_statements
@@ -29,6 +44,11 @@ services:
       -c log_min_duration_statement=${PG_LOG_MIN_DURATION_MS:-250}
       -c log_temp_files=${PG_LOG_TEMP_FILES_KB:-0}
       -c log_lock_waits=on
+      -c shared_buffers=${PG_SHARED_BUFFERS:-1GB}
+      -c work_mem=${PG_WORK_MEM:-16MB}
+      -c maintenance_work_mem=${PG_MAINTENANCE_WORK_MEM:-256MB}
+      -c autovacuum_work_mem=${PG_AUTOVACUUM_WORK_MEM:-64MB}
+      -c effective_cache_size=${PG_EFFECTIVE_CACHE_SIZE:-4GB}
     environment:
       POSTGRES_DB: diariz
       POSTGRES_USER: diariz
@@ -40,6 +60,11 @@ services:
     # over SSH, or set POSTGRES_BIND=0.0.0.0 (with a strong POSTGRES_PASSWORD) to reach it from the LAN.
     ports:
       - "${POSTGRES_BIND:-127.0.0.1}:${POSTGRES_PORT:-5433}:5432"
+    # Postgres puts the shared memory a parallel query needs (Parallel Hash, shared tuplestores) in
+    # /dev/shm, which Docker caps at 64 MB regardless of host RAM. Raising work_mem raises what a parallel
+    # worker will try to put there, and the failure is a mid-query "could not resize shared memory segment
+    # ... No space left on device" rather than anything at startup. 1 GB is ample for this workload.
+    shm_size: 1gb
     volumes:
       - pgdata:/var/lib/postgresql/data
       # Runs once, on a FRESH data directory only, as the bootstrap superuser: creates
