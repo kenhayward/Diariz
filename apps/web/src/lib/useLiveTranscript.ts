@@ -6,11 +6,15 @@ export interface LiveState {
   transcript: LiveTranscript;
   /// The server has stopped transcribing live. Not permanent - it resumes once it has caught up.
   degraded: boolean;
+  /// An administrator has switched live transcription off for this meeting. Permanent for the meeting:
+  /// switching it back on applies only to recordings started afterwards.
+  stopped: boolean;
 }
 
 export type LiveEvent =
   | { kind: "append"; recordingId: string; sequence: number; segments: LiveTranscript["segments"] }
   | { kind: "degraded"; recordingId: string; sequence: number }
+  | { kind: "stopped"; recordingId: string }
   /// The capture this panel is following has changed - a new meeting started. Not a hub event: it is
   /// raised locally, because nothing on the server knows that this page has moved on.
   | { kind: "recording-changed"; recordingId: string };
@@ -26,10 +30,15 @@ export function nextLiveState(state: LiveState, event: LiveEvent): LiveState {
   // changing - the filter would discard it for naming a different one, which is the whole point of it.
   if (event.kind === "recording-changed") {
     if (event.recordingId === state.transcript.recordingId) return state;
-    return { transcript: emptyLiveTranscript(event.recordingId), degraded: false };
+    return { transcript: emptyLiveTranscript(event.recordingId), degraded: false, stopped: false };
   }
 
   if (event.recordingId !== state.transcript.recordingId) return state;
+
+  if (event.kind === "stopped") return state.stopped ? state : { ...state, stopped: true };
+  // Text already in the worker when the switch flipped still lands. Showing it would bring back the
+  // section the panel has just withdrawn.
+  if (state.stopped) return state;
 
   if (event.kind === "degraded") {
     return state.degraded ? state : { ...state, degraded: true };
@@ -44,6 +53,7 @@ export function nextLiveState(state: LiveState, event: LiveEvent): LiveState {
     // Text arriving means the server is transcribing again. A status line stuck on "paused" while
     // lines visibly appear would be worse than having none.
     degraded: false,
+    stopped: false,
   };
 }
 
@@ -52,10 +62,13 @@ export function nextLiveState(state: LiveState, event: LiveEvent): LiveState {
 /// The hub carries ids rather than text, so an append is a signal to refetch: one event shape then
 /// serves an append, a correction, and later a relabel, without the server having to decide which of
 /// those it is sending.
-export function useLiveTranscript(recordingId: string | null, recordedMs: () => number) {
+/// `liveEnabled` is the server's answer when the recording began: false when an administrator has live
+/// transcription switched off, in which case there is no live transcript to show at all.
+export function useLiveTranscript(recordingId: string | null, liveEnabled: boolean, recordedMs: () => number) {
   const [state, setState] = useState<LiveState>(() => ({
     transcript: emptyLiveTranscript(recordingId ?? ""),
     degraded: false,
+    stopped: false,
   }));
 
   // Guards against two events for the same chunk racing each other's fetch, where the slower response
@@ -94,14 +107,20 @@ export function useLiveTranscript(recordingId: string | null, recordedMs: () => 
         }));
         // The fetch returns the WHOLE transcript, so it replaces rather than appends - which also
         // makes a missed event self-healing: the next one that lands repairs the gap.
-        setState((prev) => ({
-          transcript: {
-            recordingId: e.recordingId,
-            segments,
-            highestSequence: Math.max(prev.transcript.highestSequence, e.sequence),
-          },
-          degraded: false,
-        }));
+        setState((prev) =>
+          // Switched off while this fetch was in flight: keep the section withdrawn.
+          prev.stopped
+            ? prev
+            : {
+                transcript: {
+                  recordingId: e.recordingId,
+                  segments,
+                  highestSequence: Math.max(prev.transcript.highestSequence, e.sequence),
+                },
+                degraded: false,
+                stopped: false,
+              },
+        );
       } catch {
         // A failed refetch leaves the text as it was. The next event repairs it, and the final
         // transcript arrives regardless.
@@ -118,6 +137,11 @@ export function useLiveTranscript(recordingId: string | null, recordedMs: () => 
     [],
   );
 
+  const onStopped = useCallback(
+    (e: { recordingId: string }) => setState((prev) => nextLiveState(prev, { kind: "stopped", ...e })),
+    [],
+  );
+
   const lag = useMemo(() => {
     const last = state.transcript.segments.at(-1);
     return lagSeconds(last ? last.endMs : null, recordedMs());
@@ -125,11 +149,17 @@ export function useLiveTranscript(recordingId: string | null, recordedMs: () => 
     // the number can meaningfully move.
   }, [state.transcript, recordedMs]);
 
+  // Off from the start, or switched off part-way: either way there is no transcript to show.
+  const off = !liveEnabled || state.stopped;
   return {
-    transcript: recordingId ? state.transcript : null,
+    transcript: recordingId && !off ? state.transcript : null,
     degraded: state.degraded,
+    /// Switched off by an administrator part-way through this meeting - the panel says so. Off from the
+    /// start is not "stopped": that meeting simply never had a live transcript.
+    stopped: liveEnabled && state.stopped,
     lagSeconds: lag,
     onAppend,
     onDegraded,
+    onStopped,
   };
 }

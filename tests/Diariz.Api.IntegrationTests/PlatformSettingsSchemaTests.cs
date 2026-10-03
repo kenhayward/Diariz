@@ -41,4 +41,22 @@ public class PlatformSettingsSchemaTests(ContainersFixture fx)
 
         Assert.Equal("false", columnDefault);
     }
+
+    // A restored older backup recreates the table from the dump and lets the migration re-add this column
+    // with its column default. A CLR-only default would bring the platform back with live transcription
+    // silently switched off.
+    [Fact]
+    public async Task LiveTranscriptionEnabled_DefaultsToTrue_AtTheSqlLevel()
+    {
+        await using var db = fx.CreateDbContext();
+
+        var columnDefault = await db.Database
+            .SqlQuery<string>($"""
+                SELECT column_default AS "Value" FROM information_schema.columns
+                WHERE table_name = 'PlatformSettings' AND column_name = 'LiveTranscriptionEnabled'
+                """)
+            .SingleAsync();
+
+        Assert.Equal("true", columnDefault);
+    }
 }

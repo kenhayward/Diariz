@@ -28,5 +28,7 @@
   "liveTranscriptEmpty": "Warte auf das erste Transkript. Es dauert einen Moment und danach jeweils ein paar Sekunden der Besprechung.",
   "liveStatusLive": "Live",
   "liveStatusBehind": "Live - Transkript {{seconds}}s im Rückstand",
-  "liveStatusPaused": "Live-Transkript pausiert"
+  "liveStatusPaused": "Live-Transkript pausiert",
+  "liveStatusOff": "Live-Transkript aus",
+  "liveTranscriptOff": "Die Live-Transkription wurde von einem Administrator ausgeschaltet. Ihre Aufnahme ist davon nicht betroffen, und das vollständige Transkript ist fertig, sobald Sie die Aufnahme beenden."
 }

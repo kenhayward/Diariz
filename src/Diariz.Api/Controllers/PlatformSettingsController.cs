@@ -84,6 +84,8 @@ public class PlatformSettingsController : ControllerBase
         s.IdentificationConfirmBand = req.IdentificationConfirmBand;
         s.IdentificationMargin = req.IdentificationMargin;
         s.IdentificationMinSpeechMs = req.IdentificationMinSpeechMs;
+        await LiveTranscriptionSwitch.ApplyAsync(
+            _db, _queue, s, req.LiveTranscriptionEnabled, DateTimeOffset.UtcNow, _logger);
         await _db.SaveChangesAsync();
         return ToDto(s);
     }
@@ -147,5 +149,5 @@ public class PlatformSettingsController : ControllerBase
         s.LlmTimeoutSeconds, s.McpAccessEnabled, s.WebhooksEnabled,
         s.LlmUsageLoggingEnabled, s.LlmUsageRetentionDays, s.LlmStreamUsageEnabled,
         s.IdentificationThreshold, s.IdentificationConfirmBand, s.IdentificationMargin,
-        s.IdentificationMinSpeechMs);
+        s.IdentificationMinSpeechMs, s.LiveTranscriptionEnabled, s.LiveTranscriptionChangedAt);
 }

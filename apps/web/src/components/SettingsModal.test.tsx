@@ -246,6 +246,34 @@ describe("SettingsModal", () => {
     }
   });
 
+  it("puts the live transcription switch on the AI tab and saves it", async () => {
+    renderModal();
+
+    const live = (await screen.findByLabelText(/live transcription during recording/i)) as HTMLInputElement;
+    await waitFor(() => expect(live.checked).toBe(true));
+    fireEvent.click(live);
+    fireEvent.click(screen.getByRole("button", { name: /^ok$/i }));
+
+    await waitFor(() =>
+      expect(api.updatePlatformSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ liveTranscriptionEnabled: false }),
+      ),
+    );
+  });
+
+  it("says since when live transcription has been off", async () => {
+    (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...platformDefaults,
+      liveTranscriptionEnabled: false,
+      liveTranscriptionChangedAt: "2026-10-03T14:02:00Z",
+    });
+    renderModal();
+
+    const live = (await screen.findByLabelText(/live transcription during recording/i)) as HTMLInputElement;
+    await waitFor(() => expect(live.checked).toBe(false));
+    expect(screen.getByTestId("live-transcription-off-since").textContent).toMatch(/off since/i);
+  });
+
   it("shows the LLM usage logging settings loaded from the API", async () => {
     (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
       ...platformDefaults, llmUsageLoggingEnabled: false, llmUsageRetentionDays: 45, llmStreamUsageEnabled: false,

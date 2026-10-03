@@ -42,6 +42,14 @@ public static class TranscriptionHubExtensions
         hub.Clients.Group(userId.ToString())
             .SendAsync("LiveTranscriptDegraded", new { recordingId, sequence });
 
+    /// <summary>An administrator has switched live transcription off, so this meeting is no longer transcribed
+    /// as it runs. Not a failure: capture continues and the final transcript arrives after Stop. Sent with
+    /// every refused chunk, so the page needs only to be idempotent about it.</summary>
+    public static Task NotifyLiveTranscriptStoppedAsync(this IHubContext<TranscriptionHub> hub,
+        Guid userId, Guid recordingId) =>
+        hub.Clients.Group(userId.ToString())
+            .SendAsync("LiveTranscriptStopped", new { recordingId });
+
     /// <summary>Push a folder-level (section) generation status change. A distinct event from
     /// <c>RecordingStatusChanged</c> so per-recording listeners aren't confused by a section id. <paramref
     /// name="kind"/> is "summary" or "minutes"; <paramref name="status"/> is a <c>SectionGenerationStatus</c>

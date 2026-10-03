@@ -44,7 +44,9 @@ public record PlatformSettingsDto(
     bool McpAccessEnabled, bool WebhooksEnabled,
     bool LlmUsageLoggingEnabled, int LlmUsageRetentionDays, bool LlmStreamUsageEnabled,
     double IdentificationThreshold, double IdentificationConfirmBand, double IdentificationMargin,
-    int IdentificationMinSpeechMs);
+    int IdentificationMinSpeechMs,
+    /// <summary>Live transcription during recording, and when that last changed ("off since").</summary>
+    bool LiveTranscriptionEnabled = true, DateTimeOffset? LiveTranscriptionChangedAt = null);
 public record UpdatePlatformSettingsRequest(
     long StarterQuotaBytes, long MaxQuotaBytes,
     MinutesGenerationMode MinutesGenerationMode = MinutesGenerationMode.SingleCall,
@@ -61,7 +63,10 @@ public record UpdatePlatformSettingsRequest(
     double IdentificationThreshold = PlatformSettings.DefaultIdentificationThreshold,
     double IdentificationConfirmBand = PlatformSettings.DefaultIdentificationConfirmBand,
     double IdentificationMargin = PlatformSettings.DefaultIdentificationMargin,
-    int IdentificationMinSpeechMs = PlatformSettings.DefaultIdentificationMinSpeechMs);
+    int IdentificationMinSpeechMs = PlatformSettings.DefaultIdentificationMinSpeechMs,
+    /// <summary>Off stops live transcription in every meeting at once; on applies to recordings started
+    /// afterwards. Defaults on, so a client that does not know the field never switches it off.</summary>
+    bool LiveTranscriptionEnabled = true);
 
 /// <summary>A voice Diariz thinks it recognises but is not confident enough to name unasked.
 ///
@@ -346,7 +351,10 @@ public record BeginLiveRecordingRequest(
 public record ChunkLimitsDto(int MinMs, int MaxMs, int PauseMs);
 
 public record LiveRecordingDto(
-    Guid Id, Guid SessionId, RecordingStatus Status, ChunkLimitsDto? ChunkLimits = null);
+    Guid Id, Guid SessionId, RecordingStatus Status, ChunkLimitsDto? ChunkLimits = null,
+    /// <summary>Whether this recording will be transcribed while it runs. False when an administrator has
+    /// switched live transcription off; the recording and its final transcript are unaffected.</summary>
+    bool LiveTranscription = true);
 
 /// <summary>Why a finalise was refused: these sequences never arrived, so concatenating now would
 /// silently produce a recording with holes in it. The client still holds them in its own queue, so

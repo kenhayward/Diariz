@@ -34,6 +34,8 @@ export type NotesPopoverProps = {
   liveLagSeconds?: number;
   /// The server has stopped transcribing live. Capture is unaffected.
   liveDegraded?: boolean;
+  /// An administrator switched live transcription off part-way through the meeting.
+  liveStopped?: boolean;
   /// Absent in a plain browser, which is what hides the whole capture area.
   onChangeCaptureArea?: () => void;
   /// Takes a screenshot without closing the popover. Absent in a plain browser, same as
@@ -102,6 +104,7 @@ export default function NotesPopover({
   liveTranscript,
   liveLagSeconds,
   liveDegraded,
+  liveStopped,
   onChangeCaptureArea,
   onCapture,
   captureAreaSet = true,
@@ -178,6 +181,7 @@ export default function NotesPopover({
           liveTranscript={liveTranscript}
           liveLagSeconds={liveLagSeconds}
           liveDegraded={liveDegraded}
+          liveStopped={liveStopped}
           onTranscriptToChat={onTranscriptToChat}
           onShotToChat={onShotToChat}
           liveRecordingId={liveRecordingId}

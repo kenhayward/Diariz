@@ -12,7 +12,7 @@ namespace Diariz.Api.Tests;
 
 public class PlatformSettingsControllerTests
 {
-    private static PlatformSettingsController Build(
+    internal static PlatformSettingsController Build(
         DiarizDbContext db, FakeAudioStorage? storage = null, FakeJobQueue? queue = null) =>
         new(new PlatformSettingsService(db), db, storage ?? new FakeAudioStorage(), queue ?? new FakeJobQueue(),
             NullLogger<PlatformSettingsController>.Instance,

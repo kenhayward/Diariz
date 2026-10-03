@@ -129,4 +129,19 @@ public class PlatformSettings
 
     /// <summary>Below this much total speech, a speaker is not matched at all.</summary>
     public int IdentificationMinSpeechMs { get; set; } = DefaultIdentificationMinSpeechMs;
+
+    /// <summary>Master switch for live transcription during recording - the administrator's lever for an
+    /// overloaded server. On by default.
+    ///
+    /// <para>Deliberately asymmetric. <b>Off</b> applies at once: every meeting in progress stops being
+    /// transcribed at its next chunk, and the live-only worker frees its models. <b>On</b> applies only to
+    /// recordings started afterwards (see <see cref="LiveTranscriptionChangedAt"/>), so a meeting never
+    /// resumes mid-way with an unexplained gap. Recording itself, and the final transcript, never depend on
+    /// it.</para></summary>
+    public bool LiveTranscriptionEnabled { get; set; } = true;
+
+    /// <summary>When <see cref="LiveTranscriptionEnabled"/> last changed, or null if it never has. While off,
+    /// it is "off since" for the settings page; once back on, only recordings created at or after it are
+    /// transcribed live.</summary>
+    public DateTimeOffset? LiveTranscriptionChangedAt { get; set; }
 }

@@ -66,6 +66,17 @@ describe("startLiveSession", () => {
     expect(requestFragment).toHaveBeenCalledTimes(1);
   });
 
+  it("carries whether the server will transcribe this recording live", async () => {
+    const off = await startLiveSession(deps({
+      begin: async () => ({ id: "rec-1", sessionId: "sess-1", liveTranscription: false }),
+    }));
+    // An older server says nothing, and always transcribed live.
+    const older = await startLiveSession(deps());
+
+    expect(off?.liveTranscription).toBe(false);
+    expect(older?.liveTranscription).toBe(true);
+  });
+
   it("returns null when the server cannot be reached, so the recorder falls back", async () => {
     // The single most important behaviour in this module. A briefly unreachable server must cost
     // the live transcript, never the meeting - the caller buffers locally and uploads at stop.

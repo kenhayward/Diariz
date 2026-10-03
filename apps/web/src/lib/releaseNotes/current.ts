@@ -9,6 +9,18 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.275.0",
+    date: "2026-10-03",
+    pr: 809,
+    headline: "Administrators can switch live transcription off",
+    summary:
+      "Live transcription - the transcript that fills in on the notes panel while you record - now has an on/off switch for the whole platform, for when the server is overloaded and needs the pressure taken off. A Platform Administrator finds it at the top of the AI tab in Platform settings: Live transcription during recording.\n\nTurning it off takes effect within seconds. Every meeting in progress stops being transcribed live, work already waiting is dropped rather than worked through, and the memory the dedicated live transcription worker uses on the server is freed. Anyone recording sees the live transcript leave their notes panel, with a line saying it was turned off by an administrator and that their recording and its full transcript are unaffected. A recording started while it is off simply shows notes and captures, with no live transcript.\n\nTurning it back on applies to recordings started afterwards, so a meeting never picks up again part-way with a gap. The settings page shows since when it has been off.",
+    added: [
+      "A Platform settings switch to turn live transcription off for everyone, effective within seconds, freeing the live worker's memory",
+      "The notes panel says when live transcription has been turned off, instead of the transcript silently disappearing",
+    ],
+  },
+  {
     version: "0.274.2",
     date: "2026-10-03",
     pr: 808,

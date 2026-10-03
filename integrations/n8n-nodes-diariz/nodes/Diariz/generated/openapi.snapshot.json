@@ -1920,6 +1920,10 @@
             "format": "uuid",
             "type": "string"
           },
+          "liveTranscription": {
+            "default": true,
+            "type": "boolean"
+          },
           "sessionId": {
             "format": "uuid",
             "type": "string"

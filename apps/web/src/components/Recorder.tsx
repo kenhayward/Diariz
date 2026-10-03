@@ -373,8 +373,11 @@ export default function Recorder({
   // The live recording currently being captured, or null. Drives the transcript panel and the
   // hub subscription that feeds it; cleared at stop so neither outlives the take.
   const [liveRecordingId, setLiveRecordingId] = useState<string | null>(null);
+  // Whether the server transcribes this take while it runs - false when an administrator has live
+  // transcription switched off. The audio is captured and the final transcript produced either way.
+  const [liveTranscriptionOn, setLiveTranscriptionOn] = useState(true);
 
-  const live = useLiveTranscript(liveRecordingId, () =>
+  const live = useLiveTranscript(liveRecordingId, liveTranscriptionOn, () =>
     timing.elapsedMs(timingRef.current, Date.now()));
 
   // A hub for the duration of the capture only. The recordings list and the detail page have their own
@@ -392,13 +395,14 @@ export default function Recorder({
         onStatus: () => {},
         onLiveTranscript: (e) => void live.onAppend(e),
         onLiveTranscriptDegraded: live.onDegraded,
+        onLiveTranscriptStopped: live.onStopped,
       });
       void hub.start().catch(() => {});
     } catch {
       hub = null;
     }
     return () => void hub?.stop().catch(() => {});
-  }, [liveRecordingId, live.onAppend, live.onDegraded]);
+  }, [liveRecordingId, live.onAppend, live.onDegraded, live.onStopped]);
 
   /// Feeds the live session's chunk boundary decision. A no-op until a session exists, so it is safe
   /// to hand to a watcher armed before the server answered.
@@ -1102,6 +1106,7 @@ export default function Recorder({
       liveTranscript: live.transcript ?? undefined,
       liveLagSeconds: live.lagSeconds,
       liveDegraded: live.degraded,
+      liveStopped: live.stopped,
       // Which recording is streaming, so the pop-out can tell a capture that is still uploading from one
       // that has nowhere to go. It never calls anything with it - that window makes no API calls.
       liveRecordingId: liveRecordingId ?? undefined,
@@ -1121,6 +1126,7 @@ export default function Recorder({
       live.transcript,
       live.lagSeconds,
       live.degraded,
+      live.stopped,
       // Redundant in practice and kept for clarity: `useLiveTranscript` is keyed on this id and mints a
       // fresh transcript whenever it changes, so `live.transcript` above already moves in lockstep with
       // it. Nothing pins that coupling, so leaving it out would be relying on it.
@@ -1308,6 +1314,7 @@ export default function Recorder({
           return;
         }
         liveRef.current = live;
+        setLiveTranscriptionOn(live.liveTranscription);
         setLiveRecordingId(live.recordingId);
         // Chunk boundaries need level readings, and only now do we know they are wanted - a take with
         // no live session must not pay for an analyser it never reads. A calendar take already has a
@@ -1939,6 +1946,7 @@ export default function Recorder({
               liveTranscript={live.transcript ?? undefined}
               liveLagSeconds={live.lagSeconds}
               liveDegraded={live.degraded}
+              liveStopped={live.stopped}
               onChangeCaptureArea={canCaptureScreenshots() ? requestChangeArea : undefined}
               onCapture={canCaptureScreenshots() ? requestCapture : undefined}
               captureAreaSet={captureAreaSet}

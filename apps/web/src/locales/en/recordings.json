@@ -28,5 +28,7 @@
   "liveTranscriptEmpty": "Waiting for the first transcript. It takes a moment to arrive, and a few seconds of the meeting at a time after that.",
   "liveStatusLive": "Live",
   "liveStatusBehind": "Live - transcript {{seconds}}s behind",
-  "liveStatusPaused": "Live transcript paused"
+  "liveStatusPaused": "Live transcript paused",
+  "liveStatusOff": "Live transcript off",
+  "liveTranscriptOff": "Live transcription has been turned off by an administrator. Your recording is unaffected, and the full transcript will be ready after you stop."
 }

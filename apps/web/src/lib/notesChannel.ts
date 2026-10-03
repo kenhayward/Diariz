@@ -44,6 +44,9 @@ export interface NotesState {
   /// different things about the same meeting.
   liveLagSeconds?: number;
   liveDegraded?: boolean;
+  /// An administrator switched live transcription off part-way through this meeting: the transcript is
+  /// gone and the panel says why. Absent when it was off from the start - that meeting never had one.
+  liveStopped?: boolean;
   /// The recorded clock as a reading plus the wall-clock moment it was taken, NOT a ticking value. The
   /// client derives what to display as `recordedMs + (running ? Date.now() - atWallMs : 0)` on its own
   /// 1s interval.

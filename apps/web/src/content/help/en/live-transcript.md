@@ -87,9 +87,27 @@ minutes stale and letting you believe it is current.
 full transcript still arrives when you stop. The only thing you lose is the running view of it, and it
 resumes on its own once the backlog clears.
 
+## If it says off
+
+A Platform Administrator can switch live transcription off for everyone, usually to take the pressure
+off a busy server. If that happens while you are recording, the transcript leaves the notes panel and a
+line says live transcription has been turned off.
+
+**Your recording is not affected.** Audio is still captured and saved, your notes and captures carry
+on as before, and the full transcript still arrives when you stop. When the administrator switches it
+back on, it applies to the next recording you start, not to the one already running.
+
+If it was already off when you started recording, the notes panel simply shows your notes and captures,
+with no live transcript at all.
+
+The switch is under Platform settings, on the **AI** tab: **Live transcription during recording**.
+Turning it off stops live transcription in every meeting within a few seconds and frees the memory it
+uses on the server.
+
 ## If nothing appears
 
 - Give it a few seconds. Nothing appears until the first slice has been transcribed.
 - If you are recording in a language Diariz has been told to expect, and nobody has spoken yet, there
   is simply nothing to show.
 - A recording started before this feature existed has no live transcript. Only new recordings do.
+- Live transcription may be switched off by your administrator - see "If it says off" above.

@@ -718,3 +718,31 @@ def test_offset_leaves_a_segment_without_words_without_words():
     shifted = pipeline._offset_segments(
         [{"Speaker": "SPEAKER_00", "StartMs": 0, "EndMs": 1000, "Text": "a"}], offset_ms=5_000, overlap_ms=0)
     assert "Words" not in shifted[0]
+
+
+
+# ---- unloading (the live-transcription switch, live-only worker) ----
+
+def test_unload_models_drops_every_cached_model(monkeypatch):
+    monkeypatch.setattr(pipeline, "_whisper_model", object())
+    monkeypatch.setattr(pipeline, "_whisper_py_model", object())
+    monkeypatch.setattr(pipeline, "_diarize_model", object())
+    monkeypatch.setattr(pipeline, "_embedder", object())
+    monkeypatch.setattr(pipeline, "_align_cache", {"en": (object(), {}), "cy": None})
+
+    assert pipeline.unload_models() is True
+
+    assert pipeline._whisper_model is None
+    assert pipeline._whisper_py_model is None
+    assert pipeline._diarize_model is None
+    assert pipeline._embedder is None
+    assert pipeline._align_cache == {}
+
+
+def test_unload_models_reports_when_there_was_nothing_to_free(monkeypatch):
+    """So the worker frees device memory and logs once, not on every idle poll while the switch is off."""
+    for name in ("_whisper_model", "_whisper_py_model", "_diarize_model", "_embedder"):
+        monkeypatch.setattr(pipeline, name, None)
+    monkeypatch.setattr(pipeline, "_align_cache", {})
+
+    assert pipeline.unload_models() is False

@@ -28,5 +28,7 @@
   "liveTranscriptEmpty": "En attente de la première transcription. Elle met un instant à arriver, puis quelques secondes de réunion à la fois.",
   "liveStatusLive": "En direct",
   "liveStatusBehind": "En direct - transcription {{seconds}}s de retard",
-  "liveStatusPaused": "Transcription en direct en pause"
+  "liveStatusPaused": "Transcription en direct en pause",
+  "liveStatusOff": "Transcription en direct désactivée",
+  "liveTranscriptOff": "La transcription en direct a été désactivée par un administrateur. Votre enregistrement n'est pas affecté, et la transcription complète sera prête après l'arrêt."
 }

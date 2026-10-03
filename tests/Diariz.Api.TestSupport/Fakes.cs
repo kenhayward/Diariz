@@ -679,6 +679,15 @@ public class FakeJobQueue : IJobQueue
     public List<SectionMinutesJob> SectionMinutesEnqueued { get; } = new();
     public List<FormulaRunJob> FormulaRunJobs { get; } = new();
 
+    /// <summary>The last value written to the worker-visible live-transcription flag, or null if never written.</summary>
+    public bool? LiveTranscriptionEnabled { get; private set; }
+
+    public virtual Task SetLiveTranscriptionEnabledAsync(bool enabled, CancellationToken ct = default)
+    {
+        LiveTranscriptionEnabled = enabled;
+        return Task.CompletedTask;
+    }
+
     public virtual Task EnqueueLiveChunkAsync(LiveChunkJob job, CancellationToken ct = default)
     {
         LiveChunkEnqueued.Add(job);

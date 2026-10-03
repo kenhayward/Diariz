@@ -21,6 +21,20 @@ _diarize_model = None
 _embedder = None
 
 
+def unload_models() -> bool:
+    """Drop every cached model, so the process holds no weights until a job needs them again.
+
+    For the live-only worker when an administrator switches live transcription off: its copy of the
+    weights is the memory the switch exists to give back. The caller frees the device memory afterwards
+    (gpu_memory.release). Returns whether anything was loaded, so that happens once rather than on every
+    idle poll. The next job reloads lazily, as at startup."""
+    global _whisper_model, _whisper_py_model, _diarize_model, _embedder
+    loaded = any(m is not None for m in (_whisper_model, _whisper_py_model, _diarize_model, _embedder))         or bool(_align_cache)
+    _whisper_model = _whisper_py_model = _diarize_model = _embedder = None
+    _align_cache.clear()
+    return loaded
+
+
 def _get_whisper():
     """faster-whisper (CTranslate2) ASR model — the default backend (CUDA/CPU)."""
     global _whisper_model

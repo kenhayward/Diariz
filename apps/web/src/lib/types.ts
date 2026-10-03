@@ -23,6 +23,9 @@ export interface LiveRecording {
   /// the recorder uses its own defaults - so a shorter deployment-wide setting reaches every client
   /// without a web deploy, and an older one still records.
   chunkLimits?: { minMs: number; maxMs: number; pauseMs: number } | null;
+  /// False when an administrator has live transcription switched off; the recording itself is unaffected.
+  /// Absent from an older server, which always transcribed live.
+  liveTranscription?: boolean;
 }
 
 export interface RecordingSummary {
@@ -720,6 +723,11 @@ export interface PlatformSettings {
   identificationMargin: number;
   /// Below this much speech, a speaker is not matched at all.
   identificationMinSpeechMs: number;
+  /// Live transcription during recording. Off stops it in every meeting at once; on applies to
+  /// recordings started afterwards. Optional so an older server, which always had it on, still loads.
+  liveTranscriptionEnabled?: boolean;
+  /// When the switch last moved (ISO), or null - "off since" while it is off.
+  liveTranscriptionChangedAt?: string | null;
 }
 
 export interface GrantResult {
