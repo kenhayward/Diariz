@@ -9,6 +9,18 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.275.1",
+    date: "2026-10-03",
+    pr: 814,
+    headline: "The database is told how much memory the server has",
+    summary:
+      "Until now the database ran on the settings it ships with, which assume nothing about the machine underneath and so assume the worst: 128 MB of cache, and 4 MB for sorting. On a server with far more than that, the effect was that searching and sorting large transcripts wrote to disk when it could have stayed in memory, and rebuilding the index behind semantic search took the slow route.\n\nThe database is now given five memory settings, each adjustable per installation. The values that ship are deliberately modest so that a small machine still starts, and an example set for a large server is included for an administrator to copy.\n\nNothing about the app changes. Searching, chat and opening a long recording should be quicker on a well provisioned server once the values are raised, and nothing is different if they are left alone.",
+    changed: [
+      "The database is given cache, sort, maintenance and autovacuum memory settings, adjustable per installation (#810)",
+      "Raised the shared memory the database container is allowed, which a parallel query needs and Docker otherwise caps at 64 MB whatever the server has",
+    ],
+  },
+  {
     version: "0.275.0",
     date: "2026-10-03",
     pr: 809,
