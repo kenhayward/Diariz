@@ -60,11 +60,29 @@ services:
     # over SSH, or set POSTGRES_BIND=0.0.0.0 (with a strong POSTGRES_PASSWORD) to reach it from the LAN.
     ports:
       - "${POSTGRES_BIND:-127.0.0.1}:${POSTGRES_PORT:-5433}:5432"
-    # Postgres puts the shared memory a parallel query needs (Parallel Hash, shared tuplestores) in
-    # /dev/shm, which Docker caps at 64 MB regardless of host RAM. Raising work_mem raises what a parallel
-    # worker will try to put there, and the failure is a mid-query "could not resize shared memory segment
-    # ... No space left on device" rather than anything at startup. 1 GB is ample for this workload.
-    shm_size: 1gb
+    # Postgres puts the shared memory a parallel operation needs in /dev/shm, which Docker caps at 64 MB
+    # regardless of host RAM. The failure is a mid-operation "could not resize shared memory segment ... No
+    # space left on device" rather than anything at startup.
+    #
+    # THIS MUST BE AT LEAST maintenance_work_mem, not merely comfortably above work_mem. pgvector's
+    # PARALLEL HNSW build puts the whole graph in one shared segment sized from maintenance_work_mem, so
+    # raising that setting to win the in-memory build path is precisely what makes the build outgrow
+    # /dev/shm. 0.275.1 got this wrong - 1 GB against a maintenance_work_mem of 2 GB - and a REINDEX of the
+    # chunk embedding index died on prod (issue #819). PostgresSharedMemoryTests now asserts the pair
+    # wherever this repo states one, because neither value looks wrong on its own.
+    #
+    # Parallel Hash and shared tuplestores from an ordinary query also land here, but they divide work_mem
+    # between workers rather than multiplying it, so they are the smaller of the two demands.
+    #
+    # Why a bad pairing lies dormant: the segment is only allocated when the build actually goes PARALLEL,
+    # and the planner assigns no workers until the table is big enough. Measured while fixing #819 - a
+    # 40,000-row table built fine on a 64 MB /dev/shm, and the identical build failed the moment workers
+    # were forced on. So this cannot be found by trying it on a small database; it waits until the corpus
+    # grows, and then fails on an operation (REINDEX) that is run precisely when something is already
+    # wrong. The segment is sized from the SETTING, not the data: both the prod failure and the forced
+    # local repro asked for ~2,144,4xx,xxx bytes against maintenance_work_mem of 2 GB, on quite different
+    # table sizes.
+    shm_size: ${PG_SHM_SIZE:-1gb}
     volumes:
       - pgdata:/var/lib/postgresql/data
       # Runs once, on a FRESH data directory only, as the bootstrap superuser: creates
