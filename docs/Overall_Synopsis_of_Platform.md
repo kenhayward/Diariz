@@ -446,7 +446,10 @@ three-second window the case for that work is weak.
      never lets a split use a label that won no whole segment in the same pass, so the set of speaker labels,
      Speaker rows and voiceprints is exactly what it was. Anything that cannot be cut safely comes back
      unchanged. The callback contract is unchanged - there are just more `Segments[]`, in time order - and the
-     voiceprints are pooled from the split segments, which is why it lives in the worker rather than the API.
+     voiceprints are pooled from the split segments, which is why it lives in the worker rather than the API. Because one turn
+     can now arrive as several rows, `PromptTranscript.Build` (summary, minutes, actions and tags prompts) joins
+     consecutive rows under one displayed name into one `Name: text` line, so the repeated prefixes do not eat
+     the fixed character budget.
      Measured on AMI (pyannote 3.1): words under the wrong speaker 8.6% -> 6.4% on test and 12.9% -> 9.3% on
      dev, for 13-17% more segments. Switches: `SPLIT_SEGMENTS_BY_WORD_SPEAKER` (full files, default on) and
      `SPLIT_LIVE_SEGMENTS_BY_WORD_SPEAKER` (live chunks, default **off**, because per-chunk voiceprints drive
@@ -3291,7 +3294,9 @@ the least likely to hold.
   `GET /api/recordings/{id}/segments/{segmentId}/words`, because ~10k words per recording would dominate a
   payload that also feeds exports, MCP, webhooks and the n8n node. `TranscriptSegmentMerge` concatenates word
   lists through its rebuild — auto-merge deletes and recreates every segment, so without that a merge would
-  silently make a transcript unsplittable while reading identically.
+  silently make a transcript unsplittable while reading identically. On the live path `_offset_segments` shifts the
+  words into recording time along with their segment; before 0.274.1 it shifted only the segment, so a live row
+  was split at a chunk-relative time (issue #805).
 - **On-demand voiceprint re-embed.** `voiceprint-jobs` carries
   `{ VoiceSampleId, RecordingId, BlobKey, Spans: [{ StartMs, EndMs }] }`. The worker downloads the blob, slices
   exactly those spans (`voiceprint.embed_spans`, pure with respect to the model so it is testable without

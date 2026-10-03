@@ -365,10 +365,16 @@ def _offset_segments(segments: list[dict], offset_ms: float, overlap_ms: float) 
     by the length of the overlap.
     """
     shift = offset_ms - overlap_ms
-    return [
-        {**s, "StartMs": s["StartMs"] + shift, "EndMs": s["EndMs"] + shift}
-        for s in segments
-    ]
+
+    def moved(s):
+        out = {**s, "StartMs": s["StartMs"] + shift, "EndMs": s["EndMs"] + shift}
+        # The words move with their segment (issue #805). The API stores both as sent, and a split cuts at
+        # a word's time - so words left in window time cut a live row seconds from the chunk's start.
+        if "Words" in s:
+            out["Words"] = [{**w, "S": w["S"] + shift, "E": w["E"] + shift} for w in s["Words"]]
+        return out
+
+    return [moved(s) for s in segments]
 
 
 def transcribe(audio_path: str, min_speakers=None, max_speakers=None, language=None) -> dict:
