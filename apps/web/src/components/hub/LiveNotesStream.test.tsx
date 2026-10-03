@@ -452,6 +452,33 @@ describe("LiveNotesStream status line", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  it("says plainly that live transcription was switched off, in place of the transcript", () => {
+    // An administrator switched it off mid-meeting to relieve the server. The transcript section goes,
+    // and one line says why and that nothing is lost, rather than text vanishing unexplained.
+    renderStream({
+      lines: [note({ capturedAtMs: 1_000 })],
+      liveStopped: true,
+      onTranscriptToChat: () => {},
+    });
+
+    expect(screen.getByTestId("live-transcript-off").textContent).toMatch(/turned off by an administrator/i);
+    expect(screen.getByTestId("live-transcript-off").textContent).toMatch(/after you stop/i);
+    expect(screen.getByTestId("live-transcript-status").textContent).toMatch(/off/i);
+    expect(screen.queryAllByTestId("stream-transcript")).toHaveLength(0);
+    // With nothing transcribed live there is nothing for the chat to read.
+    expect(screen.queryByRole("button", { name: /use in chat/i })).toBeNull();
+    // Notes carry on as before.
+    expect(screen.getAllByTestId("stream-note")).toHaveLength(1);
+  });
+
+  it("keeps the switched-off notice out of the notes-only view", () => {
+    renderStream({ lines: [note({ capturedAtMs: 1_000 })], liveStopped: true });
+
+    fireEvent.click(screen.getByRole("radio", { name: /^notes/i }));
+
+    expect(screen.queryByTestId("live-transcript-off")).toBeNull();
+  });
+
   it("shows no status line at all when nothing is being transcribed live", () => {
     // An older server, or a capture that began before the server could be reached. A green "Live" dot
     // over a transcript that is never coming would be a lie.

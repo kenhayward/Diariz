@@ -73,6 +73,8 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const [mcpAccessEnabled, setMcpAccessEnabled] = useState(true);
   // Integration: master switch for outbound webhooks (meeting-event automations). Off by default.
   const [webhooksEnabled, setWebhooksEnabled] = useState(false);
+  // Live transcription during recording: the lever for an overloaded server. On by default.
+  const [liveTranscriptionEnabled, setLiveTranscriptionEnabled] = useState(true);
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -97,6 +99,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
       setApiAccessEnabled(platform.apiAccessEnabled);
       setMcpAccessEnabled(platform.mcpAccessEnabled);
       setWebhooksEnabled(platform.webhooksEnabled);
+      setLiveTranscriptionEnabled(platform.liveTranscriptionEnabled ?? true);
     }
   }, [platform]);
 
@@ -145,6 +148,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         identificationConfirmBand: identBandNum,
         identificationMargin: Number(identMargin),
         identificationMinSpeechMs: Number(identMinSpeechMs),
+        liveTranscriptionEnabled,
       });
       qc.invalidateQueries({ queryKey: ["platform-settings"] });
       onClose();
@@ -207,6 +211,33 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
             /* Platform-wide AI generation policy: minutes mode + the global LLM request timeout. */
             <div className="space-y-3">
               <p className="text-xs text-gray-500 dark:text-gray-400">{t("platformAiIntro")}</p>
+
+              {/* First on the tab: it is the lever an administrator reaches for when the server is
+                  struggling, so it should not need finding. */}
+              <div className={SETTING_GRID} data-setting-grid>
+                <SettingRow label={t("liveTranscriptionLabel")} hint={t("liveTranscriptionHint")}>
+                  {(id) => (
+                    <input
+                      id={id}
+                      type="checkbox"
+                      checked={liveTranscriptionEnabled}
+                      onChange={(e) => setLiveTranscriptionEnabled(e.target.checked)}
+                    />
+                  )}
+                </SettingRow>
+              </div>
+              {/* From the saved settings, not the checkbox: it says what is in force, not what is about
+                  to be saved. */}
+              {platform?.liveTranscriptionEnabled === false && platform.liveTranscriptionChangedAt && (
+                <p
+                  data-testid="live-transcription-off-since"
+                  className="text-xs text-amber-700 dark:text-amber-400"
+                >
+                  {t("liveTranscriptionOffSince", {
+                    time: new Date(platform.liveTranscriptionChangedAt).toLocaleString(),
+                  })}
+                </p>
+              )}
 
               <div className={SETTING_GRID} data-setting-grid>
                 <SettingRow label={t("minutesModeLabel")} hint={t("minutesModeHint")}>

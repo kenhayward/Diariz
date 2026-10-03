@@ -26,6 +26,9 @@ export interface LiveSessionDeps {
     id: string;
     sessionId: string;
     chunkLimits?: { minMs: number; maxMs: number; pauseMs: number } | null;
+    /// False when an administrator has live transcription switched off. Absent from an older server,
+    /// which always transcribed live.
+    liveTranscription?: boolean;
   }>;
   upload: (recordingId: string, sessionId: string, chunk: {
     sequence: number; blob: Blob; startMs: number; endMs: number;
@@ -42,6 +45,9 @@ export interface LiveSessionDeps {
 
 export interface LiveSession {
   readonly recordingId: string;
+  /// Whether the server will transcribe this recording while it runs. The audio is captured and the final
+  /// transcript produced either way.
+  readonly liveTranscription: boolean;
   /// One level reading from the recorder's meter. Fires `requestFragment` when a chunk has ended.
   tick(dtMs: number, level: number, paused: boolean): void;
   /// A fragment the recorder produced. Spans the recorded-clock range since the previous one.
@@ -87,6 +93,7 @@ export async function startLiveSession(deps: LiveSessionDeps): Promise<LiveSessi
 
   return {
     recordingId: begun.id,
+    liveTranscription: begun.liveTranscription ?? true,
 
     tick(dtMs, level, paused) {
       chunker = advance(chunker, { dtMs, level, paused }, limits);

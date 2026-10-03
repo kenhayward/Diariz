@@ -14,6 +14,10 @@ public interface IJobQueue
     Task EnqueueActionsAsync(ActionsJob job, CancellationToken ct = default);
     Task EnqueueAudioMergeAsync(AudioMergeJob job, CancellationToken ct = default);
     Task EnqueueLiveChunkAsync(LiveChunkJob job, CancellationToken ct = default);
+    /// <summary>Tell the workers whether live transcription is on. Not a job: one key they read before each
+    /// live chunk, so switching off also drops chunks already queued and lets the live-only worker unload
+    /// its models.</summary>
+    Task SetLiveTranscriptionEnabledAsync(bool enabled, CancellationToken ct = default);
     Task EnqueueVoiceprintAsync(VoiceprintJob job, CancellationToken ct = default);
     Task EnqueueEmbeddingAsync(EmbeddingJob job, CancellationToken ct = default);
     Task EnqueueTagsAsync(TagsJob job, CancellationToken ct = default);
@@ -58,6 +62,12 @@ public class RedisJobQueue : IJobQueue
     {
         var db = _redis.GetDatabase();
         await db.StreamAddAsync(_opts.LiveChunkStreamKey, "job", JsonSerializer.Serialize(job));
+    }
+
+    public async Task SetLiveTranscriptionEnabledAsync(bool enabled, CancellationToken ct = default)
+    {
+        var db = _redis.GetDatabase();
+        await db.StringSetAsync(_opts.LiveTranscriptionFlagKey, enabled ? "1" : "0");
     }
 
     public async Task EnqueueAsync(TranscriptionJob job, CancellationToken ct = default)

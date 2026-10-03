@@ -109,7 +109,15 @@ person) at the moment you hear them, without leaving the transcript.
   minute, during which live text visibly stalls and then arrives in a rush. An administrator can run a
   second transcription container that handles nothing but live meetings
   (`docker compose --profile live-worker up -d`), so the two never compete. It is off by default because
-  it holds a second copy of the models in VRAM; nothing changes for anyone if it is left off. It is
+  it holds a second copy of the models in VRAM; nothing changes for anyone if it is left off.
+  **An administrator can switch live transcription off** for the whole platform (Platform settings ->
+  AI -> *Live transcription during recording*) to relieve an overloaded server. Off applies at once:
+  every meeting in progress stops being transcribed at its next audio piece, queued work is dropped
+  rather than worked through, and the dedicated live worker frees its copy of the models. The notes
+  panel withdraws the transcript and says it was turned off, and that the recording and the final
+  transcript are unaffected; a meeting that starts while it is off simply has no live transcript. Back
+  on applies to recordings started afterwards, so no meeting resumes mid-way with a gap. The settings
+  page shows since when it has been off. It is
   not a separate tab: the lines land on **one stream** beside your own notes and your screen captures,
   in the order everything happened, and **each line carries the moment it was said** - which is what
   lets you pin a note of your own to a sentence from four minutes ago. The **assistant can be asked about a meeting that is

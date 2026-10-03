@@ -504,6 +504,9 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
                 .HasDefaultValue(Entities.PlatformSettings.DefaultIdentificationMargin);
             e.Property(s => s.IdentificationMinSpeechMs)
                 .HasDefaultValue(Entities.PlatformSettings.DefaultIdentificationMinSpeechMs);
+            // On by default, for the same reason as the thresholds above: a restored older backup must not
+            // come back with live transcription silently switched off.
+            e.Property(s => s.LiveTranscriptionEnabled).HasDefaultValue(true);
             e.HasData(new PlatformSettings
             {
                 Id = Entities.PlatformSettings.SingletonId,

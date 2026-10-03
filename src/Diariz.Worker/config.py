@@ -42,6 +42,9 @@ class Config:
     # Same CONSUMER_GROUP as the general worker on purpose, so Redis hands each chunk to exactly one of
     # them. The cost is a second copy of the model weights in VRAM, which is not free on a small card.
     LIVE_ONLY = os.getenv("LIVE_ONLY", "").strip().lower() in ("1", "true", "yes")
+    # The API's copy of the platform's live-transcription switch ("1"/"0"; absent = on). Must match the
+    # API's JobQueue:LiveTranscriptionFlagKey. See live_switch.py.
+    LIVE_TRANSCRIPTION_FLAG_KEY = os.getenv("LIVE_TRANSCRIPTION_FLAG_KEY", "live-transcription:enabled")
 
     CONSUMER_GROUP = os.getenv("CONSUMER_GROUP", "workers")
     CONSUMER_NAME = os.getenv("CONSUMER_NAME", "worker-1")

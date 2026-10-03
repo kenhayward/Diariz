@@ -34,7 +34,8 @@ internal static class LiveTestSupport
     }
 
     public static RecordingsController Build(
-        DiarizDbContext db, Guid userId, FakeJobQueue? queue = null, FakeAudioStorage? storage = null)
+        DiarizDbContext db, Guid userId, FakeJobQueue? queue = null, FakeAudioStorage? storage = null,
+        FakeHubContext? hub = null)
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -50,7 +51,7 @@ internal static class LiveTestSupport
             new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())));
 
         return new RecordingsController(
-            db, storage ?? new FakeAudioStorage(), queue ?? new FakeJobQueue(), new FakeHubContext(), config,
+            db, storage ?? new FakeAudioStorage(), queue ?? new FakeJobQueue(), hub ?? new FakeHubContext(), config,
             resolver, new FakeEmailSender(), new FakeSpeakerIdentification(new FakeSpeakerIdentifier()),
             new SpeakerAssignment(db, new PeopleDirectory(db)),
             Options.Create(new UploadOptions()), new RoomScope(db), new PeopleDirectory(db),

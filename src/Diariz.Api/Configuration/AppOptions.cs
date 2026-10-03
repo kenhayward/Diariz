@@ -52,6 +52,11 @@ public class JobQueueOptions
     /// rather than sharing the transcription one, so the worker can prefer it over a queued full-meeting
     /// job - a live chunk behind an hour of audio would arrive long after the meeting ended.</summary>
     public string LiveChunkStreamKey { get; set; } = "live-chunk-jobs";
+
+    /// <summary>The worker-visible copy of the platform's live-transcription switch: "1" or "0". The
+    /// database is the record and the API enforces it on its own; this exists because the worker reads
+    /// only Redis, and needs to drop chunks already queued and free its models. Absent means on.</summary>
+    public string LiveTranscriptionFlagKey { get; set; } = "live-transcription:enabled";
 }
 
 public class WorkerOptions

@@ -28,6 +28,7 @@ import audio_merge  # noqa: E402
 import callback  # noqa: E402
 import gpu_memory  # noqa: E402
 import heartbeat  # noqa: E402
+import live_switch  # noqa: E402
 import pipeline  # noqa: E402
 import storage
 import telemetry
@@ -372,6 +373,13 @@ def run_loop(r: redis.Redis, keep_going=lambda: True) -> None:
     a socket read timeout or a dropped connection (e.g. Redis restart) is caught and retried rather than
     crashing the worker. ``keep_going`` is a test seam; production runs forever."""
     while keep_going():
+        if config.LIVE_ONLY and not live_switch.is_enabled(r):
+            # Live transcription is switched off. This worker exists for nothing else, so its copy of the
+            # models is memory held for no one; give it back. Checked once a poll, and a no-op once
+            # unloaded. The first chunk after the switch comes back on reloads them, as at startup.
+            if pipeline.unload_models():
+                gpu_memory.release()
+                log.info("Live transcription is off: models unloaded")
         try:
             # Live chunks first, on their own non-blocking read. A chunk of a meeting still in progress
             # queued behind an hour of audio would arrive long after that meeting had ended, so it does
@@ -411,7 +419,13 @@ def run_loop(r: redis.Redis, keep_going=lambda: True) -> None:
                 try:
                     job = json.loads(fields["job"])
                     if stream == config.LIVE_CHUNK_STREAM_KEY:
-                        handle_live_chunk(job)
+                        if live_switch.is_enabled(r):
+                            handle_live_chunk(job)
+                        else:
+                            # Switched off to relieve the server: drop what was already queued rather
+                            # than work through it. The API settled these chunks when it was switched.
+                            log.info("Live transcription is off: dropped chunk %s of %s",
+                                     job.get("Sequence"), job.get("RecordingId"))
                     elif stream == config.MERGE_STREAM_KEY:
                         handle_merge(job)
                     elif stream == config.VOICEPRINT_STREAM_KEY:

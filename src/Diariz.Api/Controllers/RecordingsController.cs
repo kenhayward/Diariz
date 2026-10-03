@@ -539,12 +539,19 @@ public class RecordingsController : ControllerBase
 
         await _hub.NotifyStatusAsync(UserId, rec.Id, rec.Status.ToString());
 
+        // Whether this meeting is transcribed as it runs, decided once, here: the platform switch admits a
+        // recording or not for its whole life, so the panel never has to show a transcript and then
+        // withdraw it unless an administrator switches live transcription off mid-meeting.
+        var liveTranscription = LiveTranscriptionGate.Allows(
+            await _db.PlatformSettings.AsNoTracking().FirstOrDefaultAsync(), rec.CreatedAt);
+
         // The chunk limits ride along with the session so the browser does not have to ask, and so
         // the latency/diarization trade-off can be retuned on the server without a web deploy.
         return CreatedAtAction(nameof(Get), new { id = rec.Id },
             new LiveRecordingDto(rec.Id, req.SessionId, rec.Status,
                 new ChunkLimitsDto(_live.ChunkMinSeconds * 1000, _live.ChunkMaxSeconds * 1000,
-                    _live.ChunkPauseMs)));
+                    _live.ChunkPauseMs),
+                liveTranscription));
     }
 
     [HttpPut("{id:guid}/chunks/{sequence:int}")]
@@ -637,6 +644,31 @@ public class RecordingsController : ControllerBase
     {
         try
         {
+            // Settle a chunk we are declining to queue. It is not waiting on the transcriber - nothing will
+            // ever transcribe it - so counting it as outstanding would make this refusal the reason for the
+            // next one, and a pause a latch that never lifts (issue #758).
+            async Task SettleThisChunkAsync()
+            {
+                var declined = await _db.RecordingChunks
+                    .FirstOrDefaultAsync(c => c.RecordingId == rec.Id && c.Sequence == sequence);
+                if (declined is not null)
+                {
+                    declined.SettledAt = DateTimeOffset.UtcNow;
+                    await _db.SaveChangesAsync();
+                }
+            }
+
+            // An administrator has switched live transcription off, or switched it back on after this
+            // meeting began. Said again with every chunk, so a page that missed the event hears it a few
+            // seconds later.
+            if (!LiveTranscriptionGate.Allows(
+                    await _db.PlatformSettings.AsNoTracking().FirstOrDefaultAsync(), rec.CreatedAt))
+            {
+                await SettleThisChunkAsync();
+                await _hub.NotifyLiveTranscriptStoppedAsync(rec.UserId, rec.Id);
+                return;
+            }
+
             var transcription = await _db.Transcriptions
                 .FirstOrDefaultAsync(t => t.RecordingId == rec.Id && t.IsProvisional);
 
@@ -650,18 +682,9 @@ public class RecordingsController : ControllerBase
             if (LiveTranscriptLag.ShouldPause(oldestOutstanding, DateTimeOffset.UtcNow,
                     TimeSpan.FromSeconds(_live.MaxLagSeconds)))
             {
-                // Settle the chunk we are declining to queue. It is not waiting on the transcriber -
-                // nothing will ever transcribe it - so counting it as outstanding would make this
-                // refusal the reason for the next one, and the pause a latch that never lifts however
-                // far the transcriber catches up (issue #758). Settled, the measurement above sees only
-                // chunks genuinely in flight, so the transcript resumes the moment they drain.
-                var skipped = await _db.RecordingChunks
-                    .FirstOrDefaultAsync(c => c.RecordingId == rec.Id && c.Sequence == sequence);
-                if (skipped is not null)
-                {
-                    skipped.SettledAt = DateTimeOffset.UtcNow;
-                    await _db.SaveChangesAsync();
-                }
+                // Settled, the measurement above sees only chunks genuinely in flight, so the transcript
+                // resumes the moment they drain.
+                await SettleThisChunkAsync();
 
                 await _hub.NotifyLiveTranscriptDegradedAsync(rec.UserId, rec.Id, sequence);
                 return;

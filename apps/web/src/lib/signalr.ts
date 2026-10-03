@@ -23,10 +23,17 @@ export interface LiveTranscriptDegradedEvent {
   sequence: number;
 }
 
+/// An administrator has switched live transcription off, so this meeting is no longer transcribed as it
+/// runs. Repeated with every chunk the server refuses, so handling it must be idempotent.
+export interface LiveTranscriptStoppedEvent {
+  recordingId: string;
+}
+
 export interface HubHandlers {
   onStatus: (e: StatusEvent) => void;
   onLiveTranscript?: (e: LiveTranscriptEvent) => void;
   onLiveTranscriptDegraded?: (e: LiveTranscriptDegradedEvent) => void;
+  onLiveTranscriptStopped?: (e: LiveTranscriptStoppedEvent) => void;
 }
 
 export function createHub(
@@ -54,5 +61,7 @@ function buildHub(handlers: HubHandlers): HubConnection {
   if (handlers.onLiveTranscript) conn.on("LiveTranscriptAppended", handlers.onLiveTranscript);
   if (handlers.onLiveTranscriptDegraded)
     conn.on("LiveTranscriptDegraded", handlers.onLiveTranscriptDegraded);
+  if (handlers.onLiveTranscriptStopped)
+    conn.on("LiveTranscriptStopped", handlers.onLiveTranscriptStopped);
   return conn;
 }

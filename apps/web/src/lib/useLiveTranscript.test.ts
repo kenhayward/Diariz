@@ -5,7 +5,7 @@ import { emptyLiveTranscript } from "./liveTranscript";
 const RECORDING = "rec-1";
 
 function fresh(): LiveState {
-  return { transcript: emptyLiveTranscript(RECORDING), degraded: false };
+  return { transcript: emptyLiveTranscript(RECORDING), degraded: false, stopped: false };
 }
 
 const seg = (startMs: number, text: string, sequence: number) => ({
@@ -135,3 +135,38 @@ describe("nextLiveState", () => {
     expect(after).toBe(s);
   });
 });
+
+describe("nextLiveState: the administrator switches live transcription off", () => {
+  it("marks this meeting stopped", () => {
+    expect(nextLiveState(fresh(), { kind: "stopped", recordingId: RECORDING }).stopped).toBe(true);
+  });
+
+  it("is idempotent, because the server repeats it with every chunk", () => {
+    const once = nextLiveState(fresh(), { kind: "stopped", recordingId: RECORDING });
+    expect(nextLiveState(once, { kind: "stopped", recordingId: RECORDING })).toBe(once);
+  });
+
+  it("ignores text that was already on its way when it stopped", () => {
+    // A chunk in the worker when the switch flipped still lands. Showing it would bring back the very
+    // section the panel has just withdrawn.
+    const stopped = nextLiveState(fresh(), { kind: "stopped", recordingId: RECORDING });
+    const after = nextLiveState(stopped, {
+      kind: "append",
+      recordingId: RECORDING,
+      sequence: 3,
+      segments: [seg(9_000, "late", 3)],
+    });
+    expect(after).toBe(stopped);
+  });
+
+  it("ignores another recording's stop", () => {
+    const s = fresh();
+    expect(nextLiveState(s, { kind: "stopped", recordingId: "someone-else" })).toBe(s);
+  });
+
+  it("starts the next meeting fresh", () => {
+    const stopped = nextLiveState(fresh(), { kind: "stopped", recordingId: RECORDING });
+    expect(nextLiveState(stopped, { kind: "recording-changed", recordingId: "rec-2" }).stopped).toBe(false);
+  });
+});
+

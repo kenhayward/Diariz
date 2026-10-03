@@ -3199,6 +3199,28 @@ the least likely to hold.
   downloaded twice. **Off by default**: it holds a second copy of the model weights (~9 GB working
   set), which a card with headroom will not notice and an 8 GB one cannot afford.
 
+  **An administrator can switch live transcription off** (`PlatformSettings.LiveTranscriptionEnabled`,
+  Platform settings -> AI), the manual counterpart of the lag pause for an overloaded server. It is
+  deliberately asymmetric:
+  - **Off applies at once.** `LiveTranscriptionGate` is checked on every chunk upload, so each meeting
+    in progress stops at its next chunk: the chunk is stored but not queued, it is settled, and the page
+    is sent **`LiveTranscriptStopped`** - with every refused chunk, so a page that missed one hears it
+    seconds later. Flipping the switch also settles every outstanding chunk of a live recording (so none
+    reads as a backlog when it comes back on) and writes the Redis key **`live-transcription:enabled`**
+    (`"0"`/`"1"`, absent = on; `JobQueue:LiveTranscriptionFlagKey` / worker `LIVE_TRANSCRIPTION_FLAG_KEY`).
+    The worker reads it before each live chunk and **drops chunks already queued** rather than work
+    through them, and a `LIVE_ONLY` worker checks it on every poll and **unloads its models**
+    (`pipeline.unload_models` + `gpu_memory.release`) - that copy of the weights is the memory the
+    switch exists to give back. The general worker keeps its models, which serve uploads too.
+  - **On applies to recordings started afterwards**: only a recording whose `CreatedAt` is at or after
+    `LiveTranscriptionChangedAt` is transcribed live, so no meeting resumes mid-way with a gap. A
+    `LIVE_ONLY` worker reloads its models lazily on the next chunk.
+  - `POST /api/recordings/live` returns `LiveTranscription: bool` with the session. The notes panel shows
+    no live transcript at all for a recording that began with it off, and when it is switched off
+    mid-meeting it withdraws the transcript and says so. The database is the record and the API enforces
+    it on its own: a lost or unwritable Redis key costs only the dropping of already-queued chunks and the
+    live worker's unload.
+
   **Chunk length is the dominant term in live latency, and it is a server setting.** A word spoken at
   the START of a chunk cannot leave the browser until that chunk closes, so `maxMs` IS the worst-case
   wait before anything is sent - everything downstream (upload, queue, GPU, delivery) measured at
@@ -3315,7 +3337,8 @@ the least likely to hold.
   GUID) so `RecordingStatusChanged` events are scoped per user. The live transcript adds two more on the same
   hub and the same per-user group: **`LiveTranscriptAppended`** (a chunk's segments were persisted) and
   **`LiveTranscriptDegraded`** (live transcription has stopped for this recording - too far behind, or the
-  chunk failed). Both carry only `{ recordingId, sequence }`: the append is a **signal to refetch**, not the
+  chunk failed), plus **`LiveTranscriptStopped`** (`{ recordingId }` - an administrator switched live
+  transcription off; repeated with every refused chunk). The first two carry only `{ recordingId, sequence }`: the append is a **signal to refetch**, not the
   text itself, so one event shape serves an append, a correction and a later relabel without the server
   having to decide which of those it is sending - and a missed event is self-healing, since the next refetch
   returns the whole transcript and repairs the gap. Because the group is per **user**, a client receives

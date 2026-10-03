@@ -18,7 +18,7 @@ namespace Diariz.Domain.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.11")
+                .HasAnnotation("ProductVersion", "10.0.12")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "vector");
@@ -1210,6 +1210,14 @@ namespace Diariz.Domain.Migrations
                         .HasColumnType("double precision")
                         .HasDefaultValue(0.29999999999999999);
 
+                    b.Property<DateTimeOffset?>("LiveTranscriptionChangedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("LiveTranscriptionEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<bool>("LlmStreamUsageEnabled")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -1265,6 +1273,7 @@ namespace Diariz.Domain.Migrations
                             IdentificationMargin = 0.050000000000000003,
                             IdentificationMinSpeechMs = 3000,
                             IdentificationThreshold = 0.29999999999999999,
+                            LiveTranscriptionEnabled = true,
                             LlmStreamUsageEnabled = true,
                             LlmTimeoutSeconds = 120,
                             LlmUsageLoggingEnabled = true,

@@ -226,6 +226,7 @@ export default function NotesPopout() {
           liveTranscript={state.liveTranscript}
           liveLagSeconds={state.liveLagSeconds}
           liveDegraded={state.liveDegraded}
+          liveStopped={state.liveStopped}
           onAdd={(text, atMs, kind) => client?.add(text, atMs, kind)}
           onEdit={(id, text) => client?.edit(id, text)}
           onDelete={(id) => client?.remove(id)}

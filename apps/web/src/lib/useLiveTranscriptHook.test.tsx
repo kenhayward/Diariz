@@ -38,7 +38,7 @@ describe("useLiveTranscript, driven the way the recorder drives it", () => {
       detail(RECORDING, ["shall we start"]),
     );
 
-    const { result, rerender } = renderHook(({ id }) => useLiveTranscript(id, () => 0), {
+    const { result, rerender } = renderHook(({ id }) => useLiveTranscript(id, true, () => 0), {
       initialProps: { id: null as string | null },
     });
 
@@ -50,6 +50,27 @@ describe("useLiveTranscript, driven the way the recorder drives it", () => {
     await waitFor(() =>
       expect(result.current.transcript?.segments.map((s) => s.text)).toEqual(["shall we start"]),
     );
+  });
+
+  it("has no transcript at all for a meeting that began with live transcription switched off", async () => {
+    const { result } = renderHook(() => useLiveTranscript(RECORDING, false, () => 0));
+
+    expect(result.current.transcript).toBeNull();
+    // Never had one, so there is nothing to say was taken away.
+    expect(result.current.stopped).toBe(false);
+  });
+
+  it("withdraws the transcript when an administrator switches live transcription off", async () => {
+    (api.getLiveTranscript as ReturnType<typeof vi.fn>).mockResolvedValue(detail(RECORDING, ["hello"]));
+    const { result } = renderHook(() => useLiveTranscript(RECORDING, true, () => 0));
+    await act(async () => {
+      await result.current.onAppend({ recordingId: RECORDING, sequence: 0 });
+    });
+
+    act(() => result.current.onStopped({ recordingId: RECORDING }));
+
+    expect(result.current.transcript).toBeNull();
+    expect(result.current.stopped).toBe(true);
   });
 
   it("carries the speaker and whether the name is only a guess", async () => {
@@ -65,7 +86,7 @@ describe("useLiveTranscript, driven the way the recorder drives it", () => {
       ],
     });
 
-    const { result, rerender } = renderHook(({ id }) => useLiveTranscript(id, () => 0), {
+    const { result, rerender } = renderHook(({ id }) => useLiveTranscript(id, true, () => 0), {
       initialProps: { id: null as string | null },
     });
 
@@ -86,7 +107,7 @@ describe("useLiveTranscript, driven the way the recorder drives it", () => {
     // Seeded once from a null recording, that id stays "" for the whole meeting and every degraded
     // notice is silently dropped - so the panel goes on claiming it is transcribing while the server
     // has stopped, which is precisely the case the notice exists to report.
-    const { result, rerender } = renderHook(({ id }) => useLiveTranscript(id, () => 0), {
+    const { result, rerender } = renderHook(({ id }) => useLiveTranscript(id, true, () => 0), {
       initialProps: { id: null as string | null },
     });
 
@@ -101,7 +122,7 @@ describe("useLiveTranscript, driven the way the recorder drives it", () => {
       detail(RECORDING, ["from the first meeting"]),
     );
 
-    const { result, rerender } = renderHook(({ id }) => useLiveTranscript(id, () => 0), {
+    const { result, rerender } = renderHook(({ id }) => useLiveTranscript(id, true, () => 0), {
       initialProps: { id: null as string | null },
     });
 

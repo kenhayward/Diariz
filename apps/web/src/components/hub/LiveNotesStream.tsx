@@ -28,6 +28,11 @@ export type LiveNotesStreamProps = {
   liveTranscript?: LiveTranscript;
   liveLagSeconds?: number;
   liveDegraded?: boolean;
+  /// An administrator switched live transcription off part-way through this meeting, to relieve the
+  /// server. The transcript is withdrawn (`liveTranscript` is absent) and one line under "Everything" says
+  /// why and that nothing is lost. Not set when it was off from the start: that meeting never had a live
+  /// transcript, so the panel simply reads as a notes panel.
+  liveStopped?: boolean;
   /// The recorded clock. Drives the composer's badge and, once past an hour, the stamp column's width.
   elapsedMs: number;
   /// `kind` defaults to "note" when omitted - every caller predating actions still compiles and behaves
@@ -113,6 +118,7 @@ export default function LiveNotesStream({
   liveTranscript,
   liveLagSeconds,
   liveDegraded,
+  liveStopped,
   elapsedMs,
   onAdd,
   onEdit,
@@ -229,7 +235,9 @@ export default function LiveNotesStream({
   // the model can read nothing of.
   const canSendTranscript = Boolean(onTranscriptToChat && liveTranscript);
 
-  const status = liveDegraded
+  const status = liveStopped
+    ? { short: tr("liveStatusOff"), long: tr("liveTranscriptOff") }
+    : liveDegraded
     ? { short: tr("liveStatusPaused"), long: tr("liveTranscriptDegraded") }
     : (liveLagSeconds ?? 0) > 0
       ? {
@@ -381,7 +389,7 @@ export default function LiveNotesStream({
           ...(v.streamHeight === null ? { flex: 1, minHeight: 0 } : { height: v.streamHeight }),
         }}
       >
-        {items.length === 0 ? (
+        {items.length === 0 && !(liveStopped && filter === "all") ? (
           <li data-testid="notes-stream-empty" style={{ fontSize: 12, color: "var(--hub-muted)" }}>
             {emptyMessage}
           </li>
@@ -442,6 +450,16 @@ export default function LiveNotesStream({
             );
           })
         )}
+        {/* Where the transcript was, at the end of the stream where the newest text would have arrived.
+            Only under "Everything": the other views never showed the transcript. */}
+        {liveStopped && filter === "all" && (
+          <li
+            data-testid="live-transcript-off"
+            style={{ fontSize: 12, color: "var(--hub-muted)", padding: "6px 0" }}
+          >
+            {tr("liveTranscriptOff")}
+          </li>
+        )}
       </ul>
       )}
 
@@ -454,7 +472,7 @@ export default function LiveNotesStream({
           borderTop: "1px solid var(--hub-divider)",
         }}
       >
-        {liveTranscript && (
+        {(liveTranscript || liveStopped) && (
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span
               aria-hidden
@@ -462,8 +480,10 @@ export default function LiveNotesStream({
                 width: 6,
                 height: 6,
                 borderRadius: "50%",
-                background: "var(--hub-green)",
-                animation: "blink 1.6s infinite",
+                // Grey and still once switched off: a blinking green dot over a transcript that is not
+                // coming back would say the opposite of the text beside it.
+                background: liveStopped ? "var(--hub-muted)" : "var(--hub-green)",
+                animation: liveStopped ? undefined : "blink 1.6s infinite",
                 flexShrink: 0,
               }}
             />

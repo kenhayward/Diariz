@@ -28,5 +28,7 @@
   "liveTranscriptEmpty": "Esperando la primera transcripción. Tarda un momento en llegar, y después unos segundos de la reunión cada vez.",
   "liveStatusLive": "En directo",
   "liveStatusBehind": "En directo - transcripción {{seconds}}s por detrás",
-  "liveStatusPaused": "Transcripción en directo en pausa"
+  "liveStatusPaused": "Transcripción en directo en pausa",
+  "liveStatusOff": "Transcripción en directo desactivada",
+  "liveTranscriptOff": "Un administrador ha desactivado la transcripción en directo. Tu grabación no se ve afectada y la transcripción completa estará lista cuando detengas la grabación."
 }

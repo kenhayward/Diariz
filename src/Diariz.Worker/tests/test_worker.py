@@ -195,6 +195,13 @@ class _FakeRedis:
         return [(message_ids[0], {"job": json.dumps({"TranscriptionId": "recovered"})})]
 
 
+@pytest.fixture(autouse=True)
+def _live_transcription_on(monkeypatch):
+    """Live transcription is switched on unless a test says otherwise. The fakes here have no GET, and
+    the switch is its own concern (tests/test_live_switch.py)."""
+    monkeypatch.setattr(worker.live_switch, "is_enabled", lambda r: True)
+
+
 def _keep_going(n):
     """Return a keep_going() callable that is True n times, then False (bounds the test loop)."""
     seq = iter([True] * n + [False])
@@ -1110,3 +1117,66 @@ def test_a_keepalive_does_not_count_as_a_delivery(monkeypatch):
 
     assert calls.get("justid") is True, "a claim refresh must not count as a delivery"
     assert calls.get("min_idle_time") == 0, "a keepalive re-claims unconditionally; it is not a steal"
+
+
+# ---- the administrator's live-transcription switch ----
+
+def test_a_live_chunk_is_dropped_unrun_while_live_transcription_is_off(monkeypatch):
+    """Switching off is the lever for an overloaded server, so chunks already queued are not worked
+    through: each is acknowledged and dropped. The API settled them when the switch was flipped."""
+    handled = []
+    monkeypatch.setattr(worker, "handle_live_chunk", lambda job: handled.append(job))
+    monkeypatch.setattr(worker.live_switch, "is_enabled", lambda r: False)
+    msg = [(worker.config.LIVE_CHUNK_STREAM_KEY, [("7-0", {"job": json.dumps(_live_job())})])]
+    r = _FakeRedis([msg])
+
+    worker.run_loop(r, keep_going=_keep_going(1))
+
+    assert handled == []
+    assert r.acked == [(worker.config.LIVE_CHUNK_STREAM_KEY, "7-0")]
+
+
+def test_other_jobs_are_unaffected_while_live_transcription_is_off(monkeypatch):
+    handled = []
+    monkeypatch.setattr(worker, "handle", lambda job: handled.append(job))
+    monkeypatch.setattr(worker.live_switch, "is_enabled", lambda r: False)
+    msg = [(worker.config.STREAM_KEY, [("5-0", {"job": json.dumps({"TranscriptionId": "t1"})})])]
+
+    worker.run_loop(_FakeRedis([msg]), keep_going=_keep_going(2))
+
+    assert handled == [{"TranscriptionId": "t1"}]
+
+
+def test_the_live_only_worker_frees_its_models_while_live_transcription_is_off(monkeypatch):
+    """Its copy of the weights is the memory the switch exists to give back. The general worker keeps
+    its models: they serve uploads and full transcriptions too."""
+    unloaded, released = [], []
+    monkeypatch.setattr(worker.config, "LIVE_ONLY", True)
+    monkeypatch.setattr(worker.live_switch, "is_enabled", lambda r: False)
+    monkeypatch.setattr(worker.pipeline, "unload_models", lambda: unloaded.append(1) or True)
+    monkeypatch.setattr(worker.gpu_memory, "release", lambda: released.append(1))
+
+    worker.run_loop(_FakeRedis([]), keep_going=_keep_going(1))
+
+    assert unloaded == [1]
+    assert released, "the freed weights must be handed back to the device"
+
+
+def test_the_live_only_worker_keeps_its_models_while_live_transcription_is_on(monkeypatch):
+    unloaded = []
+    monkeypatch.setattr(worker.config, "LIVE_ONLY", True)
+    monkeypatch.setattr(worker.pipeline, "unload_models", lambda: unloaded.append(1) or True)
+
+    worker.run_loop(_FakeRedis([]), keep_going=_keep_going(1))
+
+    assert unloaded == []
+
+
+def test_the_general_worker_never_unloads_its_models(monkeypatch):
+    unloaded = []
+    monkeypatch.setattr(worker.live_switch, "is_enabled", lambda r: False)
+    monkeypatch.setattr(worker.pipeline, "unload_models", lambda: unloaded.append(1) or True)
+
+    worker.run_loop(_FakeRedis([]), keep_going=_keep_going(1))
+
+    assert unloaded == []
