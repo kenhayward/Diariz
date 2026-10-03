@@ -55,7 +55,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     restart: unless-stopped
     # Persisted for the same reason as the CUDA stack: these streams are the job queues, and losing them
     # strands recordings mid-pipeline with no error. See the note in docker-compose.yml.

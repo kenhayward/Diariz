@@ -19,7 +19,7 @@ public sealed class ContainersFixture : IAsyncLifetime
     // Same images as deploy/docker-compose.yml. The image is passed to the builder constructor
     // (the parameterless ctor + WithImage is obsolete in Testcontainers 4.x).
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("pgvector/pgvector:pg16").Build();
-    private readonly RedisContainer _redis = new RedisBuilder("redis:7-alpine").Build();
+    private readonly RedisContainer _redis = new RedisBuilder("redis:8-alpine").Build();
     // SeaweedFS replaced MinIO (issue #769): MinIO's community edition is archived and its images can no
     // longer be pulled. Pinned to the tag deploy/docker-compose.yml uses. Testcontainers has no SeaweedFS
     // module, so this is a generic container with its own readiness check (the S3 gateway's /healthz).
