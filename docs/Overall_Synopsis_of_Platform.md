@@ -224,6 +224,21 @@ Three things are worth knowing because they are the opposite of what you would g
 Practical rule: `api` and `web` - the two you actually ship - are fine to redeploy whenever.
 **`deploy/BringUpWebApi.cmd` does the whole sequence**, including the in-flight check below.
 
+**`deploy/BringUpProd.cmd` is the full-stack tool, and it is the only thing that refreshes third-party
+images.** It runs `docker compose pull --ignore-buildable` before `build` and `up -d`. That step is
+load-bearing rather than tidy: `build` only rebuilds the three services with a `build:` section, and
+`up -d` fetches an `image:` service **only when it is missing locally**, so without a pull `postgres`,
+`redis`, `s3` and GlitchTip stay at whatever version the host first cached, indefinitely. It is also what
+gives the minor-line pins (`redis:8-alpine`, `postgres:16-alpine`, `glitchtip:6.2`) their meaning - they
+are pinned to a line precisely so a pull collects patch fixes without taking new features. Issue #816
+found production on a June Postgres image, a patch release and four pgvector releases behind, on a server
+that had been up two days: containers are recreated on every deploy so they always look fresh, and
+`docker ps` reports the tag rather than what the tag resolved to. A pull failure warns and carries on,
+because this script also recovers the stack after a power cut and must work with an unreachable registry.
+The **base** images inside our own Dockerfiles are a separate gap: `docker compose build` without `--pull`
+keeps whatever `mcr.microsoft.com/dotnet/aspnet:10.0` and the CUDA base were first cached, and that is not
+addressed, since `--pull` on a cold start could re-download most of a 20 GB worker image.
+
 If you want to avoid even a delay, check the streams the API itself consumes. Note that
 `transcription-jobs` and `audio-merge-jobs` are **not** among them - those belong to the worker
 container, which an `api`/`web` redeploy never touches, so checking them before one answers the wrong

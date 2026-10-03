@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.275.3",
+    date: "2026-10-03",
+    pr: 817,
+    headline: "Bringing the stack up now refreshes the supporting software",
+    summary:
+      "The script that brings the whole server stack up rebuilt our own parts but never checked for new versions of the supporting software it runs on - the database, the queue and the file store. Those stayed on whichever version the machine first downloaded, so a server could sit months behind on security fixes while every deployment looked current.\n\nThe script now refreshes them as part of bringing the stack up. If it cannot reach the download service it says so and carries on with what is already there, so a server still comes back up after a power cut.",
+    fixed: [
+      "The full-stack bring-up script never refreshed the database, queue, file store or error-tracking images, leaving a server indefinitely on whichever versions it first downloaded (#816)",
+    ],
+  },
+  {
     version: "0.275.2",
     date: "2026-10-03",
     pr: 815,
