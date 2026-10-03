@@ -37,8 +37,9 @@ services:
       -c maintenance_work_mem=${PG_MAINTENANCE_WORK_MEM:-256MB}
       -c autovacuum_work_mem=${PG_AUTOVACUUM_WORK_MEM:-64MB}
       -c effective_cache_size=${PG_EFFECTIVE_CACHE_SIZE:-4GB}
-    # Parallel query shared memory lives in /dev/shm, which Docker caps at 64 MB - see docker-compose.yml.
-    shm_size: 1gb
+    # Shared memory for parallel operations lives in /dev/shm, which Docker caps at 64 MB. Must be at
+    # least maintenance_work_mem - see docker-compose.yml for why, and issue #819 for what happens if not.
+    shm_size: ${PG_SHM_SIZE:-1gb}
     environment:
       POSTGRES_DB: diariz
       POSTGRES_USER: diariz

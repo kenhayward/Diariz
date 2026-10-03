@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.275.4",
+    date: "2026-10-03",
+    pr: 820,
+    headline: "Rebuilding the search index no longer runs out of shared memory",
+    summary:
+      "Rebuilding the index behind semantic search could fail on a large installation with an error about shared memory running out of space. The memory settings added in 0.275.1 raised how much the rebuild may use, but not the pool it draws that from, so the two disagreed and the rebuild stopped part way.\n\nThe pool is now a setting of its own, raised alongside the other one, and the example settings for a large server pair the two correctly. Searching was never affected - only rebuilding the index by hand.",
+    fixed: [
+      "Rebuilding the semantic search index failed with a shared memory error on a server tuned by 0.275.1 (#819)",
+    ],
+  },
+  {
     version: "0.275.3",
     date: "2026-10-03",
     pr: 817,
