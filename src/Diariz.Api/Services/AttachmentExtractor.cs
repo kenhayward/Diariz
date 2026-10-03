@@ -111,8 +111,10 @@ public sealed class AttachmentExtractor : IAttachmentExtractor
         if (wb is null) return "";
         var shared = wb.SharedStringTablePart?.SharedStringTable;
         var sb = new StringBuilder();
+        // A part can exist with nothing in it (other generators, damaged files); the SDK then has no root
+        // element to hand back. Skip it and read the rest (#807).
         foreach (var sheetPart in wb.WorksheetParts)
-            foreach (var row in sheetPart.Worksheet.Descendants<Row>())
+            foreach (var row in sheetPart.Worksheet?.Descendants<Row>() ?? [])
             {
                 var cells = row.Elements<Cell>()
                     .Select(c => CellText(c, shared))
@@ -139,7 +141,7 @@ public sealed class AttachmentExtractor : IAttachmentExtractor
         var sb = new StringBuilder();
         var slideParts = doc.PresentationPart?.SlideParts ?? Enumerable.Empty<SlidePart>();
         foreach (var slide in slideParts)
-            foreach (var text in slide.Slide.Descendants<Drawing.Text>())
+            foreach (var text in slide.Slide?.Descendants<Drawing.Text>() ?? []) // empty part: see ExtractXlsx
                 if (!string.IsNullOrWhiteSpace(text.Text)) sb.AppendLine(text.Text);
         return sb.ToString();
     }

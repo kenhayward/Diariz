@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.274.2",
+    date: "2026-10-03",
+    pr: 808,
+    headline: "A file chat cannot read now says so",
+    summary:
+      "Adding a file to a chat message could fail with a server error when the file was damaged or unusual - a corrupt or truncated PDF or Office file, or a spreadsheet or slide deck containing an empty sheet or slide, as some programs other than Office produce.\n\nA file that cannot be read now gets a clear message saying so, and a spreadsheet or deck with an empty sheet or slide is read normally, skipping just the empty one.",
+    fixed: [
+      "Adding a damaged PDF or Office file, or a spreadsheet or deck with an empty sheet or slide, to a chat message gave a server error (#807)",
+    ],
+  },
+  {
     version: "0.274.1",
     date: "2026-10-03",
     pr: 806,
