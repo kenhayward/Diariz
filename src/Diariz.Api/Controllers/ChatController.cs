@@ -325,6 +325,12 @@ public class ChatController : ControllerBase
         {
             return BadRequest(ex.Message);
         }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The document libraries throw their own types for a corrupt or truncated file (#807). That is
+            // the file's fault, not the server's, and the caller needs to hear so rather than see a 500.
+            return BadRequest("This file could not be read.");
+        }
     }
 
 

@@ -4,6 +4,9 @@ using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 using MimeKit;
+using D = DocumentFormat.OpenXml.Drawing;
+using P = DocumentFormat.OpenXml.Presentation;
+using S = DocumentFormat.OpenXml.Spreadsheet;
 
 namespace Diariz.Api.Tests;
 
@@ -147,5 +150,47 @@ public class AttachmentExtractorTests
         using var ms = new MemoryStream();
         msg.WriteTo(ms);
         return ms.ToArray();
+    }
+
+    // ---- Office parts with no content (#807) ----
+    // Office never writes them, but other generators and damaged files do; the SDK then hands back a null
+    // root, and dereferencing it turned a readable workbook or deck into a server error.
+
+    [Fact]
+    public void Extract_XlsxWithAnEmptyWorksheetPart_ReadsTheOtherSheets()
+    {
+        using var ms = new MemoryStream();
+        using (var doc = SpreadsheetDocument.Create(ms, SpreadsheetDocumentType.Workbook))
+        {
+            var wb = doc.AddWorkbookPart();
+            wb.Workbook = new S.Workbook();
+            wb.AddNewPart<WorksheetPart>(); // a part with no worksheet in it
+            var sheet = wb.AddNewPart<WorksheetPart>();
+            sheet.Worksheet = new S.Worksheet(new S.SheetData(new S.Row(
+                new S.Cell { CellValue = new S.CellValue("42"), DataType = S.CellValues.Number })));
+        }
+
+        var r = Extractor.Extract("figures.xlsx", null, ms.ToArray());
+
+        Assert.Equal("42", r.Text);
+    }
+
+    [Fact]
+    public void Extract_PptxWithAnEmptySlidePart_ReadsTheOtherSlides()
+    {
+        using var ms = new MemoryStream();
+        using (var doc = PresentationDocument.Create(ms, PresentationDocumentType.Presentation))
+        {
+            var pres = doc.AddPresentationPart();
+            pres.Presentation = new P.Presentation();
+            pres.AddNewPart<SlidePart>(); // a part with no slide in it
+            var slide = pres.AddNewPart<SlidePart>();
+            slide.Slide = new P.Slide(new P.CommonSlideData(new P.ShapeTree(new P.Shape(
+                new P.TextBody(new D.BodyProperties(), new D.Paragraph(new D.Run(new D.Text("Agenda"))))))));
+        }
+
+        var r = Extractor.Extract("deck.pptx", null, ms.ToArray());
+
+        Assert.Equal("Agenda", r.Text);
     }
 }

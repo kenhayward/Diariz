@@ -413,6 +413,35 @@ public class ChatControllerTests
         Assert.IsType<BadRequestObjectResult>((await controller.Attachment(file, default)).Result);
     }
 
+    [Theory]
+    [InlineData("budget.xlsx")]
+    [InlineData("notes.docx")]
+    [InlineData("deck.pptx")]
+    [InlineData("report.pdf")]
+    public async Task Attachment_AFileThatCannotBeRead_ReturnsBadRequestNotAServerError(string name)
+    {
+        // #807: only ArgumentException was turned into a 400, so the document libraries' own failures -
+        // a corrupt or truncated file under a supported extension - escaped as a 500.
+        var (controller, _, _, _) = Build(Guid.NewGuid());
+        var file = TextFile(name, "application/octet-stream", "this is not a document");
+
+        var res = (await controller.Attachment(file, default)).Result;
+
+        var bad = Assert.IsType<BadRequestObjectResult>(res);
+        Assert.Equal("This file could not be read.", bad.Value);
+    }
+
+    [Fact]
+    public async Task Attachment_ACancelledRequest_IsNotReportedAsAnUnreadableFile()
+    {
+        var (controller, _, _, _) = Build(Guid.NewGuid());
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => controller.Attachment(TextFile("notes.txt", "text/plain", "hello"), cts.Token));
+    }
+
     private static IFormFile TextFile(string name, string contentType, string content)
     {
         var bytes = Encoding.UTF8.GetBytes(content);
