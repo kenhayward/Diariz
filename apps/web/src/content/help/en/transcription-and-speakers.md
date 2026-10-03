@@ -149,8 +149,15 @@ Other things the transcript toolbar does:
 
 ## When one row has two people in it
 
-Diariz attributes a whole row to one speaker. Sometimes that is wrong in a specific way: the row is mostly
-one person, with someone else's few words inside it. Naming the dominant speaker then teaches their
+Diariz starts a new row wherever the speaker changes between words, so when someone answers partway
+through another person's sentence, their words appear under their own name. That is why you may see short
+rows such as a one-word "Yeah." - press **Merge** if you would rather have them joined back. A single stray
+word inside one person's turn is left where it is rather than split off. Recordings transcribed before this
+behaviour arrived keep their old rows until you re-transcribe them, and the live transcript shown during a
+meeting keeps whole rows; the final transcript after Stop is split.
+
+The split is only as good as the voice separation behind it, so a row can still hold two people: it is
+mostly one person, with someone else's few words inside it. Naming the dominant speaker then teaches their
 voiceprint from the other person's voice too.
 
 Select the row and press **Split**. The row is laid out word by word with a scissors between each pair of

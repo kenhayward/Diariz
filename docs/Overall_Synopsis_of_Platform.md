@@ -430,10 +430,29 @@ three-second window the case for that work is weak.
      `load_align_model` raises `ValueError: No default align-model for language: X` for the rest. That used to
      fail the whole job and discard a transcript the ASR had already produced; `pipeline._get_align` now returns
      `None` for such a language (cached, so it is not re-attempted per job) and the pipeline keeps the ASR's own
-     segment timings. Nothing downstream needs the words - `_shape_segments` stores segment-level
-     start/end/text/speaker either way, and `assign_word_speakers` guards its word loop with `if 'words' in seg`,
-     so speakers are still assigned. Only that `ValueError` is swallowed: a failed download or broken checkpoint
-     still fails the job rather than silently costing every transcript its alignment.
+     segment timings. `assign_word_speakers` guards its word loop with `if 'words' in seg`, so speakers are
+     still assigned per segment; such a transcript simply has no stored word timings (no manual split) and is
+     not split at word-speaker changes. Only that `ValueError` is swallowed: a failed download or broken
+     checkpoint still fails the job rather than silently costing every transcript its alignment.
+   - **Split at word-speaker changes (issue #803).** `assign_word_speakers` gives every segment its majority
+     speaker and every timed word its own. `segment_split.split_by_word_speaker` runs between it and
+     `_shape_segments` and cuts a Whisper segment wherever the word speaker changes, so an interjection is not
+     shown under the person it interrupted. The conventions mirror the API's manual split
+     (`TranscriptSegmentSplit`): word-snapped cuts, outer edges keep the segment's bounds, the gap at a cut
+     belongs to neither piece, and each piece's text is cut out of the segment's own text. Rules: a word with
+     no diarization overlap joins the nearer neighbour by gap (an untimed word joins the previous one); a run
+     sandwiched inside one speaker's turn with fewer than `SPLIT_MIN_WORDS` (2) words **and** shorter than
+     `SPLIT_MIN_MS` (1000) is absorbed, while short runs at a segment's edge are kept; and a **label-set guard**
+     never lets a split use a label that won no whole segment in the same pass, so the set of speaker labels,
+     Speaker rows and voiceprints is exactly what it was. Anything that cannot be cut safely comes back
+     unchanged. The callback contract is unchanged - there are just more `Segments[]`, in time order - and the
+     voiceprints are pooled from the split segments, which is why it lives in the worker rather than the API.
+     Measured on AMI (pyannote 3.1): words under the wrong speaker 8.6% -> 6.4% on test and 12.9% -> 9.3% on
+     dev, for 13-17% more segments. Switches: `SPLIT_SEGMENTS_BY_WORD_SPEAKER` (full files, default on) and
+     `SPLIT_LIVE_SEGMENTS_BY_WORD_SPEAKER` (live chunks, default **off**, because per-chunk voiceprints drive
+     the cross-chunk stitcher, which has no minimum-speech guard). When the live switch is on,
+     `transcribe_window` trims whole segments to the window first and splits only the survivors, so the
+     chunk-edge keep-or-drop decision is unchanged.
 4. **Callback.** The worker `POST`s to **`internal/transcriptions/result`**, authenticated by the shared
    header **`X-Worker-Secret`** (= `CALLBACK_SECRET`), not JWT. Body (PascalCase) carries
    `{ TranscriptionId, Language, DurationMs, ProcessingMs, Segments[], Speakers[] }`, where each `Speaker`
@@ -3525,7 +3544,7 @@ want it runs the platform exactly as before with zero extra containers.
   - **One transaction per job.** `worker.py` wraps each job in a `transcribe` transaction, with a `span` per
     stage - `download` (fetching the blob from the S3 store), `decode` (the ffmpeg decode to a 16 kHz waveform, the
     slowest single stage on a long upload), `asr`, `align`, `diarize`, `shape` (reshaping into the callback's
-    segment contract), `embeddings` (the ECAPA voiceprint step, gated by `ENABLE_SPEAKER_EMBEDDINGS`), and
+    segment contract, including the word-speaker split), `embeddings` (the ECAPA voiceprint step, gated by `ENABLE_SPEAKER_EMBEDDINGS`), and
     `callback` (posting the result back to the API). The stages are deliberately gap-free, so the spans add up
     to the job's wall-clock time and a slow job can be traced to the stage responsible.
   - **A failed job files one issue, not two.** `worker.handle()` both logs the failure (`log.exception`) and

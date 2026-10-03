@@ -85,5 +85,19 @@ class Config:
     EMBED_MAX_SECONDS = float(os.getenv("EMBED_MAX_SECONDS", "120"))
     EMBED_CACHE_DIR = os.getenv("EMBED_CACHE_DIR", "")  # speechbrain savedir (blank => default)
 
+    # Split a Whisper segment where the word-level speaker changes (segment_split, issue #803), instead
+    # of showing every word under the segment's majority speaker. Measured on AMI, words under the wrong
+    # speaker fell from 8.6% to 6.4% (test) and 12.9% to 9.3% (dev), for 13-17% more segments.
+    SPLIT_SEGMENTS_BY_WORD_SPEAKER = os.getenv("SPLIT_SEGMENTS_BY_WORD_SPEAKER", "1") not in (
+        "0", "false", "False", "")
+    # The live path separately, and off by default: its per-label voiceprints drive cross-chunk speaker
+    # stitching, so it is turned on only once a replay of real chunks shows the stitcher unaffected.
+    SPLIT_LIVE_SEGMENTS_BY_WORD_SPEAKER = os.getenv("SPLIT_LIVE_SEGMENTS_BY_WORD_SPEAKER", "0") not in (
+        "0", "false", "False", "")
+    # A run of another speaker's words inside one speaker's turn is absorbed when it has fewer words than
+    # this AND lasts less than SPLIT_MIN_MS. Runs at a segment's edge are never absorbed.
+    SPLIT_MIN_WORDS = int(os.getenv("SPLIT_MIN_WORDS", "2"))
+    SPLIT_MIN_MS = float(os.getenv("SPLIT_MIN_MS", "1000"))
+
 
 config = Config()

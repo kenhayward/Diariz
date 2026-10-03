@@ -9,6 +9,18 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.274.0",
+    date: "2026-10-03",
+    pr: 804,
+    headline: "Words show under the person who said them",
+    summary:
+      "When someone spoke partway through a sentence - a quick \"yes\" while another person was talking, or an answer that began before the question had finished - the transcript used to show the whole passage under one name, so their words appeared under the wrong person.\n\nThe transcript now starts a new row wherever the speaker changes between words. On a public meeting benchmark this cuts the words shown under the wrong speaker by about a quarter (from 8.6% to 6.4%), a bigger gain than any change of speaker-recognition model we measured. A single stray word inside someone else's sentence is not split off, so rows only break where the speaker really changes. Voiceprints for recognising people are built from cleaner audio as a result.\n\nYou will see a few more, shorter rows, including one-word replies such as \"Yeah.\". Merge rows joins them back if you prefer. This applies to new recordings; re-transcribe a recording to apply it to an older one. The transcript shown during a live meeting is unchanged for now; the final transcript after you stop uses the new rule.",
+    changed: [
+      "A transcript row is split where the speaker changes between words, so an interjection appears under the person who said it (#803)",
+      "Voiceprints are built from audio that belongs to one speaker more often",
+    ],
+  },
+  {
     version: "0.273.6",
     date: "2026-10-02",
     pr: 802,
