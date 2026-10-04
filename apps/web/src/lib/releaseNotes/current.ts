@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.275.6",
+    date: "2026-10-04",
+    pr: 825,
+    headline: "The server notices a half-built search index instead of quietly paying for it",
+    summary:
+      "When rebuilding one of the database's search indexes is interrupted, the database keeps the half-finished one. It is never used to answer anything, but it is still kept up to date every time a transcript is written, so it costs the server work for no benefit - and nothing reported it. On this platform it happened once and went unnoticed through a full server rebuild.\n\nThe server now checks hourly and raises an alert to the administrators' error-tracking tool when it finds one, naming the index and what to do about it. It waits for the problem to persist and checks that no rebuild is actually running, so a deliberate rebuild never raises a false alarm. Nothing about the app changes.",
+    added: [
+      "An hourly check that alerts when the database is maintaining an index no query can use, which an interrupted index rebuild leaves behind (#822)",
+    ],
+  },
+  {
     version: "0.275.5",
     date: "2026-10-04",
     pr: 824,

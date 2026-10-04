@@ -585,6 +585,10 @@ builder.Services.AddHostedService<LiveRecordingReaper>();
 // Nightly LLM usage-log retention sweep: deletes LlmCall rows older than LlmUsageRetentionDays (0 = keep
 // forever). Reuses AudioRetentionSchedule's server-local time of day.
 builder.Services.AddHostedService<LlmUsageRetentionWorker>();
+// Hourly check for indexes Postgres is maintaining but will never use (indisvalid = false), which a failed
+// CREATE INDEX / REINDEX CONCURRENTLY leaves behind. Reports at Error level, so GlitchTip raises it - see
+// InvalidIndexMonitor for why nothing else would ever notice. Postgres-only; a no-op elsewhere.
+builder.Services.AddHostedService<InvalidIndexMonitorWorker>();
 
 builder.Services.AddControllers()
     .AddJsonOptions(o => JsonConfig.Apply(o.JsonSerializerOptions));

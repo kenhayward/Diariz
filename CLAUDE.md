@@ -51,8 +51,10 @@ API persists `Segment`s + seeds `Speaker` rows → notifies the browser over **S
   `BackgroundService`s** - summarization, meeting minutes, section summary, section minutes, actions,
   tags, formula runs and embeddings (each `*Worker.cs` in `Api/Services` calls `StreamReadGroupAsync`).
   So "the worker" in a stack trace may mean either process: check which stream the job is on.
-  `Program.cs` registers 15 `AddHostedService`s in total - the eight stream consumers plus backfills
-  (tag, embedding, storage), retention (audio, LLM usage) and the LLM usage writer.
+  `Program.cs` registers 17 `AddHostedService`s in total - the eight stream consumers, plus backfills
+  (tag, embedding, storage), retention (audio, LLM usage), the webhook delivery worker, the live-capture
+  reaper, the invalid-index monitor and the LLM usage writer. (The previous count of 15 had drifted: it
+  omitted the webhook worker and the reaper. If you add one, make the list add up to the number.)
 - **Transcription job payload.** The job payload is JSON with **PascalCase**
   keys (`TranscriptionId`, `BlobKey`, `Model`) — produced by .NET, consumed by Python. The worker's
   callback bodies are also PascalCase so .NET model binding works. Keep both sides in sync when
