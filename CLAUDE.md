@@ -44,17 +44,19 @@ API persists `Segment`s + seeds `Speaker` rows → notifies the browser over **S
 
 ### Cross-boundary contracts (the non-obvious glue)
 
-- **Redis Stream job queues - there are eleven, not one.** `RedisJobQueue` (`Api/Services/JobQueue.cs`)
-  enqueues onto **11** streams. **Three** are consumed by the Python worker, which reads all of them
-  under consumer group `workers`: `transcription-jobs`, `audio-merge-jobs` and `voiceprint-jobs`
-  (`worker/config.py`). The other **eight** are drained **in-process by the API's own
-  `BackgroundService`s** - summarization, meeting minutes, section summary, section minutes, actions,
+- **Redis Stream job queues - there are twelve, not one.** `RedisJobQueue` (`Api/Services/JobQueue.cs`)
+  enqueues onto **12** streams (count the `StreamAddAsync` calls; the doc has twice said a number the code
+  had outgrown). **Four** are consumed by the Python worker under consumer group `workers`:
+  `transcription-jobs`, `audio-merge-jobs`, `voiceprint-jobs` and `live-chunk-jobs` (`worker/config.py`,
+  which reads live chunks in a mode of its own so they cannot queue behind an hour of audio). The other
+  **eight** are drained **in-process by the API's own `BackgroundService`s** - summarization, meeting minutes, section summary, section minutes, actions,
   tags, formula runs and embeddings (each `*Worker.cs` in `Api/Services` calls `StreamReadGroupAsync`).
   So "the worker" in a stack trace may mean either process: check which stream the job is on.
-  `Program.cs` registers 17 `AddHostedService`s in total - the eight stream consumers, plus backfills
+  `Program.cs` registers 18 `AddHostedService`s in total - the eight stream consumers, plus backfills
   (tag, embedding, storage), retention (audio, LLM usage), the webhook delivery worker, the live-capture
-  reaper, the invalid-index monitor and the LLM usage writer. (The previous count of 15 had drifted: it
-  omitted the webhook worker and the reaper. If you add one, make the list add up to the number.)
+  reaper, the invalid-index monitor, the job-stream trimmer and the LLM usage writer. (That count has
+  drifted twice - it said 15 while omitting the webhook worker and the reaper. If you add one, make the
+  list add up to the number.)
 - **Transcription job payload.** The job payload is JSON with **PascalCase**
   keys (`TranscriptionId`, `BlobKey`, `Model`) — produced by .NET, consumed by Python. The worker's
   callback bodies are also PascalCase so .NET model binding works. Keep both sides in sync when
