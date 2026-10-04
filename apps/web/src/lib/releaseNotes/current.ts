@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.275.5",
+    date: "2026-10-04",
+    pr: 824,
+    headline: "Dependency records that nothing maintained are gone, and drift now fails the build",
+    summary:
+      "Internal housekeeping with no effect on the app. Two of the server projects carried a record of their software dependencies that nothing kept up to date, and one had fallen a long way behind what the server actually builds against - which meant the security scanning that reads those records was being told the wrong versions.\n\nThose two records are removed, since the packages they listed are already tracked accurately elsewhere, and a build check now fails if any remaining record ever disagrees with its project again.",
+    fixed: [
+      "Two server projects had unmaintained dependency lock files, one of them 48 packages behind, so security scanning saw the wrong versions (#823)",
+    ],
+  },
+  {
     version: "0.275.4",
     date: "2026-10-03",
     pr: 820,

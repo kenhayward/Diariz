@@ -15,6 +15,27 @@ permissions:
   contents: read
 
 jobs:
+  # Fails when any committed packages.lock.json no longer matches its project, which nothing used to
+  # catch: RestorePackagesWithLockFile is on for the dependency graph's benefit but locked mode is not,
+  # so an ordinary restore silently rewrites a stale lock in its own workspace and passes. One lock sat
+  # 48 of 94 packages behind the Api for months, telling GitHub's dependency graph the wrong versions,
+  # and was only noticed by reading `git status` after an unrelated local build (issue #823).
+  #
+  # This deliberately does NOT move floating versions - the repo pairs 12 floating references (10.*, 4.*)
+  # with committed locks, and locked mode leaving a float alone is the point. A deliberate dependency
+  # refresh is `dotnet restore Diariz.slnx --force-evaluate`, solution-wide, which is what should then
+  # update the locks in the same PR.
+  dotnet-locks:
+    name: .NET lock files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Restore in locked mode
+        run: dotnet restore Diariz.slnx --locked-mode
+
   dotnet-unit:
     name: .NET unit
     runs-on: ubuntu-latest
