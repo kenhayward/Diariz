@@ -589,6 +589,10 @@ builder.Services.AddHostedService<LlmUsageRetentionWorker>();
 // CREATE INDEX / REINDEX CONCURRENTLY leaves behind. Reports at Error level, so GlitchTip raises it - see
 // InvalidIndexMonitor for why nothing else would ever notice. Postgres-only; a no-op elsewhere.
 builder.Services.AddHostedService<InvalidIndexMonitorWorker>();
+// Daily XTRIM of every job stream by MINID. Redis keeps an acknowledged stream entry forever, so without
+// this all twelve streams grow without bound, in memory and in the AOF replayed at every restart. The
+// window is deliberately a week - see StreamRetention for why trimming too eagerly is the worse failure.
+builder.Services.AddHostedService<StreamRetentionWorker>();
 
 builder.Services.AddControllers()
     .AddJsonOptions(o => JsonConfig.Apply(o.JsonSerializerOptions));

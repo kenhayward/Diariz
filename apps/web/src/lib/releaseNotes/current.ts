@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.275.7",
+    date: "2026-10-04",
+    pr: 826,
+    headline: "Finished work is cleared out of the job queues instead of kept forever",
+    summary:
+      "Work passes between the app and the transcription server through twelve queues. A finished item was left in its queue rather than discarded, so the queues only ever grew - every recording, summary and live caption ever processed was still being held in the server's memory and re-read at every restart.\n\nCompleted items older than a week are now cleared out once a day. The week is deliberately generous: an item still being worked on holds the only copy of its instructions, and clearing one of those too early would leave a recording stuck part-way with nothing to finish it. Nothing about the app changes.",
+    fixed: [
+      "The twelve job queues never discarded completed work, so they grew without limit in server memory and slowed every restart (#818)",
+    ],
+  },
+  {
     version: "0.275.6",
     date: "2026-10-04",
     pr: 825,

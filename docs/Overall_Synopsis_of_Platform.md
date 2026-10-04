@@ -3341,8 +3341,28 @@ the least likely to hold.
   the same state occurs **legitimately** during a concurrent build, so `InvalidIndexRules` requires the index
   to be invalid on **two consecutive checks** *and* `pg_stat_progress_create_index` to show no live build -
   an alert that fires during deliberate maintenance trains the reader to ignore it. Deliberately not on
-  `GET /health`, which is unauthenticated and where index names would disclose schema. These two take the
-  API's `AddHostedService` count to 17.
+  `GET /health`, which is unauthenticated and where index names would disclose schema.
+- **`StreamRetentionWorker` (hosted service).** Daily `XTRIM ... MINID ~` over all **twelve** job streams.
+  Redis does not discard a stream entry when it is acknowledged - the consumer group's pending list empties
+  and the entry stays - and nothing ever passed a `MAXLEN`, so every stream accumulated every job ever
+  enqueued, held in memory and replayed from the AOF on each restart. `live-chunk-jobs` grows fastest by
+  orders of magnitude: one entry per audio chunk per recording during a live meeting.
+  The window is **seven days**, which looks absurdly generous and is the point. An entry that is still
+  **pending** holds the only copy of its payload: `StreamReclaimer` reads it back before acking an abandoned
+  message, and its `if (entry.Length > 0)` guard means a trimmed entry does not throw - the handler simply
+  never runs, so the recording is never settled and sits in `Transcribing` with nothing to move it on. A trim
+  that is too aggressive therefore converts a delayed job into a silently lost one, which is a worse failure
+  than the growth it fixes. An entry can legitimately stay pending for the length of its job (the Python
+  worker accepts up to four hours of audio and refreshes its claim while working) plus the abandon window
+  (`StreamReclaimer.DefaultMinIdle` x `MaxDeliveries`). `StreamRetentionTests` asserts the window against
+  that relationship rather than the number, and enumerates the options to prove no stream is left untrimmed.
+  Trimming by **MINID** not `MAXLEN` because a count cannot express "older than the longest a job can run",
+  and the safe count differs per stream by orders of magnitude - and **exact**, not the approximate `~`
+  form. Approximate trimming evicts whole radix nodes only, so a stale entry sharing a node with a retained
+  one survives and which entries go depends on how Redis packed them; `~` is for trimming that rides along
+  with every add at high throughput, whereas this is a daily sweep whose exact cost is proportional to what
+  it removes. These three take the API's
+  `AddHostedService` count to 18.
 - **Merge recordings.** `POST /api/recordings/merge` folds 2+ recordings into the earliest one: it builds a new
   transcription version on the survivor (`TranscriptMerger` lays the source transcripts end-to-end, offsetting
   timestamps and namespacing speakers) and **appends every source's action items** to the survivor. The summary
