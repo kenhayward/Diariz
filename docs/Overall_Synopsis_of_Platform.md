@@ -3330,7 +3330,19 @@ the least likely to hold.
 - **`LiveRecordingReaper` (hosted service).** Finalises live captures whose client vanished - a closed lid, a
   killed tab - from whatever chunks arrived, or deletes the recording if none did. It deliberately skips
   `Merging`, so it cannot race an in-flight finalise; the consequence is that a failed enqueue must put the
-  status back to `Live` or no later pass would ever retry it. Takes the API's `AddHostedService` count to 16.
+  status back to `Live` or no later pass would ever retry it.
+- **`InvalidIndexMonitorWorker` (hosted service).** Hourly, Postgres-only: finds indexes with
+  `indisvalid = false` and reports them at **Error** level, so the GlitchTip integration raises an alert.
+  Such an index is "ignored for queries, while it may still consume update overhead" - so a failed
+  `CREATE INDEX` / `REINDEX CONCURRENTLY` leaves a permanent tax on every write with no benefit, and on the
+  HNSW index over `TranscriptChunk` that tax is large. It happened on production on 2026-10-03 and survived a
+  full stack rebuild unnoticed, because nothing reported it and no query plan mentions it; the symptom a
+  person eventually sees is "transcription got slower". The trap the implementation exists to avoid is that
+  the same state occurs **legitimately** during a concurrent build, so `InvalidIndexRules` requires the index
+  to be invalid on **two consecutive checks** *and* `pg_stat_progress_create_index` to show no live build -
+  an alert that fires during deliberate maintenance trains the reader to ignore it. Deliberately not on
+  `GET /health`, which is unauthenticated and where index names would disclose schema. These two take the
+  API's `AddHostedService` count to 17.
 - **Merge recordings.** `POST /api/recordings/merge` folds 2+ recordings into the earliest one: it builds a new
   transcription version on the survivor (`TranscriptMerger` lays the source transcripts end-to-end, offsetting
   timestamps and namespacing speakers) and **appends every source's action items** to the survivor. The summary
