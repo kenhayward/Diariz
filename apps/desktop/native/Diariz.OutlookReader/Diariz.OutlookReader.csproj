@@ -13,6 +13,11 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- No PackageReference and no ProjectReference, so the lock file Directory.Build.props would emit
+         here held exactly one entry: Microsoft.NET.ILLink.Tasks, injected by the SDK. It carried no
+         dependency information, nothing maintained it, and this project is not in Diariz.slnx so no
+         locked-mode restore would ever check it. See issue #823. -->
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>Diariz.OutlookReader</AssemblyName>

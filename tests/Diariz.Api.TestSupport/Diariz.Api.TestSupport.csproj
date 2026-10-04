@@ -2,6 +2,13 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <!-- No PackageReference in this project - every package it compiles against arrives through the
+         ProjectReference below. Directory.Build.props would still emit a packages.lock.json here, and
+         nothing maintains it: Dependabot only updates locks for manifests it edits, and there is nothing
+         to edit. It drifted to 48 of 94 packages behind the Api and was hand-realigned twice before
+         (88552657, 2cb5b73e) - see issue #823. The packages are all tracked by
+         src/Diariz.Api/packages.lock.json, which Dependabot does maintain, so nothing is lost. -->
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
