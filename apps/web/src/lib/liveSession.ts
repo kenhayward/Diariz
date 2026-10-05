@@ -33,7 +33,9 @@ export interface LiveSessionDeps {
   upload: (recordingId: string, sessionId: string, chunk: {
     sequence: number; blob: Blob; startMs: number; endMs: number;
   }) => Promise<void>;
-  finalize: (recordingId: string) => Promise<void>;
+  /// Concatenate what the server holds. `expectedFinalSequence` is the highest sequence this client
+  /// assigned (-1 if none), which is what lets the server refuse a capture truncated at the end.
+  finalize: (recordingId: string, expectedFinalSequence: number) => Promise<void>;
   /// Ask the MediaRecorder to emit everything since the last fragment. The blob arrives later, via
   /// `offerFragment` - `requestData` is fire-and-forget by design.
   requestFragment: () => void;
@@ -52,7 +54,9 @@ export interface LiveSession {
   tick(dtMs: number, level: number, paused: boolean): void;
   /// A fragment the recorder produced. Spans the recorded-clock range since the previous one.
   offerFragment(blob: Blob, atRecordedMs: number): Promise<void>;
-  /// Finish: queue whatever is left, drain, then ask the server to concatenate.
+  /// Finish: queue whatever is left, drain, and ask the server to concatenate **only if it now holds
+  /// every chunk**. When anything is still outstanding this finalises nothing and leaves the capture
+  /// `Live`, so `pending()` is non-empty and the caller falls back to uploading the whole take.
   finish(atRecordedMs: number, tail?: Blob): Promise<void>;
   /// Sequences still held locally - none means everything reached the server.
   pending(): Promise<number[]>;
@@ -117,7 +121,23 @@ export async function startLiveSession(deps: LiveSessionDeps): Promise<LiveSessi
         chunkStartMs = atRecordedMs;
       }
       await drain();
-      await deps.finalize(begun.id);
+
+      // Ask BEFORE finalising, not after. Finalising is irreversible - it merges the chunks and
+      // queues the transcription - and `drain()` deliberately swallows upload failures so that a
+      // network problem never breaks recording. Finalising anyway produced the #827 duplicate: one
+      // meeting was merged 9.2s short because its tail never arrived, the caller then discovered the
+      // tail was still queued, and the whole take was uploaded again as a second recording.
+      //
+      // A missing tail is invisible to the server's own gap check unless we tell it what to expect
+      // (that is what `highestSequence()` is for below), but the client already knows, so the cheaper
+      // and more certain guard is simply not to call it.
+      const outstanding = await queue.pendingSequences();
+      if (outstanding.length > 0) {
+        deps.onTrouble?.("Some audio has not reached the server yet.");
+        return;
+      }
+
+      await deps.finalize(begun.id, queue.highestSequence());
     },
 
     pending: () => queue.pendingSequences(),

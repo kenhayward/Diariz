@@ -23,6 +23,16 @@ export function isGatewayError(e: unknown): boolean {
   return status === 502 || status === 503 || status === 504;
 }
 
+/// True for a 409 the API itself answered.
+///
+/// Used by the live-capture fallback for a narrow but load-bearing inference: `DELETE
+/// /api/recordings/{id}/live` refuses anything past `Live`, so a 409 from it means the server
+/// finalised the capture after all and we simply never saw the answer. That is the one case where
+/// uploading the buffered blob as well would duplicate the meeting rather than rescue it (#827).
+export function isConflict(e: unknown): boolean {
+  return axios.isAxiosError(e) && e.response?.status === 409;
+}
+
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /// Run `fn`, retrying only while it fails with a gateway error. Rethrows the last error once the delays

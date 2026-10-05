@@ -3327,10 +3327,38 @@ the least likely to hold.
   never arrived. Every chunk carries the client-generated `sessionId` from the begin call, so a second device
   signed in as the same user is refused instead of interleaving its audio. Quota is checked per chunk as well
   as at begin, because the begin check is only an estimate against a duration the client declares.
+
+  **Finalise takes `expectedFinalSequence` - the highest sequence the client assigned, or -1 for none - and
+  the body is optional.** Arrivals alone cannot reveal a capture truncated at the *end*: a chunk whose upload
+  never succeeded leaves no row, so the set simply stops earlier and looks perfectly contiguous. Issue #827
+  merged a production meeting 9.2 s short exactly there, and because the client then noticed the tail was
+  still queued and uploaded its complete local copy as well, the user got **two recordings of one meeting**
+  with two slightly different transcripts. Three rules now hold, and each is load-bearing on its own:
+  - **The client checks before finalising, not after.** `LiveSession.finish` consults its own queue and
+    returns without calling finalise when anything is outstanding - finalise merges and queues the
+    transcription, so it must never be called speculatively. Checking afterwards is what made the duplicate.
+  - **The server can refuse a short capture.** `expectedFinalSequence` is folded into the same `missing`
+    computation as interior holes (`Math.Max(chunks[^1].Sequence, expected)`), so there is one notion of
+    "missing" and the client retries everything outstanding in one pass. Absent means *no expectation* rather
+    than *expect nothing*, which is what keeps an older cached bundle and the reaper working.
+  - **The fallback discards what it replaces.** On any path where the whole blob is uploaded instead, the
+    client calls `DELETE /api/recordings/{id}/live`. Left alone the capture is reaped into a second recording
+    (see below). A **409 from that delete is read as proof the capture was finalised after all** - the
+    endpoint refuses anything past `Live` - and the client then skips the upload entirely rather than
+    duplicating the meeting. Any other failure still uploads: a stray partial recording can be deleted by
+    hand, a lost meeting cannot be recovered.
+
+  Finalise is also retried past a gateway error now (`retryOnGatewayError`, as the blob upload already was),
+  since the endpoint answers `Accepted` to a second call once it is already `Merging`. Without that, a blip
+  during an API redeploy sent a finished meeting down the fallback path and duplicated it.
 - **`LiveRecordingReaper` (hosted service).** Finalises live captures whose client vanished - a closed lid, a
   killed tab - from whatever chunks arrived, or deletes the recording if none did. It deliberately skips
   `Merging`, so it cannot race an in-flight finalise; the consequence is that a failed enqueue must put the
-  status back to `Live` or no later pass would ever retry it.
+  status back to `Live` or no later pass would ever retry it. It **accepts a gap on purpose** ("the audio that
+  arrived is still the user's"), which is right for a crashed client and is exactly why the client must
+  discard a capture it has replaced with a complete upload - the same rule that rescues a lost meeting
+  manufactures a duplicate of one that was never lost (#827). It is deliberately **not** given an expected
+  final sequence: the only party who knew it is gone.
 - **`InvalidIndexMonitorWorker` (hosted service).** Hourly, Postgres-only: finds indexes with
   `indisvalid = false` and reports them at **Error** level, so the GlitchTip integration raises an alert.
   Such an index is "ignored for queries, while it may still consume update overhead" - so a failed

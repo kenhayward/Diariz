@@ -91,6 +91,103 @@ public class LiveFinalizeTests
     }
 
     [Fact]
+    public async Task Finalize_WhenTheClientAssignedMoreChunksThanArrived_Returns409AndNamesTheMissingTail()
+    {
+        // #827. The gap check alone cannot see a truncated capture: a chunk whose upload never
+        // succeeded leaves no row, so `chunks[^1]` is simply lower and the set looks contiguous. One
+        // meeting was merged 9.2s short this way and then uploaded again whole, giving the user two
+        // recordings of it. The client's own highest assigned sequence is what makes the tail visible.
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        await LiveTestSupport.SeedUser(db, me);
+        var queue = new FakeJobQueue();
+        var controller = LiveTestSupport.Build(db, me, queue);
+        var (id, _) = await BeginWithChunks(db, me, controller, 0, 1);
+
+        var result = await controller.FinalizeLive(id, new FinalizeLiveRequest(2));
+
+        var conflict = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status409Conflict, conflict.StatusCode);
+        var missing = Assert.IsType<MissingChunksDto>(conflict.Value);
+        Assert.Equal(new[] { 2 }, missing.MissingSequences);
+        Assert.Empty(queue.AudioMergeEnqueued);
+        Assert.Equal(RecordingStatus.Live, (await db.Recordings.SingleAsync(r => r.Id == id)).Status);
+    }
+
+    [Fact]
+    public async Task Finalize_ReportsAnInteriorHoleAndAMissingTailTogether()
+    {
+        // One notion of "missing", so the client retries everything outstanding in one pass rather
+        // than finalising, being told about the hole, fixing it, and being told about the tail.
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        await LiveTestSupport.SeedUser(db, me);
+        var queue = new FakeJobQueue();
+        var controller = LiveTestSupport.Build(db, me, queue);
+        var (id, _) = await BeginWithChunks(db, me, controller, 0, 2);
+
+        var result = await controller.FinalizeLive(id, new FinalizeLiveRequest(4));
+
+        var conflict = Assert.IsType<ObjectResult>(result);
+        var missing = Assert.IsType<MissingChunksDto>(conflict.Value);
+        Assert.Equal(new[] { 1, 3, 4 }, missing.MissingSequences);
+    }
+
+    [Fact]
+    public async Task Finalize_WhenTheExpectedTailArrived_Accepts()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        await LiveTestSupport.SeedUser(db, me);
+        var queue = new FakeJobQueue();
+        var controller = LiveTestSupport.Build(db, me, queue);
+        var (id, _) = await BeginWithChunks(db, me, controller, 0, 1, 2);
+
+        var result = await controller.FinalizeLive(id, new FinalizeLiveRequest(2));
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.Single(queue.AudioMergeEnqueued);
+    }
+
+    [Fact]
+    public async Task Finalize_WithoutAnExpectation_StillAcceptsAContiguousSet()
+    {
+        // Back-compatible on purpose, two ways: a browser serving a cached older bundle sends no body,
+        // and the reaper has no expectation to send - the client that would have known is gone, and
+        // refusing there would strand the capture in Live forever, which is the opposite of what the
+        // reaper exists to do.
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        await LiveTestSupport.SeedUser(db, me);
+        var queue = new FakeJobQueue();
+        var controller = LiveTestSupport.Build(db, me, queue);
+        var (id, _) = await BeginWithChunks(db, me, controller, 0, 1);
+
+        var result = await controller.FinalizeLive(id, null);
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.Single(queue.AudioMergeEnqueued);
+    }
+
+    [Fact]
+    public async Task Finalize_WithNoChunksAndNothingExpected_DeletesTheRecording()
+    {
+        // A take stopped before a single fragment closed. The client says it assigned none (-1), and
+        // this must stay a tidy-up rather than becoming a 409 nobody can clear.
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        await LiveTestSupport.SeedUser(db, me);
+        var queue = new FakeJobQueue();
+        var controller = LiveTestSupport.Build(db, me, queue);
+        var (id, _) = await BeginWithChunks(db, me, controller);
+
+        var result = await controller.FinalizeLive(id, new FinalizeLiveRequest(-1));
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.False(await db.Recordings.AnyAsync(r => r.Id == id));
+    }
+
+    [Fact]
     public async Task Finalize_WithNoChunks_DeletesTheRecording()
     {
         // A session where nothing ever arrived is not a recording, and leaving it would show the user
