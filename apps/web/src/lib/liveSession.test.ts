@@ -168,7 +168,9 @@ describe("startLiveSession", () => {
     await session.finish(30_000, blob("tail"));
 
     expect(sent).toEqual([0, 1]);
-    expect(finalize).toHaveBeenCalledWith("rec-1");
+    // The highest sequence this client assigned rides along, so the server can tell a complete
+    // capture from one truncated at the end - see the test below.
+    expect(finalize).toHaveBeenCalledWith("rec-1", 1);
   });
 
   it("still finalises when there is no tail", async () => {
@@ -177,7 +179,9 @@ describe("startLiveSession", () => {
 
     await session.finish(0);
 
-    expect(finalize).toHaveBeenCalledWith("rec-1");
+    // -1 = nothing was ever assigned, matching `highestSequence()` and `missingSequences()`. The
+    // server deletes the empty capture rather than leaving the user a row to tidy up.
+    expect(finalize).toHaveBeenCalledWith("rec-1", -1);
   });
 
   it("reports trouble rather than throwing when a chunk will not upload", async () => {
@@ -204,5 +208,55 @@ describe("startLiveSession", () => {
     await session.finish(21_000);
 
     expect(await session.pending()).toEqual([0]);
+  });
+  it("does not finalise while a chunk is still unsent", async () => {
+    // The defect behind #827. Finalise is irreversible - it merges the chunks and queues the
+    // transcription - so asking whether the server has everything AFTER calling it is too late. One
+    // meeting finalised 9.2s short and was then uploaded again whole, giving two recordings of it.
+    const finalize = vi.fn().mockResolvedValue(undefined);
+    const session = (await startLiveSession(deps({
+      upload: async () => { throw new Error("network"); },
+      finalize,
+    })))!;
+
+    await session.offerFragment(blob(), 21_000);
+    await session.finish(21_000);
+
+    expect(finalize).not.toHaveBeenCalled();
+    // Still outstanding, which is what tells the caller to upload the whole take instead.
+    expect(await session.pending()).toEqual([0]);
+  });
+
+  it("says so when it will not finalise, rather than failing silently", async () => {
+    const onTrouble = vi.fn();
+    const session = (await startLiveSession(deps({
+      upload: async () => { throw new Error("network"); },
+      onTrouble,
+    })))!;
+
+    await session.offerFragment(blob(), 21_000);
+    await session.finish(21_000);
+
+    expect(onTrouble).toHaveBeenCalled();
+  });
+
+  it("finalises once a retry clears the backlog", async () => {
+    // The flip side: an outstanding chunk must not condemn the capture permanently. A chunk that
+    // fails once and succeeds on the next drain still finalises normally.
+    let fail = true;
+    const finalize = vi.fn().mockResolvedValue(undefined);
+    const session = (await startLiveSession(deps({
+      upload: async () => { if (fail) throw new Error("network"); },
+      finalize,
+    })))!;
+
+    await session.offerFragment(blob(), 21_000);
+    expect(await session.pending()).toEqual([0]);
+
+    fail = false;
+    await session.finish(30_000, blob("tail"));
+
+    expect(finalize).toHaveBeenCalledWith("rec-1", 1);
+    expect(await session.pending()).toEqual([]);
   });
 });

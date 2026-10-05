@@ -9,6 +9,20 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.275.8",
+    date: "2026-10-05",
+    pr: 828,
+    headline: "A meeting whose last moments did not reach the server is no longer saved twice",
+    summary:
+      "While you record, the app sends your audio to the server continuously, so a closed laptop or a crashed browser costs you at most the last few seconds rather than the whole meeting. It also keeps its own complete copy, and uploads that instead if the continuous copy turns out to be incomplete when you press Stop.\n\nThe two safety nets could both fire for the same meeting. If the final piece of audio failed to send, the server was still told to assemble what it had - and it could not tell that anything was missing, because a piece that never arrived leaves nothing behind to notice. It assembled the meeting a few seconds short, the app then saw the piece still waiting, and uploaded the complete recording as well. The result was the same meeting listed twice, with two transcripts that differ slightly, and no indication that either was a duplicate.\n\nThree things change. The app now checks that the server has every piece before asking it to assemble anything, so it never starts something it already knows is incomplete. The server is told how many pieces to expect, so it can refuse to assemble a meeting that is missing its ending instead of quietly shortening it. And when the app does fall back to uploading its own copy, it now discards the partial one on the server rather than leaving it to be tidied up into a second recording half an hour later.\n\nIf assembling fails only because the server could not be reached for a moment, the app now retries before giving up, so a brief interruption while you stop recording no longer costs you a duplicate at all.",
+    fixed: [
+      "One meeting could be saved as two recordings with different transcripts when the last piece of live audio failed to reach the server (#827)",
+      "The server could assemble a live recording that was missing its ending, having no way to tell a complete capture from a truncated one (#827)",
+      "A partial live recording left behind by a failed stop was turned into a second copy of the meeting by the server's automatic tidy-up (#827)",
+      "Stopping a recording during a brief server interruption fell straight back to re-uploading the whole meeting instead of retrying (#827)",
+    ],
+  },
+  {
     version: "0.275.7",
     date: "2026-10-04",
     pr: 826,

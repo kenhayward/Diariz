@@ -1700,7 +1700,7 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false,
+        "hasBody": true,
         "returnsArray": false
       },
       {

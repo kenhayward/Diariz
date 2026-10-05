@@ -459,8 +459,12 @@ export const api = {
 
   /// Stop capturing and concatenate. Throws on 409 with the missing sequences when a chunk never
   /// arrived - retry those and call again rather than accepting a recording with holes in it.
-  async finalizeLive(recordingId: string): Promise<void> {
-    await http.post(`/api/recordings/${recordingId}/live/finalize`);
+  ///
+  /// `expectedFinalSequence` is the highest sequence this client assigned (-1 if none). Without it the
+  /// server can only see interior holes: a chunk whose upload never succeeded leaves no row at all, so
+  /// a capture truncated at the end looks contiguous and is merged short (#827).
+  async finalizeLive(recordingId: string, expectedFinalSequence: number): Promise<void> {
+    await http.post(`/api/recordings/${recordingId}/live/finalize`, { expectedFinalSequence });
   },
 
   /// Abandon a live capture and discard whatever arrived.

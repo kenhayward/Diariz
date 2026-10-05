@@ -1396,6 +1396,23 @@
         ],
         "type": "object"
       },
+      "FinalizeLiveRequest": {
+        "properties": {
+          "expectedFinalSequence": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "expectedFinalSequence"
+        ],
+        "type": "object"
+      },
       "FolderHitDto": {
         "properties": {
           "breadcrumb": {
@@ -10585,7 +10602,7 @@
     },
     "/api/recordings/{id}/live/finalize": {
       "post": {
-        "description": "Stops accepting chunks and concatenates them into the recording's audio, after which the normal transcription pipeline runs exactly as it does for an uploaded file. Responds 202; subscribe to the recording or the `recording.transcribed` webhook for the result.\n\n409 with the missing sequence numbers if any chunk never arrived - retry those and call this again, rather than accepting a recording with holes in it. 204 if no chunk ever arrived, in which case the empty recording is discarded.",
+        "description": "Stops accepting chunks and concatenates them into the recording's audio, after which the normal transcription pipeline runs exactly as it does for an uploaded file. Responds 202; subscribe to the recording or the `recording.transcribed` webhook for the result.\n\n409 with the missing sequence numbers if any chunk never arrived - retry those and call this again, rather than accepting a recording with holes in it. 204 if no chunk ever arrived, in which case the empty recording is discarded.\n\nSend `expectedFinalSequence` - the highest sequence you assigned, or -1 if none. Without it only *interior* holes can be detected: a chunk whose upload never succeeded leaves no row, so a capture truncated at the end looks contiguous and would be merged short. The body is optional for older clients.",
         "parameters": [
           {
             "in": "path",
@@ -10597,6 +10614,46 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/FinalizeLiveRequest"
+                  }
+                ]
+              }
+            },
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/FinalizeLiveRequest"
+                  }
+                ]
+              }
+            },
+            "text/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/FinalizeLiveRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "OK"

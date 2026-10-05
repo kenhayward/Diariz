@@ -507,7 +507,7 @@ other abandoned session.
 |---|---|
 | `POST /api/recordings/live` | Begin. Body mirrors the `Upload` form fields (title, source, startedAt, roomId, sectionId) minus the audio. Enforces the same room permission check. Returns the recording id. |
 | `PUT /api/recordings/{id}/chunks/{sequence}` | One chunk, multipart. Idempotent on `(id, sequence)`. Rejects when the recording is not `Live` or not the caller's. |
-| `POST /api/recordings/{id}/live/finalize` | Stop. Concats, then runs the normal transcription. Reports which sequences are missing if there is a gap (§9.2). |
+| `POST /api/recordings/{id}/live/finalize` | Stop. Concats, then runs the normal transcription. Body `{ expectedFinalSequence }` (optional); reports which sequences are missing if there is a gap **or a missing tail** (§9.2). |
 | `DELETE /api/recordings/{id}/live` | Abandon and discard. |
 
 Quota is charged at `POST /api/recordings/live` against a caller-declared expected duration, and
@@ -526,10 +526,42 @@ sequence) and upload when connectivity returns. Recording never blocks on the ne
 ### 9.2 A chunk is lost
 
 `PUT .../chunks/{sequence}` is idempotent on `(RecordingId, Sequence)`, so a retry is safe. `finalize`
-computes the expected sequence set from the highest sequence received and refuses to concat if any are
-missing, returning the gap. The client retries the named sequences from its IndexedDB queue, then
-finalises again. Only if a chunk is genuinely unrecoverable does the user get a choice: finalise with a
-gap, or keep waiting.
+refuses to concat if any sequence is missing, returning the gap. The client retries the named sequences
+from its IndexedDB queue, then finalises again. Only if a chunk is genuinely unrecoverable does the user
+get a choice: finalise with a gap, or keep waiting.
+
+> **Corrected 0.275.8 (issue #827).** This section originally said `finalize` "computes the expected
+> sequence set **from the highest sequence received**". That is only sound for an *interior* hole. A chunk
+> whose upload never succeeded leaves no row at all, so a capture truncated at the **end** has a lower
+> highest-received and looks perfectly contiguous - and was concatenated short. Finalise therefore now
+> takes `expectedFinalSequence` (the highest the client assigned, -1 for none) and folds it into the same
+> computation, `Math.Max(chunks[^1].Sequence, expected)`. It stays optional, because an older cached bundle
+> sends no body and the reaper (§9.4) has no expectation to send.
+
+### 9.2c Stop fails after the capture has begun
+
+**Not specified originally, and the omission cost a production duplicate (#827).** §9.6's answer for a
+*failed begin* - carry on exactly as before chunked upload existed - does not transfer to a failed
+**stop**, because by then a server-side recording exists and the reaper will finalise it.
+
+The rules, in the order they fire:
+
+1. **Do not finalise speculatively.** `LiveSession.finish` drains, then checks its own queue, and returns
+   **without** calling finalise if anything is outstanding. Finalise merges and queues the transcription;
+   there is no undo. The original code finalised first and inspected the queue afterwards.
+2. **Fall back only on what the server does not have.** A non-empty queue is what tells `Recorder` to
+   upload the complete buffered blob.
+3. **Discard the capture being replaced.** Otherwise §9.4 turns it into a second recording of the same
+   meeting half an hour later - the reaper's gap tolerance is correct for a vanished client and wrong for
+   one that has just uploaded a complete copy instead.
+4. **Read a 409 from the discard as success.** `DELETE .../live` refuses anything past `Live`, so a 409
+   proves the capture *was* finalised and only the response went missing. The client then skips the upload.
+   Any other discard failure still uploads: a stray partial recording is deletable by hand, a lost meeting
+   is not.
+
+Finalise is also wrapped in `retryOnGatewayError` (the blob upload already was), since it answers
+`Accepted` once already `Merging`. A proxy blip during an API redeploy otherwise sent a complete meeting
+straight down the fallback path.
 
 ### 9.2b A chunk is corrupt, not merely late
 

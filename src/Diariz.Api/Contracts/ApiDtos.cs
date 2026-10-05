@@ -356,6 +356,19 @@ public record LiveRecordingDto(
     /// switched live transcription off; the recording and its final transcript are unaffected.</summary>
     bool LiveTranscription = true);
 
+/// <summary>What the client expects the server to hold at finalise.
+///
+/// <para><paramref name="ExpectedFinalSequence"/> is the highest sequence the capturing client assigned,
+/// or -1 if it assigned none. It exists because the server cannot otherwise tell a complete capture from
+/// one truncated at the end: a chunk whose upload never succeeded leaves no row, so the set that did
+/// arrive looks perfectly contiguous. One meeting was merged 9.2s short that way and then uploaded again
+/// whole, giving its owner two recordings of it (#827).</para>
+///
+/// <para>Optional, and absent means "no expectation" rather than "expect nothing": a browser serving a
+/// cached older bundle sends no body, and the reaper has none to send because the client that knew is
+/// gone.</para></summary>
+public record FinalizeLiveRequest(int? ExpectedFinalSequence);
+
 /// <summary>Why a finalise was refused: these sequences never arrived, so concatenating now would
 /// silently produce a recording with holes in it. The client still holds them in its own queue, so
 /// naming them is what lets it retry exactly those and finalise again.</summary>

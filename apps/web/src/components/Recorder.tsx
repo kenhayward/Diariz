@@ -64,7 +64,7 @@ import { IconCamera, IconClock, IconPencil, IconUpload, IconMore } from "./hub/h
 import { useHubPopover } from "./hub/hubPopovers";
 import { MEDIA_ACCEPT_ATTR } from "../lib/mediaKinds";
 import { pickMediaFiles } from "../lib/mediaPicker";
-import { retryOnGatewayError } from "../lib/retry";
+import { isConflict, retryOnGatewayError } from "../lib/retry";
 import { useUpload } from "../lib/uploadContext";
 import {
   savePendingRecording,
@@ -1293,7 +1293,12 @@ export default function Recorder({
           }),
         upload: (recordingId, sessionId, chunk) =>
           api.putChunk(recordingId, chunk.sequence, chunk.blob, sessionId, chunk.startMs, chunk.endMs),
-        finalize: (recordingId) => api.finalizeLive(recordingId),
+        // Retried past a proxy-level gateway error exactly as the fallback upload is. `FinalizeLive`
+        // answers `Accepted` to a second call once it is already merging, so replaying it is safe -
+        // and without this a blip during an API redeploy sent a finished meeting down the fallback
+        // path and duplicated it (#827).
+        finalize: (recordingId, expectedFinalSequence) =>
+          retryOnGatewayError(() => api.finalizeLive(recordingId, expectedFinalSequence)),
         requestFragment: () => {
           try {
             recorderRef.current?.requestData();
@@ -1461,9 +1466,34 @@ export default function Recorder({
       const tail = new Blob(chunksRef.current.slice(liveFragmentsSentRef.current), { type: "audio/webm" });
       await live.finish(timing.elapsedMs(timingRef.current, Date.now()), tail);
       // Anything still queued means the server does not have the whole recording, so the concatenated
-      // audio would have holes. Fall back rather than ship a damaged take.
-      return (await live.pending()).length === 0;
+      // audio would have holes. Fall back rather than ship a damaged take. (`finish` no longer
+      // finalises in that case, so the capture is still `Live` and can be discarded below.)
+      if ((await live.pending()).length === 0) return true;
     } catch {
+      // Fall through: we cannot tell what the server has, so treat it as not having the whole take.
+    }
+    return await abandonLive(live.recordingId);
+  }
+
+  /// Discard a live capture the fallback upload is about to replace.
+  ///
+  /// This is what stops the duplicate in #827. Left alone, a capture stuck at `Live` is collected by
+  /// the server's reaper after half an hour and *finalised from whatever arrived* - deliberately, since
+  /// for a crashed client that partial audio is all there is. Once a complete blob has been uploaded in
+  /// its place that same rule produces a second recording of the meeting, with its own transcript.
+  ///
+  /// Returns true when the capture turns out to have been finalised after all, in which case the caller
+  /// must NOT upload: `DiscardLive` refuses anything past `Live`, so a 409 is positive proof the server
+  /// has the audio and only the response to us went missing.
+  async function abandonLive(recordingId: string): Promise<boolean> {
+    try {
+      await api.discardLive(recordingId);
+      return false;
+    } catch (e) {
+      if (isConflict(e)) return true;
+      // Anything else - offline, a 5xx - and we genuinely do not know. Upload the take: a stray
+      // partial recording can be deleted by hand, a lost meeting cannot be recovered at all.
+      console.error("Could not discard the replaced live capture:", e);
       return false;
     }
   }

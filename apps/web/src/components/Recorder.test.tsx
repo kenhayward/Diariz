@@ -581,7 +581,7 @@ describe("Recorder source selection", () => {
     await screen.findByRole("button", { name: /^stop$/i });
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
 
-    await waitFor(() => expect(api.finalizeLive).toHaveBeenCalledWith("live-1"));
+    await waitFor(() => expect(api.finalizeLive).toHaveBeenCalledWith("live-1", -1));
     // The server already has the audio; re-uploading the whole blob would double the bytes and
     // create a second recording.
     expect(api.upload).not.toHaveBeenCalled();
@@ -594,6 +594,48 @@ describe("Recorder source selection", () => {
     (getStream as Mock).mockResolvedValue(fakeSession);
     (api.beginLive as Mock).mockResolvedValue({ id: "live-2", sessionId: "s2", status: "Live" });
     (api.finalizeLive as Mock).mockRejectedValue(new Error("gateway"));
+    (api.upload as Mock).mockResolvedValue({ id: "r1" });
+
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(api.upload).toHaveBeenCalled());
+    // ...and the half-finished capture must be discarded, not left for the reaper. Left alone it is
+    // finalised from whatever arrived 30 minutes later, giving a second recording of the same
+    // meeting with a different transcript (#827).
+    await waitFor(() => expect(api.discardLive).toHaveBeenCalledWith("live-2"));
+  });
+
+  it("keeps the take when the capture it is replacing turns out to be complete", async () => {
+    // The one case where a failed finalise must NOT become a second recording. DiscardLive refuses
+    // anything past Live, so a 409 is proof the server finalised after all and simply never got the
+    // answer back to us - uploading the blob as well would duplicate the meeting.
+    (getStream as Mock).mockResolvedValue(fakeSession);
+    (api.beginLive as Mock).mockResolvedValue({ id: "live-4", sessionId: "s4", status: "Live" });
+    (api.finalizeLive as Mock).mockRejectedValue(new Error("no answer"));
+    (api.discardLive as Mock).mockRejectedValue({ isAxiosError: true, response: { status: 409 } });
+    const onUploaded = vi.fn();
+
+    render(<Recorder onUploaded={onUploaded} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(onUploaded).toHaveBeenCalled());
+    expect(api.upload).not.toHaveBeenCalled();
+  });
+
+  it("still uploads the take when the capture can neither be finalised nor discarded", async () => {
+    // Both calls failing means the network is gone, not that the server has the audio. Losing the
+    // meeting to protect against a duplicate would be the wrong trade: a stray partial recording is
+    // recoverable by hand, a lost meeting is not.
+    expectsConsoleError(/Could not discard the replaced live capture/);
+    (getStream as Mock).mockResolvedValue(fakeSession);
+    (api.beginLive as Mock).mockResolvedValue({ id: "live-5", sessionId: "s5", status: "Live" });
+    (api.finalizeLive as Mock).mockRejectedValue(new Error("offline"));
+    (api.discardLive as Mock).mockRejectedValue(new Error("offline"));
     (api.upload as Mock).mockResolvedValue({ id: "r1" });
 
     render(<Recorder onUploaded={() => {}} />);
@@ -621,7 +663,7 @@ describe("Recorder source selection", () => {
 
     // Still recording, and still stoppable.
     fireEvent.click(await screen.findByRole("button", { name: /^stop$/i }));
-    await waitFor(() => expect(api.finalizeLive).toHaveBeenCalledWith("live-3"));
+    await waitFor(() => expect(api.finalizeLive).toHaveBeenCalledWith("live-3", -1));
   });
 
   it("reports the wall clock it started and stopped, not just the recorded duration", async () => {

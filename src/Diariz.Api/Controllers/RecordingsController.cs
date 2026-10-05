@@ -11,6 +11,7 @@ using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -789,8 +790,14 @@ public class RecordingsController : ControllerBase
         "subscribe to the recording or the `recording.transcribed` webhook for the result.\n\n" +
         "409 with the missing sequence numbers if any chunk never arrived - retry those and call this " +
         "again, rather than accepting a recording with holes in it. 204 if no chunk ever arrived, in " +
-        "which case the empty recording is discarded.")]
-    public async Task<IActionResult> FinalizeLive(Guid id)
+        "which case the empty recording is discarded.\n\n" +
+        "Send `expectedFinalSequence` - the highest sequence you assigned, or -1 if none. Without it " +
+        "only *interior* holes can be detected: a chunk whose upload never succeeded leaves no row, so " +
+        "a capture truncated at the end looks contiguous and would be merged short. The body is " +
+        "optional for older clients.")]
+    public async Task<IActionResult> FinalizeLive(
+        Guid id,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] FinalizeLiveRequest? req = null)
     {
         var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
         if (rec is null) return NotFound();
@@ -815,10 +822,19 @@ public class RecordingsController : ControllerBase
             return NoContent();
         }
 
-        // Every sequence from 0 to the highest received must be present: a hole means a chunk was lost,
-        // and concatenating around it would silently splice unrelated audio together.
+        // Every sequence from 0 to the highest must be present: a hole means a chunk was lost, and
+        // concatenating around it would silently splice unrelated audio together.
+        //
+        // "The highest" is the higher of what arrived and what the client says it assigned, which is the
+        // whole point of asking. Judged on arrivals alone a capture missing its TAIL is undetectable -
+        // the absent chunk leaves no row, so the set simply ends earlier and looks complete - and #827
+        // merged a meeting 9.2s short exactly there. Folded into one computation rather than checked
+        // separately so there is a single notion of "missing", and the client retries everything
+        // outstanding in one pass.
+        var expected = req?.ExpectedFinalSequence ?? -1;
+        var highest = Math.Max(chunks[^1].Sequence, expected);
         var received = chunks.Select(c => c.Sequence).ToHashSet();
-        var missing = Enumerable.Range(0, chunks[^1].Sequence + 1).Where(s => !received.Contains(s)).ToList();
+        var missing = Enumerable.Range(0, highest + 1).Where(s => !received.Contains(s)).ToList();
         if (missing.Count > 0)
             return StatusCode(StatusCodes.Status409Conflict, new MissingChunksDto(missing));
 
