@@ -1,11 +1,9 @@
-using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.Services;
 
@@ -42,21 +40,19 @@ public static class EmbeddingBackfill
 }
 
 /// <summary>Runs <see cref="EmbeddingBackfill"/> once shortly after startup, off the critical boot path.
-/// Skips entirely when no embeddings endpoint is configured server-wide (embedding or summarisation) - a
-/// per-user-only endpoint still gets indexed on the next (re)transcription, so there's nothing to backfill.</summary>
-public class EmbeddingBackfillService(
-    IServiceProvider services, IOptions<EmbeddingOptions> embedding, IOptions<SummarizationOptions> summary,
-    ILogger<EmbeddingBackfillService> logger) : BackgroundService
+/// Skips entirely when no embeddings endpoint resolves at any level (saved on the AI models page, the server's
+/// <c>Embedding</c> block, or the default model) - there would be nothing to send the jobs to.</summary>
+public class EmbeddingBackfillService(IServiceProvider services, ILogger<EmbeddingBackfillService> logger)
+    : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var serverHasEndpoint = !string.IsNullOrWhiteSpace(embedding.Value.ApiBase)
-            || !string.IsNullOrWhiteSpace(summary.Value.ApiBase);
-        if (!serverHasEndpoint) return;
-
         try
         {
             using var scope = services.CreateScope();
+            var resolver = scope.ServiceProvider.GetRequiredService<IEmbeddingSettingsResolver>();
+            if (!(await resolver.ResolveAsync(stoppingToken)).Enabled) return;
+
             var db = scope.ServiceProvider.GetRequiredService<DiarizDbContext>();
             var queue = scope.ServiceProvider.GetRequiredService<IJobQueue>();
             await EmbeddingBackfill.RunAsync(db, queue, logger, stoppingToken);

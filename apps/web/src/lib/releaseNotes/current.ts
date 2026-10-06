@@ -9,6 +9,24 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.276.0",
+    date: "2026-10-06",
+    pr: 837,
+    headline: "See and set where search embeddings go, and refresh the usage log in place",
+    summary:
+      "Semantic search and chat retrieval depend on every transcript being embedded by one fixed model. Unless the server named an embeddings endpoint, Diariz borrowed the default AI model's endpoint for this - so changing the default model quietly moved embeddings to a different server. If that server did not host the embedding model, every call was refused, new recordings stopped being indexed, and search fell back to keywords with nothing on any page to say so.\n\nThe AI models page now has an Embeddings card. It shows where embeddings are being sent and what decided it, and warns when they are only following the default model. A Platform Administrator can save an endpoint and key there, which takes precedence over the server setting, and Test embeds a short sample to confirm the endpoint answers and returns a vector of the right size. Saving queues every recording that has no index yet, so a corrected endpoint catches up straight away instead of waiting for a restart. The embedding model itself is unchanged and still set by the server, because changing it means re-indexing everything.\n\nThe LLM usage log also gains a Refresh button, which re-reads the current view without losing your page, sort or filter.",
+    added: [
+      "An Embeddings card on the AI models page showing where embeddings go and why, with a saved endpoint and key that override the server setting, and a Test that checks the vector size (#836)",
+      "A Refresh button on the LLM usage log that keeps your page, sort and filter",
+    ],
+    changed: [
+      "Saving an embedding endpoint queues every unindexed recording, and the startup re-index now runs whenever any embedding endpoint is in effect (#836)",
+    ],
+    fixed: [
+      "Changing the default AI model could silently move embeddings to a server that cannot embed, stopping search indexing with no visible sign (#836)",
+    ],
+  },
+  {
     version: "0.275.10",
     date: "2026-10-06",
     pr: 835,

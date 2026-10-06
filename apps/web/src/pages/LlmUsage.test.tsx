@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -391,6 +391,49 @@ describe("LlmUsage", () => {
       const cell = badge.closest("td")!;
       expect(cell.textContent).toContain("OK");
       expect(cell.textContent).not.toContain("Failed");
+    });
+  });
+
+  describe("refresh", () => {
+    it("re-fetches the same page and filter, so new calls appear without losing your place", async () => {
+      renderPage();
+      await waitFor(() => expect(api.getLlmUsage).toHaveBeenCalledTimes(1));
+      const first = vi.mocked(api.getLlmUsage).mock.calls[0][0];
+      const refresh = screen.getByRole("button", { name: "Refresh" });
+      await waitFor(() => expect((refresh as HTMLButtonElement).disabled).toBe(false)); // the first load has landed
+
+      fireEvent.click(refresh);
+
+      await waitFor(() => expect(api.getLlmUsage).toHaveBeenCalledTimes(2));
+      expect(vi.mocked(api.getLlmUsage).mock.calls[1][0]).toEqual(first);
+      // A new model or user can appear between refreshes; the multi-selects must offer it too.
+      await waitFor(() => expect(api.getLlmUsageFilters).toHaveBeenCalledTimes(2));
+    });
+
+    it("re-fetches the roll-up in Summary mode, not the list", async () => {
+      renderPage();
+      fireEvent.click(screen.getByRole("button", { name: "Summary" }));
+      await waitFor(() => expect(api.getLlmUsageSummary).toHaveBeenCalledTimes(1));
+      const listCalls = vi.mocked(api.getLlmUsage).mock.calls.length;
+      const refresh = screen.getByRole("button", { name: "Refresh" });
+      await waitFor(() => expect((refresh as HTMLButtonElement).disabled).toBe(false));
+
+      fireEvent.click(refresh);
+
+      await waitFor(() => expect(api.getLlmUsageSummary).toHaveBeenCalledTimes(2));
+      expect(api.getLlmUsage).toHaveBeenCalledTimes(listCalls);
+    });
+
+    it("is disabled while a fetch is already in flight", async () => {
+      let release: (v: ReturnType<typeof usagePage>) => void = () => {};
+      vi.mocked(api.getLlmUsage).mockReturnValue(new Promise((r) => { release = r; }));
+
+      renderPage();
+      const button = screen.getByRole("button", { name: "Refresh" });
+      await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(true));
+
+      await act(async () => release(usagePage([row()], totals())));
+      await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
     });
   });
 

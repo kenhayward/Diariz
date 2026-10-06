@@ -142,6 +142,17 @@ export default function LlmUsage({ embedded = false, initialQuery }: Props = {})
   const activeIsFetching = mode === "summary" ? summaryQuery.isFetching : usageQuery.isFetching;
   const deleteBlocked = deleteCount === undefined || deleteCount === 0 || deleting || activeIsFetching;
 
+  /// Re-reads what is on screen - same page, sort and filter - plus the filter options, since a model or user
+  /// can appear between refreshes. A preset window like "last 7 days" has no end date, so new calls fall inside
+  /// it. Only the active view refetches: the other one fetches when it is switched to anyway.
+  function handleRefresh() {
+    void queryClient.refetchQueries({ queryKey: ["llm-usage-filters"], type: "active" });
+    void queryClient.refetchQueries({
+      queryKey: [mode === "summary" ? "llm-usage-summary" : "llm-usage"],
+      type: "active",
+    });
+  }
+
   async function handleDelete() {
     // Re-checked here too (not just via the button's `disabled`) so there is no path - keyboard, a
     // programmatic click, a future second call site - that can reach the API call while the count on
@@ -186,15 +197,25 @@ export default function LlmUsage({ embedded = false, initialQuery }: Props = {})
       )}
       <div className="flex items-center justify-between border-b px-3 py-2 dark:border-gray-800">
         <ModeTabs mode={mode} onChange={changeMode} />
-        {/* The destructive action, visually distinct (red) from every other control on this bar. */}
-        <button
-          type="button"
-          onClick={() => void handleDelete()}
-          disabled={deleteBlocked}
-          className="rounded-full border border-red-300 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-40 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
-        >
-          {deleting ? t("llmUsageDeleting") : t("llmUsageDeleteButton")}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={activeIsFetching}
+            className="rounded-full border border-gray-200 px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800"
+          >
+            {t("llmUsageRefresh")}
+          </button>
+          {/* The destructive action, visually distinct (red) from every other control on this bar. */}
+          <button
+            type="button"
+            onClick={() => void handleDelete()}
+            disabled={deleteBlocked}
+            className="rounded-full border border-red-300 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-40 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
+          >
+            {deleting ? t("llmUsageDeleting") : t("llmUsageDeleteButton")}
+          </button>
+        </div>
       </div>
       {deleteError && (
         <p className="border-b bg-red-50 px-3 py-1 text-xs text-red-800 dark:border-gray-800 dark:bg-red-900/20 dark:text-red-300">

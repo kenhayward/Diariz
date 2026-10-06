@@ -17,6 +17,12 @@ const { api } = vi.hoisted(() => ({
     createModelFromEnvironment: vi.fn(),
     testModel: vi.fn(),
     deleteModel: vi.fn(),
+    getEmbeddingSettings: vi.fn().mockResolvedValue({
+      source: "Server", effectiveApiBase: "http://env.test/v1", model: "nomic-embed-text", dimension: 768,
+      savedApiBase: null, savedHasApiKey: false, serverApiBase: "http://env.test/v1",
+    }),
+    saveEmbeddingSettings: vi.fn(),
+    testEmbedding: vi.fn(),
   },
 }));
 vi.mock("../lib/api", () => ({ api, apiErrorMessage: (e: unknown) => String(e) }));
@@ -161,5 +167,26 @@ describe("LlmModels", () => {
     fireEvent.click(await screen.findByRole("radio", { name: /chat on gpt-oss-20b/i }));
 
     await waitFor(() => expect(listChatModels).toHaveBeenCalledTimes(2));
+  });
+
+  it("shows the embedding endpoint alongside the routing", async () => {
+    renderPage();
+    expect(await screen.findByText("http://env.test/v1")).toBeTruthy();
+  });
+
+  it("re-reads the embedding endpoint when the routing changes", async () => {
+    // While embeddings follow the default model, moving the default moves them too (issue #836) - the card
+    // must not go on showing the old endpoint.
+    api.listModels.mockResolvedValue([MODEL]);
+    api.setLlmAssignments.mockResolvedValue(undefined);
+
+    api.getEmbeddingSettings.mockClear();
+
+    renderPage();
+    await waitFor(() => expect(api.getEmbeddingSettings).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(await screen.findByRole("radio", { name: /default on gpt-oss-20b/i }));
+
+    await waitFor(() => expect(api.getEmbeddingSettings).toHaveBeenCalledTimes(2));
   });
 });

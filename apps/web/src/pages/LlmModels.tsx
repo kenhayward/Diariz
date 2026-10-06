@@ -9,6 +9,7 @@ import RoutingMatrix from "../components/llmmodels/RoutingMatrix";
 import type { TestState } from "../components/llmmodels/TestRail";
 import ModelEditorDrawer from "../components/llmmodels/ModelEditorDrawer";
 import DiscoverModelsDialog from "../components/llmmodels/DiscoverModelsDialog";
+import EmbeddingCard, { EMBEDDING_SETTINGS_KEY } from "../components/llmmodels/EmbeddingCard";
 
 interface Props {
   /// Rendered inside the settings modal rather than as its own route: drops the top bar and the
@@ -70,6 +71,8 @@ export default function LlmModels({ embedded = false, onOpenUsageLog }: Props = 
       // as the default and offers implicitly - so the picker, keyed under ["llm-models"], has to hear about
       // it too. Every other model write reaches it by prefix already; this is the one that would not.
       queryClient.invalidateQueries({ queryKey: ["llm-models"] });
+      // And while embeddings follow the default model, moving the default moves them (issue #836).
+      queryClient.invalidateQueries({ queryKey: EMBEDDING_SETTINGS_KEY });
     },
     onError: (e) => setError(apiErrorMessage(e, t("llmModelsAssignError"))),
   });
@@ -195,6 +198,9 @@ export default function LlmModels({ embedded = false, onOpenUsageLog }: Props = 
             onChatEnabledChange={(id, enabled) => setChatEnabled.mutate({ id, enabled })}
           />
         )}
+
+        {/* Outside the empty-state branch: embeddings can run off EMBED_API_BASE with no model rows at all. */}
+        <EmbeddingCard />
       </div>
 
       {discovering && (
@@ -217,11 +223,13 @@ export default function LlmModels({ embedded = false, onOpenUsageLog }: Props = 
           onSaved={() => {
             closeDrawer();
             queryClient.invalidateQueries({ queryKey: ["llm-models"] });
+            queryClient.invalidateQueries({ queryKey: EMBEDDING_SETTINGS_KEY });
           }}
           onDeleted={() => {
             closeDrawer();
             queryClient.invalidateQueries({ queryKey: ["llm-models"] });
             queryClient.invalidateQueries({ queryKey: ["llm-assignments"] });
+            queryClient.invalidateQueries({ queryKey: EMBEDDING_SETTINGS_KEY });
           }}
           onOpenUsageLog={onOpenUsageLog}
         />

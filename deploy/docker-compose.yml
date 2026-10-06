@@ -213,8 +213,8 @@ services:
       Dictation__ApiKey: ${DICTATION_API_KEY:-}
       Dictation__Model: ${DICTATION_MODEL:-whisper-1}
       Dictation__TimeoutSeconds: ${DICTATION_TIMEOUT_SECONDS:-30}
-      # Semantic search (RAG) embeddings. Empty ApiBase reuses the owner's summarisation endpoint; empty
-      # everywhere keeps search lexical. Model + dimension are server-pinned (must match the vector(768) column).
+      # Semantic search (RAG) embeddings. An endpoint saved on the AI models page wins over this one; empty in
+      # both reuses the platform default model's endpoint; empty everywhere keeps search lexical. Model + dimension are server-pinned (must match the vector(768) column).
       Embedding__ApiBase: ${EMBED_API_BASE:-}
       Embedding__ApiKey: ${EMBED_API_KEY:-}
       Embedding__Model: ${EMBED_MODEL:-nomic-embed-text}

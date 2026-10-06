@@ -1190,6 +1190,12 @@ namespace Diariz.Domain.Migrations
                     b.Property<Guid?>("DefaultLlmModelId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("EmbeddingApiBase")
+                        .HasColumnType("text");
+
+                    b.Property<string>("EmbeddingApiKeyEncrypted")
+                        .HasColumnType("text");
+
                     b.Property<double>("IdentificationConfirmBand")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("double precision")
