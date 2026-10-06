@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.275.10",
+    date: "2026-10-06",
+    pr: 835,
+    headline: "The way into the model settings and the usage log is there when you open the tab",
+    summary:
+      "The Settings AI tab is a long form: live transcription, minutes generation, the request timeout, voice identification, the usage-log switches. The two shortcuts that open the model settings and the usage log over that tab sat at its very foot, below all of it, drawn as small underlined text. On a normal screen neither was visible when the tab opened, and nothing marked them as clickable until you hovered over one.\n\nThey now sit at the top of the tab, on the right, and look like the app's other buttons. You see them the moment the tab opens, and they read as buttons rather than as part of the copy above them. Nothing else on the tab moved, and what the two shortcuts do is unchanged: they still open the model settings and the usage log over the settings dialog rather than in a separate browser tab.",
+    changed: [
+      "The shortcuts to the model settings and the usage log are at the top right of the Settings AI tab, and drawn as buttons rather than as underlined text (#834)",
+    ],
+  },
+  {
     version: "0.275.9",
     date: "2026-10-06",
     pr: 831,

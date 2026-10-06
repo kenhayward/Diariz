@@ -826,4 +826,45 @@ describe("SettingsModal", () => {
       expect(sent.models).toEqual(["gpt-oss-20b"]);
     });
   });
+
+  // The AI tab is a form taller than the dialog, so anything at its foot is below the fold on every
+  // normal screen. These three assertions are the shape the request asks for: the two panel shortcuts
+  // belong to the top of the tab, they are right-aligned there, and they read as buttons rather than
+  // as links. jsdom computes no geometry (the same caveat the column-alignment test above states), so
+  // "top" is DOM order against the tab's first settings grid and "right" is the row's own class.
+  describe("the panel shortcuts sit where they can be seen", () => {
+    it("opens above the settings it belongs to, not below them", async () => {
+      renderModal();
+
+      // The AI tab is the default tab, so it is what is on screen here. Its first settings grid is
+      // the live-transcription row; the shortcuts must come before that, not after the form.
+      const nodes = [...document.querySelectorAll("button, [data-setting-grid]")];
+      const gridAt = nodes.findIndex((n) => n.hasAttribute("data-setting-grid"));
+      for (const name of [/manage ai models/i, /usage log/i]) {
+        const at = nodes.findIndex((n) => n.tagName === "BUTTON" && name.test(n.textContent ?? ""));
+        expect(at).toBeGreaterThan(-1);
+        expect(at).toBeLessThan(gridAt);
+      }
+    });
+
+    it("reads as a button rather than a link dressed as one", () => {
+      renderModal();
+
+      for (const name of [/manage ai models/i, /usage log/i]) {
+        const cls = screen.getByRole("button", { name }).getAttribute("class") ?? "";
+        expect(cls).toContain("rounded");
+        expect(cls).toContain("border");
+        expect(cls).not.toContain("underline");
+      }
+    });
+
+    it("sits on the right edge of the tab", () => {
+      renderModal();
+
+      for (const name of [/manage ai models/i, /usage log/i]) {
+        const btn = screen.getByRole("button", { name });
+        expect(btn.parentElement!.getAttribute("class")).toContain("justify-end");
+      }
+    });
+  });
 });

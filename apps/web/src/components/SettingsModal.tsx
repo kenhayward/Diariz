@@ -210,6 +210,27 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
           {tab === "ai" ? (
             /* Platform-wide AI generation policy: minutes mode + the global LLM request timeout. */
             <div className="space-y-3">
+              {/* The two admin panels this tab opens over itself. Pinned to the top of the tab and
+                  right-aligned: at the foot of this form they sat below the fold on every normal screen,
+                  and drawn as underlined text they read as part of the copy above them. Styled like the
+                  app's other buttons so they look clickable before you hover. */}
+              <div className="flex items-center justify-end gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setPanel({ which: "usage" })}
+                  className="rounded border px-3 py-1 text-xs hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                >
+                  {t("llmUsageViewLog")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPanel({ which: "models" })}
+                  className="rounded border px-3 py-1 text-xs hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                >
+                  {t("llmModelsManage")}
+                </button>
+              </div>
+
               <p className="text-xs text-gray-500 dark:text-gray-400">{t("platformAiIntro")}</p>
 
               {/* First on the tab: it is the lever an administrator reaches for when the server is
@@ -323,22 +344,6 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                     )}
                   </SettingRow>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => setPanel({ which: "usage" })}
-                  className="mt-2 inline-block text-xs text-indigo-600 hover:underline dark:text-indigo-400"
-                >
-                  {t("llmUsageViewLog")} →
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setPanel({ which: "models" })}
-                  className="mt-2 ml-4 inline-block text-xs text-indigo-600 hover:underline dark:text-indigo-400"
-                >
-                  {t("llmModelsManage")} →
-                </button>
               </div>
             </div>
           ) : tab === "quotas" ? (
