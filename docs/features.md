@@ -731,7 +731,12 @@ clearing the box returns you to your folder.
 - **Semantic (RAG) search** (opt-in): configure an embeddings endpoint and transcripts are embedded into a
 pgvector index; the panel search, chat and the tools then search by **meaning as well as keywords** (hybrid
 vector + trigram, fused with Reciprocal Rank Fusion), so a conceptual question finds the right moment even when
-the words don't match. Without an embeddings endpoint, search stays keyword-only.
+the words don't match. Without an embeddings endpoint, search stays keyword-only. The endpoint is resolved in
+order: one saved on the **AI models** page, then the server's `EMBED_API_BASE`, then the default model's
+endpoint - and the page's **Embeddings** card shows which is in effect, warns when embeddings are only following
+the default model (which moves them whenever the default changes), and tests the endpoint including the vector
+size. Saving an endpoint there queues every unindexed recording, so a corrected endpoint catches up without a
+restart. The embedding model and dimension stay server-pinned.
 - **Chat tools** (opt-in, per-user): the assistant can call **built-in tools** that search your **whole
 transcript library** — *who said a phrase*, *what a person said about a topic*, *search transcripts*, *when a
 topic was discussed*, *count mentions*, *list recordings* (by date / name / speaker / topic), *list action
@@ -1051,8 +1056,9 @@ total states how many of the calls in scope actually reported that figure, so a 
 never shown as a complete one. Every line carries its own generation rate in tokens per second, alongside
 the platform-wide rate in the totals row, so a single slow operation is visible without averaging it away;
 an operation's rate is measured against the time the model actually spent, not the wall-clock span, which
-for a multi-call turn includes the gaps between calls. Rows matching the current filter can be deleted, with a confirmation stating
-the exact count before anything is removed.
+for a multi-call turn includes the gaps between calls. A **Refresh** button re-reads the current view in place - same page,
+sort and filter - and the filter options with it, so new calls appear without losing your place. Rows matching the current
+filter can be deleted, with a confirmation stating the exact count before anything is removed.
 - **Truncated replies are visible.** Every call records the model's `finish_reason`, and the usage log
 shows a **Cut off** badge on any row where a token cap ended the reply. This matters because such a call
 does not fail: it returns success, every token is billed, and the answer comes back short or completely

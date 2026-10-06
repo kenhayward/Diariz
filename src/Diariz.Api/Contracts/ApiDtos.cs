@@ -1315,6 +1315,26 @@ public record ImportModelsResultDto(int Added, int Skipped, IReadOnlyList<string
 /// is identical to the one the saved model would get.</summary>
 /// <summary><c>RecordingId</c> is required for Tags, Actions and Summaries, whose test runs the real prompt
 /// against a real transcript, and ignored for the four groups that use the built-in sample.</summary>
+/// <summary>Where embeddings go and why (the AI models page's embedding card, issue #836). <c>Source</c> is an
+/// <see cref="Diariz.Api.Services.EmbeddingEndpointSource"/> name. Model and dimension are server-pinned and read-only.
+/// No key is ever returned - only whether one is saved.</summary>
+public record EmbeddingSettingsDto(
+    string Source, string? EffectiveApiBase, string Model, int Dimension,
+    string? SavedApiBase, bool SavedHasApiKey, string? ServerApiBase);
+
+/// <summary>A blank <c>ApiBase</c> clears the saved endpoint and its key. <c>ApiKey</c>: null keeps the saved key,
+/// empty clears it, anything else replaces it.</summary>
+public record UpdateEmbeddingSettingsRequest(string? ApiBase, string? ApiKey);
+
+/// <summary>The saved settings plus how many unindexed recordings the save queued for embedding.</summary>
+public record EmbeddingSettingsSaveResult(EmbeddingSettingsDto Settings, int ReindexQueued);
+
+/// <summary>One sample embedded against the effective endpoint. <c>Ok</c> needs a 2xx AND a vector of the pinned
+/// dimension - a reachable server running the wrong model would otherwise pass.</summary>
+public record EmbeddingTestResult(
+    bool Ok, string? ApiBase, string Model, int ExpectedDimension, int? Dimension, int? StatusCode,
+    string? Error, long DurationMs);
+
 public record LlmModelTestRequest(string Group, Dictionary<string, string> Parameters, Guid? RecordingId = null);
 
 /// <summary>The recording an administrator has chosen to test models against. <c>Title</c> is the display

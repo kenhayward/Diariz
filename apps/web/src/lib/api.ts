@@ -107,6 +107,9 @@ import type {
   LlmUsageFilterOptions,
   LlmModel,
   LlmModelUpsert,
+  EmbeddingSettings,
+  EmbeddingSettingsSaveResult,
+  EmbeddingTestResult,
   LlmAssignments,
   LlmTestOutcome,
   LlmTestRecording,
@@ -2031,6 +2034,25 @@ export const api = {
 
   async setTestRecording(recordingId: string | null): Promise<void> {
     await http.put("/api/admin/llm-models/test-recording", { recordingId });
+  },
+
+  async getEmbeddingSettings(): Promise<EmbeddingSettings> {
+    const { data } = await http.get<EmbeddingSettings>("/api/admin/embedding");
+    return data;
+  },
+
+  /// A blank apiBase clears the saved endpoint and its key. apiKey: null keeps the saved key, "" removes it.
+  async saveEmbeddingSettings(body: {
+    apiBase: string | null;
+    apiKey: string | null;
+  }): Promise<EmbeddingSettingsSaveResult> {
+    const { data } = await http.put<EmbeddingSettingsSaveResult>("/api/admin/embedding", body);
+    return data;
+  },
+
+  async testEmbedding(): Promise<EmbeddingTestResult> {
+    const { data } = await http.post<EmbeddingTestResult>("/api/admin/embedding/test");
+    return data;
   },
 
   async getLlmAssignments(): Promise<LlmAssignments> {

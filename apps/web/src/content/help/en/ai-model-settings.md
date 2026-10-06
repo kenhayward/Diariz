@@ -176,13 +176,19 @@ so set it above that worst case, not just above how long a typical reply takes o
 
 ## Embeddings
 
-A separate embeddings endpoint powers semantic search, and is configured in the server environment
-rather than on the models page. Setting it turns panel search, chat, and the chat tools into hybrid
-keyword-plus-meaning search. Without it, search stays keyword-only. The model name must match the
-endpoint's exact identifier, and the base URL usually ends in `/v1`.
+A separate embeddings endpoint powers semantic search. It turns panel search, chat, and the chat tools
+into hybrid keyword-plus-meaning search; without one, search stays keyword-only.
 
-When no dedicated embeddings endpoint is set, embeddings reuse whichever model the platform is
-otherwise using, including its key and timeout.
+The **Embeddings** card at the foot of the models page shows where embeddings are being sent and what
+decided it. You can save an endpoint (and key) there, which wins over the server's `EMBED_API_BASE`; **Clear**
+hands control back to the server setting. The base URL usually ends in `/v1`. The model name and vector size
+are fixed by the server, because changing them means re-indexing every transcript.
+
+When neither is set, embeddings borrow the **default model's** endpoint, key and timeout - and move with it
+whenever the default model changes. The card warns you when that is the case: if the default model's server
+does not host the embedding model, every recording quietly fails to index and search falls back to keywords.
+**Test** embeds a short sample and checks both that the endpoint answers and that the vector is the right
+size. Saving an endpoint queues every recording that has no index yet, so a fix catches up without a restart.
 
 ## Other administrator settings
 
@@ -202,5 +208,6 @@ A **View usage log** link opens the log at `/admin/llm-usage`, Platform Administ
 views - **Operations** (one row per user-facing action, with how many model calls it took), **Calls**
 (every individual call), and **Summary** (rolled up by user, model, or call type) - with a filter bar for
 date range, user, call type, model, and outcome, and a totals row that always reflects the whole filter,
-not just what's on screen. Deleting rows there deletes them for good, and the confirmation tells you
-exactly how many rows are about to go before you commit to it.
+not just what's on screen. **Refresh** re-reads the current view in place - same page, sort and filter -
+so new calls appear without losing your place. Deleting rows there deletes them for good, and the
+confirmation tells you exactly how many rows are about to go before you commit to it.

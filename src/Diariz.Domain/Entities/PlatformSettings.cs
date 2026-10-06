@@ -92,6 +92,20 @@ public class PlatformSettings
     public Guid? DefaultLlmModelId { get; set; }
     public LlmModel? DefaultLlmModel { get; set; }
 
+    /// <summary>The OpenAI-compatible endpoint embeddings are sent to, set on the AI models page. Wins over the
+    /// server's <c>Embedding:ApiBase</c>, which wins over the default model's endpoint. Null/blank = not set.
+    ///
+    /// <para>Exists because the last fallback made embeddings follow the default model to whatever server it
+    /// lived on, and a server that cannot embed answers 404 - so changing the chat model silently stopped
+    /// indexing (issue #836). Only the transport lives here: the model name and dimension stay server-pinned,
+    /// since the <c>vector(768)</c> column needs a migration and a re-index to change.</para></summary>
+    public string? EmbeddingApiBase { get; set; }
+
+    /// <summary>The key for <see cref="EmbeddingApiBase"/>, encrypted at rest via IApiKeyProtector and never
+    /// returned to clients. Null = no key, and deliberately never the server key: that one belongs to a
+    /// different host.</summary>
+    public string? EmbeddingApiKeyEncrypted { get; set; }
+
     /// <summary>Master switch for the MCP server + dz_mcp_ tokens. On by default (bounded by env Mcp:Enabled).
     /// Seeded true in the migration so shipping this never disables an existing connector.</summary>
     public bool McpAccessEnabled { get; set; } = true;

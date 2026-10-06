@@ -1906,6 +1906,38 @@ export interface ParsedSummary {
 }
 
 /// Which model serves which call group, plus the fallback for groups with no entry.
+/// Where embeddings are sent, and which level decided it (issue #836). "DefaultModel" is the warning case: that
+/// endpoint moves whenever the default model does, and a server that cannot embed answers 404.
+export type EmbeddingEndpointSource = "Platform" | "Server" | "DefaultModel" | "None";
+
+export interface EmbeddingSettings {
+  source: EmbeddingEndpointSource;
+  effectiveApiBase: string | null;
+  /// Server-pinned with the dimension: the vector column needs a migration to change either.
+  model: string;
+  dimension: number;
+  savedApiBase: string | null;
+  savedHasApiKey: boolean;
+  serverApiBase: string | null;
+}
+
+export interface EmbeddingSettingsSaveResult {
+  settings: EmbeddingSettings;
+  /// Recordings with no index that the save queued for embedding.
+  reindexQueued: number;
+}
+
+export interface EmbeddingTestResult {
+  ok: boolean;
+  apiBase: string | null;
+  model: string;
+  expectedDimension: number;
+  dimension: number | null;
+  statusCode: number | null;
+  error: string | null;
+  durationMs: number;
+}
+
 export interface LlmAssignments {
   defaultModelId: string | null;
   assignments: Record<string, string>;

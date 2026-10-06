@@ -954,9 +954,15 @@ large folders silently rolled up only their first ~18 meetings. The old per-work
   chunks and retrieval needs no version filtering. Enqueued from the worker callback right after segments are
   saved (independent of summarisation), and an `EmbeddingBackfillService` indexes the existing library once on
   startup. Unlike the free per-user chat/summary endpoint, the embedding **model + dimension are server-pinned**
-  (every chunk and query must match the `vector(768)` column); the **endpoint/key** are resolved per recording
-  owner by `EmbeddingSettingsResolver` - a dedicated `Embedding` config block, else the owner's summarisation
-  endpoint, else the server summarisation default. Chunks and queries carry the model's **task prefixes**
+  (every chunk and query must match the `vector(768)` column); the **endpoint/key** are resolved platform-wide
+  by `EmbeddingSettingsResolver`, in order: `PlatformSettings.EmbeddingApiBase` (saved on the AI models page via
+  `EmbeddingSettingsController`, `api/admin/embedding`, `ManagePlatform`; key encrypted with `IApiKeyProtector`),
+  else the server `Embedding` config block (`EMBED_API_BASE`), else the **platform default model's** endpoint.
+  The resolved `EmbeddingEndpointSource` is reported to the page, which warns on the last case: that endpoint
+  moves whenever the default model does, and a server that does not host the embedding model answers 404 to
+  every call (issue #836). A save runs `EmbeddingBackfill` so unindexed recordings catch up without a restart,
+  and `POST api/admin/embedding/test` embeds a sample (logged as `AdminTest`) and checks the vector size.
+  `EmbeddingBackfillService` now gates on the resolver rather than on the env vars alone. Chunks and queries carry the model's **task prefixes**
   (`search_document: ` / `search_query: `, config-driven; the nomic default retrieves better with them, and
   they're empty-able for models like OpenAI that don't use them). **Ships inert:** with no embeddings endpoint
   configured, nothing is enqueued and retrieval stays lexical (`pg_trgm`).
