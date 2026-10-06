@@ -994,8 +994,13 @@ export default function Recorder({
   /// with "This meeting is IN PROGRESS and still being recorded", and resolves the id when the question
   /// is asked - so what the model reads is current rather than a paste that went stale the moment the
   /// meeting carried on.
+  ///
+  /// Gated on the live transcript, and not on the id alone: the shell holds its global hotkey whether or
+  /// not an administrator has live transcription switched off, so the key arrives here for a meeting that
+  /// has no live transcript at all. Declining is what keeps the hotkey and the panel's button - which is
+  /// hidden in exactly this situation - from disagreeing about the same meeting.
   function sendTranscriptToChat() {
-    if (liveRecordingId) attachLiveRecordingToChat(liveRecordingId);
+    if (liveRecordingId && live.transcript) attachLiveRecordingToChat(liveRecordingId);
   }
 
   /// One capture into the chat prompt. Addressed by its panel id, because that is the only id the

@@ -176,7 +176,9 @@ the main window goes away underneath it, it says so and stops accepting notes ra
   Terminal and VS Code. The note hotkey follows the notes - it raises and focuses the separate window when the
   notes are detached, and opens the panel in the main window when they are not. All three are held **only while a
   recording is actually running**, so Diariz never sits on a global key while idle, and the panel's hint line
-  prints what is really registered rather than a literal, so it stays right if you change one. Timestamped lines jump to that
+  prints what is really registered rather than a literal, so it stays right if you change one. The send-the-meeting
+   key is the one exception: with no live transcript, because an administrator has switched live transcription off,
+   there is nothing for it to send, so it is left out of the hint line and pressing it does nothing. Timestamped lines jump to that
 moment in the transcript. Each timestamped note is also **woven inline into the Transcript tab** - it appears as
 its own **green line** (with your name as the speaker) right after the point in the conversation where you wrote
 it; the **Merge same-speaker rows** action treats a note as a boundary, so transcript text either side of a note

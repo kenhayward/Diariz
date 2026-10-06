@@ -100,6 +100,10 @@ back on, it applies to the next recording you start, not to the one already runn
 If it was already off when you started recording, the notes panel simply shows your notes and captures,
 with no live transcript at all.
 
+Either way, the keyboard shortcut that sends the running meeting to the chat is left out of the panel's
+reminder too, and pressing it does nothing - there is no running transcript to send. The keys that put
+your cursor in the note box and take a capture still work.
+
 The switch is under Platform settings, on the **AI** tab: **Live transcription during recording**.
 Turning it off stops live transcription in every meeting within a few seconds and frees the memory it
 uses on the server.

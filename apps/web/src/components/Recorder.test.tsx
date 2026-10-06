@@ -3082,4 +3082,49 @@ describe("global hotkeys reach the right window", () => {
 
     expect(screen.queryByTestId("notes-hotkey-hint")).toBeNull();
   });
+
+  it("sends nothing when the transcript hotkey fires and live transcription is off", async () => {
+    // The platform switch is off, so this meeting has no live transcript. The key still arrives from the
+    // shell - it does not know about the switch - so the web app must decline rather than attach a
+    // meeting the chat can read nothing of.
+    (api.beginLive as Mock).mockResolvedValue({
+      id: "live-hk",
+      sessionId: "shk",
+      status: "Live",
+      liveTranscription: false,
+    });
+    installShell();
+    const attached: string[] = [];
+    const off = onChatLiveRecordingAttached((id) => attached.push(id));
+    try {
+      render(<Recorder onUploaded={() => {}} />);
+      fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+      await screen.findByTestId("notes-popover");
+
+      await act(async () => deliver!({ type: "transcript-to-chat" }));
+
+      expect(attached).toEqual([]);
+    } finally {
+      off();
+    }
+  });
+
+  it("leaves the send-transcript key out of the hint line when live transcription is off", async () => {
+    // Same meeting as above: the other two keys work with live transcription off, so the line stays and
+    // only the third part goes.
+    (api.beginLive as Mock).mockResolvedValue({
+      id: "live-hk",
+      sessionId: "shk",
+      status: "Live",
+      liveTranscription: false,
+    });
+    installShell();
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByTestId("notes-popover");
+
+    const line = await screen.findByTestId("notes-hotkey-hint");
+    expect(line.textContent).toContain("Ctrl+Shift+0");
+    expect(line.textContent).not.toContain("Ctrl+Shift+8");
+  });
 });

@@ -9,6 +9,18 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.275.9",
+    date: "2026-10-06",
+    pr: 831,
+    headline: "The notes panel stops promising a key that has nothing to send",
+    summary:
+      "A Platform Administrator can switch live transcription off for everyone, to take the pressure off a busy server. When they do, a meeting has no running transcript at all - the notes panel already showed that correctly, and it already hid the button that puts the running meeting into the chat.\n\nWhat it did not do was stop offering the keyboard shortcut for that button. The bottom of the notes panel still printed the full reminder, including the key that sends the running meeting to the chat, and pressing that key still looked like it had sent something - the same confirmation you get in a meeting that is being transcribed live. Nothing had been sent, because there was nothing to send.\n\nThe reminder and the key now follow the button. With no live transcript, the panel prints only the two keys that still work - the one that puts your cursor in the note box and the one that takes a capture - and the send key does nothing at all. Notes, captures, recording and the final transcript are unchanged; this is the same situation seen from the other end of the same control.",
+    fixed: [
+      "The notes panel still printed the send-transcript hotkey, and pressing it still looked like it sent the meeting to the chat, when live transcription was switched off platform-wide (#830)",
+      "The same happened when an administrator switched live transcription off part-way through a meeting, where the transcript had just been withdrawn (#830)",
+    ],
+  },
+  {
     version: "0.275.8",
     date: "2026-10-05",
     pr: 828,

@@ -74,7 +74,9 @@ export type LiveNotesStreamProps = {
   focusRequest?: number;
   /// The global accelerators as the shell actually registered them, already formatted for the platform.
   /// Absent in a plain browser - and on a shell predating the notes hotkeys - which hides the hint line
-  /// rather than promising keys that do nothing.
+  /// rather than promising keys that do nothing. The send-transcript part is left out of the line
+  /// whenever `onTranscriptToChat` has no live transcript to send, so the reminder and the button it
+  /// names cannot disagree about the same meeting.
   hotkeys?: { capture: string; note: string; transcriptChat: string };
   /// Draw only the status line and the composer. Compact mode in the detached window, for a call that
   /// has taken the screen.
@@ -246,15 +248,21 @@ export default function LiveNotesStream({
         }
       : { short: tr("liveStatusLive"), long: tr("liveTranscriptLive") };
 
-  // Omits an accelerator the shell could not register (an empty string), rather than printing a gap
-  // where a key should be.
+  // One part per key the panel can actually offer. An accelerator the shell could not register is left
+  // out rather than printed as a gap, and the send-transcript part follows the button it names: with no
+  // live transcript there is nothing to send, so the key is not offered and the line reads as the two
+  // keys that really do work. A line left with nothing in it is not rendered at all.
   const hotkeyHint =
-    hotkeys && (hotkeys.note || hotkeys.capture || hotkeys.transcriptChat)
-      ? t("notesHotkeyHint", {
-          note: hotkeys.note,
-          capture: hotkeys.capture,
-          chat: hotkeys.transcriptChat,
-        })
+    hotkeys
+      ? [
+          hotkeys.note ? t("notesHotkeyNote", { note: hotkeys.note }) : "",
+          hotkeys.capture ? t("notesHotkeyCapture", { capture: hotkeys.capture }) : "",
+          canSendTranscript && hotkeys.transcriptChat
+            ? t("notesHotkeyChat", { chat: hotkeys.transcriptChat })
+            : "",
+        ]
+        .filter(Boolean)
+        .join(" · ") || null
       : null;
 
   const chips: { id: StreamFilter; label: string }[] = [

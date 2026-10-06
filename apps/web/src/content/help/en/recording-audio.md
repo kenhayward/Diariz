@@ -185,7 +185,10 @@ including with a Teams or Zoom call in front of everything:
   window comes forward; if they are not, the main window opens the notes panel for you.
 - **Ctrl+Shift+9** takes a screenshot of the capture area. This one has always been here and you can
   change it - see the screenshots section below.
-- **Ctrl+Shift+8** sends the meeting you are recording to the chat, so you can ask about it.
+- **Ctrl+Shift+8** sends the meeting you are recording to the chat, so you can ask about it. This one is
+  only offered while the meeting is being transcribed live. If your administrator has switched live
+  transcription off, there is nothing for it to send, so the reminder leaves it out and pressing it does
+  nothing at all. The other two keys still work exactly as above.
 
 On a Mac these are the Command versions of the same keys.
 
