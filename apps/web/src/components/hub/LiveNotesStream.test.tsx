@@ -785,12 +785,42 @@ describe("LiveNotesStream - the hotkey hint line", () => {
   it("prints the accelerators the shell reports, not a hardcoded set", () => {
     // A literal here would be wrong the moment somebody changed a hotkey, and the whole point of the
     // line is to tell a user which keys are live while a call has the screen.
-    renderStream({ hotkeys: keys });
+    renderStream({ hotkeys: keys, liveTranscript: transcript({ startMs: 0 }), onTranscriptToChat: () => {} });
 
     const line = screen.getByTestId("notes-hotkey-hint").textContent ?? "";
     expect(line).toContain("Ctrl+Shift+0");
     expect(line).toContain("Ctrl+Shift+9");
     expect(line).toContain("Ctrl+Shift+8");
+  });
+
+  it("leaves the send-transcript key out when live transcription is off", () => {
+    // The platform switch is off, so this meeting has no live transcript and the "Use in chat" button is
+    // not offered. The hint line promised a key that does nothing, which is the whole complaint here -
+    // the other two still work, so they must stay.
+    renderStream({ hotkeys: keys });
+
+    const line = screen.getByTestId("notes-hotkey-hint").textContent ?? "";
+    expect(line).toContain("Ctrl+Shift+0");
+    expect(line).toContain("Ctrl+Shift+9");
+    expect(line).not.toContain("Ctrl+Shift+8");
+  });
+
+  it("leaves it out too when an administrator switched it off mid-meeting", () => {
+    // The withdrawn case. The panel already says why the transcript is gone; the hint line must stop
+    // offering the key that would have sent it.
+    renderStream({ hotkeys: keys, liveStopped: true, onTranscriptToChat: () => {} });
+
+    const line = screen.getByTestId("notes-hotkey-hint").textContent ?? "";
+    expect(line).toContain("Ctrl+Shift+0");
+    expect(line).not.toContain("Ctrl+Shift+8");
+  });
+
+  it("shows no line at all when the only key it had was the send-transcript one", () => {
+    // Dropping the third part must not leave a line that is just a separator, or one that names a key
+    // the shell could not register.
+    renderStream({ hotkeys: { capture: "", note: "", transcriptChat: "Ctrl+Shift+8" } });
+
+    expect(screen.queryByTestId("notes-hotkey-hint")).toBeNull();
   });
 
   it("shows nothing in a plain browser, which holds no global keys", () => {

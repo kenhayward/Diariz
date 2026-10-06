@@ -791,5 +791,7 @@
   "notesCompactHint": "Auf das Notizfeld verkleinern",
   "notesExpand": "Erweitern",
   "notesExpandHint": "Den Verlauf wieder anzeigen",
-  "notesHotkeyHint": "{{note}} Notiz überall · {{capture}} Aufnahme · {{chat}} Transkript an den Chat"
+  "notesHotkeyNote": "{{note}} Notiz überall",
+  "notesHotkeyCapture": "{{capture}} Aufnahme",
+  "notesHotkeyChat": "{{chat}} Transkript an den Chat"
 }

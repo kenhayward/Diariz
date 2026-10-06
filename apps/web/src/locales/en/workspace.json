@@ -791,5 +791,7 @@
   "notesCompactHint": "Shrink to just the note box",
   "notesExpand": "Expand",
   "notesExpandHint": "Show the stream again",
-  "notesHotkeyHint": "{{note}} note anywhere · {{capture}} capture · {{chat}} send transcript to chat"
+  "notesHotkeyNote": "{{note}} note anywhere",
+  "notesHotkeyCapture": "{{capture}} capture",
+  "notesHotkeyChat": "{{chat}} send transcript to chat"
 }

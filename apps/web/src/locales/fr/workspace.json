@@ -791,5 +791,7 @@
   "notesCompactHint": "Réduire à la zone de note",
   "notesExpand": "Agrandir",
   "notesExpandHint": "Réafficher le flux",
-  "notesHotkeyHint": "{{note}} note à tout moment · {{capture}} capture · {{chat}} transcription vers le chat"
+  "notesHotkeyNote": "{{note}} note à tout moment",
+  "notesHotkeyCapture": "{{capture}} capture",
+  "notesHotkeyChat": "{{chat}} transcription vers le chat"
 }

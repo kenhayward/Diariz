@@ -791,5 +791,7 @@
   "notesCompactHint": "Reducir solo a la caja de notas",
   "notesExpand": "Ampliar",
   "notesExpandHint": "Mostrar el flujo de nuevo",
-  "notesHotkeyHint": "{{note}} nota en cualquier momento · {{capture}} captura · {{chat}} transcripción al chat"
+  "notesHotkeyNote": "{{note}} nota en cualquier momento",
+  "notesHotkeyCapture": "{{capture}} captura",
+  "notesHotkeyChat": "{{chat}} transcripción al chat"
 }
