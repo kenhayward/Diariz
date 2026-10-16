@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.276.3",
+    date: "2026-10-16",
+    pr: 843,
+    headline: "Security update for a cryptography library used by email",
+    summary:
+      "The library Diariz uses to send transcripts by email depends on a Microsoft cryptography package with two published denial-of-service vulnerabilities, one rated high. Diariz now ships the patched version of that package. Nothing about how email or anything else works has changed.",
+    fixed: [
+      "Updated System.Security.Cryptography.Pkcs to 10.0.13, which fixes CVE-2026-70162 and CVE-2026-84008 (.NET denial of service)",
+    ],
+  },
+  {
     version: "0.276.2",
     date: "2026-10-16",
     pr: 842,
