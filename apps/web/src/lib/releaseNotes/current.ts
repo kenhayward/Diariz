@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.276.2",
+    date: "2026-10-16",
+    pr: 842,
+    headline: "Japanese meetings, and transcripts with a stuck word, get their summaries again",
+    summary:
+      "Some recordings could never get a summary, tags, action items or minutes: every attempt was refused with \"Failed to process regex\", and running it again changed nothing. The AI model's text reader gives up on any single run of letters longer than about two hundred characters with no space or punctuation in it. Ordinary transcripts reach that more easily than it sounds. Japanese and Chinese are written without spaces between words, so one long sentence is one unbroken run, and when Whisper gets stuck repeating a sound it can write a single \"word\" hundreds of letters long.\n\nDiariz now adds a space inside any run of more than a hundred letters before the text goes to the model. The model reads it as nothing more than a line break, and ordinary English text, numbers, links and images are never changed. Recordings that failed this way can simply be summarised again.",
+    fixed: [
+      "Summaries, tags, action items and minutes failed permanently with \"Failed to process regex\" on transcripts containing a very long run of letters, such as Japanese or Chinese speech or a word Whisper got stuck repeating (#841)",
+    ],
+  },
+  {
     version: "0.276.1",
     date: "2026-10-16",
     pr: 839,
