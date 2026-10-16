@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../../lib/api";
-import { hasTranscript, isProcessing } from "../../lib/recordingStatus";
+import { hasTranscript, isCapturing, isProcessing } from "../../lib/recordingStatus";
 import { copyRichLink, transcriptUrl } from "../../lib/clipboard";
 import { useSharedRoomId, useRoomBasePath } from "../../lib/rooms";
 import { useActiveRecordingId } from "../../lib/activeRoute";
@@ -96,6 +96,7 @@ export function useRecordingActions(r: RecordingSummary): RecordingActions {
     hasAudio: r.hasAudio,
     isSummarizing: r.status === "Summarizing",
     isProcessing: isProcessing(r.status),
+    isCapturing: isCapturing(r.status),
   }, t);
 
   const modals = (

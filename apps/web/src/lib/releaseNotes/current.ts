@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.276.1",
+    date: "2026-10-16",
+    pr: 839,
+    headline: "Re-transcribe can no longer stop a live recording",
+    summary:
+      "While a meeting was still being recorded live, its menu offered Re-transcribe, and choosing it did real damage. A live recording has no single audio file until you press Stop, so the transcription failed straight away and the recording was marked Failed. Worse, the recording stopped counting as live: every further piece of audio was refused, recording quietly stopped, and the audio that had already arrived was never put together, because the clean-up that rescues abandoned recordings only looks at live ones.\n\nRe-transcribe is now hidden while a recording is being captured or its audio is being joined up, and the server refuses it with a clear message if anything asks anyway. Nothing is lost by waiting: a finished live recording is transcribed automatically.",
+    fixed: [
+      "Choosing Re-transcribe during a live recording failed the transcription, stopped the recording and stranded the audio already captured. It is no longer offered until the recording has finished (#838)",
+    ],
+  },
+  {
     version: "0.276.0",
     date: "2026-10-06",
     pr: 837,

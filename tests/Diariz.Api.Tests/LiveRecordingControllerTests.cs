@@ -354,6 +354,48 @@ public class LiveRecordingControllerTests
         Assert.Null((await db.Recordings.SingleAsync(r => r.Id == id)).AudioDeletedAt);
     }
 
+    [Fact]
+    public async Task Retranscribe_ForALiveCapture_Returns409_AndLeavesTheCaptureRunning()
+    {
+        // A live capture has no canonical blob until finalise, so the job would carry an empty key and
+        // fail in the worker. Worse, queuing it flips the recording out of Live, after which every chunk
+        // and the finalise itself are refused - the capture stops and the reaper never collects it
+        // (issue #838).
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        await LiveTestSupport.SeedUser(db, me);
+        var queue = new FakeJobQueue();
+        var controller = LiveTestSupport.Build(db, me, queue);
+        var (id, _) = await BeginAsync(db, me, controller);
+
+        var result = await controller.Retranscribe(id, new RetranscribeRequest(Model: null));
+
+        Assert.Equal(StatusCodes.Status409Conflict, Assert.IsType<ObjectResult>(result).StatusCode);
+        Assert.Empty(queue.Enqueued);
+        Assert.False(await db.Transcriptions.AnyAsync(t => t.RecordingId == id));
+        Assert.Equal(RecordingStatus.Live, (await db.Recordings.SingleAsync(r => r.Id == id)).Status);
+    }
+
+    [Fact]
+    public async Task Retranscribe_WhileTheChunksAreBeingMerged_Returns409()
+    {
+        // Merging still has no blob, and the merge callback queues the transcription itself.
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        await LiveTestSupport.SeedUser(db, me);
+        var queue = new FakeJobQueue();
+        var controller = LiveTestSupport.Build(db, me, queue);
+        var (id, _) = await BeginAsync(db, me, controller);
+        (await db.Recordings.SingleAsync(r => r.Id == id)).Status = RecordingStatus.Merging;
+        await db.SaveChangesAsync();
+
+        var result = await controller.Retranscribe(id, new RetranscribeRequest(Model: null));
+
+        Assert.Equal(StatusCodes.Status409Conflict, Assert.IsType<ObjectResult>(result).StatusCode);
+        Assert.Empty(queue.Enqueued);
+        Assert.Equal(RecordingStatus.Merging, (await db.Recordings.SingleAsync(r => r.Id == id)).Status);
+    }
+
     /// <summary>Rejects an empty key the way a real object store does, so a test cannot pass by handing
     /// one to a fake that shrugs.</summary>
     private sealed class ThrowsOnEmptyKeyStorage : FakeAudioStorage

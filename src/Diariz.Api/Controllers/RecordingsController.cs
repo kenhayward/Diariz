@@ -889,11 +889,22 @@ public class RecordingsController : ControllerBase
         "back in the wrong language - detection reads the opening of the audio, so a recording that starts " +
         "quiet can be detected as a language nobody spoke.\n\n" +
         "The job reads the original audio, so a recording whose audio has been deleted is still accepted here " +
-        "but the transcription itself then fails - check `hasAudio` before offering this.")]
+        "but the transcription itself then fails - check `hasAudio` before offering this.\n\n" +
+        "Returns 409 while the recording is still being captured (status `Live` or `Merging`): its audio does " +
+        "not exist as one file until the capture is finished, and the finished capture is transcribed " +
+        "automatically.")]
     public async Task<IActionResult> Retranscribe(Guid id, RetranscribeRequest req)
     {
         var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
         if (rec is null) return NotFound();
+
+        // A capture still in progress has no canonical blob - the job would carry an empty key and fail in
+        // the worker. Queuing it would also flip the recording out of Live, after which every chunk and the
+        // finalise are refused, so the capture stops and the reaper never collects it (issue #838). Merging
+        // is the same, and the merge callback queues the transcription itself.
+        if (rec.Status == RecordingStatus.Live || rec.Status == RecordingStatus.Merging)
+            return StatusCode(StatusCodes.Status409Conflict,
+                "This recording is still being captured. It can be re-transcribed once it has finished.");
 
         // Tri-state: a present Speakers object sets the diarization hints (null bounds = automatic);
         // an absent one leaves the recording's existing hints untouched (e.g. the list re-transcribe).

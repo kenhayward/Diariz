@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
 import { createHub } from "../lib/signalr";
 import { dragHasFiles } from "../lib/dragTypes";
-import { isProcessing } from "../lib/recordingStatus";
+import { isCapturing, isProcessing } from "../lib/recordingStatus";
 import { useStatus } from "../lib/status";
 import ActionsTable from "../components/ActionsTable";
 import DetailSections, { type DetailSection } from "../components/detail/DetailSections";
@@ -1187,6 +1187,7 @@ export default function RecordingDetail() {
     hasAudio: rec.hasAudio,
     isSummarizing,
     isProcessing: isProcessing(rec.status),
+    isCapturing: isCapturing(rec.status),
   }, t);
 
   // The linked-meeting block. It lived on the old Overview tab; the hero card has no slot for a whole

@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- App version ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â keep in sync with /version.json (see CLAUDE.md versioning rule). -->
-    <Version>0.276.0</Version>
+    <Version>0.276.1</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,8 +25,8 @@
     <PackageReference Include="System.IO.Packaging" Version="10.0.12" />
     <PackageReference Include="MailKit" Version="4.18.1" />
     <PackageReference Include="MimeKit" Version="4.18.1" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.*" />
-    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.*" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.12" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
     <!-- Official MCP C# SDK ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â hosts the in-process Streamable-HTTP /mcp endpoint (tools/resources/prompts). -->
     <PackageReference Include="ModelContextProtocol.AspNetCore" Version="1.4.1" />
@@ -51,11 +51,11 @@
          OpenApi/OpenApiCuration.cs at the same time, since its transformers mutate the document
          (`document.Components.SecuritySchemes ??= ...`) rather than only inspecting it. -->
     <PackageReference Include="Microsoft.OpenApi" Version="[2.12.2, 3.0.0)" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.*">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.*" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="Pgvector.EntityFrameworkCore" Version="0.3.0" />
     <!-- OpenIddict OAuth 2.1 / OpenID Connect server + validation + ASP.NET Core host: makes the API an
          authorization server + resource server for the MCP web connector (claude.ai). EntityFrameworkCore

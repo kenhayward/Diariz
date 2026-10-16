@@ -7,6 +7,13 @@ export function isProcessing(status: RecordingStatus): boolean {
   return status === "Uploaded" || status === "Queued" || status === "Transcribing" || status === "Merging";
 }
 
+/// Whether the recording is still being captured: chunks are arriving (Live) or being joined (Merging).
+/// Neither has one audio file yet, so actions that read the audio - Re-transcribe - cannot run, and the
+/// server refuses them with 409 (issue #838). The finished capture is transcribed automatically.
+export function isCapturing(status: RecordingStatus): boolean {
+  return status === "Live" || status === "Merging";
+}
+
 /// Whether a transcript exists to act on. Summarizing/Summarized still have one - the summary is generated
 /// from it - so menu items that read the transcript stay enabled throughout.
 export function hasTranscript(status: RecordingStatus): boolean {
@@ -39,6 +46,7 @@ const STATUS_CLASS: Record<RecordingStatus, string> = {
   Summarized: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
   Merging: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
   Failed: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
+  Live: NEUTRAL_STATUS_CLASS,
 };
 
 /// The `Record` above keeps a status added to the *type* honest at compile time, but the enum is
