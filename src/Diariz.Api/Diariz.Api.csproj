@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- App version ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â keep in sync with /version.json (see CLAUDE.md versioning rule). -->
-    <Version>0.276.2</Version>
+    <Version>0.276.3</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,6 +25,10 @@
     <PackageReference Include="System.IO.Packaging" Version="10.0.12" />
     <PackageReference Include="MailKit" Version="4.18.1" />
     <PackageReference Include="MimeKit" Version="4.18.1" />
+    <!-- Transitive override: MimeKit 4.18.1 (the latest) asks for System.Security.Cryptography.Pkcs 10.0.0,
+         which is vulnerable to CVE-2026-70162 and CVE-2026-84008 (.NET denial of service, both fixed in
+         10.0.13). Drop this once MimeKit's own dependency is at or above the patched version. -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.12" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />

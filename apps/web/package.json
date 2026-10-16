@@ -1,7 +1,7 @@
 {
   "name": "diariz-web",
   "private": true,
-  "version": "0.276.2",
+  "version": "0.276.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
