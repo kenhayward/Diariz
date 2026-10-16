@@ -1367,6 +1367,19 @@ streaming upload. The backoff runs on the caller's `CancellationToken`, so the p
 bounds the whole thing. This covers a short refusal, not an outage: an endpoint down for minutes still
 fails the recording, and re-running it by hand remains the recovery.
 
+**Long letter runs are broken before a call leaves.** `LongLetterRunHandler` (`Services/Llm/LongLetterRuns.cs`)
+sits between `LlmEndpointGuardHandler` and `LlmRetryHandler` on every LLM client (issue #841). llama.cpp's
+gpt-oss tokenizer, as LM Studio serves it, refuses a whole request with 400 `Failed to process regex` when a
+single run of letters exceeds roughly 200 characters (measured: 190 ASCII passes, 200 fails; ~220 for real
+Japanese). Transcripts in languages written without spaces (Japanese, Chinese) and Whisper repetition loops
+both reach that, and since the input fails identically every time, the retry cannot help. The handler inserts
+a space every `LongLetterRuns.MaxRun` = 100 letters (combining marks count as letters) in the `messages` of a
+chat body - string `content` and the `text` of array parts. Digits, punctuation and whitespace already end a
+run, so numbers, URLs and code are never touched; image parts and embeddings `input` are left alone; and a
+body with nothing to break is sent byte for byte. It sits outside the retry so a retried attempt resends the
+rewritten body, and outside telemetry so the usage log records what was actually sent.
+`LlmLongLetterRunPipelineTests` pins its place in each client's real pipeline.
+
 Failures themselves are reported by **`LlmResponse.EnsureSuccessAsync`** (`Services/Llm/LlmResponse.cs`),
 which every pipeline client calls in place of `EnsureSuccessStatusCode()`. It reads the endpoint's error
 body - flattened to one line, bounded at 1,000 chars - into the exception message, and names the offending

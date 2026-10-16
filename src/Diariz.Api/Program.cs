@@ -325,6 +325,10 @@ IHttpClientBuilder AddLlmClient<TClient, TImplementation>(
     // The destination check goes OUTERMOST, so a refused endpoint is neither retried nor recorded as a call.
     http = http.AddHttpMessageHandler(() => new LlmEndpointGuardHandler(llmAllowLoopback));
 
+    // Break letter runs a model's tokenizer cannot split (issue #841) - OUTSIDE the retry, so a retried
+    // attempt resends the rewritten body, and outside telemetry, so the usage log records what was sent.
+    http = http.AddHttpMessageHandler(() => new LongLetterRunHandler());
+
     // Retry OUTSIDE telemetry (added first = outermost), so each attempt is timed and recorded as its own
     // row. A retry that hid its attempts would make the usage log understate what the platform spent.
     if (retry) http = http.AddHttpMessageHandler<LlmRetryHandler>();
