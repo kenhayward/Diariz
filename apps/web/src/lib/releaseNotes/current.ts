@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.276.5",
+    date: "2026-10-16",
+    pr: 847,
+    headline: "A test that could fail on a busy machine now cannot",
+    summary:
+      "Nothing changes in Diariz itself. One of the recorder's tests checks that the meeting pop-out is not resent its whole contents every time the clock ticks, and it could fail now and then when the machine running the tests was busy. Starting a live recording legitimately updates the pop-out once more just after recording begins, and the test sometimes took its starting count before that update instead of after it, then mistook it for clock churn. The test now waits for the recording to finish starting before it counts, and it still catches the problem it exists for.",
+    fixed: [
+      "The recorder's pop-out clock test could fail intermittently on a loaded machine by counting a one-off startup update as clock churn (#846)",
+    ],
+  },
+  {
     version: "0.276.4",
     date: "2026-10-16",
     pr: 845,
