@@ -56,6 +56,9 @@ export interface RecordingMenuHandlers {
   /// Delete audio are disabled while processing so the user can't remove a recording (or the audio the worker
   /// is still reading) mid-pipeline.
   isProcessing?: boolean;
+  /// Whether the recording is still being captured (Live/Merging). Re-transcribe is hidden then: there is no
+  /// audio file to read yet, and the finished capture is transcribed automatically (issue #838).
+  isCapturing?: boolean;
 }
 
 /// The single source of truth for a recording's kebab actions, so the list and detail menus
@@ -65,8 +68,9 @@ export function recordingMenu(h: RecordingMenuHandlers, t: TFunction): KebabActi
   return [
     { label: t("recordings:rename"), onClick: h.onRename },
     { label: t("recordings:copyLink"), onClick: h.onCopyLink },
-    // Re-transcribe needs the audio, so it's hidden once the audio is deleted.
-    ...(h.hasAudio ? [{ label: t("recordings:retranscribe"), onClick: h.onRetranscribe }] : []),
+    // Re-transcribe needs the audio, so it's hidden once the audio is deleted - and while it is still being
+    // captured, when it does not exist as one file yet.
+    ...(h.hasAudio && !h.isCapturing ? [{ label: t("recordings:retranscribe"), onClick: h.onRetranscribe }] : []),
     { label: t("recordings:summarise"), onClick: h.onSummarise, disabled: !h.hasTranscript || h.isSummarizing },
     ...(h.onEditSummary
       ? [{ label: t("recordings:editSummary"), onClick: h.onEditSummary, disabled: !h.hasTranscript }]

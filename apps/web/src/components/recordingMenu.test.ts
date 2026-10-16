@@ -55,6 +55,13 @@ describe("recordingMenu", () => {
     expect(labels).toContain("Delete");
   });
 
+  it("hides Re-transcribe while the recording is still being captured", () => {
+    // A live capture has no audio file until it is finished, and re-transcribing it stopped the capture
+    // (issue #838). The finished capture is transcribed automatically.
+    expect(build({ isCapturing: true }).map((a) => a.label)).not.toContain("Re-transcribe");
+    expect(build({ isCapturing: false }).map((a) => a.label)).toContain("Re-transcribe");
+  });
+
   it("omits Play when no onPlay handler is provided (the list menu)", () => {
     const labels = build({ onPlay: undefined }).map((a) => a.label);
     expect(labels).not.toContain("Play");

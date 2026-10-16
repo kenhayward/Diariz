@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { hasTranscript, isProcessing, showStatusBadge, statusBadgeClass, statusLabel } from "./recordingStatus";
+import { hasTranscript, isCapturing, isProcessing, showStatusBadge, statusBadgeClass, statusLabel } from "./recordingStatus";
 import type { RecordingStatus } from "./types";
 
 /// Every status the API can send. Kept here so the badge-class test can assert exhaustiveness: the enum is
 /// append-only on the server, and a status with no colour would render an empty class.
 const ALL: RecordingStatus[] = [
-  "Uploaded", "Queued", "Transcribing", "Transcribed", "Summarizing", "Summarized", "Merging", "Failed",
+  "Uploaded", "Queued", "Transcribing", "Transcribed", "Summarizing", "Summarized", "Merging", "Failed", "Live",
 ];
 
 describe("isProcessing", () => {
@@ -17,6 +17,18 @@ describe("isProcessing", () => {
   it("is false once a transcript exists or the job failed", () => {
     for (const s of ["Transcribed", "Summarizing", "Summarized", "Failed"] as RecordingStatus[])
       expect(isProcessing(s)).toBe(false);
+  });
+});
+
+describe("isCapturing", () => {
+  it("is true while a live capture is running or its chunks are being merged", () => {
+    // Neither has one audio file yet, so nothing that reads the recording's audio can run (issue #838).
+    expect(isCapturing("Live")).toBe(true);
+    expect(isCapturing("Merging")).toBe(true);
+  });
+
+  it("is false for every other status", () => {
+    for (const s of ALL.filter((s) => s !== "Live" && s !== "Merging")) expect(isCapturing(s)).toBe(false);
   });
 });
 

@@ -8,7 +8,8 @@ export type RecordingStatus =
   | "Summarizing"
   | "Summarized"
   | "Merging"
-  | "Failed";
+  | "Failed"
+  | "Live";
 
 export type RecordingSource = "Microphone" | "System" | "Upload" | "Combined";
 
