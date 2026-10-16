@@ -21,10 +21,12 @@ jobs:
   # 48 of 94 packages behind the Api for months, telling GitHub's dependency graph the wrong versions,
   # and was only noticed by reading `git status` after an unrelated local build (issue #823).
   #
-  # This deliberately does NOT move floating versions - the repo pairs 12 floating references (10.*, 4.*)
-  # with committed locks, and locked mode leaving a float alone is the point. A deliberate dependency
-  # refresh is `dotnet restore Diariz.slnx --force-evaluate`, solution-wide, which is what should then
-  # update the locks in the same PR.
+  # PackageReference versions are EXACT, never floating (10.*, 4.*). The repo used to pair 12 floats with
+  # committed locks on the theory that a lock holds a float still - but Diariz.Api.TestSupport has no lock
+  # (#823), so its restore re-resolved every float transitively. When EF Core 10.0.13 shipped it compiled
+  # against 10.0.13 while the locked test projects stayed on 10.0.12, and every .NET build failed with
+  # CS1705 with nothing in the repo having changed (issue #840). The second step keeps a float from
+  # coming back. Dependabot's monthly nuget group moves the pins and the locks together.
   dotnet-locks:
     name: .NET lock files
     runs-on: ubuntu-latest
@@ -35,6 +37,12 @@ jobs:
           dotnet-version: '10.0.x'
       - name: Restore in locked mode
         run: dotnet restore Diariz.slnx --locked-mode
+      - name: No floating package versions
+        run: |
+          if grep -rnE --include='*.csproj' --include='*.props' 'Version="[^"]*\*' src tests Directory.Build.props; then
+            echo "::error::Floating PackageReference version found - pin it exactly (issue #840)."
+            exit 1
+          fi
 
   dotnet-unit:
     name: .NET unit

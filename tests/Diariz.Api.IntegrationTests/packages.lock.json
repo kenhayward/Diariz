@@ -10,7 +10,7 @@
       },
       "Microsoft.AspNetCore.Mvc.Testing": {
         "type": "Direct",
-        "requested": "[10.*, )",
+        "requested": "[10.0.12, )",
         "resolved": "10.0.12",
         "contentHash": "OtjgnL8RRLQYaiuS3KzbBbyQ6am1ZrX3dvBdiuXghxL+LQinmT2vMumytveYPbnXLknZSk/aEDKENI6uf7NoNg==",
         "dependencies": {
@@ -30,7 +30,7 @@
       },
       "Testcontainers.PostgreSql": {
         "type": "Direct",
-        "requested": "[4.*, )",
+        "requested": "[4.15.0, )",
         "resolved": "4.15.0",
         "contentHash": "45ZvqAzrh9BoI15Z4id7WEfhk1pVKqVeAX76aef8fR5ScglD75fSQtYuXhKFx4kIcgRL5aLKt3pRiqCVIgsL9g==",
         "dependencies": {
@@ -39,7 +39,7 @@
       },
       "Testcontainers.Redis": {
         "type": "Direct",
-        "requested": "[4.*, )",
+        "requested": "[4.15.0, )",
         "resolved": "4.15.0",
         "contentHash": "au2OSaAQwn3W6Q2QZsYUig2Smbi0xdAZQhyjynjK10Hhf0HokhsADtGjRdXefqjSIpq49Yqpkh7QjhD7hvMwAQ==",
         "dependencies": {
@@ -924,13 +924,13 @@
           "Ical.Net": "[5.2.3, )",
           "MailKit": "[4.18.1, )",
           "Markdig": "[1.4.0, )",
-          "Microsoft.AspNetCore.Authentication.JwtBearer": "[10.*, )",
-          "Microsoft.AspNetCore.Identity.EntityFrameworkCore": "[10.*, )",
+          "Microsoft.AspNetCore.Authentication.JwtBearer": "[10.0.12, )",
+          "Microsoft.AspNetCore.Identity.EntityFrameworkCore": "[10.0.12, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.12, )",
           "Microsoft.OpenApi": "[2.12.2, 3.0.0)",
           "MimeKit": "[4.18.1, )",
           "ModelContextProtocol.AspNetCore": "[1.4.1, )",
-          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.*, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )",
           "OpenIddict.AspNetCore": "[7.7.1, )",
           "OpenIddict.EntityFrameworkCore": "[7.7.1, )",
           "Pgvector.EntityFrameworkCore": "[0.3.0, )",
@@ -945,15 +945,15 @@
       "diariz.api.testsupport": {
         "type": "Project",
         "dependencies": {
-          "Diariz.Api": "[0.273.2, )"
+          "Diariz.Api": "[0.276.1, )"
         }
       },
       "diariz.domain": {
         "type": "Project",
         "dependencies": {
-          "Microsoft.AspNetCore.Identity.EntityFrameworkCore": "[10.*, )",
-          "Microsoft.EntityFrameworkCore": "[10.*, )",
-          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.*, )",
+          "Microsoft.AspNetCore.Identity.EntityFrameworkCore": "[10.0.12, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.12, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )",
           "OpenIddict.EntityFrameworkCore": "[7.7.1, )",
           "Pgvector.EntityFrameworkCore": "[0.3.0, )"
         }

@@ -10,13 +10,13 @@
       },
       "Microsoft.AspNetCore.TestHost": {
         "type": "Direct",
-        "requested": "[10.*, )",
+        "requested": "[10.0.12, )",
         "resolved": "10.0.12",
         "contentHash": "bTHgbcjSrLxlqSasYRDU9BcJ3hDGoqIjtDY0soLNrndOWi3kxtOyddwUMaNZgtoI2Uf6y7ZQs2EuVj0c20B7mA=="
       },
       "Microsoft.EntityFrameworkCore.InMemory": {
         "type": "Direct",
-        "requested": "[10.*, )",
+        "requested": "[10.0.12, )",
         "resolved": "10.0.12",
         "contentHash": "zpyIER4WRE4wslktQWBi6aD2DbX6AwOVmMar5yO0tbswQ/vh772Ot2j+1f0/1Nxk98WSRmssLQhRpxWZPk7g+w==",
         "dependencies": {
@@ -820,13 +820,13 @@
           "Ical.Net": "[5.2.3, )",
           "MailKit": "[4.18.1, )",
           "Markdig": "[1.4.0, )",
-          "Microsoft.AspNetCore.Authentication.JwtBearer": "[10.*, )",
-          "Microsoft.AspNetCore.Identity.EntityFrameworkCore": "[10.*, )",
+          "Microsoft.AspNetCore.Authentication.JwtBearer": "[10.0.12, )",
+          "Microsoft.AspNetCore.Identity.EntityFrameworkCore": "[10.0.12, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.12, )",
           "Microsoft.OpenApi": "[2.12.2, 3.0.0)",
           "MimeKit": "[4.18.1, )",
           "ModelContextProtocol.AspNetCore": "[1.4.1, )",
-          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.*, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )",
           "OpenIddict.AspNetCore": "[7.7.1, )",
           "OpenIddict.EntityFrameworkCore": "[7.7.1, )",
           "Pgvector.EntityFrameworkCore": "[0.3.0, )",
@@ -841,15 +841,15 @@
       "diariz.api.testsupport": {
         "type": "Project",
         "dependencies": {
-          "Diariz.Api": "[0.273.2, )"
+          "Diariz.Api": "[0.276.1, )"
         }
       },
       "diariz.domain": {
         "type": "Project",
         "dependencies": {
-          "Microsoft.AspNetCore.Identity.EntityFrameworkCore": "[10.*, )",
-          "Microsoft.EntityFrameworkCore": "[10.*, )",
-          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.*, )",
+          "Microsoft.AspNetCore.Identity.EntityFrameworkCore": "[10.0.12, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.12, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )",
           "OpenIddict.EntityFrameworkCore": "[7.7.1, )",
           "Pgvector.EntityFrameworkCore": "[0.3.0, )"
         }
