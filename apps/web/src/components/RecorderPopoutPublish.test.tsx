@@ -390,6 +390,12 @@ describe("how often the recorder rebroadcasts the whole meeting", () => {
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
     await screen.findByRole("button", { name: /^stop$/i });
     await waitFor(() => expect(published?.recording).toBe(true));
+    // Starting a live capture publishes once more AFTER `recording` turns true: one render later
+    // `useLiveTranscript` re-mints the transcript for this recording's id, which also rebuilds `shots` and
+    // the clock. Wait for that settled state, or a test that takes its baseline here races it - waitFor's
+    // poll normally lands after it, but on a loaded machine it can land in between, and the startup
+    // publish is then counted as churn by "sends nothing new while only the clock is moving" (issue #846).
+    await waitFor(() => expect(published?.liveTranscript?.recordingId).toBe(id));
   }
 
   afterEach(() => {
