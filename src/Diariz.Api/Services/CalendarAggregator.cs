@@ -96,12 +96,23 @@ public sealed class CalendarAggregator : ICalendarAggregator
         return await _google.GetEventAsync(userId, eventId, ct);
     }
 
-    public async Task<bool> HasAnySourceAsync(Guid userId, CancellationToken ct = default)
+    public Task<bool> HasAnySourceAsync(Guid userId, CancellationToken ct = default) =>
+        CalendarSources.AnyAsync(_db, userId, ct);
+}
+
+/// <summary>The one rule for "does this user have a calendar at all". Shared by the aggregator, which gates
+/// the match and link endpoints on it, and the profile's <c>AnyCalendar</c>, which tells the recording page
+/// whether to offer meetings - so the page can never again ask a narrower question than the server answers
+/// (issue #844: it asked about Google alone, and lost Outlook users their meeting card).</summary>
+public static class CalendarSources
+{
+    /// <summary>A Google grant, an enabled <c>.ics</c> feed, or an enabled Outlook device. Answered from the
+    /// database rather than by probing the clients: this only gates "can we offer to match a meeting", and it
+    /// would be absurd for that to cost a Google round trip plus every feed fetch.</summary>
+    public static async Task<bool> AnyAsync(DiarizDbContext db, Guid userId, CancellationToken ct = default)
     {
-        // Answered from the database rather than by probing the clients: this only gates "can we offer to match
-        // a meeting", and it would be absurd for that to cost a Google round trip plus every feed fetch.
-        if (await _db.UserSettings.AnyAsync(s => s.UserId == userId && s.GoogleCalendarGranted, ct)) return true;
-        if (await _db.IcsCalendarSources.AnyAsync(s => s.UserId == userId && s.Enabled, ct)) return true;
-        return await _db.OutlookCalendarSources.AnyAsync(s => s.UserId == userId && s.Enabled, ct);
+        if (await db.UserSettings.AnyAsync(s => s.UserId == userId && s.GoogleCalendarGranted, ct)) return true;
+        if (await db.IcsCalendarSources.AnyAsync(s => s.UserId == userId && s.Enabled, ct)) return true;
+        return await db.OutlookCalendarSources.AnyAsync(s => s.UserId == userId && s.Enabled, ct);
     }
 }

@@ -964,6 +964,9 @@ export interface UserProfile {
   transcriptionLanguage: string | null;
   googleConnected: boolean; // account is linked to a Google identity
   googleCalendar: boolean; // user granted Google Calendar read access
+  /// Any calendar connected - Google, an .ics feed, or a desktop Outlook device - by the server's own rule.
+  /// This, not `googleCalendar`, decides whether meetings can be suggested and linked (issue #844).
+  anyCalendar: boolean;
   jobTitle: string | null;
   companyName: string | null;
   jobDescription: string | null;

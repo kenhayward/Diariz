@@ -249,7 +249,7 @@ describe("RecordingDetail", () => {
   });
 
   it("auto-saves the suggested meeting when Calendar is connected and the recording is unlinked", async () => {
-    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true });
+    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true, anyCalendar: true });
     (api.getCalendarMatch as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "evt1", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt, htmlLink: "https://cal/evt1", calendarId: "team@g",
     });
@@ -264,7 +264,7 @@ describe("RecordingDetail", () => {
   });
 
   it("shows the linked meeting's summary and manage actions on the Overview", async () => {
-    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true });
+    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true, anyCalendar: true });
     (api.getCalendarEvent as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "evt1", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt,
       htmlLink: "https://cal/evt1", location: "Room 4", description: "Agenda",
@@ -288,7 +288,7 @@ describe("RecordingDetail", () => {
   });
 
   it("offers a Calendar Event section when the recording has a linked meeting", async () => {
-    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true });
+    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true, anyCalendar: true });
     (api.getCalendarEvent as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "evt1", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt,
       htmlLink: "https://cal/evt1", location: "Room 4", description: null, organizer: null, attendees: [],
@@ -307,7 +307,7 @@ describe("RecordingDetail", () => {
   });
 
   it("has no Calendar Event section when nothing is linked", async () => {
-    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true });
+    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true, anyCalendar: true });
     // Same seeding as above; a recording with no linked meeting must fall back to the hub anyway.
     localStorage.setItem("diariz.detailSection", "meeting");
     renderPage(base); // base.calendarLink is null
@@ -318,7 +318,7 @@ describe("RecordingDetail", () => {
 
   it("hides the linked meeting on the Overview while viewing in a shared room (calendar is personal-only)", async () => {
     roomState.currentRoom = { id: "eng-room", name: "Podcasts", isPersonal: false };
-    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true });
+    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true, anyCalendar: true });
     renderPage({
       ...base,
       calendarLink: { eventId: "evt1", calendarId: "primary", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt, htmlLink: "https://cal/evt1", linkedManually: false },
@@ -332,7 +332,7 @@ describe("RecordingDetail", () => {
 
   it("does not link (auto or manual) while viewing an unlinked recording in a shared room", async () => {
     roomState.currentRoom = { id: "eng-room", name: "Podcasts", isPersonal: false };
-    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true });
+    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true, anyCalendar: true });
     (api.getCalendarMatch as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "evt1", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt, htmlLink: "https://cal/evt1", calendarId: "team@g",
     });
@@ -345,7 +345,7 @@ describe("RecordingDetail", () => {
   });
 
   it("unlinks the meeting when Unlink is clicked", async () => {
-    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true });
+    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true, anyCalendar: true });
     (api.getCalendarEvent as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "evt1", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt, htmlLink: null,
     });
@@ -359,8 +359,29 @@ describe("RecordingDetail", () => {
     await waitFor(() => expect(api.deleteCalendarLink).toHaveBeenCalledWith("rec-123"));
   });
 
+  it("offers, suggests and auto-links meetings for a user whose only calendar is Outlook or a feed", async () => {
+    // Issue #844: the page asked about the Google grant alone, so an Outlook-only user lost the meeting
+    // card and auto-linking the moment their Google connection lapsed - although the server's match and
+    // link endpoints accept any source. `anyCalendar` carries the server's rule.
+    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: false, anyCalendar: true });
+    (api.getCalendarMatch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "outlook:dev1:evt9", summary: "Design Review", start: base.createdAt, end: base.createdAt,
+      htmlLink: null, calendarId: "outlook:dev1",
+    });
+    (api.putCalendarLink as ReturnType<typeof vi.fn>).mockResolvedValue({
+      eventId: "outlook:dev1:evt9", calendarId: "outlook:dev1", summary: "Design Review", start: base.createdAt,
+      end: base.createdAt, htmlLink: null, linkedManually: false,
+    });
+    renderPage(base); // unlinked
+    await loaded();
+
+    expect(await screen.findByText("Meeting")).toBeTruthy(); // the card is back
+    await waitFor(() =>
+      expect(api.putCalendarLink).toHaveBeenCalledWith("rec-123", "outlook:dev1:evt9", false, "outlook:dev1"));
+  });
+
   it("does not query the calendar when Calendar isn't connected", async () => {
-    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: false });
+    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: false, anyCalendar: false });
     renderPage(base);
     await loaded();
     expect(api.getCalendarMatch).not.toHaveBeenCalled();

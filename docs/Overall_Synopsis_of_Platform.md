@@ -2353,6 +2353,13 @@ into it with no URL or per-user setup at all.
   `CalendarEvent.AllDay` carries the flag (Google: a `date` rather than `dateTime` start; ICS: a date-only `DTSTART`)
   and `PickBest` skips those events - they remain linkable **by hand**. Read-only (`calendar.readonly`); 400s without
   the grant. The Overview shows the matched meeting with a link to the Google Calendar event.
+  - **Any calendar source qualifies, not only Google** (since the calendar aggregator, f3e5229a): match and link
+    gate on `CalendarSources.AnyAsync` - a Google grant, an enabled `.ics` feed, or an enabled desktop Outlook
+    device - and search all of them. The profile reports the same rule as **`UserProfileDto.AnyCalendar`**, and
+    that flag (not `GoogleCalendar`, which describes the Google grant alone) is what the recording page uses to
+    fetch the suggestion, auto-link, and show its Meeting card. The page used to read `GoogleCalendar`, so an
+    Outlook- or feed-only user lost all three the moment their Google token stopped refreshing - which
+    `GoogleTokenProvider` answers by clearing the grant (issue #844).
 - **Persisted calendar links (Phase 2 feature):** the match above is a *suggestion* - a recording can also be
   **persistently linked** to an event via **`PUT /api/recordings/{id}/calendar-link`** `{ eventId, manual }`
   (owner-scoped, requires the grant), stored as a 1:1 **`RecordingCalendarLink`** (shared PK, cascade) holding a

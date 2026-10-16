@@ -263,4 +263,81 @@ public class UserProfileControllerTests
 
         Assert.True(res.Value!.Person!.VoiceprintOptOut);
     }
+
+    // ---- AnyCalendar: whether the recording page may offer, suggest and auto-link meetings (issue #844) ----
+    //
+    // The recording page used the Google grant alone, so an Outlook- or feed-only user lost the meeting card
+    // and auto-linking the moment their Google connection lapsed - while the server's match/link endpoints,
+    // which ask "any source?", would have served them fine. The flag carries the server's own rule.
+
+    private static async Task<(IdentityTestHost Host, UserProfileController Sut, Guid UserId)> UserAsync()
+    {
+        var host = new IdentityTestHost();
+        var user = new ApplicationUser { UserName = "cal@b.test", Email = "cal@b.test", IsEnabled = true };
+        await host.Users.CreateAsync(user);
+        return (host, Build(host, user.Id), user.Id);
+    }
+
+    [Fact]
+    public async Task AnyCalendar_IsTrue_ForAnOutlookOnlyUser()
+    {
+        var (host, sut, me) = await UserAsync();
+        using var _ = host;
+        host.Db.OutlookCalendarSources.Add(new OutlookCalendarSource
+        {
+            Id = Guid.NewGuid(), UserId = me, DeviceId = "dev-1", DisplayName = "Work", Enabled = true,
+        });
+        await host.Db.SaveChangesAsync();
+
+        var res = await sut.Get();
+
+        Assert.True(res.Value!.AnyCalendar);
+        Assert.False(res.Value.GoogleCalendar); // the case the page got wrong: no Google, still a calendar
+    }
+
+    [Fact]
+    public async Task AnyCalendar_IsTrue_ForAFeedOnlyUser()
+    {
+        var (host, sut, me) = await UserAsync();
+        using var _ = host;
+        host.Db.IcsCalendarSources.Add(new IcsCalendarSource
+        {
+            Id = Guid.NewGuid(), UserId = me, Name = "Team", Url = "https://cal.test/team.ics", Enabled = true,
+        });
+        await host.Db.SaveChangesAsync();
+
+        Assert.True((await sut.Get()).Value!.AnyCalendar);
+    }
+
+    [Fact]
+    public async Task AnyCalendar_IsTrue_ForAGoogleGrant()
+    {
+        var (host, sut, me) = await UserAsync();
+        using var _ = host;
+        host.Db.UserSettings.Add(new UserSettings { UserId = me, GoogleCalendarGranted = true });
+        await host.Db.SaveChangesAsync();
+
+        Assert.True((await sut.Get()).Value!.AnyCalendar);
+    }
+
+    [Fact]
+    public async Task AnyCalendar_IsFalse_WithNoSource_OrOnlyDisabledOnes()
+    {
+        // A switched-off source is not a calendar to match against - the same rule the match endpoint applies.
+        var (host, sut, me) = await UserAsync();
+        using var _ = host;
+        Assert.False((await sut.Get()).Value!.AnyCalendar);
+
+        host.Db.OutlookCalendarSources.Add(new OutlookCalendarSource
+        {
+            Id = Guid.NewGuid(), UserId = me, DeviceId = "dev-2", DisplayName = "Old laptop", Enabled = false,
+        });
+        host.Db.IcsCalendarSources.Add(new IcsCalendarSource
+        {
+            Id = Guid.NewGuid(), UserId = me, Name = "Muted", Url = "https://cal.test/muted.ics", Enabled = false,
+        });
+        await host.Db.SaveChangesAsync();
+
+        Assert.False((await sut.Get()).Value!.AnyCalendar);
+    }
 }
