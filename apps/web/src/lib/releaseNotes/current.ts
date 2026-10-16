@@ -9,6 +9,17 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.276.4",
+    date: "2026-10-16",
+    pr: 845,
+    headline: "Outlook and calendar-feed users get the meeting card and auto-linking back",
+    summary:
+      "A recording's page shows the meeting it came from, suggests one when it is not linked yet, and links the overlapping meeting automatically. All three only appeared if you had Google Calendar connected, even though matching and linking already worked with every calendar Diariz supports. So if your meetings come from a desktop Outlook calendar or a subscribed calendar feed, the card and the automatic linking disappeared as soon as a Google connection lapsed or was never there. Linking a recording from the meeting's own page kept working, which made the gap easy to miss.\n\nThe recording page now checks for any connected calendar, using the same rule the server uses. The Meeting card, the suggested meeting and automatic linking work again with Outlook and calendar feeds, with or without Google.",
+    fixed: [
+      "The Meeting card, the suggested meeting and automatic meeting linking were missing on recordings for anyone whose calendar is a desktop Outlook calendar or a subscribed feed rather than Google Calendar (#844)",
+    ],
+  },
+  {
     version: "0.276.3",
     date: "2026-10-16",
     pr: 843,

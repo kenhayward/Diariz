@@ -870,7 +870,12 @@ public record UserProfileDto(
     string? TranscriptionLanguage = null,
     /// <summary>Who the caller is in the people directory, and whether that person has a voiceprint. Always
     /// sent; nullable only so the positional record stays source-compatible.</summary>
-    SelfPersonDto? Person = null);
+    SelfPersonDto? Person = null,
+    /// <summary>Whether the caller has <b>any</b> calendar connected - a Google grant, an enabled <c>.ics</c>
+    /// feed, or an enabled desktop Outlook device - by the same rule the calendar-match and calendar-link
+    /// endpoints apply. This, not <paramref name="GoogleCalendar"/>, is what decides whether meetings can be
+    /// suggested and linked; <paramref name="GoogleCalendar"/> describes the Google grant alone.</summary>
+    bool AnyCalendar = false);
 
 /// <summary>A user's platform permissions, expanded into booleans so the client never does bit arithmetic.</summary>
 public record PermissionsDto(

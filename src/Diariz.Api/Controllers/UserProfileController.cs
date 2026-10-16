@@ -86,7 +86,8 @@ public class UserProfileController : ControllerBase
                 person.Id, person.Name,
                 // Same rule as PersonDto: an embedding or any sample counts as having a voiceprint.
                 HasVoiceprint: person.Embedding is not null || person.SampleCount > 0,
-                person.SampleCount, person.VoiceprintOptOut));
+                person.SampleCount, person.VoiceprintOptOut),
+            AnyCalendar: await CalendarSources.AnyAsync(_db, UserId));
     }
 
     [HttpPut]

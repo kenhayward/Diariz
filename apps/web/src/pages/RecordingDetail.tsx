@@ -181,12 +181,17 @@ export default function RecordingDetail() {
     enabled: Boolean(currentRoom),
   });
 
-  // If the user has connected Google Calendar, find the meeting this recording overlaps (the suggestion
-  // that seeds the auto-saved link and the "Suggested meeting" prompt). Personal room only.
+  // Whether the user has ANY calendar - Google, an .ics feed or a desktop Outlook device. Not the Google
+  // grant: that gate locked Outlook-only users out of the meeting card and auto-linking the moment their
+  // Google connection lapsed, although the match and link endpoints accept every source (issue #844).
+  const calendarConnected = profile?.anyCalendar === true;
+
+  // If the user has a calendar connected, find the meeting this recording overlaps (the suggestion that
+  // seeds the auto-saved link and the "Suggested meeting" prompt). Personal room only.
   const { data: calendarMatch } = useQuery({
     queryKey: ["calendar-match", id],
     queryFn: () => api.getCalendarMatch(id),
-    enabled: Boolean(id) && !inSharedRoom && profile?.googleCalendar === true,
+    enabled: Boolean(id) && !inSharedRoom && calendarConnected,
     retry: false,
   });
   // The full, live details of the linked event (attendees/description/location) for the Overview. Falls
@@ -207,7 +212,7 @@ export default function RecordingDetail() {
   // never fires while viewing a shared room (calendar is personal-only).
   const autoLinkedRef = useRef(false);
   useEffect(() => {
-    if (!id || !rec || inSharedRoom || profile?.googleCalendar !== true) return;
+    if (!id || !rec || inSharedRoom || !calendarConnected) return;
     if (rec.calendarLink || !calendarMatch || autoLinkedRef.current) return;
     autoLinkedRef.current = true;
     api
@@ -217,7 +222,7 @@ export default function RecordingDetail() {
       .catch(() => {
         autoLinkedRef.current = false; // let a later render retry (e.g. the event became reachable)
       });
-  }, [id, rec, inSharedRoom, profile, calendarMatch, qc]);
+  }, [id, rec, inSharedRoom, calendarConnected, calendarMatch, qc]);
 
   async function unlinkMeeting() {
     if (!id) return;
@@ -1200,7 +1205,7 @@ export default function RecordingDetail() {
       calendarLink={rec.calendarLink}
       linkedEvent={linkedEvent}
       suggestion={calendarMatch}
-      calendarConnected={profile?.googleCalendar === true}
+      calendarConnected={calendarConnected}
       onLink={() => setLinkModalOpen(true)}
       onAcceptSuggestion={acceptSuggestion}
       onUnlink={unlinkMeeting}

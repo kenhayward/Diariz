@@ -5636,6 +5636,10 @@
       },
       "UserProfileDto": {
         "properties": {
+          "anyCalendar": {
+            "default": false,
+            "type": "boolean"
+          },
           "apiAccessEnabled": {
             "default": false,
             "type": "boolean"
