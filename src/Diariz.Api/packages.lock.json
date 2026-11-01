@@ -117,11 +117,11 @@
       },
       "ModelContextProtocol.AspNetCore": {
         "type": "Direct",
-        "requested": "[1.4.1, )",
-        "resolved": "1.4.1",
-        "contentHash": "AoI+00fRxb0GAMMabMUgpV5QhNoa/F7I9oiVGHfJKtBZ4g/DEyoDdTS9Rp/m4e3MnXhhvSBeu2wTafhesdf52w==",
+        "requested": "[2.3.0, )",
+        "resolved": "2.3.0",
+        "contentHash": "YaRK007jAIFYAGH65I2SPsXVHzaFDRBx+d3swxLCziRYysmk9zGCWm+Lqdt5geHq0wDwCcvwYkMzAOSUWLpajw==",
         "dependencies": {
-          "ModelContextProtocol": "1.4.1"
+          "ModelContextProtocol": "[2.3.0]"
         }
       },
       "Npgsql.EntityFrameworkCore.PostgreSQL": {
@@ -368,8 +368,8 @@
       },
       "Microsoft.Extensions.AI.Abstractions": {
         "type": "Transitive",
-        "resolved": "10.5.2",
-        "contentHash": "Ei+YWV9Ybnps7pR1dgjlG29gelXEwZkhLVAcWmKe6HvXS6LNBYgSdWiY3Hk9OZXYtK34rv/NtLWBQYQGOBQYPQ=="
+        "resolved": "10.11.0",
+        "contentHash": "h4DX/TdJU4fk1GGaf19n6Kujkj6VXbGeL4UEOsQ8+ZJC5fVApPauokCtvBP684BYbczUYZQNfo1mbmyHG4WVSg=="
       },
       "Microsoft.Extensions.AmbientMetadata.Application": {
         "type": "Transitive",
@@ -505,18 +505,18 @@
       },
       "ModelContextProtocol": {
         "type": "Transitive",
-        "resolved": "1.4.1",
-        "contentHash": "mP5hvBpoWe5EbWBqHWD09A4Dy6Pq+/vV2dumOV4uegCZcg+yqf8q8wrxtuZ3EQyXEJn9jzsnoiI/qyfJAihlZQ==",
+        "resolved": "2.3.0",
+        "contentHash": "PHZ0q8xTAoysqUKpA5gC0RGJSfwpZhfsNz+9Sw0X0RzFFVHjIE52sx6C+ogMn+LSE+FfiYiNscPJhM6q6DMT6Q==",
         "dependencies": {
-          "ModelContextProtocol.Core": "1.4.1"
+          "ModelContextProtocol.Core": "[2.3.0]"
         }
       },
       "ModelContextProtocol.Core": {
         "type": "Transitive",
-        "resolved": "1.4.1",
-        "contentHash": "G/hOBZkJsvF3MSy0sOvXdxca5uRe2Sb4xk7xRuTWNZI45khVBjOLo6nSzGilctIICavNVxbxUF908fLYI9RxkQ==",
+        "resolved": "2.3.0",
+        "contentHash": "EDpbQholhVWoNumb0Ab3oGv9LmXOLgaD5ixEIUkrnzpnqD0TJCSHTJ5G71/J1KlrQ98aWDclWTPMffKTnCJoMw==",
         "dependencies": {
-          "Microsoft.Extensions.AI.Abstractions": "10.5.2"
+          "Microsoft.Extensions.AI.Abstractions": "10.11.0"
         }
       },
       "Mono.TextTemplating": {
