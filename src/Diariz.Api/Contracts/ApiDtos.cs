@@ -338,7 +338,12 @@ public record BeginLiveRecordingRequest(
     Guid? RoomId,
     DateTimeOffset? StartedAt,
     Guid SessionId,
-    long ExpectedDurationMs);
+    long ExpectedDurationMs,
+    bool AutoGenerateSummary = false,
+    bool AutoGenerateMinutes = false,
+    bool AutoExtractActions = false,
+    bool AutoExtractTags = false,
+    bool AutoGenerateEmbeddings = false);
 
 /// <summary>The live recording that was just created. <paramref name="SessionId"/> is echoed so a client
 /// that lost its own copy can recover it rather than being locked out of its own capture.</summary>

@@ -61,10 +61,25 @@ Respond in plain text, not JSON. {output_shape}
             ? "On the first line, write a concise title of at most 6 words (the meeting's subject, with no "
               + "label and no quotes). Then, on the next line, write the summary paragraph. Do not use code fences."
             : "Output only the summary paragraph - no heading, no labels, no quotes, and no code fences.";
+        //var system = (template ?? DefaultTemplate).Replace("{output_shape}", shape);
+
+        //var user = "Transcript:\n" + PromptTranscript.Build(segments, charBudget);
+        //return [new ChatMessage("system", system), new ChatMessage("user", user)];
         var system = (template ?? DefaultTemplate).Replace("{output_shape}", shape);
 
-        var user = "Transcript:\n" + PromptTranscript.Build(segments, charBudget);
-        return [new ChatMessage("system", system), new ChatMessage("user", user)];
+// Force the LLM to generate the summary in Italian.
+system += "\n\n" + """
+IMPORTANT LANGUAGE REQUIREMENT:
+Always write the entire response in Italian.
+This applies to both the recording title and the summary.
+Preserve technical terms, product names, acronyms and proper nouns
+in their original form (e.g. NestJS, TypeScript, PostgreSQL, Docker).
+Never translate technical identifiers.
+Do not add explanations about the chosen language.
+""";
+
+var user = "Transcript:\n" + PromptTranscript.Build(segments, charBudget);
+return [new ChatMessage("system", system), new ChatMessage("user", user)];
     }
 
     /// <summary>Parse a whole /chat/completions response. A streamed caller has only the assembled content

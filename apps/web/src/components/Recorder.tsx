@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { api, apiErrorMessage, getToken } from "../lib/api";
+import { api, apiErrorMessage, getToken, DEFAULT_RECORDING_PROCESSING_OPTIONS, type RecordingProcessingOptions } from "../lib/api";
 import { userIdFromToken, fullNameFromToken } from "../lib/jwt";
 import {
   getStream,
@@ -249,6 +249,13 @@ export default function Recorder({
   // True once we've asked the browser for mic access to reveal device labels (on first picker focus).
   // Used to show the "no microphone detected" hint only after an attempt that came back empty.
   const [labelsTried, setLabelsTried] = useState(false);
+  const [processingOptions, setProcessingOptions] = useState<RecordingProcessingOptions>({
+    ...DEFAULT_RECORDING_PROCESSING_OPTIONS,
+  });
+  const processingOptionsRef = useRef(processingOptions);
+  processingOptionsRef.current = processingOptions;
+  const activeProcessingOptionsRef = useRef<RecordingProcessingOptions>({ ...DEFAULT_RECORDING_PROCESSING_OPTIONS });
+  const [showProcessingOptions, setShowProcessingOptions] = useState(false);
   const [recording, setRecording] = useState(false);
   // Paused mid-recording: capture is suspended (nothing recorded, mic muted) but the recorder is still live.
   const [paused, setPaused] = useState(false);
@@ -1186,6 +1193,9 @@ export default function Recorder({
     if (recordingRef.current) stop();
     if (pendingUploadRef.current) await pendingUploadRef.current;
 
+    // Freeze options for this take: changing the picker after capture starts cannot alter its processing.
+    activeProcessingOptionsRef.current = { ...processingOptionsRef.current };
+
     // Resolve which mic (if any) and whether to add system audio, from a tray command or the on-screen
     // controls. A tray "mic" with the current "No microphone" selection falls back to the default mic.
     let micSel: SourceSelection;
@@ -1295,6 +1305,7 @@ export default function Recorder({
             // take will overwrite, and one clock read keeps the live stamp and the fallback
             // upload's stamp identical rather than a few milliseconds apart.
             startedAt,
+            processingOptions: activeProcessingOptionsRef.current,
           }),
         upload: (recordingId, sessionId, chunk) =>
           api.putChunk(recordingId, chunk.sequence, chunk.blob, sessionId, chunk.startMs, chunk.endMs),
@@ -1550,7 +1561,7 @@ export default function Recorder({
         api.upload(blob, title, durationMs, source, pendingSectionRef.current, pendingRoomRef.current, {
           startedAt,
           endedAt,
-        }),
+        }, activeProcessingOptionsRef.current),
       );
       if (userId) await clearPendingRecording(userId);
       setPending(null);
@@ -1620,7 +1631,7 @@ export default function Recorder({
         api.upload(pending.blob, pending.title, pending.durationMs, pending.source, null, null, {
           startedAt: pending.startedAt,
           endedAt: pending.endedAt,
-        }),
+        }, processingOptionsRef.current),
       );
       if (userId) await clearPendingRecording(userId);
       setPending(null);
@@ -1694,7 +1705,7 @@ export default function Recorder({
   function onPickFiles(e: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     e.target.value = ""; // let the user re-pick the same file later
-    uploads.uploadFiles(files);
+    uploads.uploadFiles(files, undefined, { ...processingOptionsRef.current });
   }
 
   // Prefer the named picker so the dialog's filter reads "Audio and video files" instead of Chromium's
@@ -1706,7 +1717,7 @@ export default function Recorder({
       fileRef.current?.click();
       return;
     }
-    if (files.length) uploads.uploadFiles(files);
+    if (files.length) uploads.uploadFiles(files, undefined, { ...processingOptionsRef.current });
   }
 
   // Keep the tray bridge pointed at the latest start/stop without reconnecting.
@@ -1858,6 +1869,44 @@ export default function Recorder({
             constraints={constraints}
             onToggleConstraint={toggleConstraint}
           />
+        </div>
+
+        {/* Processing options are opt-in and apply to both live capture and file uploads. */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowProcessingOptions((open) => !open)}
+            aria-expanded={showProcessingOptions}
+            aria-label="Opzioni elaborazione AI"
+            className="rounded-lg border border-gray-300 bg-white px-2 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+          >
+            AI ({Object.values(processingOptions).filter(Boolean).length})
+          </button>
+          {showProcessingOptions && (
+            <div className="absolute left-0 top-full z-50 mt-2 w-72 rounded-lg border border-gray-200 bg-white p-3 shadow-xl dark:border-gray-700 dark:bg-gray-900">
+              <div className="mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">Elaborazioni dopo la trascrizione</div>
+              {([
+                ["autoGenerateSummary", "Genera riepilogo"],
+                ["autoGenerateMinutes", "Genera verbale"],
+                ["autoExtractActions", "Estrai attività"],
+                ["autoExtractTags", "Estrai tag"],
+                ["autoGenerateEmbeddings", "Genera embeddings (RAG)"],
+              ] as const).map(([key, label]) => (
+                <label key={key} className="flex cursor-pointer items-center gap-2 py-1 text-sm text-gray-800 dark:text-gray-200">
+                  <input
+                    type="checkbox"
+                    checked={processingOptions[key]}
+                    disabled={recording}
+                    onChange={(e) => setProcessingOptions((current) => ({ ...current, [key]: e.target.checked }))}
+                    className="h-4 w-4 accent-blue-600"
+                  />
+                  {label}
+                </label>
+              ))}
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Tutte disattivate per impostazione predefinita. Le modifiche durante la registrazione sono bloccate.</p>
+              <button type="button" onClick={() => setShowProcessingOptions(false)} className="mt-2 rounded border px-3 py-1 text-xs dark:border-gray-600">Chiudi</button>
+            </div>
+          )}
         </div>
 
         <RecordHero

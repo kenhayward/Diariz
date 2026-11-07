@@ -178,6 +178,28 @@ http.interceptors.response.use(
   },
 );
 
+export type RecordingProcessingOptions = {
+  autoGenerateSummary: boolean;
+  autoGenerateMinutes: boolean;
+  autoExtractActions: boolean;
+  autoExtractTags: boolean;
+  autoGenerateEmbeddings: boolean;
+};
+
+export const DEFAULT_RECORDING_PROCESSING_OPTIONS: RecordingProcessingOptions = {
+  autoGenerateSummary: false,
+  autoGenerateMinutes: false,
+  autoExtractActions: false,
+  autoExtractTags: false,
+  autoGenerateEmbeddings: false,
+};
+
+function appendProcessingOptions(form: FormData, options: RecordingProcessingOptions): void {
+  for (const [key, value] of Object.entries(options)) {
+    form.append(key, String(value));
+  }
+}
+
 export const api = {
   async login(email: string, password: string): Promise<AuthResponse> {
     const { data } = await http.post<AuthResponse>("/api/auth/login", { email, password });
@@ -394,6 +416,7 @@ export const api = {
     /// Wall clock (epoch ms) the capture began and stopped. Trailing and optional so existing callers and
     /// their positional-argument assertions are unaffected.
     times: { startedAt?: number; endedAt?: number } = {},
+    processingOptions: RecordingProcessingOptions = DEFAULT_RECORDING_PROCESSING_OPTIONS,
   ): Promise<RecordingSummary> {
     const form = new FormData();
     const ext = blob.type.includes("wav") ? "wav" : "webm";
@@ -409,6 +432,7 @@ export const api = {
     // stand in for the wall-clock end; the server falls back to upload time when these are absent.
     if (times.startedAt) form.append("startedAt", new Date(times.startedAt).toISOString());
     if (times.endedAt) form.append("endedAt", new Date(times.endedAt).toISOString());
+    appendProcessingOptions(form, processingOptions);
     const { data } = await http.post<RecordingSummary>("/api/recordings", form);
     return data;
   },
@@ -429,6 +453,7 @@ export const api = {
     sectionId?: string | null;
     roomId?: string | null;
     startedAt?: number;
+    processingOptions?: RecordingProcessingOptions;
   }): Promise<LiveRecording> {
     const { data } = await http.post<LiveRecording>("/api/recordings/live", {
       title: req.title,
@@ -438,6 +463,7 @@ export const api = {
       sectionId: req.sectionId ?? null,
       roomId: req.roomId ?? null,
       startedAt: req.startedAt ? new Date(req.startedAt).toISOString() : null,
+      ...{ ...DEFAULT_RECORDING_PROCESSING_OPTIONS, ...req.processingOptions },
     });
     return data;
   },
@@ -482,6 +508,7 @@ export const api = {
     title: string,
     roomId: string | null = null,
     sectionId: string | null = null,
+    processingOptions: RecordingProcessingOptions = DEFAULT_RECORDING_PROCESSING_OPTIONS,
   ): Promise<RecordingSummary> {
     const form = new FormData();
     form.append("audio", file, file.name);
@@ -494,6 +521,7 @@ export const api = {
     // A folder in the uploader's personal room, from the placement preference (validated server-side, which
     // also ignores it for a shared-room upload); omitted = ungrouped.
     if (sectionId) form.append("sectionId", sectionId);
+    appendProcessingOptions(form, processingOptions);
     const { data } = await http.post<RecordingSummary>("/api/recordings", form);
     return data;
   },

@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { api, apiErrorMessage } from "./api";
+import { api, apiErrorMessage, type RecordingProcessingOptions } from "./api";
 import { titleFromFilename } from "./audioFormats";
 import { runUploadBatch, type UploadBatchHandle, type UploadItem } from "./uploadQueue";
 import { extractAudio } from "./videoAudio";
@@ -16,7 +16,7 @@ interface UploadContextValue {
   /// Passing it (even as `{ sectionId: null }`, meaning the room root) overrides the placement preference:
   /// a drop is an instruction about this batch, while the preference only answers "where do things go when
   /// I haven't said". The Upload button has no drop target and so omits it.
-  uploadFiles: (files: File[], target?: { sectionId: string | null }) => void;
+  uploadFiles: (files: File[], target?: { sectionId: string | null }, options?: RecordingProcessingOptions) => void;
   /// Cancel one in-flight item (an extraction in progress). Settled items ignore it.
   cancel: (id: string) => void;
   /// Drop the done/failed/cancelled rows from the status list (keeps any still in flight).
@@ -42,7 +42,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   const handleRef = useRef<UploadBatchHandle | null>(null);
 
   const uploadFiles = useCallback(
-    (files: File[], target?: { sectionId: string | null }) => {
+    (files: File[], target?: { sectionId: string | null }, options?: RecordingProcessingOptions) => {
       if (files.length === 0) return;
       // Snapshot the room and folder at drop time - a batch runs one file at a time and the user can browse
       // away mid-upload, so every file in it is filed where the batch started, not where the panel ends up.
@@ -57,7 +57,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
       void runUploadBatch(files, {
         upload: async (file) => {
           try {
-            await api.uploadFile(file, titleFromFilename(file.name), roomId, sectionId);
+            await api.uploadFile(file, titleFromFilename(file.name), roomId, sectionId, options);
           } catch (e) {
             throw new Error(apiErrorMessage(e, "Upload failed."));
           }

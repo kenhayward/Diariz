@@ -34,14 +34,14 @@ public static class TagsProcessor
             .FirstOrDefaultAsync(r => r.Id == job.RecordingId, ct);
         if (rec is null) return; // recording deleted before the job ran — nothing to do.
 
-        // Attribute every model call this job makes. Pushed once here rather than at the client, so the
-        // handler deep inside HttpClient can record who asked and why.
-        using var llm = LlmCallScope.Push(
-            LlmCallKind.Tags, rec.UserId, await OwnerEmailAsync(db, rec.UserId, ct),
-            rec.Id, rec.Name ?? rec.Title);
-
         try
         {
+            // Include attribution setup in the error boundary: an unavailable user lookup
+            // must not turn a completed transcription into a failed callback.
+            using var llm = LlmCallScope.Push(
+                LlmCallKind.Tags, rec.UserId, await OwnerEmailAsync(db, rec.UserId, ct),
+                rec.Id, rec.Name ?? rec.Title);
+
             // Stale-job guard: only the latest transcription's job may (re)write the tags. A backfill job or
             // a slow queue entry referencing an older version would otherwise clobber fresher tags.
             var latestId = await db.Transcriptions
@@ -76,6 +76,22 @@ public static class TagsProcessor
             if (!cfg.Enabled) return; // no LLM configured — marker stays null so the backfill retries later.
 
             var extracted = await client.ExtractAsync(cfg, segs, template, ct);
+
+            // The LLM may take minutes. A new transcription can finish while it is running:
+            // recheck immediately before replacing suggestions so an old result cannot
+            // overwrite tags produced for the newer transcript.
+            var currentLatestId = await db.Transcriptions
+                .Where(t => t.RecordingId == rec.Id)
+                .OrderByDescending(t => t.Version)
+                .Select(t => (Guid?)t.Id)
+                .FirstOrDefaultAsync(ct);
+            if (currentLatestId != job.TranscriptionId)
+            {
+                logger.LogInformation(
+                    "Discarding stale tag result for recording {RecordingId}, transcription {TranscriptionId}",
+                    rec.Id, job.TranscriptionId);
+                return;
+            }
 
             // Replace only AFTER a successful extraction so a failed re-run keeps the previous set - and
             // replace only the SUGGESTIONS. Adopted tags are the user's own and must survive a
@@ -135,8 +151,16 @@ public static class TagsProcessor
             rec.TagsExtractedAt = DateTimeOffset.UtcNow;
 
             await db.SaveChangesAsync(ct);
-            // Nudge the browser to refetch (status is unchanged — tags don't own the recording status).
-            await hub.NotifyStatusAsync(rec.UserId, rec.Id, rec.Status.ToString());
+            // A disconnected SignalR client must not prevent webhook delivery after
+            // the tags have already been committed.
+            try
+            {
+                await hub.NotifyStatusAsync(rec.UserId, rec.Id, rec.Status.ToString());
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Could not notify tag completion for recording {RecordingId}", rec.Id);
+            }
             await PublishTagsReadyAsync(
                 db, webhooks, publicUrl, rec, newTags, logger, ct);
         }

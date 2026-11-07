@@ -103,14 +103,21 @@ public static class SummarizationProcessor
         catch (Exception ex)
         {
             logger.LogError(ex, "Summarisation failed for recording {RecordingId}", rec.Id);
-            rec.Status = RecordingStatus.Failed;
-            rec.Error = ex.Message;
+            // Summarisation is optional: a failed LLM call must never invalidate a completed
+            // transcription. Preserve an existing summary's status when one is available.
+            // Only settle the status if this job still owns the Summarizing state: an older
+            // job must not overwrite a newer transcription or a successful retry.
+            if (rec.Status != RecordingStatus.Summarizing) return;
+            var hasSummary = await db.Transcriptions.AsNoTracking()
+                .AnyAsync(t => t.Id == job.TranscriptionId && t.Summary != null, CancellationToken.None);
+            rec.Status = hasSummary ? RecordingStatus.Summarized : RecordingStatus.Transcribed;
+            rec.Error = $"Summarisation failed: {ex.Message}";
             // Deliberately NOT ct. The commonest way to land here is the host cancelling mid-call on a
             // shutdown or redeploy, and that same token would cancel this write - leaving the recording in
             // Summarizing forever while the worker's finally acks the stream entry, so nothing ever retries
             // it and no error is recorded. This write is what ends the job; it has to outlive the cancel.
             await db.SaveChangesAsync(CancellationToken.None);
-            await hub.NotifyStatusAsync(rec.UserId, rec.Id, RecordingStatus.Failed.ToString());
+            await hub.NotifyStatusAsync(rec.UserId, rec.Id, rec.Status.ToString());
         }
     }
 
@@ -120,8 +127,8 @@ public static class SummarizationProcessor
     /// recording shows "Summarising..." indefinitely with no error anywhere to explain it.
     ///
     /// <para>Only a recording still sitting in Summarizing is touched. An abandoned message can be hours
-    /// old, and in that time the user may have re-run the summary or re-transcribed; failing it then would
-    /// report a dead job against work that has since succeeded.</para></summary>
+    /// old, and in that time the user may have re-run the summary or re-transcribed; changing its status
+    /// then would report a dead job against work that has since succeeded.</para></summary>
     public static async Task AbandonAsync(
         DiarizDbContext db, IHubContext<TranscriptionHub> hub, SummarizationJob job, ILogger logger,
         CancellationToken ct = default)
@@ -130,11 +137,13 @@ public static class SummarizationProcessor
         if (rec is null || rec.Status != RecordingStatus.Summarizing) return;
 
         logger.LogError(
-            "Summarisation for recording {RecordingId} was abandoned by the queue; marking it failed", rec.Id);
-        rec.Status = RecordingStatus.Failed;
+            "Summarisation for recording {RecordingId} was abandoned by the queue; preserving transcription", rec.Id);
+        var hasSummary = await db.Transcriptions.AsNoTracking()
+            .AnyAsync(t => t.Id == job.TranscriptionId && t.Summary != null, ct);
+        rec.Status = hasSummary ? RecordingStatus.Summarized : RecordingStatus.Transcribed;
         rec.Error = "Summarisation was abandoned after repeated failures. Try summarising again.";
         await db.SaveChangesAsync(ct);
-        await hub.NotifyStatusAsync(rec.UserId, rec.Id, RecordingStatus.Failed.ToString());
+        await hub.NotifyStatusAsync(rec.UserId, rec.Id, rec.Status.ToString());
     }
 
     private static Task<string?> OwnerEmailAsync(DiarizDbContext db, Guid userId, CancellationToken ct) =>

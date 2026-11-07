@@ -377,7 +377,12 @@ public class RecordingsController : ControllerBase
         [FromForm] IFormFile audio, [FromForm] string? title, [FromForm] long durationMs,
         [FromForm] RecordingSource source = RecordingSource.Microphone, [FromForm] Guid? sectionId = null,
         [FromForm] Guid? roomId = null, [FromForm] DateTimeOffset? startedAt = null,
-        [FromForm] DateTimeOffset? endedAt = null)
+        [FromForm] DateTimeOffset? endedAt = null,
+        [FromForm] bool autoGenerateSummary = false,
+        [FromForm] bool autoGenerateMinutes = false,
+        [FromForm] bool autoExtractActions = false,
+        [FromForm] bool autoExtractTags = false,
+        [FromForm] bool autoGenerateEmbeddings = false)
     {
         if (audio is null || audio.Length == 0) return BadRequest("Empty audio.");
 
@@ -430,6 +435,11 @@ public class RecordingsController : ControllerBase
             DurationMs = durationMs,
             StartedAt = started,
             EndedAt = ended,
+            AutoGenerateSummary = autoGenerateSummary,
+            AutoGenerateMinutes = autoGenerateMinutes,
+            AutoExtractActions = autoExtractActions,
+            AutoExtractTags = autoExtractTags,
+            AutoGenerateEmbeddings = autoGenerateEmbeddings,
             Status = RecordingStatus.Uploaded
         };
         // Through AudioFormats, not Path.GetExtension: the filename is the client's, and this key
@@ -524,6 +534,11 @@ public class RecordingsController : ControllerBase
             StartedAt = PlausibleCaptureTime(req.StartedAt),
             Status = RecordingStatus.Live,
             LiveSessionId = req.SessionId,
+            AutoGenerateSummary = req.AutoGenerateSummary,
+            AutoGenerateMinutes = req.AutoGenerateMinutes,
+            AutoExtractActions = req.AutoExtractActions,
+            AutoExtractTags = req.AutoExtractTags,
+            AutoGenerateEmbeddings = req.AutoGenerateEmbeddings,
         };
         _db.Recordings.Add(rec);
         await _db.SaveChangesAsync();
@@ -1573,6 +1588,74 @@ public class RecordingsController : ControllerBase
             await _db.SaveChangesAsync();
         }
         return NoContent();
+    }
+
+    /// <summary>Run selected AI post-processing tasks on an existing final transcription.
+    /// Never enqueues transcription or touches the audio.</summary>
+    [HttpPost("{id:guid}/process-ai")]
+    [EndpointSummary("Process an existing transcription with selected AI operations")]
+    public async Task<IActionResult> ProcessExistingAi(Guid id, ProcessExistingAiRequest req, CancellationToken ct = default)
+    {
+        if (!req.Summary && !req.Minutes && !req.Actions && !req.Tags && !req.Embeddings)
+            return BadRequest("Select at least one AI operation.");
+
+        var rec = await _db.Recordings
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+                .ThenInclude(t => t.Summary)
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+                .ThenInclude(t => t.MeetingMinutes)
+            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId, ct);
+        if (rec is null) return NotFound();
+        var current = rec.Transcriptions.FirstOrDefault();
+        if (current is null || current.IsProvisional)
+            return BadRequest("A completed transcription is required.");
+        if (!await _db.Segments.AnyAsync(s => s.TranscriptionId == current.Id, ct))
+            return BadRequest("The transcription has no segments.");
+
+        // Manual edits are protected: explicit consent is required before overwriting them.
+        if (!req.OverwriteManualEdits &&
+            ((req.Summary && current.Summary?.IsUserEdited == true) ||
+             (req.Minutes && current.MeetingMinutes?.IsUserEdited == true)))
+            return Conflict("Summary or minutes contain manual edits. Set overwriteManualEdits=true to replace them.");
+
+        if (req.Summary && rec.Status == RecordingStatus.Summarizing)
+            return Conflict("A summary is already being generated.");
+
+        // Validate configured LLMs before enqueuing any work. Embeddings are handled by their
+        // own resolver in the worker; when unavailable the job safely becomes a no-op.
+        if (req.Summary && !(await _summarization.ResolveAsync(LlmCallKind.Summarize)).Enabled)
+            return BadRequest("Summary LLM is not configured.");
+        if (req.Minutes && !(await _summarization.ResolveAsync(LlmCallKind.MeetingMinutes)).Enabled)
+            return BadRequest("Meeting minutes LLM is not configured.");
+        if (req.Actions && !(await _summarization.ResolveAsync(LlmCallKind.ExtractActions)).Enabled)
+            return BadRequest("Actions LLM is not configured.");
+        if (req.Tags && !(await _summarization.ResolveAsync(LlmCallKind.Tags)).Enabled)
+            return BadRequest("Tags LLM is not configured.");
+
+        if (req.Summary && current.Summary is { IsUserEdited: true } summary)
+            summary.IsUserEdited = false;
+        if (req.Minutes && current.MeetingMinutes is { IsUserEdited: true } minutes)
+            minutes.IsUserEdited = false;
+        if (req.Summary) rec.Status = RecordingStatus.Summarizing;
+        await _db.SaveChangesAsync(ct);
+
+        // The action processor already triggers minutes when AutoGenerateMinutes is set.
+        // Avoid queuing the same minutes twice for that combination.
+        if (req.Actions)
+            await _queue.EnqueueActionsAsync(new ActionsJob(rec.Id, current.Id, Force: true, RunMinutesAfterActions: req.Minutes), ct);
+        if (req.Summary)
+            await _queue.EnqueueSummarizationAsync(new SummarizationJob(rec.Id, current.Id), ct);
+        if (req.Minutes && !req.Actions)
+            await _queue.EnqueueMeetingMinutesAsync(new MeetingMinutesJob(rec.Id, current.Id), ct);
+        if (req.Tags)
+            await _queue.EnqueueTagsAsync(new TagsJob(rec.Id, current.Id), ct);
+        if (req.Embeddings)
+            await _queue.EnqueueEmbeddingAsync(new EmbeddingJob(rec.Id, current.Id), ct);
+        if (req.Summary)
+            await _hub.NotifyStatusAsync(rec.UserId, rec.Id, rec.Status.ToString());
+
+        return Accepted(new { recordingId = rec.Id, transcriptionId = current.Id,
+            requested = new { req.Summary, req.Minutes, req.Actions, req.Tags, req.Embeddings } });
     }
 
     [HttpPost("{id:guid}/summarize")]
