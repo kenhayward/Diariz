@@ -9,6 +9,18 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.276.6",
+    date: "2026-11-08",
+    pr: 872,
+    headline: "Server libraries updated, including the one that carries every background job",
+    summary:
+      "Nothing changes in how Diariz works or looks. This is a routine refresh of 26 of the server's third-party libraries, all of them patch or minor releases with no change to how Diariz uses them.\n\nTwo are worth naming. The Redis client moved a full minor version, and Redis is what carries every background job in Diariz - transcription, summaries, meeting minutes, action items, tags and the search index all queue through it, so the whole transcription pipeline was re-tested against a real Redis rather than a stand-in before this shipped. The database and web-framework libraries also took their regular patch updates.\n\nThe one thing a server administrator may notice is that the record of exactly which library versions Diariz was built against is now generated for all four projects together. Previously one of them could be left slightly behind, which did not affect the running app but could stop a fresh build in its tracks.",
+    changed: [
+      "Refreshed 26 server libraries, including Entity Framework Core and ASP.NET 10.0.12 to 10.0.14, the Redis client 3.3.1 to 3.4.29, OpenIddict 7.7.2, the AWS S3 client, SkiaSharp, MailKit, Markdig and the test container libraries",
+      "The build's record of resolved library versions is now regenerated across all four projects at once, so it cannot drift out of step and fail a clean build",
+    ],
+  },
+  {
     version: "0.276.5",
     date: "2026-10-16",
     pr: 847,
