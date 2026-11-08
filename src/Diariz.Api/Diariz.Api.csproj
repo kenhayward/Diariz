@@ -9,29 +9,29 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AWSSDK.S3" Version="4.0.104.1" />
+    <PackageReference Include="AWSSDK.S3" Version="4.0.104.8" />
     <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
-    <PackageReference Include="Google.Apis.Auth" Version="1.77.0" />
-    <PackageReference Include="Ical.Net" Version="5.2.3" />
-    <PackageReference Include="Markdig" Version="1.4.0" />
+    <PackageReference Include="Google.Apis.Auth" Version="1.78.0" />
+    <PackageReference Include="Ical.Net" Version="5.2.4" />
+    <PackageReference Include="Markdig" Version="1.5.1" />
     <!-- Rescales screenshots for vision-model chat attachments (VisionImageEncoder). MIT over Google's
          BSD Skia - chosen over ImageSharp, whose Six Labors Split License needs a commercial licence for
          anything but OSS and small companies. The NoDependencies native asset carries its own
          libSkiaSharp.so and needs no fontconfig, so the runtime Dockerfile stays untouched (we resample
          pixels and never render text). -->
-    <PackageReference Include="SkiaSharp" Version="4.153.1" />
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.1" />
+    <PackageReference Include="SkiaSharp" Version="4.154.0" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.154.0" />
     <!-- Pin a patched System.IO.Packaging (OpenXml pulls a transitive 8.0.0 with a high-severity advisory). -->
-    <PackageReference Include="System.IO.Packaging" Version="10.0.12" />
-    <PackageReference Include="MailKit" Version="4.18.1" />
-    <PackageReference Include="MimeKit" Version="4.18.1" />
+    <PackageReference Include="System.IO.Packaging" Version="10.0.14" />
+    <PackageReference Include="MailKit" Version="4.18.2" />
+    <PackageReference Include="MimeKit" Version="4.18.2" />
     <!-- Transitive override: MimeKit 4.18.1 (the latest) asks for System.Security.Cryptography.Pkcs 10.0.0,
          which is vulnerable to CVE-2026-70162 and CVE-2026-84008 (.NET denial of service, both fixed in
          10.0.13). Drop this once MimeKit's own dependency is at or above the patched version. -->
-    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
-    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.12" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.14" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.14" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.14" />
     <!-- Official MCP C# SDK ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â hosts the in-process Streamable-HTTP /mcp endpoint (tools/resources/prompts). -->
     <PackageReference Include="ModelContextProtocol.AspNetCore" Version="1.4.1" />
     <!-- Direct pin to override the transitive Microsoft.OpenApi 2.0.0 (from AspNetCore.OpenApi), which has
@@ -54,8 +54,8 @@
          REMOVE THE CEILING when this project moves to ASP.NET Core 11 - and expect work in
          OpenApi/OpenApiCuration.cs at the same time, since its transformers mutate the document
          (`document.Components.SecuritySchemes ??= ...`) rather than only inspecting it. -->
-    <PackageReference Include="Microsoft.OpenApi" Version="[2.12.2, 3.0.0)" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
+    <PackageReference Include="Microsoft.OpenApi" Version="[2.13.0, 3.0.0)" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.14">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
@@ -64,11 +64,11 @@
     <!-- OpenIddict OAuth 2.1 / OpenID Connect server + validation + ASP.NET Core host: makes the API an
          authorization server + resource server for the MCP web connector (claude.ai). EntityFrameworkCore
          supplies the store wiring for AddCore().UseEntityFrameworkCore(). Pinned exactly (security-critical). -->
-    <PackageReference Include="OpenIddict.AspNetCore" Version="7.7.1" />
-    <PackageReference Include="OpenIddict.EntityFrameworkCore" Version="7.7.1" />
+    <PackageReference Include="OpenIddict.AspNetCore" Version="7.7.2" />
+    <PackageReference Include="OpenIddict.EntityFrameworkCore" Version="7.7.2" />
     <!-- Error + performance reporting to a Sentry-compatible endpoint (GlitchTip); see TelemetryOptions. -->
-    <PackageReference Include="Sentry.AspNetCore" Version="6.12.0" />
-    <PackageReference Include="StackExchange.Redis" Version="3.3.1" />
+    <PackageReference Include="Sentry.AspNetCore" Version="6.12.1" />
+    <PackageReference Include="StackExchange.Redis" Version="3.4.29" />
     <PackageReference Include="UglyToad.PdfPig" Version="1.7.0-custom-5" />
   </ItemGroup>
 
