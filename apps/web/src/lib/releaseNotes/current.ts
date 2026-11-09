@@ -9,6 +9,18 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.276.8",
+    date: "2026-11-09",
+    pr: 880,
+    headline: "Worker libraries updated, and a test-harness trap the new test runner exposed closed",
+    summary:
+      "Nothing changes in how Diariz works or looks. This is a routine refresh of four of the transcription worker's libraries: the test runner, the AWS storage client, the speaker-embedding library behind voiceprints and the optional error-reporting client. All four are patch or minor releases with no change to how Diariz uses them.\n\nThe update sat blocked behind thirteen failing tests, and the cause is worth recording because of how badly it pointed at the wrong thing. The worker's test suite never loads the real speech-recognition libraries, which need a GPU: it registers a stand-in for each one, and every test in the run shares that single object. The new test runner changed how it puts back a value a test had replaced, and against those stand-ins it now deletes the replaced function instead of restoring it. A stand-in remembers a deletion permanently, so the first test to replace a function left it missing for every test after it. The failures named the transcription pipeline, and a different test each time the order changed, when nothing about the pipeline had changed at all.\n\nThe stand-ins now hold their functions somewhere the runner can restore them, and a new test replaces and restores one twice over to pin that, so a later runner update cannot quietly reintroduce the problem. This is test scaffolding only: none of it ships in the worker that transcribes your recordings.",
+    changed: [
+      "Refreshed four transcription-worker libraries - the pytest test runner 9.2.0, the AWS S3 client, the SpeechBrain speaker-embedding library 1.1.2 and the Sentry-compatible error-reporting client 2.74.0",
+      "Fixed the worker's test scaffolding so it survives the new test runner's clean-up. The suite stands in for the GPU-only speech libraries, and the runner now deletes a stood-in function after the first test that replaces it, which failed thirteen tests with errors that pointed at the transcription pipeline rather than at the test setup. A new test replaces and restores a stand-in's function twice over, so a later runner update cannot reintroduce it",
+    ],
+  },
+  {
     version: "0.276.7",
     date: "2026-11-09",
     pr: 879,
