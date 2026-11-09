@@ -1844,6 +1844,19 @@ const GENERATED: GeneratedResource[] = [
         "returnsArray": false
       },
       {
+        "value": "processAnExistingTranscriptionWithSelectedAiOperations",
+        "displayName": "Process an existing transcription with selected AI operations",
+        "description": "Re-runs any of the summary, meeting minutes, action items, tags and search embeddings on the current transcript, without transcribing the audio again. Choose at least one. The work is queued and the call returns 202 straight away.",
+        "method": "POST",
+        "path": "/api/recordings/{id}/process-ai",
+        "pathParams": [
+          "id"
+        ],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": false
+      },
+      {
         "value": "protectARecordingSAudioFromDeletion",
         "displayName": "Protect a recording's audio from deletion",
         "description": "Marks the audio as protected, or clears that. While protected the recording is skipped by the nightly auto-retention job and refused by both the single and bulk audio-delete endpoints. Use it to keep important recordings playable and re-transcribable on a platform with a retention policy. It does not protect against deleting the whole recording.",

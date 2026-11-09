@@ -2165,6 +2165,230 @@ public class RecordingsControllerTests
         Assert.IsType<NotFoundResult>(await controller.Summarize(rec.Id));
     }
 
+    // ---- Process existing transcription with selected AI operations (process-ai) ----
+
+    private static ProcessExistingAiRequest Ai(
+        bool summary = false, bool minutes = false, bool actions = false, bool tags = false,
+        bool embeddings = false, bool overwrite = false) =>
+        new(summary, minutes, actions, tags, embeddings, overwrite);
+
+    private static async Task AddSummary(DiarizDbContext db, Guid recId, bool userEdited)
+    {
+        var tr = await db.Transcriptions.FirstAsync(t => t.RecordingId == recId);
+        db.Summaries.Add(new Summary
+        {
+            Id = Guid.NewGuid(), TranscriptionId = tr.Id, Model = userEdited ? "user" : "m", Text = "s",
+            IsUserEdited = userEdited,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task ProcessAi_WithNothingSelected_ReturnsBadRequest()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId);
+
+        Assert.IsType<BadRequestObjectResult>(
+            await Build(db, userId, new FakeJobQueue()).ProcessExistingAi(rec.Id, Ai()));
+    }
+
+    [Fact]
+    public async Task ProcessAi_OnAnotherUsersRecording_ReturnsNotFound_AndQueuesNothing()
+    {
+        using var db = TestDb.Create();
+        var rec = await SeedTranscribedRecording(db, Guid.NewGuid());
+        var queue = new FakeJobQueue();
+
+        var result = await Build(db, Guid.NewGuid(), queue).ProcessExistingAi(rec.Id, Ai(tags: true));
+
+        Assert.IsType<NotFoundResult>(result);
+        Assert.Empty(queue.TagsEnqueued);
+    }
+
+    [Fact]
+    public async Task ProcessAi_WithoutSegments_ReturnsBadRequest()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1); // a transcription with no segments
+
+        Assert.IsType<BadRequestObjectResult>(
+            await Build(db, userId, new FakeJobQueue()).ProcessExistingAi(rec.Id, Ai(tags: true)));
+    }
+
+    [Fact]
+    public async Task ProcessAi_WhenTheLlmIsNotConfigured_ReturnsBadRequest_AndQueuesNothing()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId);
+        var queue = new FakeJobQueue();
+
+        var result = await Build(db, userId, queue, summarizationEnabled: false).ProcessExistingAi(rec.Id, Ai(tags: true));
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Empty(queue.TagsEnqueued);
+    }
+
+    [Fact]
+    public async Task ProcessAi_QueuesOnlyWhatWasAskedFor_AndLeavesTheStatusAlone()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId);
+        var tr = await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id);
+        var queue = new FakeJobQueue();
+
+        var result = await Build(db, userId, queue).ProcessExistingAi(rec.Id, Ai(tags: true, embeddings: true));
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.Equal(tr.Id, Assert.Single(queue.TagsEnqueued).TranscriptionId);
+        Assert.Equal(tr.Id, Assert.Single(queue.EmbeddingEnqueued).TranscriptionId);
+        Assert.Empty(queue.SummarizationEnqueued);
+        Assert.Empty(queue.ActionsEnqueued);
+        Assert.Empty(queue.MeetingMinutesEnqueued);
+        Assert.Equal(RecordingStatus.Transcribed, (await db.Recordings.FindAsync(rec.Id))!.Status);
+    }
+
+    [Fact]
+    public async Task ProcessAi_ActionsAlone_ForcesExtraction_WithoutChainingMinutes()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId);
+        var queue = new FakeJobQueue();
+
+        await Build(db, userId, queue).ProcessExistingAi(rec.Id, Ai(actions: true));
+
+        var job = Assert.Single(queue.ActionsEnqueued);
+        Assert.True(job.Force);
+        Assert.False(job.RunMinutesAfterActions);
+        Assert.Empty(queue.MeetingMinutesEnqueued);
+    }
+
+    [Fact]
+    public async Task ProcessAi_ActionsAndMinutes_ChainsTheMinutesBehindTheActions_RatherThanQueueingThemTwice()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId);
+        var queue = new FakeJobQueue();
+
+        await Build(db, userId, queue).ProcessExistingAi(rec.Id, Ai(actions: true, minutes: true));
+
+        Assert.True(Assert.Single(queue.ActionsEnqueued).RunMinutesAfterActions);
+        Assert.Empty(queue.MeetingMinutesEnqueued); // ActionsProcessor queues them once the actions settle
+    }
+
+    [Fact]
+    public async Task ProcessAi_Summary_MarksSummarizing_AndQueuesTheJob()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId);
+        var queue = new FakeJobQueue();
+
+        var result = await Build(db, userId, queue).ProcessExistingAi(rec.Id, Ai(summary: true));
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.Single(queue.SummarizationEnqueued);
+        Assert.Equal(RecordingStatus.Summarizing, (await db.Recordings.FindAsync(rec.Id))!.Status);
+    }
+
+    [Fact]
+    public async Task ProcessAi_Summary_WhileOneIsAlreadyRunning_ReturnsConflict_AndQueuesNothing()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId);
+        rec.Status = RecordingStatus.Summarizing;
+        await db.SaveChangesAsync();
+        var queue = new FakeJobQueue();
+
+        var result = await Build(db, userId, queue).ProcessExistingAi(rec.Id, Ai(summary: true, tags: true));
+
+        Assert.IsType<ConflictObjectResult>(result);
+        Assert.Empty(queue.SummarizationEnqueued);
+        Assert.Empty(queue.TagsEnqueued);
+    }
+
+    [Fact]
+    public async Task ProcessAi_HandEditedSummary_WithoutConsent_ReturnsConflict_AndKeepsItProtected()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId);
+        await AddSummary(db, rec.Id, userEdited: true);
+        var queue = new FakeJobQueue();
+
+        var result = await Build(db, userId, queue).ProcessExistingAi(rec.Id, Ai(summary: true));
+
+        Assert.IsType<ConflictObjectResult>(result);
+        Assert.Empty(queue.SummarizationEnqueued);
+        Assert.True((await db.Summaries.SingleAsync()).IsUserEdited);
+    }
+
+    [Fact]
+    public async Task ProcessAi_HandEditedSummaryAndMinutes_WithConsent_ClearTheProtection_AndQueue()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId);
+        await AddSummary(db, rec.Id, userEdited: true);
+        await AddMinutes(db, rec.Id, "mine", userEdited: true);
+        var queue = new FakeJobQueue();
+
+        var result = await Build(db, userId, queue)
+            .ProcessExistingAi(rec.Id, Ai(summary: true, minutes: true, overwrite: true));
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.Single(queue.SummarizationEnqueued);
+        Assert.Single(queue.MeetingMinutesEnqueued);
+        Assert.False((await db.Summaries.SingleAsync()).IsUserEdited);
+        Assert.False((await db.MeetingMinutes.SingleAsync()).IsUserEdited);
+    }
+
+    // Summarizing is a one-way door: only the summariser clears it, and POST /summarize no-ops while it is set.
+    // If the job never reaches the queue, the status and the cleared protection must both be put back, or the
+    // recording is stuck and the user's hand-edited text is left unprotected for the next automatic run.
+    [Fact]
+    public async Task ProcessAi_WhenTheSummaryCannotBeQueued_RollsBackTheStatusAndTheProtection()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId);
+        await AddSummary(db, rec.Id, userEdited: true);
+        var queue = new FakeJobQueue { ThrowOnSummarizationEnqueue = new InvalidOperationException("redis down") };
+
+        var result = await Build(db, userId, queue).ProcessExistingAi(rec.Id, Ai(summary: true, overwrite: true));
+
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, Assert.IsAssignableFrom<ObjectResult>(result).StatusCode);
+        Assert.Equal(RecordingStatus.Transcribed, (await db.Recordings.FindAsync(rec.Id))!.Status);
+        Assert.True((await db.Summaries.SingleAsync()).IsUserEdited);
+    }
+
+    [Fact]
+    public async Task ProcessAi_WhenTheMinutesCannotBeQueued_RestoresTheirProtection_AndThatOfTheSummaryBehindThem()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId);
+        await AddSummary(db, rec.Id, userEdited: true);
+        await AddMinutes(db, rec.Id, "mine", userEdited: true);
+        var queue = new FakeJobQueue { ThrowOnMeetingMinutesEnqueue = new InvalidOperationException("redis down") };
+
+        var result = await Build(db, userId, queue)
+            .ProcessExistingAi(rec.Id, Ai(summary: true, minutes: true, overwrite: true));
+
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, Assert.IsAssignableFrom<ObjectResult>(result).StatusCode);
+        Assert.Empty(queue.SummarizationEnqueued); // queued last, so never reached
+        Assert.Equal(RecordingStatus.Transcribed, (await db.Recordings.FindAsync(rec.Id))!.Status);
+        Assert.True((await db.Summaries.SingleAsync()).IsUserEdited);
+        Assert.True((await db.MeetingMinutes.SingleAsync()).IsUserEdited);
+    }
+
     // ---- Rename recording ----
 
     [Fact]

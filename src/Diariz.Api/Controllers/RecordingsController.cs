@@ -1575,6 +1575,117 @@ public class RecordingsController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Run selected AI post-processing tasks on an existing final transcription.
+    /// Never enqueues transcription or touches the audio.</summary>
+    [HttpPost("{id:guid}/process-ai")]
+    [EndpointSummary("Process an existing transcription with selected AI operations")]
+    [EndpointDescription(
+        "Re-runs any of the summary, meeting minutes, action items, tags and search embeddings on the current " +
+        "transcript, without transcribing the audio again. Choose at least one. The work is queued and the " +
+        "call returns 202 straight away.\n\n" +
+        "A hand-edited summary or set of minutes is **protected**: asking for it again returns 409 unless " +
+        "`overwriteManualEdits` is true. Asking for a summary while one is already being generated also " +
+        "returns 409. Re-extracting action items replaces the unpinned ones and keeps the pinned ones; asked " +
+        "together with the minutes, the minutes are regenerated after the actions so they list the new set.")]
+    public async Task<IActionResult> ProcessExistingAi(Guid id, ProcessExistingAiRequest req, CancellationToken ct = default)
+    {
+        if (!req.Summary && !req.Minutes && !req.Actions && !req.Tags && !req.Embeddings)
+            return BadRequest("Select at least one AI operation.");
+
+        var rec = await _db.Recordings
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+                .ThenInclude(t => t.Summary)
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+                .ThenInclude(t => t.MeetingMinutes)
+            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId, ct);
+        if (rec is null) return NotFound();
+        var current = rec.Transcriptions.FirstOrDefault();
+        if (current is null || current.IsProvisional)
+            return BadRequest("A completed transcription is required.");
+        if (!await _db.Segments.AnyAsync(s => s.TranscriptionId == current.Id, ct))
+            return BadRequest("The transcription has no segments.");
+
+        // Manual edits are protected: explicit consent is required before overwriting them.
+        if (!req.OverwriteManualEdits &&
+            ((req.Summary && current.Summary?.IsUserEdited == true) ||
+             (req.Minutes && current.MeetingMinutes?.IsUserEdited == true)))
+            return Conflict("Summary or minutes contain manual edits. Set overwriteManualEdits=true to replace them.");
+
+        if (req.Summary && rec.Status == RecordingStatus.Summarizing)
+            return Conflict("A summary is already being generated.");
+
+        // Validate configured LLMs before enqueuing any work. Embeddings are handled by their
+        // own resolver in the worker; when unavailable the job safely becomes a no-op.
+        if (req.Summary && !(await _summarization.ResolveAsync(LlmCallKind.Summarize)).Enabled)
+            return BadRequest("Summary LLM is not configured.");
+        if (req.Minutes && !(await _summarization.ResolveAsync(LlmCallKind.MeetingMinutes)).Enabled)
+            return BadRequest("Meeting minutes LLM is not configured.");
+        if (req.Actions && !(await _summarization.ResolveAsync(LlmCallKind.ExtractActions)).Enabled)
+            return BadRequest("Actions LLM is not configured.");
+        if (req.Tags && !(await _summarization.ResolveAsync(LlmCallKind.Tags)).Enabled)
+            return BadRequest("Tags LLM is not configured.");
+
+        // Consent was given (or nothing was hand-edited): drop the protection so the queued jobs may overwrite.
+        // It is committed before queueing because a job can start the moment it is queued, and must see it.
+        var summaryProtected = req.Summary && current.Summary is { IsUserEdited: true };
+        var minutesProtected = req.Minutes && current.MeetingMinutes is { IsUserEdited: true };
+        var statusBefore = rec.Status;
+        if (summaryProtected) current.Summary!.IsUserEdited = false;
+        if (minutesProtected) current.MeetingMinutes!.IsUserEdited = false;
+        if (req.Summary) rec.Status = RecordingStatus.Summarizing;
+        await _db.SaveChangesAsync(ct);
+
+        // The jobs that depend on what was just committed go last, so a queue failure part-way through leaves
+        // as little as possible to undo: tags and embeddings need nothing put back, the minutes and the summary
+        // do. Each step that reaches the queue owns its change from then on - only the rest is rolled back.
+        var minutesQueued = false;
+        try
+        {
+            if (req.Tags)
+                await _queue.EnqueueTagsAsync(new TagsJob(rec.Id, current.Id), ct);
+            if (req.Embeddings)
+                await _queue.EnqueueEmbeddingAsync(new EmbeddingJob(rec.Id, current.Id), ct);
+            // Asked together, the minutes ride behind the actions (ActionsProcessor queues them once the actions
+            // settle) so they render the fresh action set; asked alone, the actions leave the minutes untouched.
+            if (req.Actions)
+            {
+                await _queue.EnqueueActionsAsync(
+                    new ActionsJob(rec.Id, current.Id, Force: true, RunMinutesAfterActions: req.Minutes), ct);
+                minutesQueued = req.Minutes;
+            }
+            if (req.Minutes && !req.Actions)
+            {
+                await _queue.EnqueueMeetingMinutesAsync(new MeetingMinutesJob(rec.Id, current.Id), ct);
+                minutesQueued = true;
+            }
+            if (req.Summary)
+                await _queue.EnqueueSummarizationAsync(new SummarizationJob(rec.Id, current.Id), ct);
+        }
+        catch (Exception)
+        {
+            // Summarizing is a one-way door - only the summariser clears it and POST /summarize no-ops while it
+            // is set - so a summary that never reached the queue must not leave it behind. The protection flags
+            // go back too, or the next automatic run would overwrite the user's text without asking.
+            // CancellationToken.None: the undo must land even if the request is being torn down.
+            if (minutesProtected && !minutesQueued) current.MeetingMinutes!.IsUserEdited = true;
+            if (req.Summary)
+            {
+                if (summaryProtected) current.Summary!.IsUserEdited = true;
+                rec.Status = statusBefore;
+            }
+            await _db.SaveChangesAsync(CancellationToken.None);
+            return Problem(
+                statusCode: StatusCodes.Status503ServiceUnavailable,
+                detail: "The AI processing could not be queued. Nothing that was not queued has changed; try again.");
+        }
+
+        if (req.Summary)
+            await _hub.NotifyStatusAsync(rec.UserId, rec.Id, rec.Status.ToString());
+
+        return Accepted(new { recordingId = rec.Id, transcriptionId = current.Id,
+            requested = new { req.Summary, req.Minutes, req.Actions, req.Tags, req.Embeddings } });
+    }
+
     [HttpPost("{id:guid}/summarize")]
     [EndpointSummary("Generate a summary")]
     [EndpointDescription(

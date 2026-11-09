@@ -9,6 +9,21 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.277.0",
+    date: "2026-11-09",
+    pr: 882,
+    headline: "Re-run any AI step on a recording without transcribing it again",
+    summary:
+      "A new Regenerate AI... button on a recording you own re-runs the AI steps you pick - the summary, the meeting minutes, the action items, the tags and the search index - on the transcript you already have. The audio is not transcribed again, so it costs one model call per step instead of a full pass through the GPU. That makes it the cheap way to refresh a recording after changing your model or your prompts, or to fill in a step that failed the first time, one step at a time.\n\nYour own work is protected. A summary or set of minutes you edited by hand is only replaced if you tick a box saying so; without it the request is turned down and nothing changes. Re-extracting action items works like the existing Extract button: actions you pinned are kept and the rest are replaced, rather than a reworded copy of every action being added on top. Asked together with the minutes, the minutes are regenerated after the actions so their action table lists the new set.\n\nIf the server cannot queue the work - a brief hiccup in the job queue, say - you are told so, and anything that was not queued is left exactly as it was: a recording is never left stuck on Summarising, and a hand-edited summary never loses its protection. The same operation is available to integrations as POST /api/recordings/{id}/process-ai, and in the n8n node.",
+    added: [
+      "Regenerate AI... on a recording you own: re-run the summary, meeting minutes, action items, tags or search index on the existing transcript, any combination, without transcribing the audio again",
+      "POST /api/recordings/{id}/process-ai, the same operation for the REST API, and a matching operation in the n8n community node",
+    ],
+    changed: [
+      "Re-extracting action items from Regenerate AI replaces the unpinned actions and keeps the pinned ones, the same as the Extract button, instead of adding a reworded duplicate of each",
+    ],
+  },
+  {
     version: "0.276.8",
     date: "2026-11-09",
     pr: 880,

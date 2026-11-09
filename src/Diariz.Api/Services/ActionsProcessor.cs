@@ -48,8 +48,8 @@ public static class ActionsProcessor
         {
             // Auto-extract only once: a set ActionsExtractedAt means extraction ran (or the user added an
             // action), so the pipeline must not overwrite it. Explicit re-extraction goes through the
-            // controller. Even when we skip, the minutes are still (re)generated below.
-            if (rec.ActionsExtractedAt is not null) return;
+            // controller, or a forced job (process-ai). Even when we skip, the minutes are still (re)generated below.
+            if (rec.ActionsExtractedAt is not null && !job.Force) return;
 
             var transcription = await db.Transcriptions
                 .Include(t => t.Segments)
@@ -82,11 +82,16 @@ public static class ActionsProcessor
             // them rather than replacing them: the model is told what is there, and exact repeats are dropped as a
             // backstop. Every existing row is listed, and with ActionsExtractedAt null those can only be live ones:
             // adding an action by hand, and a merge that brings any actions across, both set it.
-            var existingTexts = rec.Actions.OrderBy(a => a.Ordinal).Select(a => a.Text).ToList();
+            // A forced job is an explicit "extract again", so it matches the re-extract endpoint
+            // (RecordingActionsController.Extract): only the pinned rows survive and the rest are replaced. Appending
+            // would stack a reworded copy of every action on top of the old one.
+            var kept = (job.Force ? rec.Actions.Where(a => a.Pinned) : rec.Actions).OrderBy(a => a.Ordinal).ToList();
+            var existingTexts = kept.Select(a => a.Text).ToList();
             var extracted = await client.ExtractAsync(
                 cfg, segs, template, rec.StartedAt ?? rec.CreatedAt, existingTexts, ct);
 
-            var ordinal = rec.Actions.Count == 0 ? 0 : rec.Actions.Max(a => a.Ordinal) + 1;
+            if (job.Force) db.RecordingActions.RemoveRange(rec.Actions.Where(a => !a.Pinned));
+            var ordinal = kept.Count == 0 ? 0 : kept.Max(a => a.Ordinal) + 1;
             var newActions = ActionMerge.WithoutDuplicates(extracted, existingTexts).Select(e => new RecordingAction
             {
                 Id = Guid.NewGuid(),
@@ -104,7 +109,7 @@ public static class ActionsProcessor
             await hub.NotifyStatusAsync(rec.UserId, rec.Id, rec.Status.ToString());
             await PublishActionItemsReadyAsync(
                 db, webhooks, publicUrl, rec,
-                rec.Actions.Where(a => !newActions.Contains(a)).OrderBy(a => a.Ordinal).Concat(newActions).ToList(),
+                kept.Concat(newActions).ToList(),
                 logger, ct);
         }
         catch (Exception ex)
@@ -117,14 +122,18 @@ public static class ActionsProcessor
         {
             // Chain the minutes now that the actions are settled (freshly extracted, preserved on a
             // re-transcribe, or extraction failed) so the minutes render the canonical action set. Always runs
-            // for an existing recording, so the minutes never depend on extraction succeeding.
-            try
+            // for an existing recording, so the minutes never depend on extraction succeeding. The one exception
+            // is a process-ai request for actions alone, which asks not to regenerate the minutes as well.
+            if (job.RunMinutesAfterActions)
             {
-                await queue.EnqueueMeetingMinutesAsync(new MeetingMinutesJob(rec.Id, job.TranscriptionId), ct);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to enqueue minutes after actions for recording {RecordingId}", rec.Id);
+                try
+                {
+                    await queue.EnqueueMeetingMinutesAsync(new MeetingMinutesJob(rec.Id, job.TranscriptionId), ct);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to enqueue minutes after actions for recording {RecordingId}", rec.Id);
+                }
             }
         }
     }

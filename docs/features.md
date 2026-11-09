@@ -644,6 +644,14 @@ your own recording is never gated.
 re-create them, or **email them to yourself** (optionally with the recording's attachments). The minutes also
 travel with the emailed transcript and the Markdown/text/RTF downloads. The Meeting Minutes panel is always
 available (collapsed) with a refresh button to generate them on any recording.
+- **Regenerate AI** on a recording you own re-runs any combination of the **summary, meeting minutes, action
+items, tags and search index** on the transcript you already have, without transcribing the audio again - one
+model call per step instead of a GPU pass, so it is the cheap way to refresh a recording after changing a model or a
+prompt, or to fill in a step that failed. A hand-edited summary or set of minutes is replaced only if you tick a box
+consenting to it. Re-extracting action items keeps the pinned ones and replaces the rest (like the Extract button);
+asked together with the minutes, the minutes are regenerated after the actions so they list the new set. If the
+work cannot be queued, nothing that was not queued changes - a recording is never left stuck on Summarising. The
+same operation is `POST /api/recordings/{id}/process-ai` for integrations and the n8n node.
 - **Meeting types: minutes are a formula.** A **meeting type** is *presentation and selection* — a name, group,
 icon, colour, and the **framing** you give the model ("this is a customer call; keep it suitable to send back to
 them"). It carries **no prompts of its own**: it names the **formula** whose template generates the minutes, plus
