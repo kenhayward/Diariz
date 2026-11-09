@@ -9,6 +9,19 @@ import type { Release } from "./types";
 /// safety net rather than the trigger; the historical epochs average 16.
 export const RECENT: Release[] = [
   {
+    version: "0.276.7",
+    date: "2026-11-09",
+    pr: 879,
+    headline: "Web libraries updated, and a stale security pin that was blocking them removed",
+    summary:
+      "Nothing changes in how Diariz works or looks. This is the companion to the server-library refresh in the previous release, covering the web app's own third-party libraries: 23 are updated directly, which carries about 200 of their own dependencies along with them. React, the rich-text editor behind meeting minutes, the translation libraries, the HTTP client, the audio library and the API-reference viewer all take patch or minor releases, with no change to how Diariz uses them.\n\nWhy this needed a hand-written release rather than an automatic one is worth recording, because it had quietly blocked every web library update for a while. An earlier security fix pinned one library to an exact version to force a patched release. That pin was written without a scope, so it applied everywhere in the dependency tree, and once a newer version of its parent came to need a different major version the build stopped compiling altogether. The library it was guarding has since been fixed upstream on both versions, so the pin had stopped protecting anything and only blocked. It is gone.\n\nA second pin from that same fix had fallen behind the advisories it existed to dodge. It forced an HTTP library to a version that was patched when the pin was written and has since had eight advisories raised against it, so a pin meant to force a safe version was holding an unsafe one. It now points at the patched line. A second, unpinned copy of the same library had drifted behind the same advisories on its own newer release line, and that is updated too, which together take a dependency audit of the web app from twelve warnings to none. These are build-time and server-side libraries rather than code that runs in your browser, so nothing was exposed to users.",
+    changed: [
+      "Refreshed the web app's third-party libraries - 23 updated directly, about 200 of their dependencies moved with them - including React 19.3.1, the TipTap editor 3.33.0, i18next and react-i18next, axios 1.21.0, mediabunny, Sentry, TanStack Query and the Scalar API-reference viewer",
+      "Removed a dependency pin left over from an earlier security fix. Written without a scope, it applied to the whole dependency tree and had started to block every web library update; the problem it guarded against is fixed upstream on both affected versions",
+      "Raised a second pin from that fix to a patched version. It had fallen behind the advisories it existed to dodge, holding an HTTP library on a version with eight known vulnerabilities, and updated a second copy of that library which had drifted behind the same advisories; a dependency audit of the web app now reports none at all, down from twelve",
+    ],
+  },
+  {
     version: "0.276.6",
     date: "2026-11-08",
     pr: 872,
