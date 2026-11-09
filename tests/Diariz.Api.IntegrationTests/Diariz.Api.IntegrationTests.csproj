@@ -15,6 +15,22 @@
     </PackageReference>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
+    <!-- Pinned to 2.8.2 deliberately: this project must NOT follow tests/Diariz.Api.Tests to 4.0.1.
+         The unit project runs 4.0.1 (PR #876) and is green on every check. Bumping THIS project fails
+         exactly one test of 524 - VectorIndexIntegrationTests.UnfencedSemanticSql_CanPlanOntoTheAnnIndex
+         - where the planner picks IX_TranscriptChunks_UserId_RecordingId (rows=668 on the chunk scan,
+         286 estimated overall) instead of the ANN index.
+
+         The per-project split is what localises it: every class here shares the "integration" collection
+         and ONE Postgres container, so the runner's assembly/collection execution order changes how
+         populated TranscriptChunks is by the time that test calls Analyze - and a plain index scan on the
+         user/recording filter then costs less than the ANN path. The unit project has no shared container,
+         which is why the identical bump is harmless there.
+
+         So the two test projects sit on different runner versions ON PURPOSE. Aligning them as a tidy-up
+         reintroduces a red integration run, and the failure names a query plan rather than the runner, so
+         it does not point back here. The way to unblock the bump is to stop that plan assertion depending
+         on statistics other tests built - PR #875 is left open as the record of the unresolved half. -->
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
