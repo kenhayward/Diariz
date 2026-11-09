@@ -31,7 +31,7 @@
          reintroduces a red integration run, and the failure names a query plan rather than the runner, so
          it does not point back here. The way to unblock the bump is to stop that plan assertion depending
          on statistics other tests built - PR #875 is left open as the record of the unresolved half. -->
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
