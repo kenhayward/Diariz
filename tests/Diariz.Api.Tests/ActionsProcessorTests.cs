@@ -205,6 +205,82 @@ public class ActionsProcessorTests
         Assert.Single(await db.RecordingActions.Where(a => a.RecordingId == rec.Id).ToListAsync());
     }
 
+    // A forced job is the explicit "extract again" from process-ai. It must behave like the existing
+    // re-extract endpoint (RecordingActionsController.Extract): replace the unpinned rows and keep the pinned
+    // ones. Appending instead would stack a reworded copy of every action on top of the old one.
+    [Fact]
+    public async Task ProcessAsync_Forced_ReExtractsAlreadyExtractedRecording_ReplacingUnpinned_KeepingPinned()
+    {
+        using var db = TestDb.Create();
+        var (rec, tr) = await Seed(db, Guid.NewGuid(), actionsExtractedAt: DateTimeOffset.UtcNow);
+        db.RecordingActions.AddRange(
+            new RecordingAction
+            {
+                Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Adopted task", Actor = "Ada", Ordinal = 0,
+                Pinned = true,
+            },
+            new RecordingAction
+            {
+                Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Old extracted task", Actor = "", Ordinal = 1,
+            });
+        await db.SaveChangesAsync();
+        var client = new FakeActionsClient { Result = { new ExtractedAction("Book the room", "Grace", "") } };
+
+        await ActionsProcessor.ProcessAsync(db, client, new FakeLlmSettingsResolver(), new FakeHubContext(),
+            new FakeJobQueue(), new ActionsJob(rec.Id, tr.Id, Force: true), Template, NullLogger.Instance,
+            new CapturingWebhookPublisher(), "");
+
+        var actions = await db.RecordingActions.Where(a => a.RecordingId == rec.Id).OrderBy(a => a.Ordinal).ToListAsync();
+        Assert.Equal(["Adopted task", "Book the room"], actions.Select(a => a.Text));
+        Assert.Equal(1, client.Calls);                               // ran despite ActionsExtractedAt
+        Assert.Equal(["Adopted task"], client.LastAlreadyRecorded);  // told only what it is keeping
+        Assert.Equal(1, actions[1].Ordinal);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_NotForced_StillSkipsAnAlreadyExtractedRecording()
+    {
+        using var db = TestDb.Create();
+        var (rec, tr) = await Seed(db, Guid.NewGuid(), actionsExtractedAt: DateTimeOffset.UtcNow);
+        var client = new FakeActionsClient { Result = { new ExtractedAction("LLM task", "", "") } };
+
+        await ActionsProcessor.ProcessAsync(db, client, new FakeLlmSettingsResolver(), new FakeHubContext(),
+            new FakeJobQueue(), new ActionsJob(rec.Id, tr.Id, Force: false), Template, NullLogger.Instance,
+            new CapturingWebhookPublisher(), "");
+
+        Assert.Equal(0, client.Calls);
+    }
+
+    // process-ai asks for actions alone: re-extracting them must not also regenerate the minutes behind the
+    // user's back. The pipeline's own job leaves the flag at its default and keeps chaining them.
+    [Fact]
+    public async Task ProcessAsync_WhenToldNotToChainMinutes_EnqueuesNoMinutes()
+    {
+        using var db = TestDb.Create();
+        var (rec, tr) = await Seed(db, Guid.NewGuid());
+        var queue = new FakeJobQueue();
+
+        await ActionsProcessor.ProcessAsync(db, new FakeActionsClient(), new FakeLlmSettingsResolver(),
+            new FakeHubContext(), queue, new ActionsJob(rec.Id, tr.Id, Force: true, RunMinutesAfterActions: false),
+            Template, NullLogger.Instance, new CapturingWebhookPublisher(), "");
+
+        Assert.Empty(queue.MeetingMinutesEnqueued);
+    }
+
+    [Fact]
+    public async Task ActionsJob_WithoutTheNewFields_KeepsThePipelineBehaviour()
+    {
+        // A job already sitting on the stream when this ships carries neither field. It must deserialize to
+        // the old behaviour: not forced, and still chaining the minutes.
+        var json = $$"""{"RecordingId":"{{Guid.NewGuid()}}","TranscriptionId":"{{Guid.NewGuid()}}"}""";
+
+        var job = System.Text.Json.JsonSerializer.Deserialize<ActionsJob>(json)!;
+
+        Assert.False(job.Force);
+        Assert.True(job.RunMinutesAfterActions);
+        await Task.CompletedTask;
+    }
+
     [Fact]
     public async Task ProcessAsync_NoSegments_DoesNothing()
     {

@@ -82,7 +82,9 @@ public record MeetingMinutesJob(
 /// ActionsWorker. Only auto-extracts when the recording has never had actions extracted.</summary>
 public record ActionsJob(
     Guid RecordingId,
-    Guid TranscriptionId);
+    Guid TranscriptionId,
+    bool Force = false,
+    bool RunMinutesAfterActions = true);
 
 /// <summary>Job payload for async folder-summary generation, consumed by the API's SectionSummaryWorker. The
 /// owner and the included recordings are derived from the section inside the processor.</summary>

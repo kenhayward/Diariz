@@ -69,6 +69,7 @@ import { fetchLanguages } from "../lib/languages";
 import { selectedMeetingType } from "../lib/meetingTypes";
 import type { SegmentDto, FormulaResult } from "../lib/types";
 import RetranscribeModal from "../components/detail/RetranscribeModal";
+import RegenerateAiModal, { type AiSelection } from "../components/detail/RegenerateAiModal";
 import SegmentEditModal from "../components/detail/SegmentEditModal";
 import RecordingNameForm from "../components/detail/RecordingNameForm";
 import SpeakerRow from "../components/detail/SpeakerRow";
@@ -361,6 +362,8 @@ export default function RecordingDetail() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionInfo, setActionInfo] = useState<string | null>(null);
   const [retranscribeOpen, setRetranscribeOpen] = useState(false);
+  const [regenerateAiOpen, setRegenerateAiOpen] = useState(false);
+  const [regenerateAiBusy, setRegenerateAiBusy] = useState(false);
   // When the transcript has edited/translated segments, the user can flip the whole list back to the
   // model's original words.
   const [showOriginal, setShowOriginal] = useState(false);
@@ -522,6 +525,27 @@ export default function RecordingDetail() {
       setActionError(apiErrorMessage(e, t("workspace:errSummarise")));
     } finally {
       setSummarizing(false);
+    }
+  }
+
+  // Re-runs the chosen AI steps on the current transcript; the audio is not transcribed again.
+  async function regenerateAi(selection: AiSelection, overwriteManualEdits: boolean) {
+    if (!id || !Object.values(selection).some(Boolean)) return;
+    setRegenerateAiBusy(true);
+    setActionError(null);
+    setActionInfo(null);
+    try {
+      await api.processAi(id, selection, overwriteManualEdits);
+      setRegenerateAiOpen(false);
+      setActionInfo(t("workspace:regenAiQueued"));
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["recording", id] }),
+        qc.invalidateQueries({ queryKey: ["recordings"] }),
+      ]);
+    } catch (e) {
+      setActionError(apiErrorMessage(e, t("workspace:errRegenAi")));
+    } finally {
+      setRegenerateAiBusy(false);
     }
   }
 
@@ -1702,6 +1726,19 @@ export default function RecordingDetail() {
           onDownload={() => setDownloading(true)}
         />
       )}
+      {isOwner && hasTranscript && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => setRegenerateAiOpen(true)}
+            disabled={regenerateAiBusy || isProcessing(rec.status)}
+            className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-40 dark:border-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+          >
+            {t("workspace:regenAiButton")}
+          </button>
+        </div>
+      )}
+
       {/* Where this sits in the room you're viewing. Directly under the name and ABOVE the source/date
           line: the path answers "where is this?", which belongs to the title block - under the subtitle it
           read as one more piece of metadata. Rendered only when the recording is actually placed in that
@@ -1925,6 +1962,16 @@ export default function RecordingDetail() {
       )}
       {managingFormulas && (
         <PreferencesModal initialTab="formulas" onClose={() => setManagingFormulas(false)} />
+      )}
+
+      {regenerateAiOpen && (
+        <RegenerateAiModal
+          busy={regenerateAiBusy}
+          summaryEdited={rec.summary?.isUserEdited === true}
+          minutesEdited={rec.meetingMinutes?.isUserEdited === true}
+          onCancel={() => setRegenerateAiOpen(false)}
+          onConfirm={regenerateAi}
+        />
       )}
 
       {retranscribeOpen && (

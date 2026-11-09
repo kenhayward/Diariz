@@ -3131,6 +3131,35 @@
       "PlatformPermission": {
         "type": "integer"
       },
+      "ProcessExistingAiRequest": {
+        "properties": {
+          "actions": {
+            "default": false,
+            "type": "boolean"
+          },
+          "embeddings": {
+            "default": false,
+            "type": "boolean"
+          },
+          "minutes": {
+            "default": false,
+            "type": "boolean"
+          },
+          "overwriteManualEdits": {
+            "default": false,
+            "type": "boolean"
+          },
+          "summary": {
+            "default": false,
+            "type": "boolean"
+          },
+          "tags": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "RecordingActionDto": {
         "properties": {
           "actor": {
@@ -10894,6 +10923,51 @@
           }
         },
         "summary": "Rename a recording",
+        "tags": [
+          "Recordings"
+        ]
+      }
+    },
+    "/api/recordings/{id}/process-ai": {
+      "post": {
+        "description": "Re-runs any of the summary, meeting minutes, action items, tags and search embeddings on the current transcript, without transcribing the audio again. Choose at least one. The work is queued and the call returns 202 straight away.\n\nA hand-edited summary or set of minutes is **protected**: asking for it again returns 409 unless `overwriteManualEdits` is true. Asking for a summary while one is already being generated also returns 409. Re-extracting action items replaces the unpinned ones and keeps the pinned ones; asked together with the minutes, the minutes are regenerated after the actions so they list the new set.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessExistingAiRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessExistingAiRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessExistingAiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Process an existing transcription with selected AI operations",
         "tags": [
           "Recordings"
         ]

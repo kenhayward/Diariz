@@ -786,6 +786,17 @@ large folders silently rolled up only their first ~18 meetings. The old per-work
 (`SectionSummary`/`SectionMinutes`/`FormulaRun:CombineCharBudget`, `MeetingMinutes:TranscriptCharBudget`) are gone -
 `Chat:ContextLength` (env `CHAT_CONTEXT_LENGTH`) is now the only knob, and it must be set to the model's real window.
 
+- **Re-run AI steps (async).** `POST /api/recordings/{id}/process-ai` (`ProcessExistingAiRequest`: any of
+  `summary`, `minutes`, `actions`, `tags`, `embeddings`, plus `overwriteManualEdits`) re-runs the chosen steps on the
+  **current, non-provisional** transcription by enqueueing onto the existing streams - it never touches the audio or
+  the transcription queue, and adds no stream of its own. Owner-only (`UserId` filter). It returns 409 for a
+  hand-edited summary/minutes without `overwriteManualEdits`, or a summary already `Summarizing`; 400 when a chosen
+  step's LLM is not configured. Order matters: the protection flags are cleared and `Summarizing` committed **before**
+  enqueueing (a job can start at once), and the jobs are queued tags -> embeddings -> actions -> minutes -> summary,
+  so if the queue throws part-way only what did not reach it is rolled back (flags restored, status put back) and the
+  call returns 503. Actions + minutes ride as one `ActionsJob` with `RunMinutesAfterActions`, so the minutes render
+  the fresh action set. The web's **Regenerate AI...** button is the UI for it.
+
 - **Summarise (async).** `POST /api/recordings/{id}/summarize` sets status `Summarizing` and enqueues on a
   **second Redis stream `summarization-jobs`** (group `summarizers`). The API's **only stream consumer**,
   `SummarizationWorker` (a singleton `BackgroundService`), reads it, calls `/chat/completions`
@@ -861,7 +872,11 @@ large folders silently rolled up only their first ~18 meetings. The old per-work
   meeting produced. An explicit re-extract stays synchronous: `POST /api/recordings/{id}/actions/extract`
   calls the LLM inline and **replaces only the unpinned rows** - pinned actions (live or otherwise) are kept
   and passed as the same `alreadyRecorded` context, so a re-extract can no longer discard what someone chose
-  to track. A recording merge copies `Source` onto the folded-in rows; `CapturedAtMs` is not, since it is an
+  to track. `ActionsJob` carries two optional fields for `process-ai` (below): `Force` runs extraction even when
+  `ActionsExtractedAt` is set, and then behaves like the explicit re-extract (replaces the unpinned rows, keeps the
+  pinned ones); `RunMinutesAfterActions` (default `true`) lets a request for actions alone skip chaining the minutes.
+  Both default to the old behaviour, so a job already on the stream when they shipped deserialises unchanged.
+  A recording merge copies `Source` onto the folded-in rows; `CapturedAtMs` is not, since it is an
   offset into a different recording's clock. Actions also travel into transcript downloads, the emailed
   transcript, and the chat context. Its instruction prompt is the **editable** `prompts/extract-actions.md`
   (`{calendar_date}` substituted).

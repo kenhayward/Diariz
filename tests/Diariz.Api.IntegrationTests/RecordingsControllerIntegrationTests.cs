@@ -17,7 +17,8 @@ namespace Diariz.Api.IntegrationTests;
 [Collection(IntegrationCollection.Name)]
 public class RecordingsControllerIntegrationTests(ContainersFixture fx)
 {
-    private static RecordingsController Build(Diariz.Domain.DiarizDbContext db, Guid userId, IGoogleCalendarClient? calendar = null)
+    private static RecordingsController Build(
+        Diariz.Domain.DiarizDbContext db, Guid userId, IGoogleCalendarClient? calendar = null, FakeJobQueue? queue = null)
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Transcription:DefaultModel"] = "whisperx-large-v3" })
@@ -25,7 +26,7 @@ public class RecordingsControllerIntegrationTests(ContainersFixture fx)
         var resolver = new LlmSettingsResolver(
             db, Options.Create(new LlmDefaultsOptions()),
             Options.Create(new SummarizationOptions { ApiBase = "http://llm.test/v1" }), new FakeApiKeyProtector(), new ChatModelCatalog(db, Options.Create(new LlmDefaultsOptions())));
-        return new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config,
+        return new RecordingsController(db, new FakeAudioStorage(), queue ?? new FakeJobQueue(), new FakeHubContext(), config,
             resolver, new FakeEmailSender(), new FakeSpeakerIdentification(new FakeSpeakerIdentifier()), new SpeakerAssignment(db, new PeopleDirectory(db)), Options.Create(new UploadOptions()), new RoomScope(db),
             new PeopleDirectory(db), new CapturingWebhookPublisher(), Options.Create(new AppPublicOptions()), null,
             new CalendarAggregator(calendar ?? new NoGoogleCalendar(), new NoIcsFeeds(), new NoOutlookDevices(), db))
@@ -54,6 +55,36 @@ public class RecordingsControllerIntegrationTests(ContainersFixture fx)
         db.Recordings.Add(rec);
         await db.SaveChangesAsync();
         return (user.Id, rec.Id);
+    }
+
+    // process-ai picks "the current transcription" with a filtered Include (OrderByDescending(Version).Take(1)).
+    // The in-memory provider ignores that Take, so only real Postgres can show the work lands on the newest
+    // version rather than on whichever row happened to load first.
+    [Fact]
+    public async Task ProcessAi_QueuesTheWorkAgainstTheHighestTranscriptionVersion()
+    {
+        var (userId, recId) = await SeedRecording();
+        var v2 = Guid.NewGuid();
+        await using (var seed = fx.CreateDbContext())
+        {
+            foreach (var (version, trId) in new[] { (1, Guid.NewGuid()), (2, v2) })
+            {
+                seed.Transcriptions.Add(new Transcription { Id = trId, RecordingId = recId, Model = "m", Version = version });
+                seed.Segments.Add(new Segment
+                {
+                    Id = Guid.NewGuid(), TranscriptionId = trId, SpeakerLabel = "SPEAKER_00",
+                    StartMs = 0, EndMs = 1000, Original = $"version {version}", Ordinal = 0,
+                });
+            }
+            await seed.SaveChangesAsync();
+        }
+        var queue = new FakeJobQueue();
+
+        await using (var db = fx.CreateDbContext())
+            Assert.IsType<AcceptedResult>(await Build(db, userId, queue: queue)
+                .ProcessExistingAi(recId, new ProcessExistingAiRequest(Tags: true)));
+
+        Assert.Equal(v2, Assert.Single(queue.TagsEnqueued).TranscriptionId);
     }
 
     [Fact]

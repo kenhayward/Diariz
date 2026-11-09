@@ -1299,6 +1299,15 @@ export const api = {
     await http.post("/api/recordings/merge", { ids });
   },
 
+  /** Re-run the chosen AI steps on the current transcript without transcribing the audio again. A hand-edited
+   *  summary or set of minutes is only replaced when `overwriteManualEdits` is true (the API answers 409 otherwise). */
+  async processAi(
+    id: string,
+    selection: { summary: boolean; minutes: boolean; actions: boolean; tags: boolean; embeddings: boolean },
+    overwriteManualEdits: boolean,
+  ): Promise<void> {
+    await http.post(`/api/recordings/${encodeURIComponent(id)}/process-ai`, { ...selection, overwriteManualEdits });
+  },
   async summarize(id: string): Promise<void> {
     await http.post(`/api/recordings/${id}/summarize`);
   },

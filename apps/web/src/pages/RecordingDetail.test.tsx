@@ -60,6 +60,7 @@ vi.mock("../lib/api", () => ({
     renameRecording: vi.fn(),
     deleteRecording: vi.fn(),
     summarize: vi.fn(),
+    processAi: vi.fn(),
     generateMeetingMinutes: vi.fn(),
     updateMeetingMinutes: vi.fn(),
     emailMeetingMinutes: vi.fn(),
@@ -477,6 +478,33 @@ describe("RecordingDetail", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: /generate meeting minutes/i }));
 
     await waitFor(() => expect(api.generateMeetingMinutes).toHaveBeenCalledWith("rec-123"));
+  });
+
+  // The Regenerate AI button, its success message and its error fallback shipped hardcoded in Italian.
+  it("offers Regenerate AI... to the owner and opens the regenerate dialog", async () => {
+    renderPage(base);
+    await loaded();
+
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate AI..." }));
+
+    expect(screen.getByRole("dialog", { name: "Regenerate AI processing" })).toBeTruthy();
+  });
+
+  it("reports that the AI processing was queued", async () => {
+    (api.processAi as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    renderPage(base);
+    await loaded();
+
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate AI..." }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /^Tags/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Start processing" }));
+
+    expect(await screen.findByText("AI processing queued. The results will update when it finishes.")).toBeTruthy();
+    expect(api.processAi).toHaveBeenCalledWith(
+      "rec-123",
+      { summary: false, minutes: false, actions: false, tags: true, embeddings: false },
+      false,
+    );
   });
 
   it("re-transcribe (kebab) opens a modal and re-transcribes on confirm", async () => {

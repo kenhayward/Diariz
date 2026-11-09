@@ -718,8 +718,13 @@ public class FakeJobQueue : IJobQueue
         return Task.CompletedTask;
     }
 
+    /// <summary>Makes the minutes enqueue fail, for the same reason as <see cref="ThrowOnSummarizationEnqueue"/>:
+    /// a caller that cleared a protection flag ahead of queueing must put it back when the queue refuses.</summary>
+    public Exception? ThrowOnMeetingMinutesEnqueue { get; set; }
+
     public Task EnqueueMeetingMinutesAsync(MeetingMinutesJob job, CancellationToken ct = default)
     {
+        if (ThrowOnMeetingMinutesEnqueue is not null) throw ThrowOnMeetingMinutesEnqueue;
         MeetingMinutesEnqueued.Add(job);
         return Task.CompletedTask;
     }

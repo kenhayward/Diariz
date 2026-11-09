@@ -39,6 +39,20 @@ with the right permission, shared platform-wide.
 Under the hood a meeting type points at a **formula**, so minutes and formulas are the same machinery.
 Anything you can express as a formula can produce your minutes. See [Formulas](/help/formulas).
 
+## Re-running AI steps on a recording
+
+**Regenerate AI...** on a recording you own re-runs any of the summary, the meeting minutes, the action
+items, the tags, and the search index on the transcript you already have. The audio is not transcribed
+again, so it is quick and is the way to refresh a recording after you change your model or a prompt, or
+to fill in a step that failed.
+
+- **Your edits are safe.** If you edited the summary or the minutes by hand, they are only replaced when
+  you tick the box agreeing to it.
+- **Pinned action items stay.** Re-extracting replaces the other action items but keeps the ones you
+  pinned. Pick the minutes too and they are rebuilt after the actions, so they list the new set.
+- **Nothing is left half done.** If the work cannot be started, you are told, and anything that was not
+  started stays exactly as it was.
+
 ## How your notes affect minutes
 
 Every minutes section weights what you flagged in your notes. A template can also include an
