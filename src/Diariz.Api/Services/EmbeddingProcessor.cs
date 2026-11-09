@@ -24,6 +24,8 @@ public static class EmbeddingProcessor
         var rec = await db.Recordings.FirstOrDefaultAsync(r => r.Id == job.RecordingId, ct);
         if (rec is null) return; // recording deleted before the job ran.
 
+        try
+        {
         // Attribute every model call this job makes. Pushed once here rather than at the client, so the
         // handler deep inside HttpClient can record who asked and why.
         using var llm = LlmCallScope.Push(
@@ -57,8 +59,8 @@ public static class EmbeddingProcessor
         var drafts = TranscriptChunker.Chunk(segs);
         if (drafts.Count == 0)
         {
-            // No segments (defensive): still clear any stale chunks so retrieval doesn't surface orphans.
-            await ReplaceChunksAsync(db, rec.Id, [], ct);
+            // An empty transcript must not erase embeddings generated from an earlier valid version.
+            logger.LogWarning("No text chunks to embed for recording {RecordingId}; existing chunks preserved", rec.Id);
             return;
         }
 
@@ -66,13 +68,17 @@ public static class EmbeddingProcessor
         // models that don't use prefixes. The stored chunk text stays unprefixed - only the embedding input carries it.
         var inputs = drafts.Select(d => cfg.DocumentPrefix + d.Text).ToList();
         var vectors = await client.EmbedAsync(cfg, inputs, ct);
+        // Never replace valid RAG data with partial/empty results from a failing embedding service.
+        if (vectors is null || vectors.Count != drafts.Count || vectors.Any(v => v is not { Length: > 0 }))
+            throw new InvalidOperationException(
+                $"Embedding service returned incomplete vectors (expected {drafts.Count}, received {vectors?.Count ?? 0}).");
 
         var now = DateTimeOffset.UtcNow;
         var fresh = new List<TranscriptChunk>(drafts.Count);
         for (var i = 0; i < drafts.Count; i++)
         {
             var d = drafts[i];
-            var vec = i < vectors.Count ? vectors[i] : null;
+            var vec = vectors[i];
             fresh.Add(new TranscriptChunk
             {
                 Id = Guid.NewGuid(),
@@ -84,13 +90,36 @@ public static class EmbeddingProcessor
                 EndMs = d.EndMs,
                 SpeakerLabels = string.Join(", ", d.Speakers),
                 Text = d.Text,
-                Embedding = vec is { Length: > 0 } ? new Vector(vec) : null,
+                Embedding = new Vector(vec),
                 CreatedAt = now,
             });
         }
 
+        // A slower job from an older transcription must never overwrite newer embeddings.
+        var latestId = await db.Transcriptions
+            .Where(t => t.RecordingId == rec.Id && !t.IsProvisional)
+            .OrderByDescending(t => t.Version)
+            .Select(t => (Guid?)t.Id)
+            .FirstOrDefaultAsync(ct);
+        if (latestId != transcription.Id)
+        {
+            logger.LogInformation("Skipping obsolete embedding job for recording {RecordingId}", rec.Id);
+            return;
+        }
+
         await ReplaceChunksAsync(db, rec.Id, fresh, ct);
         logger.LogInformation("Embedded {Count} chunk(s) for recording {RecordingId}", fresh.Count, rec.Id);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Allow the host to stop cleanly; no chunks have been replaced.
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // Embedding is optional: an Ollama timeout must not fail the transcription or summary.
+            logger.LogError(ex, "Embedding generation failed for recording {RecordingId}; existing chunks preserved", rec.Id);
+        }
     }
 
     private static Task<string?> OwnerEmailAsync(DiarizDbContext db, Guid userId, CancellationToken ct) =>

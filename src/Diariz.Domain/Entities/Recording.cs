@@ -48,6 +48,32 @@ public class Recording
     public RecordingStatus Status { get; set; } = RecordingStatus.Uploaded;
     public string? Error { get; set; }
 
+/// <summary>
+/// Generate an AI summary automatically after transcription.
+/// </summary>
+public bool AutoGenerateSummary { get; set; } = false;
+
+/// <summary>
+/// Generate meeting minutes automatically after transcription.
+/// </summary>
+public bool AutoGenerateMinutes { get; set; } = false;
+
+/// <summary>
+/// Extract action items automatically after transcription.
+/// </summary>
+public bool AutoExtractActions { get; set; } = false;
+
+/// <summary>
+/// Extract tags automatically after transcription.
+/// </summary>
+public bool AutoExtractTags { get; set; } = false;
+
+/// <summary>
+/// Generate text embeddings for semantic search automatically.
+/// Does not affect speaker voice embeddings.
+/// </summary>
+public bool AutoGenerateEmbeddings { get; set; } = false;    
+
     /// <summary>Optional diarization hints passed to pyannote: force at least/at most this many speakers.
     /// Null = automatic. Used to split two people the diarizer lumped into one (set <see cref="MinSpeakers"/>
     /// = 2). Applied on the next (re-)transcription.</summary>

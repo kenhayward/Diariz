@@ -37,6 +37,8 @@ public static class MeetingMinutesProcessor
             LlmCallKind.MeetingMinutes, rec.UserId, await OwnerEmailAsync(db, rec.UserId, ct),
             rec.Id, rec.Name ?? rec.Title);
 
+        // Additional formulas may depend on the generated minutes: run them only after a successful save.
+        var minutesSaved = false;
         try
         {
             var transcription = await db.Transcriptions
@@ -102,8 +104,17 @@ public static class MeetingMinutesProcessor
             minutes.CreatedAt = DateTimeOffset.UtcNow;
 
             await db.SaveChangesAsync(ct);
-            // Nudge the browser to refetch (status is unchanged — minutes don't own the recording status).
-            await hub.NotifyStatusAsync(rec.UserId, rec.Id, rec.Status.ToString());
+            minutesSaved = true;
+
+            // Notifications are best-effort: their failure must not prevent dependent formulas.
+            try
+            {
+                await hub.NotifyStatusAsync(rec.UserId, rec.Id, rec.Status.ToString());
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Could not notify minutes status for recording {RecordingId}", rec.Id);
+            }
 
             string? meetingTypeName = null;
             if (rec.MeetingTypeId is { } typeId)
@@ -121,10 +132,19 @@ public static class MeetingMinutesProcessor
             logger.LogError(ex, "Meeting-minutes generation failed for recording {RecordingId}", rec.Id);
         }
 
-        // The meeting type's ADDITIONAL formulas, after the minutes are saved (so one may legitimately declare
-        // the Minutes context and read them). Outside the try: a primary failure doesn't cancel them, and a
-        // failure here can't undo minutes that were written.
-        await EnqueueAdditionalFormulasAsync(db, queue, hub, rec, logger, ct);
+        // Additional formulas can consume the Minutes context, so never run them when
+        // minutes generation failed. A notification/webhook failure does not affect this.
+        if (minutesSaved)
+        {
+            try
+            {
+                await EnqueueAdditionalFormulasAsync(db, queue, hub, rec, logger, ct);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Could not enqueue additional formulas for recording {RecordingId}", rec.Id);
+            }
+        }
     }
 
     private static Task<string?> OwnerEmailAsync(DiarizDbContext db, Guid userId, CancellationToken ct) =>

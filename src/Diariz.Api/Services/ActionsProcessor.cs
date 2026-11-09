@@ -12,7 +12,7 @@ namespace Diariz.Api.Services;
 
 /// <summary>
 /// Processes a single action-extraction job as part of the pipeline: builds the transcript, calls the LLM,
-/// and persists the recording's <see cref="RecordingAction"/>s. Runs in parallel with the summary + minutes
+/// and persists the recording's <see cref="RecordingAction"/>s. Runs in parallel with the summary
 /// and deliberately does NOT change <c>Recording.Status</c> (so it never races the summary's status
 /// transitions). Skips when actions have already been extracted (or the user added their own) so the
 /// automatic run never clobbers manual edits — an explicit re-extract (the controller) still replaces them.
@@ -20,7 +20,7 @@ namespace Diariz.Api.Services;
 /// BackgroundService so it can be unit-tested with a fake client + in-memory DbContext. Mirrors
 /// <see cref="MeetingMinutesProcessor"/>.
 ///
-/// The pipeline runs actions BEFORE the minutes (this method enqueues the minutes job when it finishes), so the
+/// When both actions and minutes are enabled, this method enqueues minutes after actions finish, so the
 /// minutes can render the canonical extracted action set — keeping the minutes' Action Items table and the
 /// recording's Actions panel identical.
 /// </summary>
@@ -49,7 +49,7 @@ public static class ActionsProcessor
             // Auto-extract only once: a set ActionsExtractedAt means extraction ran (or the user added an
             // action), so the pipeline must not overwrite it. Explicit re-extraction goes through the
             // controller. Even when we skip, the minutes are still (re)generated below.
-            if (rec.ActionsExtractedAt is not null) return;
+            if (rec.ActionsExtractedAt is not null && !job.Force) return;
 
             var transcription = await db.Transcriptions
                 .Include(t => t.Segments)
@@ -115,16 +115,21 @@ public static class ActionsProcessor
         }
         finally
         {
-            // Chain the minutes now that the actions are settled (freshly extracted, preserved on a
-            // re-transcribe, or extraction failed) so the minutes render the canonical action set. Always runs
-            // for an existing recording, so the minutes never depend on extraction succeeding.
-            try
+            // Chain automatic minutes only when requested for this recording.
+            // This also runs when action extraction was skipped or failed, so minutes
+            // can still use the canonical actions already stored on the recording.
+            if (job.RunMinutesAfterActions && (rec.AutoGenerateMinutes || job.Force))
             {
-                await queue.EnqueueMeetingMinutesAsync(new MeetingMinutesJob(rec.Id, job.TranscriptionId), ct);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to enqueue minutes after actions for recording {RecordingId}", rec.Id);
+                try
+                {
+                    await queue.EnqueueMeetingMinutesAsync(
+                        new MeetingMinutesJob(rec.Id, job.TranscriptionId), ct);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex,
+                        "Failed to enqueue minutes after actions for recording {RecordingId}", rec.Id);
+                }
             }
         }
     }

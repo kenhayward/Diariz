@@ -142,10 +142,10 @@ public class WorkerCallbackController : ControllerBase
             return Ok();
         }
 
-        // Continue the pipeline: when summarisation is configured for the owner, kick it off
-        // automatically (which also auto-names the recording when it has no name yet).
+        // Automatic AI processing is selected independently for each recording.
+        // A configured summarization endpoint alone must not start the LLM pipeline.
         var cfg = await _summarization.ResolveAsync(LlmCallKind.Summarize);
-        var autoSummarise = cfg.Enabled;
+        var autoSummarise = transcription.Recording.AutoGenerateSummary && cfg.Enabled;
         transcription.Recording.Status = autoSummarise ? RecordingStatus.Summarizing : RecordingStatus.Transcribed;
 
         await _db.SaveChangesAsync();
@@ -176,41 +176,44 @@ public class WorkerCallbackController : ControllerBase
             }
         }
 
+        var recording = transcription.Recording;
+
         if (autoSummarise)
         {
             try
             {
-                await _queue.EnqueueSummarizationAsync(new SummarizationJob(transcription.RecordingId, transcription.Id));
+                await _queue.EnqueueSummarizationAsync(new SummarizationJob(recording.Id, transcription.Id));
             }
             catch
             {
-                // Summarizing is already committed above, and the job we just failed to queue is the only
-                // thing that clears it - POST /summarize no-ops while it is set, so the recording would sit
-                // in "Summarising..." until someone thought to re-transcribe it. Put it back to a status the
-                // user can act on, then let the failure surface to the worker.
-                //
-                // The status is deliberately committed *before* the enqueue rather than after: the summariser
-                // runs in this same process and would otherwise be free to finish and write Summarized before
-                // the flip landed on top of it - trading a rare stuck recording for a rarer one.
-                transcription.Recording.Status = RecordingStatus.Transcribed;
+                // Restore a usable status if the summary could not be queued.
+                recording.Status = RecordingStatus.Transcribed;
                 await _db.SaveChangesAsync();
                 throw;
             }
-            // Action items are extracted next (its worker skips recordings already extracted, so a re-transcribe
-            // never clobbers manual edits). It is status-neutral (no race with the summary) and, when it finishes,
-            // chains the meeting-minutes job — so the minutes render the same canonical action set.
-            await _queue.EnqueueActionsAsync(new ActionsJob(transcription.RecordingId, transcription.Id));
-            // Tag-cloud tags are re-extracted on every (re)transcription — the tags processor replaces the
-            // previous set wholesale (tags are machine-only, so there are no manual edits to preserve).
-            await _queue.EnqueueTagsAsync(new TagsJob(transcription.RecordingId, transcription.Id));
         }
 
-        // Build/refresh the RAG index for this recording's latest transcription (status-neutral, independent of
-        // summarisation — RAG can be on via a dedicated embeddings endpoint even when summarisation is off). The
-        // processor no-ops if the owner has no endpoint, so only enqueue when embedding is actually configured.
-        var embedCfg = await _embedding.ResolveAsync();
-        if (embedCfg.Enabled)
-            await _queue.EnqueueEmbeddingAsync(new EmbeddingJob(transcription.RecordingId, transcription.Id));
+        // Action extraction is independent of summarization. ActionsProcessor
+        // chains the minutes job when AutoGenerateMinutes is enabled.
+        if (recording.AutoExtractActions)
+            await _queue.EnqueueActionsAsync(new ActionsJob(recording.Id, transcription.Id));
+
+        // Tags are independent of the summary and actions.
+        if (recording.AutoExtractTags)
+            await _queue.EnqueueTagsAsync(new TagsJob(recording.Id, transcription.Id));
+
+        // Without action extraction there is no chain to minutes: enqueue it here.
+        if (recording.AutoGenerateMinutes && !recording.AutoExtractActions)
+            await _queue.EnqueueMeetingMinutesAsync(new MeetingMinutesJob(recording.Id, transcription.Id));
+
+        // Text/RAG embeddings are optional; speaker voice embeddings above
+        // remain enabled independently of this setting.
+        if (recording.AutoGenerateEmbeddings)
+        {
+            var embedCfg = await _embedding.ResolveAsync();
+            if (embedCfg.Enabled)
+                await _queue.EnqueueEmbeddingAsync(new EmbeddingJob(recording.Id, transcription.Id));
+        }
 
         await _hub.NotifyStatusAsync(transcription.Recording.UserId, transcription.RecordingId,
             transcription.Recording.Status.ToString());

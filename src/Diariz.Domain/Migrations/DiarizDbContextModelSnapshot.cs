@@ -1307,6 +1307,21 @@ namespace Diariz.Domain.Migrations
                     b.Property<DateTimeOffset?>("AudioProtectedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("AutoExtractActions")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("AutoExtractTags")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("AutoGenerateEmbeddings")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("AutoGenerateMinutes")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("AutoGenerateSummary")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("BlobKey")
                         .IsRequired()
                         .HasColumnType("text");
